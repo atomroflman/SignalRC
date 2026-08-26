@@ -1,7 +1,7 @@
-using LteCar.Onboard.Hardware;
+using SignalRC.Onboard.Hardware;
 using Microsoft.Extensions.Logging;
 
-namespace LteCar.Onboard.Control.ControlTypes;
+namespace SignalRC.Onboard.Control.ControlTypes;
 
 [ControlType("Throttle")]
 public class ThrottleControl : ServoControlBase 

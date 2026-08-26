@@ -1,6 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 
-namespace LteCar.Onboard;
+namespace SignalRC.Onboard;
 
 public static class IServiceCollectionExtensions
 {

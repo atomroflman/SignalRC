@@ -1,10 +1,10 @@
-// filepath: /home/greg-e/LteCar/Onboard/Control/ControlTypes/CustomBash.cs
+// filepath: /home/greg-e/SignalRC/Onboard/Control/ControlTypes/CustomBash.cs
 using System;
 using System.Diagnostics;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 
-namespace LteCar.Onboard.Control.ControlTypes;
+namespace SignalRC.Onboard.Control.ControlTypes;
 
 [ControlType("CustomBash")]
 public class CustomBash : ControlTypeBase

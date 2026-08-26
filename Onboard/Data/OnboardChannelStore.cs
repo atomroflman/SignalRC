@@ -1,9 +1,9 @@
 using System.Text.Json;
-using LteCar.Shared.Channels;
+using SignalRC.Shared.Channels;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 
-namespace LteCar.Onboard.Data;
+namespace SignalRC.Onboard.Data;
 
 // ponytail: raw SQLite instead of EF Core; one table per channel kind, primary key = dictionary key.
 public sealed class OnboardChannelStore

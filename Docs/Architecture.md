@@ -1,8 +1,8 @@
-# Architecture – LteCar
+# Architecture – SignalRC
 
 ## Overview
 
-LteCar is a system for remotely controlling vehicles over the internet (LTE/WiFi). A user controls a real vehicle in real time through a web interface, sees its camera feed via a WebRTC video stream, and receives telemetry data. Communication between all components runs primarily over **SignalR** (WebSocket-based).
+SignalRC is a system for remotely controlling vehicles over the internet (LTE/WiFi). A user controls a real vehicle in real time through a web interface, sees its camera feed via a WebRTC video stream, and receives telemetry data. Communication between all components runs primarily over **SignalR** (WebSocket-based).
 
 ```mermaid
 graph LR
@@ -147,7 +147,7 @@ When the connection is established, the vehicle synchronizes its channel configu
 User authentication is based on **cookies**:
 
 1. The browser calls `/api/user/me`.
-2. If no `LteCarAuth` cookie exists, the server creates a new user and signs a session with a **Sqids-encoded session token** as `ClaimTypes.NameIdentifier`.
+2. If no `SignalRCAuth` cookie exists, the server creates a new user and signs a session with a **Sqids-encoded session token** as `ClaimTypes.NameIdentifier`.
 3. The cookie is automatically sent with all subsequent requests (`HttpOnly`, `SameSite=Lax`, unlimited lifetime).
 4. Controllers resolve the user via `GetCurrentUserAsync()` from the cookie.
 

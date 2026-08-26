@@ -1,8 +1,8 @@
-using LteCar.Server.Data;
+using SignalRC.Server.Data;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
-namespace LteCar.Server.Controllers;
+namespace SignalRC.Server.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
@@ -10,7 +10,7 @@ public partial class FlowController : ControllerBase
 {
     private readonly ILogger<FlowController> _logger;
 
-    public FlowController(LteCarContext context, ILogger<FlowController> logger) : base(context)
+    public FlowController(SignalRCContext context, ILogger<FlowController> logger) : base(context)
     {
         _logger = logger;
     }

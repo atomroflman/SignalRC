@@ -1,14 +1,14 @@
 using System.Security.Claims;
-using LteCar.Server.Data;
+using SignalRC.Server.Data;
 using Microsoft.EntityFrameworkCore;
 
-namespace LteCar.Server.Controllers;
+namespace SignalRC.Server.Controllers;
 
 public class ControllerBase : Microsoft.AspNetCore.Mvc.ControllerBase
 {
-    protected readonly LteCarContext _context;
+    protected readonly SignalRCContext _context;
 
-    public ControllerBase(LteCarContext context)
+    public ControllerBase(SignalRCContext context)
     {
         _context = context;
     }

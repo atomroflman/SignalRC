@@ -2,11 +2,11 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Configuration;
 
-namespace LteCar.Server.Data;
+namespace SignalRC.Server.Data;
 
-public class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<LteCarContext>
+public class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<SignalRCContext>
 {
-    public LteCarContext CreateDbContext(string[] args)
+    public SignalRCContext CreateDbContext(string[] args)
     {
         var configuration = new ConfigurationBuilder()
             .SetBasePath(Directory.GetCurrentDirectory())
@@ -14,11 +14,11 @@ public class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<LteCarCont
             .Build();
 
         var connectionString = configuration.GetConnectionString("DefaultConnection")
-            ?? "Host=localhost;Database=ltecar;Username=ltecar;Password=ltecar";
+            ?? "Host=localhost;Database=signalrc;Username=signalrc;Password=signalrc";
 
-        var optionsBuilder = new DbContextOptionsBuilder<LteCarContext>();
+        var optionsBuilder = new DbContextOptionsBuilder<SignalRCContext>();
         optionsBuilder.UseNpgsql(connectionString);
 
-        return new LteCarContext(optionsBuilder.Options);
+        return new SignalRCContext(optionsBuilder.Options);
     }
 }

@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
-using LteCar.Shared.Channels;
+using SignalRC.Shared.Channels;
 
-namespace LteCar.Server.Services;
+namespace SignalRC.Server.Services;
 
 // ponytail: in-memory per-car cache of the ControlType/TelemetryType strings
 // the Onboard has registered. Not persisted: if the Server restarts, the

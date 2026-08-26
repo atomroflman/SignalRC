@@ -1,4 +1,4 @@
-namespace LteCar.Onboard.Hardware
+namespace SignalRC.Onboard.Hardware
 {
     public interface IModuleManager
     {

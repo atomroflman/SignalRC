@@ -2,12 +2,12 @@ using System.Diagnostics;
 using System.Collections.Concurrent;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
-using LteCar.Server.Data;
+using SignalRC.Server.Data;
 using Microsoft.EntityFrameworkCore;
-using LteCar.Shared.Video;
-using LteCar.Server.Configuration;
+using SignalRC.Shared.Video;
+using SignalRC.Server.Configuration;
 
-namespace LteCar.Server;
+namespace SignalRC.Server;
 
 public class VideoStreamReceiverService
 {
@@ -30,7 +30,7 @@ public class VideoStreamReceiverService
     public async Task<VideoSettings> StartStreamAsync(int streamId)
     {
         var ctx = _serviceProvider.CreateScope().ServiceProvider
-            .GetRequiredService<LteCarContext>();
+            .GetRequiredService<SignalRCContext>();
         var stream = await ctx
             .CarVideoStreams
             .Include(s => s.Car)
@@ -268,7 +268,7 @@ public class VideoStreamReceiverService
     {
         var (startPort, endPort) = (JanusConfig.Value.PortRangeStart, JanusConfig.Value.PortRangeEnd);
         var ctx = _serviceProvider.CreateScope().ServiceProvider
-            .GetRequiredService<LteCarContext>();
+            .GetRequiredService<SignalRCContext>();
         var takenPorts = ctx.CarVideoStreams
             .Where(s => s.IsActive)
             .Select(e => new { e.JanusPort, e.Port })
@@ -421,7 +421,7 @@ public class VideoStreamReceiverService
         {
             Logger.LogInformation($"Stopping stream '{streamId}'");
             var ctx = _serviceProvider.CreateScope().ServiceProvider
-                .GetRequiredService<LteCarContext>();
+                .GetRequiredService<SignalRCContext>();
             var stream = await ctx
                 .CarVideoStreams
                 .FirstOrDefaultAsync(s => s.Id == streamId);
@@ -471,7 +471,7 @@ public class VideoStreamReceiverService
     public async Task<bool> StopStreamsByCar(string carId)
     {
         var carStreams = _serviceProvider.CreateScope().ServiceProvider
-            .GetRequiredService<LteCarContext>()
+            .GetRequiredService<SignalRCContext>()
             .CarVideoStreams
             .Where(s => s.Car.CarIdentityKey == carId && s.IsActive)
             .AsNoTracking()

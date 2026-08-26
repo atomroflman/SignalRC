@@ -12,11 +12,11 @@
   },
   "telemetryChannels": {
     "cpuTemperature": {
-      "telemetryType": "LteCar.Onboard.Telemetry.CpuTemperatureReader",
+      "telemetryType": "SignalRC.Onboard.Telemetry.CpuTemperatureReader",
       "readIntervalTicks": 1000
     },
     "debug": {
-      "telemetryType": "LteCar.Onboard.Telemetry.StoreBackedTelemetryReader",
+      "telemetryType": "SignalRC.Onboard.Telemetry.StoreBackedTelemetryReader",
       "readIntervalTicks": 10
     }
   },

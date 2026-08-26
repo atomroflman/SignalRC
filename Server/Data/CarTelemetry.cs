@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace LteCar.Server.Data
+namespace SignalRC.Server.Data
 {
     public class CarTelemetry : EntityBase
     {
@@ -12,7 +12,7 @@ namespace LteCar.Server.Data
         [MaxLength(64)]
         public string TelemetryType { get; set; } = string.Empty;
 
-        public LteCar.Shared.Channels.TelemetryDataType DataType { get; set; } = LteCar.Shared.Channels.TelemetryDataType.String;
+        public SignalRC.Shared.Channels.TelemetryDataType DataType { get; set; } = SignalRC.Shared.Channels.TelemetryDataType.String;
         [MaxLength(32)]
         public string? Unit { get; set; }
         public byte? Decimals { get; set; }

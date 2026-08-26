@@ -1,16 +1,16 @@
-using LteCar.Server.Data;
-using LteCar.Shared.HubClients;
-using LteCar.Shared.Hubs;
+using SignalRC.Server.Data;
+using SignalRC.Shared.HubClients;
+using SignalRC.Shared.Hubs;
 using Microsoft.AspNetCore.SignalR;
 
-namespace LteCar.Server.Hubs;
+namespace SignalRC.Server.Hubs;
 
 public class UserChannelHub : Hub<IUserChannelClient>, IUserChannelServer
 {
     private readonly ILogger<UserChannelHub> _logger;
-    private readonly LteCarContext _context;
+    private readonly SignalRCContext _context;
 
-    public UserChannelHub(ILogger<UserChannelHub> logger, LteCarContext context)
+    public UserChannelHub(ILogger<UserChannelHub> logger, SignalRCContext context)
     {
         _logger = logger;
         _context = context;

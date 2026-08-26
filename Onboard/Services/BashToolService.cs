@@ -1,10 +1,10 @@
 using System.Diagnostics;
 using System.Text;
-using LteCar.Shared.HubClients;
+using SignalRC.Shared.HubClients;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Logging;
 
-namespace LteCar.Onboard;
+namespace SignalRC.Onboard;
 
 public class BashToolService
 {

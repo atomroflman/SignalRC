@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Primitives;
 using System.Net;
 
-namespace LteCar.Server.Services;
+namespace SignalRC.Server.Services;
 
 public interface IOnboardInstallScriptService
 {
@@ -68,7 +68,7 @@ public class OnboardInstallScriptService : IOnboardInstallScriptService
         var template = File.ReadAllText(templatePath);
         var gitRefLine = string.IsNullOrWhiteSpace(resolvedGitRef)
             ? string.Empty
-            : $"LTECAR_GIT_REF='{EscapeForSingleQuotes(resolvedGitRef)}'{Environment.NewLine}";
+            : $"SIGNALRC_GIT_REF='{EscapeForSingleQuotes(resolvedGitRef)}'{Environment.NewLine}";
 
         Logger.LogInformation(
             "Generating onboard install script for {ServerName}:{ServerPort} (HTTPS: {UseHttps}, Branch: {Branch}, GitRef: {GitRef})",
@@ -82,11 +82,11 @@ public class OnboardInstallScriptService : IOnboardInstallScriptService
 #!/bin/bash
 # Sourced from: {{templatePath}}
 DEPLOY_MODE='onboard'
-LTECAR_SERVER_URL='{{EscapeForSingleQuotes(serverUrl)}}'
-LTECAR_SERVER_NAME='{{EscapeForSingleQuotes(settings.ServerName)}}'
-LTECAR_SERVER_PORT='{{settings.ServerPort}}'
-LTECAR_USE_HTTPS='{{settings.UseHttps.ToString().ToLowerInvariant()}}'
-LTECAR_BRANCH='{{EscapeForSingleQuotes(resolvedBranch)}}'
+SIGNALRC_SERVER_URL='{{EscapeForSingleQuotes(serverUrl)}}'
+SIGNALRC_SERVER_NAME='{{EscapeForSingleQuotes(settings.ServerName)}}'
+SIGNALRC_SERVER_PORT='{{settings.ServerPort}}'
+SIGNALRC_USE_HTTPS='{{settings.UseHttps.ToString().ToLowerInvariant()}}'
+SIGNALRC_BRANCH='{{EscapeForSingleQuotes(resolvedBranch)}}'
 {{gitRefLine}}
 {{template}}
 """;

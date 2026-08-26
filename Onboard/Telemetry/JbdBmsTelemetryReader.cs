@@ -3,7 +3,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 
-namespace LteCar.Onboard.Telemetry;
+namespace SignalRC.Onboard.Telemetry;
 
 public class JbdBmsTelemetryReader : TelemetryReaderBase
 {
@@ -21,7 +21,7 @@ public class JbdBmsTelemetryReader : TelemetryReaderBase
     /// </summary>
     public string Channel { get; set; } = string.Empty;
 
-    public string JbdToolPath { get; set; } = "~/ltecar/bin/jbdtools";
+    public string JbdToolPath { get; set; } = "~/signalrc/bin/jbdtools";
 
     public JbdBmsTelemetryReader(ILogger<JbdBmsTelemetryReader> logger, ILogger<Bash> bashLogger, Bash bash)
         : base(logger)
@@ -33,7 +33,7 @@ public class JbdBmsTelemetryReader : TelemetryReaderBase
             var whichResult = _bash.ExecuteAndRead("which jbdtool")?.Trim();
             if (string.IsNullOrEmpty(whichResult) || !File.Exists(whichResult))
             {
-                Logger.LogWarning("jbdtool CLI was not found in PATH. Install via: sudo apt install python3-venv python3-pip && python3 -m venv ~/ltecar && source ~/ltecar/bin/activate && pip install jbdtools");
+                Logger.LogWarning("jbdtool CLI was not found in PATH. Install via: sudo apt install python3-venv python3-pip && python3 -m venv ~/signalrc && source ~/signalrc/bin/activate && pip install jbdtools");
             }
         }
         catch (Exception ex)

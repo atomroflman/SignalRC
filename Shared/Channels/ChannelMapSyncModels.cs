@@ -1,7 +1,7 @@
 using System.Text.Json.Serialization;
 using MessagePack;
 
-namespace LteCar.Shared.Channels;
+namespace SignalRC.Shared.Channels;
 
 // MessagePack keys chosen to keep bandwidth low; order stable for future evolution
 [MessagePackObject]

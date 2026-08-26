@@ -1,7 +1,7 @@
-using LteCar.Server.Configuration;
+using SignalRC.Server.Configuration;
 using Microsoft.AspNetCore.Mvc;
 
-namespace LteCar.Server.Controllers;
+namespace SignalRC.Server.Controllers;
 
 [ApiController]
 public class WebRtcController : Microsoft.AspNetCore.Mvc.ControllerBase

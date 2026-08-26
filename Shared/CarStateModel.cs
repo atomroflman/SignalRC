@@ -1,4 +1,4 @@
-namespace LteCar.Shared;
+namespace SignalRC.Shared;
 
 public class CarStateModel
 {

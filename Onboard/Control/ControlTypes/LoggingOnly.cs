@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging;
 
-namespace LteCar.Onboard.Control.ControlTypes;
+namespace SignalRC.Onboard.Control.ControlTypes;
 
 [ControlType("LoggingOnly")]
 public class LoggingOnlyControl : ControlTypeBase

@@ -2,7 +2,7 @@ using Microsoft.Extensions.Logging;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace LteCar.Onboard.Control.ControlTypes;
+namespace SignalRC.Onboard.Control.ControlTypes;
 
 [ControlType("PwmBlinker")]
 public class PwmBlinker : PwmLight

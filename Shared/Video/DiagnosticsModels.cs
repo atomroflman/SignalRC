@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace LteCar.Shared.Video;
+namespace SignalRC.Shared.Video;
 
 public enum DiagnosticStatus
 {

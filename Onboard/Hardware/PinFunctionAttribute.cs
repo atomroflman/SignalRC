@@ -1,4 +1,4 @@
-namespace LteCar.Onboard.Control;
+namespace SignalRC.Onboard.Control;
 
 [AttributeUsage(AttributeTargets.Property)]
 public class PinFunctionAttribute : Attribute

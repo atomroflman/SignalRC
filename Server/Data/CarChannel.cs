@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
-using LteCar.Server.Data.EntityMapping;
+using SignalRC.Server.Data.EntityMapping;
 
-namespace LteCar.Server.Data
+namespace SignalRC.Server.Data
 {
     public class CarChannel : EntityBase
     {

@@ -1,7 +1,7 @@
-using LteCar.Shared.Channels;
-using LteCar.Shared.FileTransfer;
+using SignalRC.Shared.Channels;
+using SignalRC.Shared.FileTransfer;
 
-namespace LteCar.Shared.HubClients;
+namespace SignalRC.Shared.HubClients;
 
 // ponytail: subset of the merged-hub's client interface used by the Onboard's
 // ControlService. The server's CarConnectionHub is typed

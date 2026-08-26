@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging;
 
-namespace LteCar.Onboard.Telemetry;
+namespace SignalRC.Onboard.Telemetry;
 
 public abstract class TelemetryReaderBase : IDisposable
 {

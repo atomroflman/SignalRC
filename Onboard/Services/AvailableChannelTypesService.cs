@@ -1,9 +1,9 @@
 using System.Reflection;
-using LteCar.Onboard.Control.ControlTypes;
-using LteCar.Onboard.Telemetry;
-using LteCar.Shared.Channels;
+using SignalRC.Onboard.Control.ControlTypes;
+using SignalRC.Onboard.Telemetry;
+using SignalRC.Shared.Channels;
 
-namespace LteCar.Onboard.Services;
+namespace SignalRC.Onboard.Services;
 
 // ponytail: enumerates every ControlType the Onboard knows about (via the
 // [ControlType("...")] attribute) and every concrete TelemetryReaderBase

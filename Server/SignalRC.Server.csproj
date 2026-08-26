@@ -25,14 +25,14 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Shared\LteCar.Shared.csproj" />
+    <ProjectReference Include="..\Shared\SignalRC.Shared.csproj" />
   </ItemGroup>
   
   <ItemGroup>
     <None Update="appSettings.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    <EmbeddedResource Include="Generated/server-build-info.txt" LogicalName="LteCar.Server.Generated.server-build-info.txt" />
+    <EmbeddedResource Include="Generated/server-build-info.txt" LogicalName="SignalRC.Server.Generated.server-build-info.txt" />
   </ItemGroup>
   
   <ItemGroup>

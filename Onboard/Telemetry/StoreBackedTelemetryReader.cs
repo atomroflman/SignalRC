@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging;
 
-namespace LteCar.Onboard.Telemetry;
+namespace SignalRC.Onboard.Telemetry;
 
 // ponytail: emits whatever TelemetryStore holds for this channel on each tick.
 // No default value — readers see null (which TelemetryService skips) until a

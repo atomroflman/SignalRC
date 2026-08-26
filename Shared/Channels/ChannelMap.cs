@@ -1,7 +1,7 @@
 using System.Text.Json.Serialization;
 using MessagePack;
 
-namespace LteCar.Shared.Channels;
+namespace SignalRC.Shared.Channels;
 
 // MessagePack indexes chosen for stable, compact representation.
 // Keep ordering stable; append new fields with next index.

@@ -2,7 +2,7 @@
 
 #nullable disable
 
-namespace LteCar.Server.Migrations
+namespace SignalRC.Server.Migrations
 {
     /// <inheritdoc />
     public partial class TelemetryFormatColumns : Migration

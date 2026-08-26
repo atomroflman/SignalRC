@@ -5,54 +5,32 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Spectre.Console;
-using LteCar.Onboard;
-using LteCar.Onboard.Control;
-using LteCar.Onboard.Control.ControlTypes;
-using LteCar.Onboard.Data;
-using LteCar.Onboard.Hardware;
-using LteCar.Onboard.Services;
-using LteCar.Onboard.Telemetry;
-using LteCar.Onboard.Video;
-using LteCar.Shared.Channels;
+using SignalRC.Onboard;
+using SignalRC.Onboard.Control;
+using SignalRC.Onboard.Control.ControlTypes;
+using SignalRC.Onboard.Data;
+using SignalRC.Onboard.Hardware;
+using SignalRC.Onboard.Services;
+using SignalRC.Onboard.Telemetry;
+using SignalRC.Onboard.Video;
+using SignalRC.Shared.Channels;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Configuration;
 
-var configDirEnv = Environment.GetEnvironmentVariable("CONFIG_DIR");
-var configDirArg = args.FirstOrDefault(a => a.StartsWith("--config-dir="))?.Split('=', 2, StringSplitOptions.TrimEntries)[1];
 var defaultConfigDir = Directory.GetCurrentDirectory();
-// Setup-Modus prüfen
-if (args.Length > 0 && args[0].Equals("setup", StringComparison.OrdinalIgnoreCase))
-{
-    var setupConfigLoader = new ConfigLoader(defaultConfigDir, configDirArg ?? configDirEnv);
-    LteCar.Onboard.Setup.SetupMenu.Run(setupConfigLoader);
-    return;
-}
 
 // Telemetry-Probe-Modus: liest konfigurierte Reader lokal und zeigt Werte an,
 // ohne eine Serververbindung aufzubauen oder irgendetwas zu senden.
 if (args.Length > 0 && args[0].Equals("telemetry-probe", StringComparison.OrdinalIgnoreCase))
 {
-    var probeConfigLoader = new ConfigLoader(defaultConfigDir, configDirArg ?? configDirEnv);
-    await LteCar.Onboard.Telemetry.TelemetryProbeTool.RunAsync(probeConfigLoader);
+    var probeConfigLoader = new ConfigLoader(defaultConfigDir);
+    await SignalRC.Onboard.Telemetry.TelemetryProbeTool.RunAsync(probeConfigLoader);
     return;
 }
 
-// Update-Modus: git pull + dotnet publish + systemctl restart (falls Service vorhanden).
-// Siehe Onboard/Update/UpdateTool.cs.
-if (args.Length > 0 && args[0].Equals("update", StringComparison.OrdinalIgnoreCase))
-{
-    var exitCode = await LteCar.Onboard.Update.UpdateTool.RunAsync(configDirArg ?? configDirEnv ?? defaultConfigDir);
-    Environment.Exit(exitCode);
-}
-
-var configLoader = new ConfigLoader(defaultConfigDir, configDirArg ?? configDirEnv);
-
-if (configDirArg != null || configDirEnv != null)
-{
-    Console.WriteLine($"Using config directory: {configLoader.ConfigDir}");
-}
+var configLoader = new ConfigLoader(defaultConfigDir);
 
 var carIdentityKey = CarIdentityService.ResolveCarIdentityKey();
 var startupTime = DateTime.Now;
@@ -256,7 +234,7 @@ if (!keyDownloaded)
         if (string.IsNullOrEmpty(hash))
             return (400, "text/plain", Encoding.UTF8.GetBytes("Missing identity hash parameter"), false);
 
-        var actualHash = LteCar.Shared.HashUtility.GenerateSha256Hash(carIdentityKey);
+        var actualHash = SignalRC.Shared.HashUtility.GenerateSha256Hash(carIdentityKey);
         if (!string.Equals(actualHash, hash, StringComparison.OrdinalIgnoreCase))
         {
             logger.LogWarning($"SSH key download attempt with wrong identity hash. Expected: {actualHash}, Got: {hash}");

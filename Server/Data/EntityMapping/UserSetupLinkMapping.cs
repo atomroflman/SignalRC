@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
-namespace LteCar.Server.Data.EntityMapping;
+namespace SignalRC.Server.Data.EntityMapping;
 
 public class UserSetupLinkMapping : IEntityTypeConfiguration<UserSetupLink>
 {

@@ -1,19 +1,19 @@
 using System.Net.Http.Json;
 using System.Text.Json;
-using LteCar.Onboard.Control;
-using LteCar.Onboard.Services;
-using LteCar.Onboard.Telemetry;
-using LteCar.Onboard.Video;
-using LteCar.Shared;
-using LteCar.Shared.Channels;
-using LteCar.Shared.HubClients;
+using SignalRC.Onboard.Control;
+using SignalRC.Onboard.Services;
+using SignalRC.Onboard.Telemetry;
+using SignalRC.Onboard.Video;
+using SignalRC.Shared;
+using SignalRC.Shared.Channels;
+using SignalRC.Shared.HubClients;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using TypedSignalR.Client;
 
-namespace LteCar.Onboard;
+namespace SignalRC.Onboard;
 
 public class ServerConnectionService
 {
@@ -322,7 +322,7 @@ public class ServerConnectionService
             if (branchMismatch || commitMismatch)
             {
                 Logger.LogWarning(
-                    "Version mismatch with server. Local={LocalBranch}@{LocalCommit}, Server={RemoteBranch}@{RemoteCommit}. Run 'dotnet run -- update' to sync.",
+                    "Version mismatch with server. Local={LocalBranch}@{LocalCommit}, Server={RemoteBranch}@{RemoteCommit}. Run 'sudo ./update.sh' in the repo checkout to sync.",
                     local.Branch, shortLocal, remote.Branch ?? "?", shortRemote);
             }
         }

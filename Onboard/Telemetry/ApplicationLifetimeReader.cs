@@ -1,7 +1,7 @@
 using System;
 using Microsoft.Extensions.Logging;
 
-namespace LteCar.Onboard.Telemetry
+namespace SignalRC.Onboard.Telemetry
 {
     public class ApplicationLifetimeReader : TelemetryReaderBase
     {

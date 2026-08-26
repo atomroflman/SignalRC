@@ -1,5 +1,5 @@
 <!--
-  Architekturdiagramm für das LteCar-System
+  Architekturdiagramm für das SignalRC-System
   Fokus: Anwendungen und deren Kommunikation (max. 1 Knick pro Pfeil, rechtwinklig)
 -->
 <svg xmlns="http://www.w3.org/2000/svg" width="1100" height="600" viewBox="0 0 1100 600">

@@ -1,10 +1,10 @@
 using System;
 using System.Diagnostics;
 using System.Threading;
-using LteCar.Onboard.Control.ControlTypes;
-using LteCar.Onboard.Hardware;
+using SignalRC.Onboard.Control.ControlTypes;
+using SignalRC.Onboard.Hardware;
 
-namespace LteCar.Onboard.Control;
+namespace SignalRC.Onboard.Control;
 
 public sealed class ResendRequiredContolDecorator : IControlType, IDisposable
 {

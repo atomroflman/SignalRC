@@ -1,10 +1,10 @@
 using System.Text.Json;
-using LteCar.Server.Data;
-using LteCar.Shared.Channels;
-using LteCar.Shared.Video;
+using SignalRC.Server.Data;
+using SignalRC.Shared.Channels;
+using SignalRC.Shared.Video;
 using Microsoft.EntityFrameworkCore;
 
-namespace LteCar.Server.Services;
+namespace SignalRC.Server.Services;
 
 /// <summary>
 /// Converts between the domain <see cref="ChannelMap"/> and the EF Core database entities.
@@ -12,7 +12,7 @@ namespace LteCar.Server.Services;
 /// </summary>
 public static class ChannelMapMapper
 {
-    public static async Task<ChannelMap> FromDbAsync(int carId, LteCarContext db, CancellationToken cancellationToken = default)
+    public static async Task<ChannelMap> FromDbAsync(int carId, SignalRCContext db, CancellationToken cancellationToken = default)
     {
         var controls = await db.CarChannels.AsNoTracking().Where(c => c.CarId == carId).ToListAsync(cancellationToken);
         var telemetries = await db.CarTelemetry.AsNoTracking().Where(t => t.CarId == carId).ToListAsync(cancellationToken);
@@ -89,7 +89,7 @@ public static class ChannelMapMapper
     /// Replaces all channel configuration for a car with the provided <see cref="ChannelMap"/>.
     /// Use this when the server is the source of truth and the client uploads its full config.
     /// </summary>
-    public static async Task SaveToDbAsync(int carId, ChannelMap map, LteCarContext db, CancellationToken cancellationToken = default)
+    public static async Task SaveToDbAsync(int carId, ChannelMap map, SignalRCContext db, CancellationToken cancellationToken = default)
     {
         var now = DateTime.UtcNow;
 

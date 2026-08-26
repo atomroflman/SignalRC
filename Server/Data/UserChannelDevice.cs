@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace LteCar.Server.Data;
+namespace SignalRC.Server.Data;
 public class UserChannelDevice : EntityBase
 {
     [MaxLength(512)]

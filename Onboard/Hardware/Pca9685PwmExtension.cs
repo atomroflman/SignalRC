@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
-namespace LteCar.Onboard.Hardware
+namespace SignalRC.Onboard.Hardware
 {
     /// <summary>
     /// Maps normalized float values (-1 to 1) to PCA9685 PWM outputs using direct I2C access.

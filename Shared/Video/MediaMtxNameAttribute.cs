@@ -1,4 +1,4 @@
-namespace LteCar.Shared.Video
+namespace SignalRC.Shared.Video
 {
     public class MediaMtxNameAttribute(string name) : Attribute
     {

@@ -1,6 +1,6 @@
 using MessagePack;
 
-namespace LteCar.Shared.FileTransfer;
+namespace SignalRC.Shared.FileTransfer;
 
 [MessagePackObject]
 public class FileListEntry

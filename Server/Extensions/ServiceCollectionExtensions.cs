@@ -1,7 +1,7 @@
-using LteCar.Server.Configuration;
-using LteCar.Server.Services;
+using SignalRC.Server.Configuration;
+using SignalRC.Server.Services;
 
-namespace LteCar.Server.Extensions;
+namespace SignalRC.Server.Extensions;
 
 public static class ServiceCollectionExtensions
 {

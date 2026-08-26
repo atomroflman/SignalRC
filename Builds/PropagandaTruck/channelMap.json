@@ -102,28 +102,28 @@
     "videoInit": {
       "controlType": "CustomBash",
       "options": {
-        "Command": "/home/greg-e/LteCar/Builds/PropagandaTruck/init-video-player.sh"
+        "Command": "/home/greg-e/SignalRC/Builds/PropagandaTruck/init-video-player.sh"
       }
     },
      "videoLoad": {
       "controlType": "CustomBash",
       "options": {
-        "Command": "/home/greg-e/LteCar/Builds/PropagandaTruck/all-video-playlist.sh"
+        "Command": "/home/greg-e/SignalRC/Builds/PropagandaTruck/all-video-playlist.sh"
       }
     },
      "videoNext": {
       "controlType": "CustomBash",
       "options": {
-        "Command": "/home/greg-e/LteCar/Builds/PropagandaTruck/next.sh"
+        "Command": "/home/greg-e/SignalRC/Builds/PropagandaTruck/next.sh"
       }
     }
   },
   "telemetryChannels": {
     "lifetime": {
-      "telemetryType": "LteCar.Onboard.Telemetry.ApplicationLifetimeReader"
+      "telemetryType": "SignalRC.Onboard.Telemetry.ApplicationLifetimeReader"
     },
     "battery.voltage": {
-      "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
+      "telemetryType": "SignalRC.Onboard.Telemetry.JbdBmsTelemetryReader",
       "readIntervalTicks": 50,
       "dataType": "Number",
       "unit": "V",
@@ -135,7 +135,7 @@
       }
     },
     "battery.current": {
-      "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
+      "telemetryType": "SignalRC.Onboard.Telemetry.JbdBmsTelemetryReader",
       "readIntervalTicks": 50,
       "dataType": "Number",
       "unit": "A",
@@ -147,7 +147,7 @@
       }
     },
     "battery.soc": {
-      "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
+      "telemetryType": "SignalRC.Onboard.Telemetry.JbdBmsTelemetryReader",
       "readIntervalTicks": 50,
       "dataType": "Integer",
       "unit": "%",
@@ -159,7 +159,7 @@
       }
     },
     "battery.capacity": {
-      "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
+      "telemetryType": "SignalRC.Onboard.Telemetry.JbdBmsTelemetryReader",
       "readIntervalTicks": 50,
       "dataType": "Number",
       "unit": "Ah",
@@ -171,7 +171,7 @@
       }
     },
     "battery.cycles": {
-      "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
+      "telemetryType": "SignalRC.Onboard.Telemetry.JbdBmsTelemetryReader",
       "readIntervalTicks": 50,
       "dataType": "Integer",
       "options": {
@@ -181,7 +181,7 @@
       }
     },
     "battery.cellsMin": {
-      "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
+      "telemetryType": "SignalRC.Onboard.Telemetry.JbdBmsTelemetryReader",
       "readIntervalTicks": 50,
       "dataType": "Number",
       "unit": "V",
@@ -193,7 +193,7 @@
       }
     },
     "battery.cellsMax": {
-      "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
+      "telemetryType": "SignalRC.Onboard.Telemetry.JbdBmsTelemetryReader",
       "readIntervalTicks": 50,
       "dataType": "Number",
       "unit": "V",
@@ -205,7 +205,7 @@
       }
     },
     "battery.cellsDiff": {
-      "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
+      "telemetryType": "SignalRC.Onboard.Telemetry.JbdBmsTelemetryReader",
       "readIntervalTicks": 50,
       "dataType": "Number",
       "unit": "V",
@@ -217,7 +217,7 @@
       }
     },
     "battery.temperature": {
-      "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
+      "telemetryType": "SignalRC.Onboard.Telemetry.JbdBmsTelemetryReader",
       "readIntervalTicks": 50,
       "dataType": "Number",
       "unit": "°C",
@@ -229,7 +229,7 @@
       }
     },
     "battery": {
-      "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
+      "telemetryType": "SignalRC.Onboard.Telemetry.JbdBmsTelemetryReader",
       "readIntervalTicks": 50,
       "options": {
         "jbdToolPath": "/home/greg-e/jbdtool/jbdtool",

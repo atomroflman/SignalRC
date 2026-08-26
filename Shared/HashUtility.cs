@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace LteCar.Shared;
+namespace SignalRC.Shared;
 
 /// <summary>
 /// Utility class for consistent SHA256 hashing across the application

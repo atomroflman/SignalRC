@@ -1,6 +1,6 @@
 using System.Reflection;
 
-namespace LteCar.Server.Services;
+namespace SignalRC.Server.Services;
 
 public interface IServerBuildInfoService
 {
@@ -11,7 +11,7 @@ public sealed record ServerBuildInfo(string Branch, string? Commit);
 
 public class ServerBuildInfoService : IServerBuildInfoService
 {
-    private const string ResourceName = "LteCar.Server.Generated.server-build-info.txt";
+    private const string ResourceName = "SignalRC.Server.Generated.server-build-info.txt";
     private readonly Lazy<ServerBuildInfo> _buildInfo;
 
     public ILogger<ServerBuildInfoService> Logger { get; }

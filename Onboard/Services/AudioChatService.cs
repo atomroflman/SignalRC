@@ -1,11 +1,11 @@
-using LteCar.Shared.HubClients;
-using LteCar.Shared.Hubs;
+using SignalRC.Shared.HubClients;
+using SignalRC.Shared.Hubs;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using TypedSignalR.Client;
 
-namespace LteCar.Onboard;
+namespace SignalRC.Onboard;
 
 public class AudioChatService : VehicleServiceBase
 {

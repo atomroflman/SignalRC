@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { Locale, Messages, messagesByLocale, supportedLocales } from './translations';
 
-const LOCALE_STORAGE_KEY = 'ltecar.locale';
+const LOCALE_STORAGE_KEY = 'signalrc.locale';
 
 type I18nContextValue = {
   locale: Locale;

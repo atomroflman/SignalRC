@@ -1,4 +1,4 @@
-namespace LteCar.Onboard.Control.ControlTypes;
+namespace SignalRC.Onboard.Control.ControlTypes;
 
 public class ControlTypeAttribute : Attribute
 {

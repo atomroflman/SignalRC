@@ -1,17 +1,17 @@
 using System.Runtime.InteropServices;
 
-namespace LteCar.Onboard.Services;
+namespace SignalRC.Onboard.Services;
 
 /// <summary>
 /// Löst den stabilen CarIdentityKey auf – unabhängig vom aktuellen Config-Ordner.
 /// Reihenfolge:
-/// 1. Override-Datei (/etc/ltecar/carIdentityKey.txt), z. B. für Debug oder Ersatz-Hardware.
+/// 1. Override-Datei (/etc/signalrc/carIdentityKey.txt), z. B. für Debug oder Ersatz-Hardware.
 /// 2. Hardware-Serial aus /proc/cpuinfo (Raspberry Pi).
-/// 3. Fallback-Datei unter ~/.config/ltecar/carIdentityKey.txt (wird einmalig erzeugt).
+/// 3. Fallback-Datei unter ~/.config/signalrc/carIdentityKey.txt (wird einmalig erzeugt).
 /// </summary>
 public static class CarIdentityService
 {
-    private const string OverridePath = "/etc/ltecar/carIdentityKey.txt";
+    private const string OverridePath = "/etc/signalrc/carIdentityKey.txt";
     private const string ProcCpuInfo = "/proc/cpuinfo";
 
     public static string ResolveCarIdentityKey()
@@ -89,7 +89,7 @@ public static class CarIdentityService
     {
         var fallbackDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "ltecar");
+            "signalrc");
         var fallbackPath = Path.Combine(fallbackDir, "carIdentityKey.txt");
 
         try

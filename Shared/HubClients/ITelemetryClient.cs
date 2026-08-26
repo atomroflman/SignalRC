@@ -1,4 +1,4 @@
-namespace LteCar.Shared.HubClients;
+namespace SignalRC.Shared.HubClients;
 
 // ponytail: subset of the merged hub's client interface used by the Onboard's
 // TelemetryService. The server's CarConnectionHub is typed

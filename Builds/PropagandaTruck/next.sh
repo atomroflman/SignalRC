@@ -1,5 +1,5 @@
 #!/bin/bash
-# filepath: /home/greg-e/LteCar/Builds/PropagandaTruck/next.sh
+# filepath: /home/greg-e/SignalRC/Builds/PropagandaTruck/next.sh
 # Play next track on all mpv IPC sockets (no arguments).
 set -euo pipefail
 

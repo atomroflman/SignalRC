@@ -1,3 +1,3 @@
-namespace LteCar.Shared;
+namespace SignalRC.Shared;
 
 public record PingCarResult(long CarTimestamp, double ServerRequestMs);

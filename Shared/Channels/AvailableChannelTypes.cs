@@ -1,7 +1,7 @@
 using System.Text.Json.Serialization;
 using MessagePack;
 
-namespace LteCar.Shared.Channels;
+namespace SignalRC.Shared.Channels;
 
 // ponytail: vehicle-reported list of every ControlType string and every
 // telemetry reader class name the Onboard knows about. Browser fetches

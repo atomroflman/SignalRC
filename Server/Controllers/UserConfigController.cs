@@ -1,16 +1,16 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using LteCar.Server.Data;
+using SignalRC.Server.Data;
 
-namespace LteCar.Server.Controllers
+namespace SignalRC.Server.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
     public class UserConfigController : ControllerBase
     {
-        private new readonly LteCarContext _context;
+        private new readonly SignalRCContext _context;
 
-        public UserConfigController(LteCarContext context) : base(context)
+        public UserConfigController(SignalRCContext context) : base(context)
         {
             _context = context;
         }

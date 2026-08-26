@@ -1,8 +1,8 @@
 using System.Text.Json.Serialization;
-using LteCar.Shared.Video;
+using SignalRC.Shared.Video;
 using MessagePack;
 
-namespace LteCar.Shared.Channels;
+namespace SignalRC.Shared.Channels;
 
 /// <summary>
 /// ConfigMap item for a video stream.

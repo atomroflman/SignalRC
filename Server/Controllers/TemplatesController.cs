@@ -1,13 +1,13 @@
-using LteCar.Server.Data;
-using LteCar.Server.Hubs;
-using LteCar.Server.Services;
-using LteCar.Shared.Channels;
-using LteCar.Shared.HubClients;
+using SignalRC.Server.Data;
+using SignalRC.Server.Hubs;
+using SignalRC.Server.Services;
+using SignalRC.Shared.Channels;
+using SignalRC.Shared.HubClients;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 
-namespace LteCar.Server.Controllers;
+namespace SignalRC.Server.Controllers;
 
 [ApiController]
 [Route("api/templates")]
@@ -18,7 +18,7 @@ public class TemplatesController : Server.Controllers.ControllerBase
     private readonly ILogger<TemplatesController> _logger;
 
     public TemplatesController(
-        LteCarContext context,
+        SignalRCContext context,
         ChannelTemplateService templateService,
         IHubContext<CarConnectionHub, IConnectionHubClient> controlHub,
         ILogger<TemplatesController> logger) : base(context)

@@ -1,4 +1,4 @@
-# LteCar – Remote Control over LTE/Internet
+# SignalRC – Remote Control over LTE/Internet
 
 *[Deutsche Version](Readme.de.md)*
 
@@ -13,7 +13,7 @@ curl -fsSL https://raw.githubusercontent.com/atomroflman/SignalRC/master/install
 # → choose "1) Server"
 ```
 
-This installs the full container stack (`nginx` + `client` + `server` + `janus` + `postgres` + `turn`) via Docker or Podman Compose, and can optionally register a `ltecar.service` systemd unit so the stack survives reboots.
+This installs the full container stack (`nginx` + `client` + `server` + `janus` + `postgres` + `turn`) via Docker or Podman Compose, and can optionally register a `signalrc.service` systemd unit so the stack survives reboots.
 
 ### 2. Install onboard (the vehicle) — via the web UI
 
@@ -23,7 +23,7 @@ Once the server is running, open it in a browser (`https://your-server/`). With 
 curl -fsSL https://YOUR-SERVER/api/install/onboard.sh | sudo bash
 ```
 
-Paste that on the Raspberry Pi. It runs the same `install.sh`, pre-filled for `onboard` mode, and can register `ltecar-onboard.service` (+ `ltecar-mediamtx.service`) for autostart. Vehicle-specific configuration (channels, name, hardware) happens afterwards from the web client at `/car/[carId]`.
+Paste that on the Raspberry Pi. It runs the same `install.sh`, pre-filled for `onboard` mode, and can register `signalrc-onboard.service` (+ `signalrc-mediamtx.service`) for autostart. Vehicle-specific configuration (channels, name, hardware) happens afterwards from the web client at `/car/[carId]`.
 
 Prefer to do it by hand instead? Run the installer directly on the vehicle and choose option 2:
 
@@ -190,7 +190,6 @@ Vehicle configuration (channels, name, hardware) and testing happen in the web c
 
 | Variable | Description |
 |----------|--------------|
-| `CONFIG_DIR` | Config directory (Onboard) |
 | `VEHICLE_TEMPLATES_PATH` | Template base path (filesystem vehicle templates in `VehicleTemplates/`/`vehicleTemplates/`) |
 | `COTURN_EXTERNAL_IP` / `COTURN_USERNAME` / `COTURN_CREDENTIAL` | TURN server public IP and credentials (Docker Compose) |
 | `JANUS_NAT_1_1` | Public IP for Janus WebRTC NAT traversal (Docker Compose); falls back to Azure IMDS if unset |

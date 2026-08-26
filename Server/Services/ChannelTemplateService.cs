@@ -1,9 +1,9 @@
 using System.Text.Json;
-using LteCar.Server.Data;
-using LteCar.Shared.Channels;
+using SignalRC.Server.Data;
+using SignalRC.Shared.Channels;
 using Microsoft.EntityFrameworkCore;
 
-namespace LteCar.Server.Services;
+namespace SignalRC.Server.Services;
 
 /// <summary>
 /// Vehicle hardware template descriptor as stored in <c>VehicleTemplates/{key}/config.json</c>.
@@ -45,7 +45,7 @@ public class ChannelTemplateService
     public async Task SeedAsync(CancellationToken cancellationToken = default)
     {
         using var scope = _serviceProvider.CreateScope();
-        await using var db = scope.ServiceProvider.GetRequiredService<LteCarContext>();
+        await using var db = scope.ServiceProvider.GetRequiredService<SignalRCContext>();
 
         var templateDir = GetTemplateDirectory();
         if (!Directory.Exists(templateDir))
@@ -112,7 +112,7 @@ public class ChannelTemplateService
     public async Task ApplyTemplateAsync(int carId, int templateId, CancellationToken cancellationToken = default)
     {
         using var scope = _serviceProvider.CreateScope();
-        await using var db = scope.ServiceProvider.GetRequiredService<LteCarContext>();
+        await using var db = scope.ServiceProvider.GetRequiredService<SignalRCContext>();
 
         var template = await db.ChannelTemplates.FirstOrDefaultAsync(t => t.Id == templateId, cancellationToken)
             ?? throw new InvalidOperationException($"Template {templateId} not found.");

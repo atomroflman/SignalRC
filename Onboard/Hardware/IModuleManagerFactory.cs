@@ -1,4 +1,4 @@
-using LteCar.Onboard.Hardware;
+using SignalRC.Onboard.Hardware;
 
 public interface IModuleManagerFactory
 {

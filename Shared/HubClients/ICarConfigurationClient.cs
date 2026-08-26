@@ -1,4 +1,4 @@
-namespace LteCar.Server.Hubs;
+namespace SignalRC.Server.Hubs;
 
 public interface ICarConfigurationClient
 {

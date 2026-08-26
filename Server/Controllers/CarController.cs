@@ -1,9 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using LteCar.Server.Data;
+using SignalRC.Server.Data;
 using System.Security.Claims;
 
-namespace LteCar.Server.Controllers
+namespace SignalRC.Server.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
@@ -11,7 +11,7 @@ namespace LteCar.Server.Controllers
     {
         private readonly CarConnectionStore _connectionStore;
 
-        public CarController(LteCarContext context, CarConnectionStore connectionStore) : base(context)
+        public CarController(SignalRCContext context, CarConnectionStore connectionStore) : base(context)
         {
             _connectionStore = connectionStore;
         }
@@ -117,7 +117,7 @@ namespace LteCar.Server.Controllers
             if (car == null)
                 return NotFound("Car not found");
 
-            var hash = LteCar.Shared.HashUtility.GenerateSha256Hash(car.CarIdentityKey);
+            var hash = SignalRC.Shared.HashUtility.GenerateSha256Hash(car.CarIdentityKey);
 
             return Ok(new { hash });
         }

@@ -1,16 +1,16 @@
 using System.Text.Json;
-using LteCar.Server.Data;
-using LteCar.Server.Hubs;
-using LteCar.Server.Services;
-using LteCar.Shared;
-using LteCar.Shared.Channels;
-using LteCar.Shared.HubClients;
-using LteCar.Shared.Video;
+using SignalRC.Server.Data;
+using SignalRC.Server.Hubs;
+using SignalRC.Server.Services;
+using SignalRC.Shared;
+using SignalRC.Shared.Channels;
+using SignalRC.Shared.HubClients;
+using SignalRC.Shared.Video;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 
-namespace LteCar.Server.Controllers;
+namespace SignalRC.Server.Controllers;
 
 // ponytail: edit per-channel config from the web UI; mutations push live to the
 // connected Onboard via the control hub. Schema already roundtrips every MapItem field
@@ -23,7 +23,7 @@ public class ChannelsController : ControllerBase
     private readonly AvailableTypesRegistry _availableTypes;
     private readonly ILogger<ChannelsController> _logger;
 
-    public ChannelsController(LteCarContext context, IHubContext<CarConnectionHub, IConnectionHubClient> controlHub, AvailableTypesRegistry availableTypes, ILogger<ChannelsController> logger) : base(context)
+    public ChannelsController(SignalRCContext context, IHubContext<CarConnectionHub, IConnectionHubClient> controlHub, AvailableTypesRegistry availableTypes, ILogger<ChannelsController> logger) : base(context)
     {
         _controlHub = controlHub;
         _availableTypes = availableTypes;
@@ -493,7 +493,7 @@ public class TelemetryChannelDto
     public string? ChannelName { get; set; }
     public int ReadIntervalTicks { get; set; }
     public string? TelemetryType { get; set; }
-    public LteCar.Shared.Channels.TelemetryDataType DataType { get; set; }
+    public SignalRC.Shared.Channels.TelemetryDataType DataType { get; set; }
     public string? Unit { get; set; }
     public byte? Decimals { get; set; }
     public string? PinManager { get; set; }
@@ -516,7 +516,7 @@ public class VideoStreamDto
     public int? Priority { get; set; }
     public int? Port { get; set; }
     public int? JanusPort { get; set; }
-    public LteCar.Shared.Video.StreamProtocol? Protocol { get; set; }
+    public SignalRC.Shared.Video.StreamProtocol? Protocol { get; set; }
     public string? ProcessArguments { get; set; }
     public string? StreamPurpose { get; set; }
     public string? Description { get; set; }

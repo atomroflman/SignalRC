@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Options;
 using System.ComponentModel.DataAnnotations;
 
-namespace LteCar.Server.Configuration;
+namespace SignalRC.Server.Configuration;
 
 public interface IConfigurationService
 {

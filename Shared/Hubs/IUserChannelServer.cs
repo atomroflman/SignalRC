@@ -1,4 +1,4 @@
-namespace LteCar.Shared.Hubs;
+namespace SignalRC.Shared.Hubs;
 
 public interface IUserChannelServer
 {

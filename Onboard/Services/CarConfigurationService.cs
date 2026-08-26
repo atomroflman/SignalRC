@@ -1,4 +1,4 @@
-using LteCar.Shared;
+using SignalRC.Shared;
 
 public class ServerCarConfigurationService {
     public event Action OnConfigurationChanged = delegate { };

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-LteCar Video-Stack Diagnose-Tool
+SignalRC Video-Stack Diagnose-Tool
 
 Läuft auf dem Onboard-Client (Raspberry Pi / lte-truck) und prüft Schritt für
 Schritt, ob der Video-Stream vom Kamera-Sensor bis zum Janus-Server funktioniert.
@@ -126,11 +126,11 @@ def find_onboard_dir() -> Path:
         Path.cwd() / "Onboard",
         Path(__file__).resolve().parent.parent,
         Path("/home/greg-e/SignalRC/Onboard"),
-        Path("/opt/ltecar/onboard"),
+        Path("/opt/signalrc/onboard"),
     ]
     for candidate in candidates:
         if (candidate / "appSettings.json").exists() or (
-            candidate / "LteCar.Onboard"
+            candidate / "SignalRC.Onboard"
         ).exists():
             return candidate
     return Path.cwd()
@@ -377,7 +377,7 @@ def check_leftover_processes() -> tuple[bool, list[str]]:
     for line in stdout.splitlines():
         if "grep" in line.lower():
             continue
-        if "LteCar.Onboard" in line:
+        if "SignalRC.Onboard" in line:
             continue
         for pattern, label in patterns:
             if re.search(pattern, line):
@@ -389,13 +389,13 @@ def check_leftover_processes() -> tuple[bool, list[str]]:
 
 
 def check_onboard_error_log() -> str:
-    """Prüft /var/log/ltecar/onboard.err auf bekannte Fehlermuster.
+    """Prüft /var/log/signalrc/onboard.err auf bekannte Fehlermuster.
 
     Berücksichtigt nur Einträge, die nach dem letzten Start des
-    ltecar-onboard.service geschrieben wurden, damit alte Crashes
+    signalrc-onboard.service geschrieben wurden, damit alte Crashes
     nicht den aktuellen Zustand verschleiern.
     """
-    log_path = Path("/var/log/ltecar/onboard.err")
+    log_path = Path("/var/log/signalrc/onboard.err")
     if not log_path.exists():
         return ""
 
@@ -442,8 +442,8 @@ def check_onboard_error_log() -> str:
 
 
 def check_systemd_service() -> dict:
-    """Liest den Status des ltecar-onboard.service aus."""
-    rc, stdout, _ = run(["systemctl", "status", "ltecar-onboard.service", "--no-pager", "-l"])
+    """Liest den Status des signalrc-onboard.service aus."""
+    rc, stdout, _ = run(["systemctl", "status", "signalrc-onboard.service", "--no-pager", "-l"])
     result = {
         "exit_code": rc,
         "active": False,
@@ -621,7 +621,7 @@ def start_test_mediamtx(onboard_dir: Path, stream_name: str) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="LteCar Video-Stack Diagnose")
+    parser = argparse.ArgumentParser(description="SignalRC Video-Stack Diagnose")
     parser.add_argument(
         "--start-test",
         action="store_true",
@@ -642,7 +642,7 @@ def main() -> int:
     set_json_mode(args.json)
 
     if not _json_mode:
-        print(color("LteCar Video-Stack Diagnose", Colors.BOLD + Colors.INFO))
+        print(color("SignalRC Video-Stack Diagnose", Colors.BOLD + Colors.INFO))
         print(color(f"Gestartet: {time.strftime('%Y-%m-%d %H:%M:%S')}", Colors.INFO))
 
     onboard_dir = find_onboard_dir()
@@ -673,9 +673,9 @@ def main() -> int:
     errors: list[str] = []
 
     print_step(0, "Onboard-Prozess läuft")
-    running, procs = check_process("LteCar.Onboard", r"LteCar\.Onboard(\.dll)?$")
+    running, procs = check_process("SignalRC.Onboard", r"SignalRC\.Onboard(\.dll)?$")
     if running:
-        ok(f"LteCar.Onboard läuft (PID {procs[0]['pid']})")
+        ok(f"SignalRC.Onboard läuft (PID {procs[0]['pid']})")
         # Hinweis, wenn der laufende Build nicht dem systemd-Release entspricht.
         full_cmd = procs[0]["cmd"]
         if "/bin/Debug/" in full_cmd:
@@ -684,7 +684,7 @@ def main() -> int:
         elif "/publish/" not in full_cmd:
             warn("Der laufende Onboard scheint nicht der veröffentlichte Release-Build zu sein.")
     else:
-        fail("LteCar.Onboard läuft NICHT")
+        fail("SignalRC.Onboard läuft NICHT")
         errors.append("Onboard-Prozess fehlt")
         fail("Abbruch: Ohne Onboard kann der Rest nicht funktionieren.")
         print_summary(errors)
@@ -715,15 +715,15 @@ def main() -> int:
         errors.append("Verwaiste Kamera-Prozesse gefunden")
 
     # Schritt 0.7: systemd-Service-Status
-    print_step(0.7, "systemd-Service 'ltecar-onboard.service'")
+    print_step(0.7, "systemd-Service 'signalrc-onboard.service'")
     svc = check_systemd_service()
     if svc.get("failed"):
-        fail("ltecar-onboard.service ist im Zustand 'failed'")
-        errors.append("systemd-Service ltecar-onboard.service failed")
+        fail("signalrc-onboard.service ist im Zustand 'failed'")
+        errors.append("systemd-Service signalrc-onboard.service failed")
     elif svc.get("active"):
-        ok("ltecar-onboard.service ist aktiv")
+        ok("signalrc-onboard.service ist aktiv")
     else:
-        warn("ltecar-onboard.service ist nicht aktiv")
+        warn("signalrc-onboard.service ist nicht aktiv")
     if "active_line" in svc:
         info(svc["active_line"])
 

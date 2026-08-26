@@ -1,13 +1,13 @@
 using System.Reflection;
 using System.Text.Json;
-using LteCar.Onboard.Control.ControlTypes;
-using LteCar.Onboard.Hardware;
-using LteCar.Shared.Channels;
+using SignalRC.Onboard.Control.ControlTypes;
+using SignalRC.Onboard.Hardware;
+using SignalRC.Shared.Channels;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
-namespace LteCar.Onboard.Control;
+namespace SignalRC.Onboard.Control;
 
 public class ControlExecutionService
 {

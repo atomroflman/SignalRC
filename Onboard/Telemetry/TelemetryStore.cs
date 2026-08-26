@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 
-namespace LteCar.Onboard.Telemetry;
+namespace SignalRC.Onboard.Telemetry;
 
 // ponytail: shared bag the inbound ITelemetryClient.UpdateTelemetry writes
 // into and StoreBackedTelemetryReader reads out of. The Onboard side has no

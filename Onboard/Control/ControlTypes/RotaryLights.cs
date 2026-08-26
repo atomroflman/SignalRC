@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Logging;
-using LteCar.Onboard.Hardware;
+using SignalRC.Onboard.Hardware;
 
-namespace LteCar.Onboard.Control.ControlTypes
+namespace SignalRC.Onboard.Control.ControlTypes
 {
     [ControlType("RotaryLight")]
     public class RotaryLight : ControlTypeBase

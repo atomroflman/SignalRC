@@ -1,9 +1,9 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using LteCar.Shared.Video;
+using SignalRC.Shared.Video;
 using System.Text.Json;
 
-namespace LteCar.Server.Data;
+namespace SignalRC.Server.Data;
 
 public class CarVideoStream : EntityBase, IVideoSettings
 {

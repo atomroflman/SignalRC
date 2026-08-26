@@ -1,8 +1,8 @@
-# LteCar Features
+# SignalRC Features
 
 ## Overview
 
-LteCar provides the following features for remote vehicle control:
+SignalRC provides the following features for remote vehicle control:
 
 - **Remote Control**: Drive your car over LTE/Internet with low latency
 - **Video Streaming**: Real-time video from on-board camera
@@ -26,7 +26,7 @@ LteCar provides the following features for remote vehicle control:
 
 ### Channels
 
-LteCar supports unlimited control channels defined in `channelMap.json`, each backed by a `controlType` implementation (`Onboard/Control/ControlTypes/`) — see [Configuration Reference → Control Types](CONFIGURATION.md#control-types) for the full, current list. The common ones:
+SignalRC supports unlimited control channels defined in `channelMap.json`, each backed by a `controlType` implementation (`Onboard/Control/ControlTypes/`) — see [Configuration Reference → Control Types](CONFIGURATION.md#control-types) for the full, current list. The common ones:
 
 | `controlType` value | Description |
 |-------------|-------------|
@@ -206,7 +206,7 @@ The filesystem templates under `VehicleTemplates/`/`vehicleTemplates/` are creat
 
 Templates are looked up from:
 1. `VEHICLE_TEMPLATES_PATH` environment variable
-2. `~/vehicleTemplates/` by default (the user's home directory, not `~/.ltecar/`)
+2. `~/vehicleTemplates/` by default (the user's home directory, not `~/.signalrc/`)
 
 ### A second, separate template system
 

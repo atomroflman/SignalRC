@@ -1,4 +1,4 @@
-namespace LteCar.Server.Services;
+namespace SignalRC.Server.Services;
 
 public class BiDictionary<TKey, TValue>
     where TKey : notnull

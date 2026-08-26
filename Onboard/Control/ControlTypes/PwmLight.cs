@@ -1,8 +1,8 @@
-// filepath: /home/greg-e/LteCar/Onboard/Control/ControlTypes/PwmLight.cs
+// filepath: /home/greg-e/SignalRC/Onboard/Control/ControlTypes/PwmLight.cs
 using Microsoft.Extensions.Logging;
-using LteCar.Onboard.Hardware;
+using SignalRC.Onboard.Hardware;
 
-namespace LteCar.Onboard.Control.ControlTypes;
+namespace SignalRC.Onboard.Control.ControlTypes;
 
 [ControlType("PwmLight")]
 public class PwmLight : ControlTypeBase

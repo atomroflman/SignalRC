@@ -1,4 +1,4 @@
-# LteCar – Fernsteuerung über LTE/Internet
+# SignalRC – Fernsteuerung über LTE/Internet
 
 *[English version](Readme.md)*
 
@@ -15,7 +15,7 @@ curl -fsSL https://raw.githubusercontent.com/atomroflman/SignalRC/master/install
 # → "1) Server" wählen
 ```
 
-Das installiert den vollständigen Container-Stack (`nginx` + `client` + `server` + `janus` + `postgres` + `turn`) über Docker- oder Podman-Compose und kann optional eine `ltecar.service`-Systemd-Unit anlegen, damit der Stack Reboots übersteht.
+Das installiert den vollständigen Container-Stack (`nginx` + `client` + `server` + `janus` + `postgres` + `turn`) über Docker- oder Podman-Compose und kann optional eine `signalrc.service`-Systemd-Unit anlegen, damit der Stack Reboots übersteht.
 
 ### 2. Onboard (Fahrzeug) installieren – über die Web-UI
 
@@ -25,7 +25,7 @@ Sobald der Server läuft, im Browser öffnen (`https://euer-server/`). Solange k
 curl -fsSL https://EUER-SERVER/api/install/onboard.sh | sudo bash
 ```
 
-Diesen Befehl auf dem Raspberry Pi einfügen. Er führt dasselbe `install.sh` aus, vorbefüllt für den `onboard`-Modus, und kann `ltecar-onboard.service` (+ `ltecar-mediamtx.service`) für den Autostart registrieren. Die fahrzeugspezifische Konfiguration (Kanäle, Name, Hardware) erfolgt danach über den Web-Client unter `/car/[carId]`.
+Diesen Befehl auf dem Raspberry Pi einfügen. Er führt dasselbe `install.sh` aus, vorbefüllt für den `onboard`-Modus, und kann `signalrc-onboard.service` (+ `signalrc-mediamtx.service`) für den Autostart registrieren. Die fahrzeugspezifische Konfiguration (Kanäle, Name, Hardware) erfolgt danach über den Web-Client unter `/car/[carId]`.
 
 Lieber manuell? Installer direkt auf dem Fahrzeug starten und Option 2 wählen:
 
@@ -173,7 +173,6 @@ Die fahrzeugspezifische Konfiguration (Kanäle, Name, Hardware) sowie das Testen
 
 | Variable | Beschreibung |
 |----------|--------------|
-| `CONFIG_DIR` | Konfigurationsverzeichnis (Onboard) |
 | `VEHICLE_TEMPLATES_PATH` | Template-Pfad (Dateisystem-Fahrzeugvorlagen in `VehicleTemplates/`/`vehicleTemplates/`) |
 | `COTURN_EXTERNAL_IP` / `COTURN_USERNAME` / `COTURN_CREDENTIAL` | Öffentliche IP und Zugangsdaten des TURN-Servers (Docker Compose) |
 | `JANUS_NAT_1_1` | Öffentliche IP für Janus-WebRTC-NAT-Traversal (Docker Compose); fällt ohne Angabe auf Azure IMDS zurück |

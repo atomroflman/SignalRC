@@ -1,9 +1,9 @@
 using Microsoft.AspNetCore.SignalR;
-using LteCar.Server.Data;
-using LteCar.Shared;
+using SignalRC.Server.Data;
+using SignalRC.Shared;
 using Microsoft.EntityFrameworkCore;
 
-namespace LteCar.Server.Hubs;
+namespace SignalRC.Server.Hubs;
 
 public interface IAudioChatClient
 {
@@ -45,10 +45,10 @@ public class AudioStreamSettings
 
 public class CarAudioHub : Hub<IAudioChatClient>, IAudioChatServer
 {
-    private readonly LteCarContext _context;
+    private readonly SignalRCContext _context;
     private readonly ILogger<CarAudioHub> _logger;
 
-    public CarAudioHub(LteCarContext context, ILogger<CarAudioHub> logger)
+    public CarAudioHub(SignalRCContext context, ILogger<CarAudioHub> logger)
     {
         _context = context;
         _logger = logger;

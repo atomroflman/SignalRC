@@ -1,7 +1,7 @@
 using System.Threading.Tasks;
-using LteCar.Shared.Video;
+using SignalRC.Shared.Video;
 
-namespace LteCar.Shared.HubClients;
+namespace SignalRC.Shared.HubClients;
 
 public interface IDiagnosticsClient
 {

@@ -1,4 +1,4 @@
-namespace LteCar.Server.Data;
+namespace SignalRC.Server.Data;
 
 public class UserSetupCarChannelNode : UserSetupFlowNodeBase
 {

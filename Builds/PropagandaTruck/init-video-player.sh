@@ -1,5 +1,5 @@
 #!/bin/bash
-# filepath: /home/greg-e/LteCar/Builds/PropagandaTruck/init-video-player.sh
+# filepath: /home/greg-e/SignalRC/Builds/PropagandaTruck/init-video-player.sh
 # Initialize two mpv instances that listen on unix sockets for JSON IPC.
 set -euo pipefail
 

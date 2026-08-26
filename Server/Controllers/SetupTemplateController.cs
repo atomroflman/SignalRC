@@ -1,15 +1,15 @@
-using LteCar.Server.Data;
-using LteCar.Shared.SetupTemplate;
+using SignalRC.Server.Data;
+using SignalRC.Shared.SetupTemplate;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
-namespace LteCar.Server.Controllers;
+namespace SignalRC.Server.Controllers;
 
 [ApiController]
 [Route("api/setuptemplate")]
 public class SetupTemplateController : ControllerBase
 {
-    public SetupTemplateController(LteCarContext context) : base(context) { }
+    public SetupTemplateController(SignalRCContext context) : base(context) { }
 
     [HttpGet("export/{carId:int}")]
     public async Task<IActionResult> Export(int carId)

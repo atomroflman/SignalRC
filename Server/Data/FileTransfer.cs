@@ -1,6 +1,6 @@
-using LteCar.Shared.FileTransfer;
+using SignalRC.Shared.FileTransfer;
 
-namespace LteCar.Server.Data;
+namespace SignalRC.Server.Data;
 
 public class FileTransfer : EntityBase
 {

@@ -1,7 +1,7 @@
-using LteCar.Shared.Channels;
-using LteCar.Shared.Video;
+using SignalRC.Shared.Channels;
+using SignalRC.Shared.Video;
 
-namespace LteCar.Shared;
+namespace SignalRC.Shared;
 
 public class CarConfiguration : IConfigurationModel
 {

@@ -1,7 +1,7 @@
-using LteCar.Onboard.Telemetry;
+using SignalRC.Onboard.Telemetry;
 using Microsoft.Extensions.Logging;
 
-namespace LteCar.Onboard.Control.ControlTypes;
+namespace SignalRC.Onboard.Control.ControlTypes;
 
 // ponytail: control channel whose received value is re-published as telemetry
 // under the same channel name. Pair it with a StoreBackedTelemetryReader on

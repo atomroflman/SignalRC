@@ -1,6 +1,6 @@
-using LteCar.Onboard.Hardware;
+using SignalRC.Onboard.Hardware;
 
-namespace LteCar.Onboard.Control.ControlTypes;
+namespace SignalRC.Onboard.Control.ControlTypes;
 
 public interface IControlType
 {

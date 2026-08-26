@@ -1,8 +1,8 @@
-using LteCar.Shared.HubClients;
+using SignalRC.Shared.HubClients;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 
-namespace LteCar.Server.Hubs;
+namespace SignalRC.Server.Hubs;
 
 public class CarBashHub : Hub<ICarBashClient>, ICarBashServer
 {

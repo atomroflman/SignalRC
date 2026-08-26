@@ -1,10 +1,10 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LteCar.Onboard", "Onboard\LteCar.Onboard.csproj", "{E7AEB4DD-801F-4D12-98D2-BB8A55AEAD31}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SignalRC.Onboard", "Onboard\SignalRC.Onboard.csproj", "{E7AEB4DD-801F-4D12-98D2-BB8A55AEAD31}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LteCar.Server", "Server\LteCar.Server.csproj", "{2EC5A5E7-52C7-45D7-B4C1-1F26FE262877}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SignalRC.Server", "Server\SignalRC.Server.csproj", "{2EC5A5E7-52C7-45D7-B4C1-1F26FE262877}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LteCar.Shared", "Shared\LteCar.Shared.csproj", "{B7DE295C-94C6-4B1D-ADA4-B54BA8FF9991}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SignalRC.Shared", "Shared\SignalRC.Shared.csproj", "{B7DE295C-94C6-4B1D-ADA4-B54BA8FF9991}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

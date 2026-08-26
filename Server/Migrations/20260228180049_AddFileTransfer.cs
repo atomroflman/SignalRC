@@ -4,7 +4,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace LteCar.Server.Migrations
+namespace SignalRC.Server.Migrations
 {
     /// <inheritdoc />
     public partial class AddFileTransfer : Migration

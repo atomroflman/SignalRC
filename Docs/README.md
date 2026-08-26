@@ -1,4 +1,4 @@
-# LteCar Documentation
+# SignalRC Documentation
 
 *This documentation is maintained primarily in English. For a German-language overview, see [README.de.md](README.de.md).*
 
@@ -17,7 +17,7 @@ For the full container stack, see the installation guide. It covers the nginx + 
 
 ## System Overview
 
-LteCar is a system for building and operating remotely controlled cars over LTE/Internet.
+SignalRC is a system for building and operating remotely controlled cars over LTE/Internet.
 
 ### Key Features
 

@@ -1,14 +1,14 @@
 using System.Diagnostics;
-using LteCar.Server.Hubs;
-using LteCar.Shared;
-using LteCar.Shared.Channels;
-using LteCar.Shared.HubClients;
-using LteCar.Shared.Hubs;
-using LteCar.Shared.Video;
+using SignalRC.Server.Hubs;
+using SignalRC.Shared;
+using SignalRC.Shared.Channels;
+using SignalRC.Shared.HubClients;
+using SignalRC.Shared.Hubs;
+using SignalRC.Shared.Video;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
-namespace LteCar.Onboard.Video;
+namespace SignalRC.Onboard.Video;
 
 // public class CameraProcessInfo
 // {

@@ -13,8 +13,8 @@ COPY .git .git
 COPY Server/ Server/
 COPY Shared/ Shared/
 
-RUN dotnet restore Server/LteCar.Server.csproj
-RUN dotnet publish Server/LteCar.Server.csproj -c Release -o /app/publish /p:UseAppHost=false \
+RUN dotnet restore Server/SignalRC.Server.csproj
+RUN dotnet publish Server/SignalRC.Server.csproj -c Release -o /app/publish /p:UseAppHost=false \
     /p:BuildInfoBranch="$GIT_BRANCH" /p:BuildInfoCommit="$GIT_COMMIT"
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
@@ -29,4 +29,4 @@ COPY VehicleTemplates /app/VehicleTemplates
 # ffmpeg is used by VideoStreamReceiverService to relay
 # the TCP stream from the Onboard to Janus via RTP.
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg curl && rm -rf /var/lib/apt/lists/*
-ENTRYPOINT ["dotnet", "LteCar.Server.dll"]
+ENTRYPOINT ["dotnet", "SignalRC.Server.dll"]

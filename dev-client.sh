@@ -1,38 +1,38 @@
 #!/bin/bash
 # Startet einen Dev-Container für den Next.js-Client, der die Source per
 # bind-mount vom Host holt. Hot-Reload funktioniert ohne Container-Build.
-# Voraussetzung: source unter ~/LteCar/Client ist via git pull aktuell.
+# Voraussetzung: source unter ~/SignalRC/Client ist via git pull aktuell.
 set -euo pipefail
 
-cd ~/LteCar
+cd ~/SignalRC
 
 echo "[dev-client] stoppe abhängige container (nginx) ..."
-podman stop ltecar_nginx_1 2>/dev/null || true
+podman stop signalrc_nginx_1 2>/dev/null || true
 for i in $(seq 1 15); do
-  if ! podman inspect ltecar_nginx_1 >/dev/null 2>&1; then
+  if ! podman inspect signalrc_nginx_1 >/dev/null 2>&1; then
     break
   fi
   sleep 1
 done
-podman rm -f ltecar_nginx_1 2>/dev/null || true
+podman rm -f signalrc_nginx_1 2>/dev/null || true
 
 echo "[dev-client] stoppe alten prod-client ..."
-podman stop ltecar_client_1 2>/dev/null || true
+podman stop signalrc_client_1 2>/dev/null || true
 for i in $(seq 1 15); do
-  if ! podman inspect ltecar_client_1 >/dev/null 2>&1; then
+  if ! podman inspect signalrc_client_1 >/dev/null 2>&1; then
     break
   fi
   sleep 1
 done
-podman rm -f ltecar_client_1 2>/dev/null || true
+podman rm -f signalrc_client_1 2>/dev/null || true
 
 echo "[dev-client] starte dev-container (node:22-alpine, npm run dev) ..."
-podman run --name ltecar_client_1 \
-  --network ltecar_default \
+podman run --name signalrc_client_1 \
+  --network signalrc_default \
   --network-alias client \
   -p 3000:3000 \
-  -v "$HOME/LteCar/Client":/app:Z \
-  -v ltecar_client_nm:/app/node_modules \
+  -v "$HOME/SignalRC/Client":/app:Z \
+  -v signalrc_client_nm:/app/node_modules \
   --env NODE_ENV=development \
   --env PORT=3000 \
   --env HOSTNAME=0.0.0.0 \
@@ -62,5 +62,5 @@ for i in $(seq 1 15); do
 done
 
 echo "[dev-client] nginx nicht bereit, logs:"
-podman logs --tail=20 ltecar_nginx_1
+podman logs --tail=20 signalrc_nginx_1
 exit 1

@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace LteCar.Shared.SetupTemplate;
+namespace SignalRC.Shared.SetupTemplate;
 
 public sealed class VehicleSetupTemplate
 {

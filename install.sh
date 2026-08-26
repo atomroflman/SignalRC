@@ -112,14 +112,14 @@ parse_server_url() {
     fi
 
     if [[ "$host_port" == *:* ]]; then
-        LTECAR_SERVER_NAME="${host_port%%:*}"
-        LTECAR_SERVER_PORT="${host_port##*:}"
+        SIGNALRC_SERVER_NAME="${host_port%%:*}"
+        SIGNALRC_SERVER_PORT="${host_port##*:}"
     else
-        LTECAR_SERVER_NAME="$host_port"
-        LTECAR_SERVER_PORT=$([ "$scheme" = "https" ] && echo "443" || echo "80")
+        SIGNALRC_SERVER_NAME="$host_port"
+        SIGNALRC_SERVER_PORT=$([ "$scheme" = "https" ] && echo "443" || echo "80")
     fi
 
-    LTECAR_USE_HTTPS=$([ "$scheme" = "https" ] && echo "true" || echo "false")
+    SIGNALRC_USE_HTTPS=$([ "$scheme" = "https" ] && echo "true" || echo "false")
     return 0
 }
 
@@ -129,8 +129,8 @@ prompt_onboard_server_settings() {
     local current_server_port=""
     local current_use_https=""
 
-    if [ -n "${LTECAR_SERVER_URL:-}" ]; then
-        parse_server_url "$LTECAR_SERVER_URL" || true
+    if [ -n "${SIGNALRC_SERVER_URL:-}" ]; then
+        parse_server_url "$SIGNALRC_SERVER_URL" || true
     fi
 
     if [ -f "$appsettings_path" ] && command -v python3 &>/dev/null; then
@@ -151,10 +151,10 @@ PY
         current_use_https="${current_settings[2]}"
     fi
 
-    local default_server_name="${LTECAR_SERVER_NAME:-$current_server_name}"
-    local default_server_port="${LTECAR_SERVER_PORT:-$current_server_port}"
+    local default_server_name="${SIGNALRC_SERVER_NAME:-$current_server_name}"
+    local default_server_port="${SIGNALRC_SERVER_PORT:-$current_server_port}"
     local default_use_https
-    default_use_https=$(normalize_boolean "${LTECAR_USE_HTTPS:-$current_use_https}")
+    default_use_https=$(normalize_boolean "${SIGNALRC_USE_HTTPS:-$current_use_https}")
 
     [ -n "$default_server_name" ] || default_server_name="localhost"
     if [ -z "$default_server_port" ]; then
@@ -184,7 +184,7 @@ update_onboard_appsettings() {
         return 0
     fi
 
-    python3 - "$appsettings_path" "${LTECAR_SERVER_NAME:-}" "${LTECAR_SERVER_PORT:-}" "$(normalize_boolean "${LTECAR_USE_HTTPS:-false}")" "$(MEDIAMTX_DEST)" <<'PY'
+    python3 - "$appsettings_path" "${SIGNALRC_SERVER_NAME:-}" "${SIGNALRC_SERVER_PORT:-}" "$(normalize_boolean "${SIGNALRC_USE_HTTPS:-false}")" "$(MEDIAMTX_DEST)" <<'PY'
 import json
 import sys
 
@@ -230,9 +230,9 @@ else
 
     REPO_DIR="$RUN_USER_HOME/SignalRC"
 
-    if [[ -n $LTECAR_BRANCH ]]; then
-        echo "Branch preselected: $LTECAR_BRANCH"
-        BRANCH_CHOICE="$LTECAR_BRANCH"
+    if [[ -n $SIGNALRC_BRANCH ]]; then
+        echo "Branch preselected: $SIGNALRC_BRANCH"
+        BRANCH_CHOICE="$SIGNALRC_BRANCH"
         CURRENT_BRANCH=$BRANCH_CHOICE
         if [ -d "$REPO_DIR" ] && [ "$(ls -A "$REPO_DIR")" ]; then
             echo "Target directory $REPO_DIR already exists and is not empty. Skipping clone."
@@ -249,7 +249,7 @@ else
         mapfile -t BRANCHES < <(git ls-remote --heads "$REPO_URL" | sed 's|.*refs/heads/||' | sort)
 
         DEFAULT_IDX=1
-        DEFAULT_BRANCH="${LTECAR_BRANCH:-}"
+        DEFAULT_BRANCH="${SIGNALRC_BRANCH:-}"
         for i in "${!BRANCHES[@]}"; do
             idx=$((i + 1))
             marker=""
@@ -285,17 +285,17 @@ else
         fi
     fi
 
-    #if [ -n "${LTECAR_GIT_REF:-}" ]; then
-    #    echo "Checking out preselected git ref: $LTECAR_GIT_REF"
+    #if [ -n "${SIGNALRC_GIT_REF:-}" ]; then
+    #    echo "Checking out preselected git ref: $SIGNALRC_GIT_REF"
     #    run_as_user git -C "$REPO_DIR" fetch --all --tags --prune
-    #    run_as_user git -C "$REPO_DIR" checkout "$LTECAR_GIT_REF"
-    #    CURRENT_BRANCH=$(git -C "$REPO_DIR" branch --show-current || echo "$LTECAR_GIT_REF")
+    #    run_as_user git -C "$REPO_DIR" checkout "$SIGNALRC_GIT_REF"
+    #    CURRENT_BRANCH=$(git -C "$REPO_DIR" branch --show-current || echo "$SIGNALRC_GIT_REF")
     #fi
 fi
 
 echo ""
 echo "============================================"
-echo "  LteCar Installer"
+echo "  SignalRC Installer"
 echo "============================================"
 echo "  User  : $RUN_USER"
 echo "  Home  : $RUN_USER_HOME"
@@ -457,12 +457,12 @@ if [ "$DEPLOY_MODE" = "server" ]; then
         # `|| true` so missing containers on a first-ever boot don't abort.
         # Wrapped in `/bin/sh -c` because systemd ExecStartPre does not invoke
         # a shell – `|| true` would otherwise be passed to podman as args.
-        EXEC_START_PRE="ExecStartPre=/bin/sh -c '$ENGINE_BIN start ltecar_postgres_1 ltecar_janus_1 ltecar_server_1 ltecar_client_1 ltecar_nginx_1 || true'"
+        EXEC_START_PRE="ExecStartPre=/bin/sh -c '$ENGINE_BIN start signalrc_postgres_1 signalrc_janus_1 signalrc_server_1 signalrc_client_1 signalrc_nginx_1 || true'"
     fi
 
-    cat > /etc/systemd/system/ltecar.service <<EOF
+    cat > /etc/systemd/system/signalrc.service <<EOF
 [Unit]
-Description=LteCar compose stack
+Description=SignalRC compose stack
 Wants=network-online.target
 After=network-online.target $AFTER_TARGET
 # Limit restart attempts to 5 in 10 minutes when ExecStart fails
@@ -487,7 +487,7 @@ WantedBy=multi-user.target
 EOF
 
     systemctl daemon-reload
-    systemctl enable --now ltecar.service
+    systemctl enable --now signalrc.service
 
     # Rootless podman kills its containers when the owning user's session
     # ends. Without linger the stack dies whenever greg-e (or whoever owns
@@ -503,13 +503,13 @@ EOF
     fi
 
     echo ""
-    systemctl status ltecar.service --no-pager || true
+    systemctl status signalrc.service --no-pager || true
 
     echo ""
     echo "============================================"
     echo "  Installation complete!"
     echo "============================================"
-    echo "  Manage:  sudo systemctl {start|stop|restart|status} ltecar.service"
+    echo "  Manage:  sudo systemctl {start|stop|restart|status} signalrc.service"
     echo "  Logs  :  $COMPOSE_CMD -f $COMPOSE_FILE logs -f"
     echo "============================================"
     exit 0
@@ -626,10 +626,10 @@ if [ "$DEPLOY_MODE" = "onboard" ]; then
     export PATH="$DOTNET_ROOT:$DOTNET_ROOT/tools:$PATH"
 
     echo "Building .NET Onboard Client ..."
-    echo "\"$DOTNET_ROOT/dotnet\" publish \"$REPO_DIR/Onboard/LteCar.Onboard.csproj\" -c Release"
-    run_as_user "$DOTNET_ROOT/dotnet" publish "$REPO_DIR/Onboard/LteCar.Onboard.csproj" -c Release || true
+    echo "\"$DOTNET_ROOT/dotnet\" publish \"$REPO_DIR/Onboard/SignalRC.Onboard.csproj\" -c Release"
+    run_as_user "$DOTNET_ROOT/dotnet" publish "$REPO_DIR/Onboard/SignalRC.Onboard.csproj" -c Release || true
 
-    ONBOARD_DLL="$REPO_DIR/Onboard/bin/Release/net10.0/publish/LteCar.Onboard.dll"
+    ONBOARD_DLL="$REPO_DIR/Onboard/bin/Release/net10.0/publish/SignalRC.Onboard.dll"
     if [ ! -f "$ONBOARD_DLL" ]; then
         echo "Error: Onboard DLL not found at $ONBOARD_DLL. Build failed?"
         exit 1
@@ -652,13 +652,13 @@ if [ "$DEPLOY_MODE" = "onboard" ]; then
     echo ""
     echo "── Phase 5: systemd service ──────────────────────────"
 
-    LOG_DIR="/var/log/ltecar"
+    LOG_DIR="/var/log/signalrc"
     mkdir -p "$LOG_DIR"
     chown "$RUN_USER:$RUN_USER" "$LOG_DIR"
 
-    cat > /etc/systemd/system/ltecar-onboard.service <<EOF
+    cat > /etc/systemd/system/signalrc-onboard.service <<EOF
 [Unit]
-Description=LteCar Onboard Client
+Description=SignalRC Onboard Client
 After=network-online.target
 Wants=network-online.target
 # Endless retry: Onboard must always come back, even after a hard crash.
@@ -681,11 +681,11 @@ StandardError=append:$LOG_DIR/onboard.err
 WantedBy=multi-user.target
 EOF
 
-   cat > /etc/systemd/system/ltecar-mediamtx.service <<EOF
+   cat > /etc/systemd/system/signalrc-mediamtx.service <<EOF
 [Unit]
-Description=LteCar mediamtx
-After=ltecar-onboard.service
-Wants=ltecar-onboard.service
+Description=SignalRC mediamtx
+After=signalrc-onboard.service
+Wants=signalrc-onboard.service
 # Endless retry: Onboard must always come back, even after a hard crash.
 StartLimitIntervalSec=infinity
 
@@ -705,8 +705,8 @@ WantedBy=multi-user.target
 EOF
 
     systemctl daemon-reload
-    systemctl enable ltecar-onboard.service
-    systemctl enable ltecar-mediamtx.service
+    systemctl enable signalrc-onboard.service
+    systemctl enable signalrc-mediamtx.service
 
     echo ""
     echo "Service installed and enabled for future boots."
@@ -716,9 +716,9 @@ EOF
     echo "============================================"
     echo "  Installation complete!"
     echo "============================================"
-    echo "  Start :  sudo systemctl start ltecar-onboard.service"
+    echo "  Start :  sudo systemctl start signalrc-onboard.service"
     echo "  Logs  :  $LOG_DIR/onboard.log"
-    echo "  Manage:  sudo systemctl {start|stop|restart|status} ltecar-onboard.service"
+    echo "  Manage:  sudo systemctl {start|stop|restart|status} signalrc-onboard.service"
     echo "============================================"
     exit 0
 fi

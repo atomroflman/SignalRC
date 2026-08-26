@@ -2,11 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Text.Json;
-using LteCar.Shared.Channels;
+using SignalRC.Shared.Channels;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
-namespace LteCar.Onboard.Hardware
+namespace SignalRC.Onboard.Hardware
 {
     /// <summary>
     /// Factory for creating IModuleManager instances based on ChannelMap configuration.

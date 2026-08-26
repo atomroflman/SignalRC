@@ -1,6 +1,6 @@
 using MessagePack;
 
-namespace LteCar.Shared;
+namespace SignalRC.Shared;
 
 /// <summary>
 /// SSH-based authentication request for acquiring car control

@@ -1,11 +1,11 @@
 using System.Diagnostics;
 using System.Reflection;
 using System.Text.Json;
-using LteCar.Shared.HubClients;
-using LteCar.Shared.Video;
+using SignalRC.Shared.HubClients;
+using SignalRC.Shared.Video;
 using Microsoft.Extensions.Logging;
 
-namespace LteCar.Onboard;
+namespace SignalRC.Onboard;
 
 public class OnboardDiagnosticsService : IDiagnosticsClient
 {

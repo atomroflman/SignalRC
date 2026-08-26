@@ -1,5 +1,5 @@
 // ReSharper disable InconsistentNaming
-namespace LteCar.Onboard.Control;
+namespace SignalRC.Onboard.Control;
 
 [Flags]
 public enum PinFunctionFlags

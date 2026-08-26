@@ -1,4 +1,4 @@
-namespace LteCar.Shared.HubClients;
+namespace SignalRC.Shared.HubClients;
 
 // ponytail: union of the client subsets the server's CarConnectionHub
 // pushes calls through. The hub is typed Hub<IConnectionHubClient>; each

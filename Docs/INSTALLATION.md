@@ -1,4 +1,4 @@
-# LteCar Installation Guide
+# SignalRC Installation Guide
 
 ## Prerequisites
 
@@ -15,7 +15,7 @@ curl -fsSL https://raw.githubusercontent.com/atomroflman/SignalRC/master/install
 # → choose "1) Server"
 ```
 
-`install.sh` clones the repo (if not already checked out), asks whether to use Docker or Podman, and whether to deploy the **full stack** (`nginx` + `client` + `server` + `janus` + `postgres` + `turn`) or just the **local-debug** stack (`postgres` + `janus`, see below). It then builds/pulls the images and, at the end, offers to install a `ltecar.service` systemd unit so the stack is enabled and restarted automatically — no manual systemd unit file needed.
+`install.sh` clones the repo (if not already checked out), asks whether to use Docker or Podman, and whether to deploy the **full stack** (`nginx` + `client` + `server` + `janus` + `postgres` + `turn`) or just the **local-debug** stack (`postgres` + `janus`, see below). It then builds/pulls the images and, at the end, offers to install a `signalrc.service` systemd unit so the stack is enabled and restarted automatically — no manual systemd unit file needed.
 
 Run it directly instead of piping from GitHub if you already have the repo checked out:
 
@@ -65,7 +65,7 @@ Edit `Server/appSettings.json` (only the keys that actually bind — see [CONFIG
 ```json
 {
   "ConnectionStrings": {
-    "DefaultConnection": "Host=localhost;Database=ltecar;Username=ltecar;Password=your-password"
+    "DefaultConnection": "Host=localhost;Database=signalrc;Username=signalrc;Password=your-password"
   },
   "JanusConfiguration": {
     "HostName": "localhost"
@@ -91,7 +91,7 @@ cd Server
 dotnet run
 ```
 
-For production, use `install.sh` or `docker compose up --build` as described above. The repo-root `start-server.sh` is a stale leftover pointing at a path from an older project layout (`LteCar.Server/bin/...`) — it does not work against the current `Server/` project and should not be used.
+For production, use `install.sh` or `docker compose up --build` as described above. The repo-root `start-server.sh` is a stale leftover pointing at a path from an older project layout (`SignalRC.Server/bin/...`) — it does not work against the current `Server/` project and should not be used.
 
 ### Local vs Remote Janus
 
@@ -128,7 +128,7 @@ For a Raspberry Pi, `install.sh` automatically:
 3. Installs the .NET SDK via `dotnet-install.sh` (channel 10.0) into `~/.dotnet` — no `apt` `dotnet-sdk` package or Microsoft package feed needed.
 4. Prompts for the server URL and writes it into `Onboard/appSettings.json`.
 5. Publishes the Onboard client (`dotnet publish -c Release`).
-6. Optionally installs and enables `ltecar-onboard.service` (+ `ltecar-mediamtx.service`) via systemd.
+6. Optionally installs and enables `signalrc-onboard.service` (+ `signalrc-mediamtx.service`) via systemd.
 
 Hardware connections: PCA9685 PWM controller via I2C (SDA/SCL), plain GPIO outputs, a Raspberry Pi Camera Module, and an optional JBD BMS via UART for battery telemetry. GPIO/I2C access goes through the .NET `System.Device.Gpio`/`System.Device.I2c` libraries directly — no `pigpio` daemon is required or installed.
 
@@ -143,24 +143,12 @@ dotnet run             # normal start
 
 ## Config Directory
 
-The Onboard client supports flexible config directory locations:
-
-### Command Line
+The Onboard client always uses its current working directory as the config directory (`channelMap.json`, `appSettings.json`, `ssh_key`, `channels.sqlite`). Run it from the directory that holds those files:
 
 ```bash
-dotnet run -- --config-dir=/path/to/config
-```
-
-### Environment Variable
-
-```bash
-export CONFIG_DIR=/path/to/config
+cd Onboard
 dotnet run
 ```
-
-### Interactive Selection
-
-If no config directory is specified, the Onboard app will prompt interactively for one on first run. The chosen path is persisted in `.configdir` file.
 
 ---
 

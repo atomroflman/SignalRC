@@ -1,13 +1,13 @@
 using System.Diagnostics;
 using System.Text.RegularExpressions;
 using System.Text;
-using LteCar.Shared.Channels;
-using LteCar.Shared;
+using SignalRC.Shared.Channels;
+using SignalRC.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using LteCar.Shared.Video;
+using SignalRC.Shared.Video;
 
-namespace LteCar.Onboard;
+namespace SignalRC.Onboard;
 
 public class MediaMtxConfiguration
 {

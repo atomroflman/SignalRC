@@ -1,7 +1,7 @@
 using System.Reflection;
 using Microsoft.Extensions.Logging;
 
-namespace LteCar.Onboard.Services;
+namespace SignalRC.Onboard.Services;
 
 public interface IOnboardBuildInfoService
 {
@@ -12,7 +12,7 @@ public sealed record OnboardBuildInfo(string Branch, string? Commit);
 
 public class OnboardBuildInfoService : IOnboardBuildInfoService
 {
-    private const string ResourceName = "LteCar.Onboard.Generated.onboard-build-info.txt";
+    private const string ResourceName = "SignalRC.Onboard.Generated.onboard-build-info.txt";
     private readonly Lazy<OnboardBuildInfo> _buildInfo;
 
     public ILogger<OnboardBuildInfoService> Logger { get; }

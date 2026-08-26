@@ -4,7 +4,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging;
 
-namespace LteCar.Onboard;
+namespace SignalRC.Onboard;
 
 // ponytail: generates and caches a self-signed TLS certificate in the
 // configDir so the Onboard can serve the SSH-key DL endpoint over HTTPS
@@ -72,7 +72,7 @@ public class TlsCertificateService
         }
 
         using var rsa = RSA.Create(2048);
-        var req = new CertificateRequest("CN=ltecar-vehicle", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        var req = new CertificateRequest("CN=signalrc-vehicle", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         req.CertificateExtensions.Add(sanBuilder.Build());
 
         var cert = req.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(1));

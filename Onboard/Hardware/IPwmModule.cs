@@ -1,7 +1,7 @@
 using System;
 using System.Threading.Tasks;
 
-namespace LteCar.Onboard.Hardware
+namespace SignalRC.Onboard.Hardware
 {
     public interface IPwmModule : IModule
     {

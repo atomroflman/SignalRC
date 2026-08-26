@@ -1,5 +1,5 @@
 // ReSharper disable InconsistentNaming
-namespace LteCar.Onboard.Control;
+namespace SignalRC.Onboard.Control;
 
 /// <summary>
 /// Represents the GPIO pin mapping for a Raspberry Pi 40-pin header.

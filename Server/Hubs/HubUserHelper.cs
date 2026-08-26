@@ -1,12 +1,12 @@
 using System.Security.Claims;
-using LteCar.Server.Data;
+using SignalRC.Server.Data;
 using Microsoft.EntityFrameworkCore;
 
-namespace LteCar.Server.Hubs;
+namespace SignalRC.Server.Hubs;
 
 public static class HubUserHelper
 {
-    public static async Task<User?> GetUserAsync(HttpContext httpContext, LteCarContext db)
+    public static async Task<User?> GetUserAsync(HttpContext httpContext, SignalRCContext db)
     {
         if (httpContext.User.Identity is not ClaimsIdentity claimsIdentity)
             return null;

@@ -1,7 +1,7 @@
 using System.Text.Json.Serialization;
 using MessagePack;
 
-namespace LteCar.Shared.Channels;
+namespace SignalRC.Shared.Channels;
 
 // Base channel map item. Derived classes extend with their own keyed fields.
 [MessagePackObject]

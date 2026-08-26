@@ -3,23 +3,23 @@ using Microsoft.AspNetCore.Http;
 using System;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
-using LteCar.Server.Data;
+using SignalRC.Server.Data;
 using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
-namespace LteCar.Server.Controllers;
+namespace SignalRC.Server.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
 public class UserController : ControllerBase
 {
-    private readonly LteCarContext DbContext;
+    private readonly SignalRCContext DbContext;
     private readonly IServiceProvider ServiceProvider;
     private readonly ILogger<UserController> Logger;
     private static readonly TimeSpan CodeValidity = TimeSpan.FromMinutes(5);
 
-    public UserController(LteCarContext context, IServiceProvider serviceProvider, ILogger<UserController> logger) : base(context)
+    public UserController(SignalRCContext context, IServiceProvider serviceProvider, ILogger<UserController> logger) : base(context)
     {
         DbContext = context;
         ServiceProvider = serviceProvider;
@@ -182,7 +182,7 @@ public class UserController : ControllerBase
             return BadRequest(new { message = "Recovery key is required" });
         }
 
-        var normalized = LteCar.Server.Data.User.NormalizeRecoveryKey(model.RecoveryKey);
+        var normalized = SignalRC.Server.Data.User.NormalizeRecoveryKey(model.RecoveryKey);
         if (normalized.Length != 16)
         {
             return Unauthorized(new { message = "Invalid recovery key" });
@@ -232,7 +232,7 @@ public class UserController : ControllerBase
             return Unauthorized(new { message = "You must be logged in to regenerate a recovery key" });
         }
 
-        var newKey = LteCar.Server.Data.User.GenerateRecoveryKey();
+        var newKey = SignalRC.Server.Data.User.GenerateRecoveryKey();
         user.SetRecoveryKey(newKey);
         await DbContext.SaveChangesAsync();
 
@@ -344,7 +344,7 @@ public class UserController : ControllerBase
         if (!string.IsNullOrEmpty(user.RecoveryKeyHash))
             return null;
 
-        var key = LteCar.Server.Data.User.GenerateRecoveryKey();
+        var key = SignalRC.Server.Data.User.GenerateRecoveryKey();
         user.SetRecoveryKey(key);
         await DbContext.SaveChangesAsync();
         Logger.LogInformation("Generated new recovery key for user {UserId}", user.Id);

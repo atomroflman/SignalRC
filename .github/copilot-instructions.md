@@ -4,7 +4,7 @@ This project is a C# LTE powered RC Car platform with a modular architecture, al
 ## Architecture
 The project is structured into several key components, that are organized in folders:
 ```
-LteCar/
+SignalRC/
 ├── Onboard/                # Main application running on the car
 │   ├── Control/            # Control channel implementations (Steering, Throttle, etc.)
 │   ├── Hardware/           # Hardware abstraction layer and drivers

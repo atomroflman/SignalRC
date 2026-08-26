@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
-using LteCar.Shared;
+using SignalRC.Shared;
 
-namespace LteCar.Server;
+namespace SignalRC.Server;
 
 public class CarConnectionStore : ConcurrentDictionary<string, CarConnectionInfo>
 {

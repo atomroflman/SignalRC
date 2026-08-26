@@ -2,20 +2,20 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Diagnostics;
-using LteCar.Server.Configuration;
-using LteCar.Server.Data;
-using LteCar.Server.Services;
-using LteCar.Shared;
-using LteCar.Shared.Channels;
-using LteCar.Shared.FileTransfer;
-using LteCar.Shared.HubClients;
-using LteCar.Shared.Video;
+using SignalRC.Server.Configuration;
+using SignalRC.Server.Data;
+using SignalRC.Server.Services;
+using SignalRC.Shared;
+using SignalRC.Shared.Channels;
+using SignalRC.Shared.FileTransfer;
+using SignalRC.Shared.HubClients;
+using SignalRC.Shared.Video;
 using MessagePack;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Sqids;
 
-namespace LteCar.Server.Hubs;
+namespace SignalRC.Server.Hubs;
 
 public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
 {
@@ -61,7 +61,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
 
     public Task<CarStateModel[]> UiClientConnected()
     {
-        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
+        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<SignalRCContext>();
         var states = dbContext.Cars
             .AsNoTracking()
             .ToList()
@@ -82,7 +82,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
     public async Task<CarConfiguration> OpenCarConnection(string carIdentityKey, string channelMapHash)
     {
         Logger.LogInformation("Car with identity key '{CarIdentityKey}' attempting to connect: ChannelHash '{ChannelMapHash}'", carIdentityKey, channelMapHash);
-        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
+        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<SignalRCContext>();
         var car = dbContext.Cars.FirstOrDefault(c => c.CarIdentityKey == carIdentityKey);
         if (car == null)
         {
@@ -205,7 +205,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
         var stoppedStreamIds = _viewerRegistry.RemoveConnection(Context.ConnectionId);
         foreach (var streamId in stoppedStreamIds)
         {
-            var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
+            var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<SignalRCContext>();
             var stream = await dbContext.CarVideoStreams.FirstOrDefaultAsync(s => s.Id == streamId);
             if (stream == null)
                 continue;
@@ -228,7 +228,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
         try
         {
             Logger.LogInformation("SyncChannelMap invoked for car {CarId}", request.CarId);
-            var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
+            var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<SignalRCContext>();
             var car = await dbContext.Cars.FirstOrDefaultAsync(c => c.Id == request.CarId);
             if (car == null)
             {
@@ -272,7 +272,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
     {
         Logger.LogInformation("Device reports transfer {Token} status: {Status}", update.Token, update.Status);
 
-        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
+        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<SignalRCContext>();
         var transfer = await dbContext.FileTransfers
             .FirstOrDefaultAsync(f => f.DownloadToken == update.Token);
         if (transfer == null)
@@ -350,7 +350,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
         if (!_connectionStore.TryGetValue(carId.ToString(), out var connectionInfo))
             return;
         // TODO: Cache einbauen
-        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
+        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<SignalRCContext>();
         var channelName = dbContext.Set<CarChannel>().FirstOrDefault(e => e.Id == channelId)?.ChannelName;
         if (channelName == null)
         {
@@ -379,7 +379,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
         if (!approved)
             return null;
 
-        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
+        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<SignalRCContext>();
         var transfer = new FileTransfer
         {
             CarId = carId,
@@ -439,7 +439,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
                 Logger.LogWarning($"No authenticated user found for car {carId}");
                 return;
             }
-            var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
+            var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<SignalRCContext>();
             var car = await dbContext.Cars.FirstOrDefaultAsync(c => c.Id == carId);
             if (car == null)
             {
@@ -470,7 +470,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
             if (!user.HasControlledCar)
             {
                 user.HasControlledCar = true;
-                var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
+                var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<SignalRCContext>();
                 await dbContext.SaveChangesAsync();
             }
         }
@@ -488,7 +488,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
             if (user == null) return;
             if (user.ActiveVehicleId == carId) return;
             user.ActiveVehicleId = carId;
-            var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
+            var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<SignalRCContext>();
             await dbContext.SaveChangesAsync();
         }
         catch (Exception ex)
@@ -504,7 +504,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
             var user = await GetCurrentUserAsync();
             if (user == null || user.ActiveVehicleId != carId) return;
             user.ActiveVehicleId = null;
-            var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
+            var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<SignalRCContext>();
             await dbContext.SaveChangesAsync();
         }
         catch (Exception ex)
@@ -517,7 +517,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
     {
         if (!_connectionStore.TryGetValue(carId.ToString(), out var connectionInfo))
             return;
-        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
+        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<SignalRCContext>();
         var activeDriver = await dbContext.Users.FirstOrDefaultAsync(user => user.ActiveVehicleId == carId);
         connectionInfo.DriverId = activeDriver?.Id.ToString();
         connectionInfo.DriverName = activeDriver?.Name ?? activeDriver?.LoginName;
@@ -538,7 +538,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
         if (string.IsNullOrEmpty(sessionToken))
             return null;
         var sessionId = _sqidsEncoder.Decode(sessionToken).FirstOrDefault();
-        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
+        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<SignalRCContext>();
         return await dbContext.Users.FirstOrDefaultAsync(u => u.SessionId == sessionId);
     }
 
@@ -578,7 +578,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
 
     private async Task PersistTelemetrySubscription(string carId, string channelName, bool add)
     {
-        var db = Context.GetHttpContext()?.RequestServices.GetService<LteCarContext>();
+        var db = Context.GetHttpContext()?.RequestServices.GetService<SignalRCContext>();
         if (db == null) return;
         if (!int.TryParse(carId, out var carIdInt))
         {
@@ -632,7 +632,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
 
     public async Task ConnectCar(string carIdentityKey)
     {
-        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
+        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<SignalRCContext>();
         var car = dbContext.Cars
             .Include(c => c.VideoStreams)
             .FirstOrDefault(c => c.CarIdentityKey == carIdentityKey);
@@ -725,7 +725,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
 
     public async Task<IReadOnlyList<VideoStreamMapItem>> GetVideoStreamsForCar(int carId)
     {
-        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
+        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<SignalRCContext>();
         var streams = await dbContext.CarVideoStreams
             .Where(s => s.CarId == carId)
             .OrderBy(s => s.Priority)
@@ -791,7 +791,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
     public async Task ChangeVideoStreamSettings(int streamId, VideoStreamMapItem settings)
     {
         var stream = await GetStreamAsync(streamId);
-        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
+        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<SignalRCContext>();
         Logger.LogInformation("Changing video stream settings for stream {StreamId} ({StreamName}) for car {CarId}", stream.Id, stream.Name, stream.CarId);
         
         stream.Bitrate = settings.Bitrate ?? stream.Bitrate;
@@ -893,7 +893,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
     {
         await EnsureDriverCanManageStreamAsync(carId);
 
-        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
+        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<SignalRCContext>();
         var stream = await dbContext.CarVideoStreams
             .FirstOrDefaultAsync(s => s.Id == streamId && s.CarId == carId)
             ?? throw new InvalidOperationException($"Video stream with ID {streamId} not found for car {carId}.");
@@ -918,7 +918,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
 
     private async Task<CarVideoStream> GetStreamAsync(int streamId)
     {
-        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
+        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<SignalRCContext>();
         return await dbContext.CarVideoStreams
             .FirstOrDefaultAsync(s => s.Id == streamId)
             ?? throw new InvalidOperationException($"Video stream with ID {streamId} not found.");
@@ -926,7 +926,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
 
     private async Task StartStreamForViewersAsync(CarVideoStream stream)
     {
-        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
+        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<SignalRCContext>();
         Logger.LogInformation("Starting video stream {StreamId} ({StreamName}) for car {CarId}", stream.Id, stream.Name, stream.CarId);
         await _streamService.StartStreamAsync(stream.Id);
         stream.IsActive = true;
@@ -936,7 +936,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
 
     private async Task StopStreamForViewersAsync(CarVideoStream stream)
     {
-        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
+        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<SignalRCContext>();
         Logger.LogInformation("Stopping video stream {StreamId} ({StreamName}) for car {CarId}", stream.Id, stream.Name, stream.CarId);
         await Clients.Car(stream.CarId).StopVideoStream(stream.StreamId);
         await _streamService.StopStream(stream.Id);
@@ -948,7 +948,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
     {
         var httpContext = Context.GetHttpContext()
             ?? throw new HubException("No HTTP context available for video hub request.");
-        var dbContext = httpContext.RequestServices.GetRequiredService<LteCarContext>();
+        var dbContext = httpContext.RequestServices.GetRequiredService<SignalRCContext>();
         var user = await HubUserHelper.GetUserAsync(httpContext, dbContext);
         if (user == null || string.IsNullOrWhiteSpace(user.LoginName))
         {
@@ -968,7 +968,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
     }
 
     // ponytail: setup-node deletion needs explicit link cleanup; FK is ClientCascade so EF doesn't auto-include links
-    private static void DeleteSetupNodes<TNode>(LteCarContext dbContext, List<TNode> nodes) where TNode : UserSetupFlowNodeBase
+    private static void DeleteSetupNodes<TNode>(SignalRCContext dbContext, List<TNode> nodes) where TNode : UserSetupFlowNodeBase
     {
         if (nodes.Count == 0) return;
         var nodeIds = nodes.Select(n => n.Id).ToList();

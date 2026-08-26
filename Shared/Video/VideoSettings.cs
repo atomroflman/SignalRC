@@ -1,4 +1,4 @@
-namespace LteCar.Shared.Video;
+namespace SignalRC.Shared.Video;
 
 /// <summary>
 /// Video setting to be sent to the car for configuring / starting the video stream.

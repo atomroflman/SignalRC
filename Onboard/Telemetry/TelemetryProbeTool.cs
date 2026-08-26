@@ -1,11 +1,11 @@
 using System.Reflection;
 using System.Text.Json;
-using LteCar.Shared.Channels;
+using SignalRC.Shared.Channels;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
-namespace LteCar.Onboard.Telemetry;
+namespace SignalRC.Onboard.Telemetry;
 
 public class TelemetryProbeTool
 {

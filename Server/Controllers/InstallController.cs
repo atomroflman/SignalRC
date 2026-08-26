@@ -1,7 +1,7 @@
-using LteCar.Server.Services;
+using SignalRC.Server.Services;
 using Microsoft.AspNetCore.Mvc;
 
-namespace LteCar.Server.Controllers;
+namespace SignalRC.Server.Controllers;
 
 [ApiController]
 [Route("api/install")]
@@ -35,7 +35,7 @@ public class InstallController : Microsoft.AspNetCore.Mvc.ControllerBase
     public IActionResult GetOnboardScript()
     {
         var script = OnboardInstallScriptService.BuildOnboardInstallScript(Request);
-        Response.Headers.ContentDisposition = "inline; filename=ltecar-onboard-install.sh";
+        Response.Headers.ContentDisposition = "inline; filename=signalrc-onboard-install.sh";
         return Content(script, "text/x-shellscript; charset=utf-8");
     }
 }

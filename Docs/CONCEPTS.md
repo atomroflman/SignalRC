@@ -1,4 +1,4 @@
-# LteCar – Concepts & Implementation Reference
+# SignalRC – Concepts & Implementation Reference
 
 *A condensed, code-level reference. For the narrative version, see [Architecture.md](Architecture.md). For a German summary of the whole documentation set, see [README.de.md](README.de.md).*
 
@@ -95,7 +95,7 @@ They don't currently interoperate — applying one does not affect the other.
 - The `FileTransfer` entity tracks status.
 
 ## Authentication
-- **Browser**: `LteCarAuth` cookie (`HttpOnly`, `SameSite=Lax`), Sqids session token, recovery key, 5-minute `TransferCode` for session transfer.
+- **Browser**: `SignalRCAuth` cookie (`HttpOnly`, `SameSite=Lax`), Sqids session token, recovery key, 5-minute `TransferCode` for session transfer.
 - **Vehicle identity**: GUID (`carIdentityKey.txt`), SHA-256 verification.
 - **Control auth**: SSH-key challenge-response (RSA-2048, Web Crypto API). The private key is deleted from the vehicle after download.
 - **DataProtection keys** live in `Server/DataProtectionKeys/`.
@@ -103,6 +103,6 @@ They don't currently interoperate — applying one does not affect the other.
 ## Configuration
 - **Onboard `appSettings.json`**: `ServerName`, `ServerPort`, `UseHttps`, `CarName`, `CarSecret`, `CameraOptions`, plus the (mostly inert) feature flags — see [CONFIGURATION.md](CONFIGURATION.md).
 - **Server `appSettings.json`**: `IdSalt`, `IdAlphabet`, `ConnectionStrings.DefaultConnection`, `JanusConfiguration` (`HostName`, `PortRangeStart`/`PortRangeEnd`), `FileTransfer`, `WebRtc` (TURN config). No `ServerName`/`Application`/`RunJanusServer` section exists.
-- **Onboard config directory**: via `CONFIG_DIR`, `--config-dir=`, or `.configdir`.
+- **Onboard config directory**: always the process's current working directory.
 - **ChannelMap**: separates `pinManagers`, `controlChannels`, `telemetryChannels`, `videoStreams`.
 - **Server env vars**: `ConnectionStrings__DefaultConnection`, `JanusConfiguration__HostName`, `JanusConfiguration__PortRangeStart`/`PortRangeEnd`, `FileTransfer__StoragePath`, `WebRtc__Username`/`WebRtc__Credential`, `COTURN_EXTERNAL_IP`/`COTURN_USERNAME`/`COTURN_CREDENTIAL`, `JANUS_NAT_1_1`, `ASPNETCORE_ENVIRONMENT`, `GIT_BRANCH`, `GIT_COMMIT`.

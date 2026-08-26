@@ -1,4 +1,4 @@
-# LteCar Configuration Reference
+# SignalRC Configuration Reference
 
 ## Configuration Files
 
@@ -111,14 +111,14 @@ The real binding class is `Server/Configuration/ApplicationConfiguration.cs` —
   "IdAlphabet": "...",
   "SessionTransferAlphabet": "...",
   "ConnectionStrings": {
-    "DefaultConnection": "Host=localhost;Database=ltecar;Username=ltecar;Password=ltecar;Include Error Detail"
+    "DefaultConnection": "Host=localhost;Database=signalrc;Username=signalrc;Password=signalrc;Include Error Detail"
   },
   "JanusConfiguration": {
     "HostName": "localhost"
   },
   "FileTransfer": {
     "ThrottleKBytesPerSecond": 20,
-    "StoragePath": "/var/data/ltecar",
+    "StoragePath": "/var/data/signalrc",
     "MaxFileSizeMB": 100
   },
   "WebRtc": {
@@ -161,7 +161,6 @@ Exists in code but **not mapped/reachable**:
 
 | Variable | Description |
 |----------|-------------|
-| `CONFIG_DIR` | Config directory path (`Onboard/Program.cs`) |
 | `VEHICLE_TEMPLATES_PATH` | Template base path for filesystem vehicle templates (`VehicleTemplates/`/`vehicleTemplates/`) |
 
 There is no `LTE_USE_NEW_CONNECTION_MODEL` variable in the current code — it doesn't appear anywhere outside old documentation. The single-hub connection model it used to toggle is now simply the only model.
@@ -191,7 +190,7 @@ If you choose the installer HTTPS option, Caddy becomes the public entry point i
 
 ## Database
 
-LteCar uses PostgreSQL. **Never modify the database manually** - always use EF Core migrations.
+SignalRC uses PostgreSQL. **Never modify the database manually** - always use EF Core migrations.
 
 ### Migrations
 

@@ -1,4 +1,4 @@
-# LteCar Dokumentation (Deutsche Übersicht)
+# SignalRC Dokumentation (Deutsche Übersicht)
 
 *Diese Seite ist eine deutschsprachige Zusammenfassung. Die vollständige, laufend gepflegte Dokumentation ist Englisch – siehe [README.md](README.md) und die verlinkten Detail-Dokumente.*
 
@@ -13,7 +13,7 @@
 
 ## Systemüberblick
 
-LteCar ist ein System zum Bau und Betrieb ferngesteuerter Fahrzeuge über LTE/Internet.
+SignalRC ist ein System zum Bau und Betrieb ferngesteuerter Fahrzeuge über LTE/Internet.
 
 ### Kernfunktionen
 

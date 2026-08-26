@@ -1,4 +1,4 @@
-namespace LteCar.Shared.FileTransfer;
+namespace SignalRC.Shared.FileTransfer;
 
 public enum FileTransferStatus
 {

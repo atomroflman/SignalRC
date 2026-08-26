@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Security.Cryptography;
 using System.Text;
 
-namespace LteCar.Server.Data
+namespace SignalRC.Server.Data
 {
     public class User : EntityBase
     {

@@ -3,15 +3,15 @@ services:
     image: docker.io/library/postgres:18.3
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ltecar
-      POSTGRES_USER: ltecar
-      POSTGRES_PASSWORD: ltecar
+      POSTGRES_DB: signalrc
+      POSTGRES_USER: signalrc
+      POSTGRES_PASSWORD: signalrc
     ports:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ltecar -d ltecar"]
+      test: ["CMD-SHELL", "pg_isready -U signalrc -d signalrc"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -46,7 +46,7 @@ services:
       - ./janus-config/janus.transport.http.jcfg:/usr/local/etc/janus/janus.transport.http.jcfg:ro
       - ./janus-config/janus.transport.websockets.jcfg:/usr/local/etc/janus/janus.transport.websockets.jcfg:ro
       # Override the canyanjanus image's hardcoded sample mountpoints.
-      # The LteCar Server is the single source of truth for mountpoints;
+      # The SignalRC Server is the single source of truth for mountpoints;
       # see janus-config/janus.plugin.streaming.jcfg.
       - ./janus-config/janus.plugin.streaming.jcfg:/usr/local/etc/janus/janus.plugin.streaming.jcfg:ro
       # Override the main janus.jcfg to enable WebRTC ICE NAT traversal.
@@ -88,12 +88,12 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://0.0.0.0:5000
-      ConnectionStrings__DefaultConnection: Host=postgres;Database=ltecar;Username=ltecar;Password=ltecar
+      ConnectionStrings__DefaultConnection: Host=postgres;Database=signalrc;Username=signalrc;Password=signalrc
       JanusConfiguration__HostName: janus
       JanusConfiguration__PortRangeStart: "10000"
       JanusConfiguration__PortRangeEnd: "10200"
-      FileTransfer__StoragePath: /app/data/ltecar
-      WebRtc__Username: ${COTURN_USERNAME:-ltecar}
+      FileTransfer__StoragePath: /app/data/signalrc
+      WebRtc__Username: ${COTURN_USERNAME:-signalrc}
       WebRtc__Credential: ${COTURN_CREDENTIAL:-}
       COTURN_EXTERNAL_IP: ${COTURN_EXTERNAL_IP:-}
     # Resolve public IP from COTURN_EXTERNAL_IP or Azure IMDS, build TURN URLs
@@ -110,9 +110,9 @@ services:
         export WebRtc__Urls__0="turn:$$IP:3478?transport=udp";
         export WebRtc__Urls__1="turn:$$IP:3478?transport=tcp";
       fi;
-      exec dotnet LteCar.Server.dll
+      exec dotnet SignalRC.Server.dll
     volumes:
-      - ltecar-server-data:/app/DataProtectionKeys
+      - signalrc-server-data:/app/DataProtectionKeys
     healthcheck:
       # Server image is mcr.microsoft.com/dotnet/aspnet (debian-slim) with curl
       # added for Azure IMDS lookup. We still use bash's /dev/tcp built-in
@@ -154,7 +154,7 @@ services:
     # Username is configurable too.
     environment:
       COTURN_EXTERNAL_IP: ${COTURN_EXTERNAL_IP:-}
-      COTURN_USERNAME: ${COTURN_USERNAME:-ltecar}
+      COTURN_USERNAME: ${COTURN_USERNAME:-signalrc}
       COTURN_CREDENTIAL: ${COTURN_CREDENTIAL:-}
     command: >-
       sh -c '
@@ -163,7 +163,7 @@ services:
           IP=$$(curl -fsS -H "Metadata: true" "http://169.254.169.254/metadata/instance/network/interface/0/ipv4/ipAddress/0/publicIpAddress?api-version=2021-02-01&format=text" 2>/dev/null);
         fi;
         if [ -z "$$IP" ] || [ -z "$$COTURN_CREDENTIAL" ]; then echo "Need COTURN_CREDENTIAL and either COTURN_EXTERNAL_IP or Azure IMDS public IP"; exit 1; fi;
-        exec turnserver --no-tls --no-dtls --realm=ltecar.local --external-ip="$$IP" --lt-cred-mech --user="$$COTURN_USERNAME:$$COTURN_CREDENTIAL" --fingerprint --no-loopback-stun --no-multicast-peers --listening-port=3478 --min-port=49152 --max-port=50152'
+        exec turnserver --no-tls --no-dtls --realm=signalrc.local --external-ip="$$IP" --lt-cred-mech --user="$$COTURN_USERNAME:$$COTURN_CREDENTIAL" --fingerprint --no-loopback-stun --no-multicast-peers --listening-port=3478 --min-port=49152 --max-port=50152'
     ports:
       - "3478:3478/udp"
       - "3478:3478/tcp"
@@ -197,4 +197,4 @@ services:
 
 volumes:
   postgres-data:
-  ltecar-server-data:
+  signalrc-server-data:

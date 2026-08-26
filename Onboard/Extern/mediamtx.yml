@@ -1,4 +1,4 @@
-# MediaMTX configuration template for LteCar
+# MediaMTX configuration template for SignalRC
 #
 # The Onboard service rewrites the section after the marker line
 # below at runtime based on the active streams in

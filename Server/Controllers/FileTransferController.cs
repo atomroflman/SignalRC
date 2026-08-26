@@ -1,16 +1,16 @@
 using System.Security.Cryptography;
-using LteCar.Server.Configuration;
-using LteCar.Server.Data;
-using LteCar.Server.Hubs;
-using LteCar.Shared;
-using LteCar.Shared.FileTransfer;
-using LteCar.Shared.HubClients;
+using SignalRC.Server.Configuration;
+using SignalRC.Server.Data;
+using SignalRC.Server.Hubs;
+using SignalRC.Shared;
+using SignalRC.Shared.FileTransfer;
+using SignalRC.Shared.HubClients;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Net.Http.Headers;
 
-namespace LteCar.Server.Controllers;
+namespace SignalRC.Server.Controllers;
 
 [ApiController]
 [Route("api/filetransfer")]
@@ -21,7 +21,7 @@ public class FileTransferController : ControllerBase
     private readonly ILogger<FileTransferController> _logger;
 
     public FileTransferController(
-        LteCarContext context,
+        SignalRCContext context,
         IHubContext<CarConnectionHub, IConnectionHubClient> controlHub,
         IConfigurationService config,
         ILogger<FileTransferController> logger) : base(context)

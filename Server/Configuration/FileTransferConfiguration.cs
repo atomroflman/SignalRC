@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace LteCar.Server.Configuration;
+namespace SignalRC.Server.Configuration;
 
 public class FileTransferConfiguration
 {
@@ -9,7 +9,7 @@ public class FileTransferConfiguration
     [Range(1, 10240)]
     public int ThrottleKBytesPerSecond { get; set; } = 20;
 
-    public string StoragePath { get; set; } = "/var/data/ltecar";
+    public string StoragePath { get; set; } = "/var/data/signalrc";
 
     [Range(1, 10240)]
     public int MaxFileSizeMB { get; set; } = 100;

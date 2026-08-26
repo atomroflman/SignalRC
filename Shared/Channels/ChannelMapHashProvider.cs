@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace LteCar.Shared.Channels;
+namespace SignalRC.Shared.Channels;
 
 public static class ChannelMapHashProvider
 {

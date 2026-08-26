@@ -1,4 +1,4 @@
-# LteCar Video Stack – Architecture & Step-by-Step Test Guide
+# SignalRC Video Stack – Architecture & Step-by-Step Test Guide
 
 This document describes the complete data flow of a video stream from the Raspberry Pi camera sensor to the browser, defines test points at each link in the chain, and gives commands to check whether the stream is working up to that point.
 
@@ -23,7 +23,7 @@ This document describes the complete data flow of a video stream from the Raspbe
 ┌──────────────────────────────────────────┴──────────────────────────────────┐
 │  lte-rc-server                                                                │
 │  ┌──────────────────────────┐    SignalR     ┌────────────────────────────┐ │
-│  │ LteCar.Server            │ ◄──────────────►│ LteCar.Onboard (lte-truck) │ │
+│  │ SignalRC.Server            │ ◄──────────────►│ SignalRC.Onboard (lte-truck) │ │
 │  │  - VideoStreamReceiver   │                 │  - VideoStreamService      │ │
 │  │  - ActiveVideoStreamViewerRegistry          │  - MediaMtxConfigurator    │ │
 │  └──────────────────────────┘                 └────────────────────────────┘ │
@@ -66,29 +66,29 @@ This document describes the complete data flow of a video stream from the Raspbe
 
 ### Step 0: Onboard process is running
 
-The entire video stack starts on the truck. If `LteCar.Onboard` is not running, there is no stream.
+The entire video stack starts on the truck. If `SignalRC.Onboard` is not running, there is no stream.
 
 **What happens:**
-- `LteCar.Onboard` registers itself with the server (`CarConnectionHub.OpenCarConnection`).
+- `SignalRC.Onboard` registers itself with the server (`CarConnectionHub.OpenCarConnection`).
 - When it receives `StartVideoStream(streamId, settings)`, it restarts MediaMTX and configures ffmpeg with `settings.TargetPort`.
 
 **Test:**
 
 ```bash
-ssh lte-truck "ps aux | grep -E 'LteCar.Onboard|mediamtx|mtxrpicam' | grep -v grep"
+ssh lte-truck "ps aux | grep -E 'SignalRC.Onboard|mediamtx|mtxrpicam' | grep -v grep"
 ```
 
 **Expected result:**
 ```text
-greg-e  <pid>  …  ./LteCar.Onboard
+greg-e  <pid>  …  ./SignalRC.Onboard
 greg-e  <pid>  …  /…/Extern/mediamtx /…/Extern/mediamtx.yml
 greg-e  <pid>  …  /dev/shm/mediamtx-rpicamera-…/mtxrpicam
 ```
 
 **If not:**
-- The `ltecar-onboard.service` service is in a `failed` state (see `systemctl status ltecar-onboard`).
+- The `signalrc-onboard.service` service is in a `failed` state (see `systemctl status signalrc-onboard`).
 - Or the manually started process was terminated (reboot, crash, terminal session ended).
-- Fix: restart `LteCar.Onboard` (see section 3).
+- Fix: restart `SignalRC.Onboard` (see section 3).
 
 ---
 
@@ -114,7 +114,7 @@ mtxrpicam <pid> greg-e 7uW  CHR  511,3 /dev/media3
 **Test:**
 
 ```bash
-ssh lte-truck "grep -E 'Camera.acquire|stream is available' /tmp/ltecar_onboard_restart.log | tail -10"
+ssh lte-truck "grep -E 'Camera.acquire|stream is available' /tmp/signalrc_onboard_restart.log | tail -10"
 ```
 
 **Expected result:**
@@ -380,7 +380,7 @@ curl -i -N \
 
 ### 3.1 Truck was rebooted
 
-Onboard on `lte-truck` currently does not start automatically after a reboot, because `ltecar-onboard.service` is in a `failed` state. After a reboot it must be restarted manually:
+Onboard on `lte-truck` currently does not start automatically after a reboot, because `signalrc-onboard.service` is in a `failed` state. After a reboot it must be restarted manually:
 
 ```bash
 ssh lte-truck
@@ -389,7 +389,7 @@ cd /home/greg-e/SignalRC/Onboard/bin/Debug/net10.0/
 DOTNET_ROOT=/home/greg-e/.dotnet \
 DOTNET_ENVIRONMENT=Production \
 PATH=/home/greg-e/.dotnet:/home/greg-e/.dotnet/tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-nohup ./LteCar.Onboard > /tmp/ltecar_onboard_restart.log 2>&1 &
+nohup ./SignalRC.Onboard > /tmp/signalrc_onboard_restart.log 2>&1 &
 ```
 
 Then check steps 0–2.
@@ -427,7 +427,7 @@ ssh lte-rc-server '
 
 | Problem | Cause | Status |
 |---------|---------|--------|
-| Onboard does not start automatically after reboot | `ltecar-onboard.service` is `failed` | Needs investigation / the service needs to be fixed |
+| Onboard does not start automatically after reboot | `signalrc-onboard.service` is `failed` | Needs investigation / the service needs to be fixed |
 | Camera stays blocked by an old `mtxrpicam` | `MediaMtxConfigurator.StopAsync()` only terminates the main process, not the helper | Fix implemented in `Onboard/Services/MediaMtxConfigurator.cs` |
 | Server-pushed ChannelMap does not include `pinManagers` | `ChannelMap.PinManagers` has `[IgnoreMember]` | Fix implemented in `Shared/Channels/ChannelMap.cs` |
 | Server container restart loses Janus sessions | Janus keeps sessions in RAM | No fix needed; the server recreates mountpoints on demand |

@@ -1,4 +1,4 @@
-namespace LteCar.Shared.HubClients;
+namespace SignalRC.Shared.HubClients;
 
 public interface ICarBashClient
 {

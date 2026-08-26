@@ -2,11 +2,11 @@ using System;
 using System.Linq;
 using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
-using LteCar.Onboard.Control;
-using LteCar.Onboard.Hardware;
+using SignalRC.Onboard.Control;
+using SignalRC.Onboard.Hardware;
 using Microsoft.Extensions.Logging;
 
-namespace LteCar.Onboard.Hardware
+namespace SignalRC.Onboard.Hardware
 {
     public class RaspberryPiGpioManager : IModuleManager
     {

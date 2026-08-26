@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# LteCar Update-Skript
+# SignalRC Update-Skript
 # Erkennt automatisch, ob auf diesem Host der Server-Compose-Stack oder der
 # Onboard-Vehicle-Client installiert ist, stoppt den Service, aktualisiert das
 # Repo, baut neu und startet wieder.
@@ -10,8 +10,8 @@ set -euo pipefail
 #   sudo ./update.sh
 #
 # Unterstützte Installationen (von install.sh angelegt):
-#   - /etc/systemd/system/ltecar.service        -> Server (Docker/Podman Compose)
-#   - /etc/systemd/system/ltecar-onboard.service -> Onboard (Vehicle Client)
+#   - /etc/systemd/system/signalrc.service        -> Server (Docker/Podman Compose)
+#   - /etc/systemd/system/signalrc-onboard.service -> Onboard (Vehicle Client)
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
@@ -34,23 +34,23 @@ run_as_user() {
 }
 
 # ── Deployment erkennen ──────────────────────────────────────────────
-SERVER_SERVICE="/etc/systemd/system/ltecar.service"
-ONBOARD_SERVICE="/etc/systemd/system/ltecar-onboard.service"
+SERVER_SERVICE="/etc/systemd/system/signalrc.service"
+ONBOARD_SERVICE="/etc/systemd/system/signalrc-onboard.service"
 
 if [ -f "$SERVER_SERVICE" ]; then
     DEPLOY_TYPE="server"
-    SERVICE_NAME="ltecar.service"
+    SERVICE_NAME="signalrc.service"
 elif [ -f "$ONBOARD_SERVICE" ]; then
     DEPLOY_TYPE="onboard"
-    SERVICE_NAME="ltecar-onboard.service"
+    SERVICE_NAME="signalrc-onboard.service"
 else
-    echo "Fehler: Kein bekannter LteCar-Service gefunden."
+    echo "Fehler: Kein bekannter SignalRC-Service gefunden."
     echo "Erwartet: $SERVER_SERVICE  oder  $ONBOARD_SERVICE"
     exit 1
 fi
 
 echo "============================================"
-echo "  LteCar Update"
+echo "  SignalRC Update"
 echo "============================================"
 echo "  Typ : $DEPLOY_TYPE"
 echo "  User: $RUN_USER"
@@ -104,7 +104,7 @@ elif [ "$DEPLOY_TYPE" = "onboard" ]; then
     run_as_user \
         DOTNET_ROOT="$(dirname "$DOTNET_BIN")" \
         PATH="$(dirname "$DOTNET_BIN"):$(dirname "$DOTNET_BIN")/tools:$PATH" \
-        "$DOTNET_BIN" publish "$SCRIPT_DIR/Onboard/LteCar.Onboard.csproj" -c Release
+        "$DOTNET_BIN" publish "$SCRIPT_DIR/Onboard/SignalRC.Onboard.csproj" -c Release
 fi
 
 # ── 3. Service stoppen ───────────────────────────────────────────────

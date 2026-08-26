@@ -3,7 +3,7 @@ using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
-namespace LteCar.Onboard.Hardware;
+namespace SignalRC.Onboard.Hardware;
 
 public class RaspberryPiPwmPin : IPwmModule
 {

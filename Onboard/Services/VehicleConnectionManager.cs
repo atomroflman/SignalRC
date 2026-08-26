@@ -1,14 +1,14 @@
 using System.Text.Json;
-using LteCar.Onboard.Services;
-using LteCar.Shared.Channels;
-using LteCar.Shared.Hubs;
+using SignalRC.Onboard.Services;
+using SignalRC.Shared.Channels;
+using SignalRC.Shared.Hubs;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using TypedSignalR.Client;
 
-namespace LteCar.Onboard;
+namespace SignalRC.Onboard;
 
 public interface IVehicleService
 {

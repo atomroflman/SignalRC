@@ -1,7 +1,7 @@
-using LteCar.Shared.Channels;
-using LteCar.Shared.Video;
+using SignalRC.Shared.Channels;
+using SignalRC.Shared.Video;
 
-namespace LteCar.Shared.HubClients;
+namespace SignalRC.Shared.HubClients;
 
 // ponytail: subset of the merged hub's client interface used by the Onboard's
 // VideoStreamService. See ITelemetryClient for the dispatch-by-method-name

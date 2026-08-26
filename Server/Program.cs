@@ -1,9 +1,9 @@
-using LteCar.Server;
-using LteCar.Server.Configuration;
-using LteCar.Server.Data;
-using LteCar.Server.Extensions;
-using LteCar.Server.Hubs;
-using LteCar.Server.Services;
+using SignalRC.Server;
+using SignalRC.Server.Configuration;
+using SignalRC.Server.Data;
+using SignalRC.Server.Extensions;
+using SignalRC.Server.Hubs;
+using SignalRC.Server.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.DataProtection;
 
@@ -58,7 +58,7 @@ builder.Services.AddSingleton<AvailableTypesRegistry>();
 builder.Services.AddSingleton<IServerBuildInfoService, ServerBuildInfoService>();
 builder.Services.AddSingleton<IOnboardInstallScriptService, OnboardInstallScriptService>();
 builder.Services.AddSingleton<ChannelTemplateService>();
-builder.Services.AddDbContext<LteCarContext>((serviceProvider, options) =>
+builder.Services.AddDbContext<SignalRCContext>((serviceProvider, options) =>
 {
     var configService = serviceProvider.GetRequiredService<IConfigurationService>();
     options.UseNpgsql(configService.DefaultConnectionString, opt =>
@@ -79,12 +79,12 @@ var dataProtectionKeysPath = Path.Combine(Directory.GetCurrentDirectory(), "Data
 Directory.CreateDirectory(dataProtectionKeysPath);
 builder.Services.AddDataProtection()
     .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeysPath))
-    .SetApplicationName("LteCar.Server")
+    .SetApplicationName("SignalRC.Server")
     .SetDefaultKeyLifetime(TimeSpan.FromDays(90));
 builder.Services.AddAuthentication("cookie")
     .AddCookie("cookie", options =>
     {
-        options.Cookie.Name = "LteCarAuth";
+        options.Cookie.Name = "SignalRCAuth";
         options.LoginPath = "/";
         options.Cookie.HttpOnly = true;
         options.Cookie.SameSite = SameSiteMode.Lax;
@@ -167,7 +167,7 @@ static void ApplyDatabaseMigrations(IServiceProvider services, ILogger logger)
         try
         {
             using var scope = services.CreateScope();
-            var dbContext = scope.ServiceProvider.GetRequiredService<LteCarContext>();
+            var dbContext = scope.ServiceProvider.GetRequiredService<SignalRCContext>();
             dbContext.Database.Migrate();
             logger.LogInformation("Database migrations applied successfully.");
             return;
@@ -184,6 +184,6 @@ static void ApplyDatabaseMigrations(IServiceProvider services, ILogger logger)
     }
 
     using var finalScope = services.CreateScope();
-    var finalDbContext = finalScope.ServiceProvider.GetRequiredService<LteCarContext>();
+    var finalDbContext = finalScope.ServiceProvider.GetRequiredService<SignalRCContext>();
     finalDbContext.Database.Migrate();
 }

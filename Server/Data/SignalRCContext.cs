@@ -3,11 +3,11 @@ using Microsoft.EntityFrameworkCore;
 using System.Data;
 using System.Reflection;
 
-namespace LteCar.Server.Data
+namespace SignalRC.Server.Data
 {
-    public class LteCarContext : DbContext
+    public class SignalRCContext : DbContext
     {
-        public LteCarContext(DbContextOptions<LteCarContext> options) : base(options) { }
+        public SignalRCContext(DbContextOptions<SignalRCContext> options) : base(options) { }
 
         public DbSet<Car> Cars { get; set; }
         public DbSet<User> Users { get; set; }

@@ -1,6 +1,6 @@
-using LteCar.Shared.Channels;
-using LteCar.Shared.HubClients;
-using LteCar.Shared.Hubs;
+using SignalRC.Shared.Channels;
+using SignalRC.Shared.HubClients;
+using SignalRC.Shared.Hubs;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -9,7 +9,7 @@ using System.Reflection;
 using System.Text.Json;
 using TypedSignalR.Client;
 
-namespace LteCar.Onboard.Telemetry;
+namespace SignalRC.Onboard.Telemetry;
 
 public class TelemetryService : IHubConnectionObserver, ITelemetryClient
 {

@@ -3,7 +3,7 @@ using System.Text;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
-namespace LteCar.Onboard;
+namespace SignalRC.Onboard;
 
 // SECURITY: the Onboard's private SSH key authenticates the driver session
 // against this specific vehicle. It MUST stay inside the local network —

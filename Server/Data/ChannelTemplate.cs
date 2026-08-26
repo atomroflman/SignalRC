@@ -1,9 +1,9 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace LteCar.Server.Data;
+namespace SignalRC.Server.Data;
 
 /// <summary>
-/// Vehicle hardware template stored on the server. Contains a complete <see cref="LteCar.Shared.Channels.ChannelMap"/>
+/// Vehicle hardware template stored on the server. Contains a complete <see cref="SignalRC.Shared.Channels.ChannelMap"/>
 /// that can be applied to a car to restore or initialize its configuration.
 /// </summary>
 public class ChannelTemplate : EntityBase
@@ -26,7 +26,7 @@ public class ChannelTemplate : EntityBase
     public string? Author { get; set; }
 
     /// <summary>
-    /// Serialized <see cref="LteCar.Shared.Channels.ChannelMap"/>.
+    /// Serialized <see cref="SignalRC.Shared.Channels.ChannelMap"/>.
     /// </summary>
     [Required]
     public string ChannelMapJson { get; set; } = string.Empty;

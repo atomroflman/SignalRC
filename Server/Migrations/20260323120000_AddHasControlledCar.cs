@@ -2,7 +2,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace LteCar.Server.Migrations
+namespace SignalRC.Server.Migrations
 {
     /// <inheritdoc />
     public partial class AddHasControlledCar : Migration

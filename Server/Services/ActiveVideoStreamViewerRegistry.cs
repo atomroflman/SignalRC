@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
 using System.Threading;
 
-namespace LteCar.Server.Services;
+namespace SignalRC.Server.Services;
 
 public class ActiveVideoStreamViewerRegistry
 {

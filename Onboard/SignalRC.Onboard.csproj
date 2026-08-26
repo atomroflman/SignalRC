@@ -9,10 +9,6 @@
   </PropertyGroup>
 
     <ItemGroup>
-      <EmbeddedResource Remove="Setup\SetupTexts.de.resx" />
-    </ItemGroup>
-
-    <ItemGroup>
       <PackageReference Include="CSharpVitamins.ShortGuid" Version="2.0.0" />
       <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="9.0.3" />
       <PackageReference Include="Microsoft.AspNetCore.SignalR.Client.Core" Version="9.0.3" />
@@ -38,7 +34,7 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\Shared\LteCar.Shared.csproj" />
+      <ProjectReference Include="..\Shared\SignalRC.Shared.csproj" />
     </ItemGroup>
     <ItemGroup>
       <None Update="Extern/mediamtx.yml">
@@ -65,9 +61,7 @@
     </ItemGroup>
     
     <ItemGroup>
-      <EmbeddedResource Update="Setup/translations.json">
-      </EmbeddedResource>
-      <EmbeddedResource Include="Generated/onboard-build-info.txt" LogicalName="LteCar.Onboard.Generated.onboard-build-info.txt" />
+      <EmbeddedResource Include="Generated/onboard-build-info.txt" LogicalName="SignalRC.Onboard.Generated.onboard-build-info.txt" />
     </ItemGroup>
 
   <Target Name="GenerateOnboardBuildInfo" BeforeTargets="BeforeBuild">

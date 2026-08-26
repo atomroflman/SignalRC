@@ -1,6 +1,6 @@
 # Vehicle Templates
 
-Dieses Verzeichnis enthält Fahrzeug-Vorlagen für das LteCar-System. Jede Vorlage ist in einem separaten Ordner organisiert und kann neben der Grundkonfiguration auch zusätzliche Dateien wie Skripte, 3D-Modelle und Dokumentation enthalten.
+Dieses Verzeichnis enthält Fahrzeug-Vorlagen für das SignalRC-System. Jede Vorlage ist in einem separaten Ordner organisiert und kann neben der Grundkonfiguration auch zusätzliche Dateien wie Skripte, 3D-Modelle und Dokumentation enthalten.
 
 ## 📁 Ordnerstruktur
 

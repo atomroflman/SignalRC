@@ -1,19 +1,19 @@
 using CSharpVitamins;
-using LteCar.Onboard.Data;
-using LteCar.Onboard.Telemetry;
-using LteCar.Shared;
-using LteCar.Shared.Channels;
-using LteCar.Shared.FileTransfer;
-using LteCar.Server.Hubs;
-using LteCar.Shared.HubClients;
+using SignalRC.Onboard.Data;
+using SignalRC.Onboard.Telemetry;
+using SignalRC.Shared;
+using SignalRC.Shared.Channels;
+using SignalRC.Shared.FileTransfer;
+using SignalRC.Server.Hubs;
+using SignalRC.Shared.HubClients;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using TypedSignalR.Client;
-using LteCar.Onboard;
+using SignalRC.Onboard;
 using System.Diagnostics;
 
-namespace LteCar.Onboard.Control;
+namespace SignalRC.Onboard.Control;
 
 public class ControlService : IControlClient, IHubConnectionObserver
 {
@@ -199,7 +199,7 @@ public class ControlService : IControlClient, IHubConnectionObserver
     }
 
     private string FileTransferBasePath =>
-        Configuration.GetValue<string>("FileTransfer:BasePath") ?? "/var/data/ltecar/files";
+        Configuration.GetValue<string>("FileTransfer:BasePath") ?? "/var/data/signalrc/files";
 
     public Task<bool> ApproveFileUpload(string sessionId, string filePath)
     {

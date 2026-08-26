@@ -1,4 +1,4 @@
-namespace LteCar.Shared.Video;
+namespace SignalRC.Shared.Video;
 
 /// <summary>
 /// Model for updating video settings from the UI.

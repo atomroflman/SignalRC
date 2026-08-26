@@ -1,4 +1,4 @@
-namespace LteCar.Onboard;
+namespace SignalRC.Onboard;
 
 // ponytail: observer pattern used by services that want to react to the shared
 // ServerConnectionService reconnect lifecycle (currently a hook-and-log only;

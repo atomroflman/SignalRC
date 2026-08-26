@@ -1,4 +1,4 @@
-namespace LteCar.Shared.Channels;
+namespace SignalRC.Shared.Channels;
 
 public enum TelemetryDataType
 {

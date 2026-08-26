@@ -1,7 +1,7 @@
-using LteCar.Server.Services;
+using SignalRC.Server.Services;
 using Microsoft.AspNetCore.Mvc;
 
-namespace LteCar.Server.Controllers;
+namespace SignalRC.Server.Controllers;
 
 [ApiController]
 public class VersionController : Microsoft.AspNetCore.Mvc.ControllerBase

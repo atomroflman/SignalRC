@@ -2,7 +2,7 @@
   "name": "PropagandaTruck",
   "description": "Standard-Konfiguration für den Propaganda-Truck mit Lenkung, Antrieb, Beleuchtung und Kamera-Setup",
   "version": "1.0",
-  "author": "LteCar Team",
+  "author": "SignalRC Team",
   "created": "2025-09-28",
   "channelMap": {
     "pinManagers": {
@@ -95,13 +95,13 @@
     },
     "telemetryChannels": {
       "lifetime": {
-        "telemetryType": "LteCar.Onboard.Telemetry.ApplicationLifetimeReader"
+        "telemetryType": "SignalRC.Onboard.Telemetry.ApplicationLifetimeReader"
       },
       "battery": {
-        "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
+        "telemetryType": "SignalRC.Onboard.Telemetry.JbdBmsTelemetryReader",
         "readIntervalTicks": 50,
         "options": {
-          "jbdToolPath": "~/ltecar/bin/jbdtools",
+          "jbdToolPath": "~/signalrc/bin/jbdtools",
           "channel": "A5:C2:37:55:36:B6"
         }
       }

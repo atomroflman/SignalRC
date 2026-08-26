@@ -1,7 +1,7 @@
-using LteCar.Shared;
-using LteCar.Shared.Channels;
-using LteCar.Shared.FileTransfer;
-using LteCar.Shared.Video;
+using SignalRC.Shared;
+using SignalRC.Shared.Channels;
+using SignalRC.Shared.FileTransfer;
+using SignalRC.Shared.Video;
 
 
 

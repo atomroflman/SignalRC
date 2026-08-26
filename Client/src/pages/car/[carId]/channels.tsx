@@ -162,7 +162,7 @@ function TelemetryEditor({
     <div className="grid grid-cols-2 gap-2 p-2 border border-zinc-700 rounded bg-zinc-950">
       <Field label="Channel name"><input className={inputClass} value={t.channelName} onChange={e => update({ channelName: e.target.value })} disabled={!isNew} /></Field>
       <Field label="Telemetry type">
-        <input className={inputClass + " font-mono"} value={t.telemetryType} onChange={e => update({ telemetryType: e.target.value })} list="telemetry-type-options" placeholder="e.g. LteCar.Onboard.Telemetry.CpuTemperatureReader" />
+        <input className={inputClass + " font-mono"} value={t.telemetryType} onChange={e => update({ telemetryType: e.target.value })} list="telemetry-type-options" placeholder="e.g. SignalRC.Onboard.Telemetry.CpuTemperatureReader" />
       </Field>
       <Field label="Read interval (ms)"><input className={inputClass} type="number" value={t.readIntervalTicks} onChange={e => update({ readIntervalTicks: Number(e.target.value) })} /></Field>
       <Field label="Data type">
