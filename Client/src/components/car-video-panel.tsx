@@ -37,6 +37,8 @@ export default function CarVideoPanel({ carId }: CarVideoPanelProps): JSX.Elemen
   const [error, setError] = useState<string | null>(null);
   const [documentVisible, setDocumentVisible] = useState(true);
   const [reconnectVersion, setReconnectVersion] = useState(0);
+  // Vehicle audio starts muted: browsers block unmuted autoplay, and nobody wants a surprise.
+  const [audioOn, setAudioOn] = useState(false);
   const connectCarUi = useCarUiStore(state => state.connect);
 
   useEffect(() => {
@@ -255,6 +257,20 @@ export default function CarVideoPanel({ carId }: CarVideoPanelProps): JSX.Elemen
         </div>
       )}
 
+      {selectedStream?.audioDevice && selectedStream.enabled && (
+        <div className="flex shrink-0">
+          <button
+            type="button"
+            className={`rounded-full border px-3 py-1 text-xs transition-colors ${
+              audioOn ? 'border-green-700 bg-green-800 text-white' : 'border-zinc-300 bg-white text-zinc-700 hover:border-zinc-500'
+            }`}
+            onClick={() => setAudioOn(on => !on)}
+          >
+            {audioOn ? `🔊 ${messages.carVideoPanel.vehicleAudioOn}` : `🔇 ${messages.carVideoPanel.vehicleAudioOff}`}
+          </button>
+        </div>
+      )}
+
       {selectedStream && !selectedStream.enabled && (
         <div className="rounded-2xl border border-amber-900 bg-amber-950/50 p-6 text-sm text-amber-200">
           {messages.carVideoPanel.streamDisabledHint}
@@ -269,7 +285,12 @@ export default function CarVideoPanel({ carId }: CarVideoPanelProps): JSX.Elemen
 
       {selectedStream && selectedStream.enabled && documentVisible && (
         <div className="flex min-h-0 flex-1 overflow-hidden rounded-2xl border border-zinc-200 bg-black shadow-sm">
-          <VideoStream key={selectedStream.serverId} streamId={selectedStream.serverId} streamName={selectedStream.name} />
+          <VideoStream
+            key={selectedStream.serverId}
+            streamId={selectedStream.serverId}
+            streamName={selectedStream.name}
+            audioEnabled={audioOn}
+          />
         </div>
       )}
     </div>

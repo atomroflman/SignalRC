@@ -20,6 +20,7 @@ import {
 } from './janus-client';
 import { useI18n } from '@/i18n/provider';
 import type { Messages } from '@/i18n/translations';
+import { usePushToTalkStore } from './audio-store';
 
 interface VideoStreamProps {
   streamId?: number;
@@ -592,6 +593,8 @@ export default function VideoStream({
   const { videoRef, audioRef, phase, error, janusStreams, stats, vehicleSending, retryInfo } =
     useJanusStreaming(streamId, onAudioTrack);
   const [overlayVisible, setOverlayVisible] = useState(true);
+  // Half-duplex: mute the vehicle while the driver talks through its speaker.
+  const talking = usePushToTalkStore((state) => state.talking);
 
   const formattedBitrate = formatBitrate(stats.bitrate);
   const formattedFps =
@@ -674,7 +677,7 @@ export default function VideoStream({
         muted={!audioEnabled}
         className="h-full max-w-full bg-black object-contain"
       />
-      <audio ref={audioRef} autoPlay playsInline className={audioEnabled ? 'w-full mt-2' : 'hidden'} />
+      <audio ref={audioRef} autoPlay playsInline muted={!audioEnabled || talking} className="hidden" />
     </div>
   );
 }

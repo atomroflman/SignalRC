@@ -48,7 +48,7 @@ public sealed class OnboardChannelStore
         {
             ["control_channels"] = ["options_json", "server_id", "modified_at", "control_type", "test_disabled", "max_resend_interval"],
             ["telemetry_channels"] = ["options_json", "server_id", "modified_at", "read_interval_ticks", "telemetry_type", "data_type", "unit", "decimals"],
-            ["video_streams"] = ["server_id", "modified_at", "camera_device", "rpi_cam_id", "width", "height", "framerate", "bitrate", "options_json"],
+            ["video_streams"] = ["server_id", "modified_at", "camera_device", "rpi_cam_id", "width", "height", "framerate", "bitrate", "options_json", "audio_device", "audio_denoise"],
             ["pin_managers"] = ["type", "options_json"],
         };
 
@@ -68,6 +68,7 @@ public sealed class OnboardChannelStore
                     "data_type" => "DEFAULT 0",
                     "read_interval_ticks" => "DEFAULT 0",
                     "decimals" => "DEFAULT 0",
+                    "audio_denoise" => "DEFAULT 0",
                     "width" or "height" or "framerate" or "bitrate" or "rpi_cam_id" or "server_id" or "address" => "DEFAULT NULL",
                     _ => "DEFAULT NULL",
                 };
@@ -77,7 +78,7 @@ public sealed class OnboardChannelStore
                     nullable = "NOT NULL";
 
                 var sql = $"ALTER TABLE {table} ADD COLUMN {col} TEXT {nullable} {defaultValue};";
-                if (col is "address" or "server_id" or "rpi_cam_id" or "width" or "height" or "framerate" or "bitrate" or "read_interval_ticks" or "data_type" or "decimals" or "test_disabled" or "enabled")
+                if (col is "address" or "server_id" or "rpi_cam_id" or "width" or "height" or "framerate" or "bitrate" or "read_interval_ticks" or "data_type" or "decimals" or "test_disabled" or "enabled" or "audio_denoise")
                     sql = $"ALTER TABLE {table} ADD COLUMN {col} INTEGER {nullable} {defaultValue};";
 
                 try
@@ -158,7 +159,7 @@ public sealed class OnboardChannelStore
 
         await using (var cmd = c.CreateCommand())
         {
-            cmd.CommandText = "SELECT dict_key, stream_id, name, location, type, enabled, server_id, modified_at, camera_device, rpi_cam_id, width, height, framerate, bitrate, options_json FROM video_streams";
+            cmd.CommandText = "SELECT dict_key, stream_id, name, location, type, enabled, server_id, modified_at, camera_device, rpi_cam_id, width, height, framerate, bitrate, options_json, audio_device, audio_denoise FROM video_streams";
             await using var rd = await cmd.ExecuteReaderAsync();
             while (await rd.ReadAsync())
             {
@@ -178,6 +179,8 @@ public sealed class OnboardChannelStore
                     Framerate = rd.IsDBNull(12) ? null : rd.GetInt32(12),
                     Bitrate = rd.IsDBNull(13) ? null : rd.GetInt32(13),
                     Options = rd.IsDBNull(14) ? new() : JsonSerializer.Deserialize<Dictionary<string, object>>(rd.GetString(14)) ?? new(),
+                    AudioDevice = rd.IsDBNull(15) ? null : rd.GetString(15),
+                    AudioDenoise = !rd.IsDBNull(16) && rd.GetBoolean(16),
                 };
                 map.VideoStreams[rd.GetString(0)] = item;
             }
@@ -270,8 +273,8 @@ public sealed class OnboardChannelStore
         await using var c = Open();
         await using var cmd = c.CreateCommand();
         cmd.CommandText = @"
-            INSERT INTO video_streams (dict_key, stream_id, name, location, type, enabled, server_id, modified_at, camera_device, rpi_cam_id, width, height, framerate, bitrate, options_json)
-            VALUES ($k, $sid, $n, $loc, $t, $en, $svid, $mod, $cam, $rcid, $w, $h, $fps, $br, $opts)
+            INSERT INTO video_streams (dict_key, stream_id, name, location, type, enabled, server_id, modified_at, camera_device, rpi_cam_id, width, height, framerate, bitrate, options_json, audio_device, audio_denoise)
+            VALUES ($k, $sid, $n, $loc, $t, $en, $svid, $mod, $cam, $rcid, $w, $h, $fps, $br, $opts, $adev, $adn)
             ON CONFLICT(dict_key) DO UPDATE SET
                 stream_id=excluded.stream_id,
                 name=excluded.name,
@@ -286,7 +289,9 @@ public sealed class OnboardChannelStore
                 height=excluded.height,
                 framerate=excluded.framerate,
                 bitrate=excluded.bitrate,
-                options_json=excluded.options_json;";
+                options_json=excluded.options_json,
+                audio_device=excluded.audio_device,
+                audio_denoise=excluded.audio_denoise;";
         cmd.Parameters.AddWithValue("$k", dictKey);
         cmd.Parameters.AddWithValue("$sid", item.StreamId);
         cmd.Parameters.AddWithValue("$n", (object?)item.Name ?? DBNull.Value);
@@ -302,6 +307,8 @@ public sealed class OnboardChannelStore
         cmd.Parameters.AddWithValue("$fps", (object?)item.Framerate ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$br", (object?)item.Bitrate ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$opts", JsonSerializer.Serialize(item.Options));
+        cmd.Parameters.AddWithValue("$adev", string.IsNullOrWhiteSpace(item.AudioDevice) ? DBNull.Value : item.AudioDevice);
+        cmd.Parameters.AddWithValue("$adn", item.AudioDenoise);
         await cmd.ExecuteNonQueryAsync();
     }
 
@@ -403,14 +410,15 @@ public sealed class OnboardChannelStore
         await using var cmd = c.CreateCommand();
         cmd.Transaction = tx;
         cmd.CommandText = @"
-            INSERT INTO video_streams (dict_key, stream_id, name, location, type, enabled, server_id, modified_at, camera_device, rpi_cam_id, width, height, framerate, bitrate, options_json)
-            VALUES ($k, $sid, $name, $loc, $type, $en, $svr, $mod, $cam, $rpi, $w, $h, $fps, $br, $opts)
+            INSERT INTO video_streams (dict_key, stream_id, name, location, type, enabled, server_id, modified_at, camera_device, rpi_cam_id, width, height, framerate, bitrate, options_json, audio_device, audio_denoise)
+            VALUES ($k, $sid, $name, $loc, $type, $en, $svr, $mod, $cam, $rpi, $w, $h, $fps, $br, $opts, $adev, $adn)
             ON CONFLICT(dict_key) DO UPDATE SET
                 stream_id=excluded.stream_id, name=excluded.name, location=excluded.location,
                 type=excluded.type, enabled=excluded.enabled, server_id=excluded.server_id,
                 modified_at=excluded.modified_at, camera_device=excluded.camera_device,
                 rpi_cam_id=excluded.rpi_cam_id, width=excluded.width, height=excluded.height,
-                framerate=excluded.framerate, bitrate=excluded.bitrate, options_json=excluded.options_json;";
+                framerate=excluded.framerate, bitrate=excluded.bitrate, options_json=excluded.options_json,
+                audio_device=excluded.audio_device, audio_denoise=excluded.audio_denoise;";
         cmd.Parameters.AddWithValue("$k", dictKey);
         cmd.Parameters.AddWithValue("$sid", item.StreamId);
         cmd.Parameters.AddWithValue("$name", (object?)item.Name ?? DBNull.Value);
@@ -426,6 +434,8 @@ public sealed class OnboardChannelStore
         cmd.Parameters.AddWithValue("$fps", (object?)item.Framerate ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$br", (object?)item.Bitrate ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$opts", JsonSerializer.Serialize(item.Options));
+        cmd.Parameters.AddWithValue("$adev", string.IsNullOrWhiteSpace(item.AudioDevice) ? DBNull.Value : item.AudioDevice);
+        cmd.Parameters.AddWithValue("$adn", item.AudioDenoise);
         await cmd.ExecuteNonQueryAsync();
     }
 
@@ -503,7 +513,9 @@ public sealed class OnboardChannelStore
             height INTEGER,
             framerate INTEGER,
             bitrate INTEGER,
-            options_json TEXT NOT NULL DEFAULT '{}'
+            options_json TEXT NOT NULL DEFAULT '{}',
+            audio_device TEXT,
+            audio_denoise INTEGER NOT NULL DEFAULT 0
         );
         CREATE TABLE IF NOT EXISTS pin_managers (
             dict_key TEXT PRIMARY KEY,

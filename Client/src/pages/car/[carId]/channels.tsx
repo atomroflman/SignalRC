@@ -53,9 +53,13 @@ type VideoStream = {
   cameraDevice?: string | null;
   rpiCamId?: number | null;
   priority?: number | null;
+  audioDevice?: string | null;
+  audioDenoise?: boolean;
   optionsJson: string;
   modifiedAt?: string | null;
 };
+
+type AudioDevice = { name: string; description?: string | null };
 
 type Template = {
   id: number;
@@ -207,6 +211,10 @@ function VideoEditor({
       <Field label="Height"><input className={inputClass} type="number" value={v.height ?? ""} onChange={e => update({ height: e.target.value === "" ? null : Number(e.target.value) })} /></Field>
       <Field label="Framerate"><input className={inputClass} type="number" value={v.framerate ?? ""} onChange={e => update({ framerate: e.target.value === "" ? null : Number(e.target.value) })} /></Field>
       <Field label="Bitrate (kbps)"><input className={inputClass} type="number" value={v.bitrateKbps ?? ""} onChange={e => update({ bitrateKbps: e.target.value === "" ? null : Number(e.target.value) })} /></Field>
+      <Field label="Audio input (ALSA)" hint="Microphone sent with this stream; empty = video only">
+        <input className={inputClass + " font-mono"} value={v.audioDevice ?? ""} onChange={e => update({ audioDevice: e.target.value })} list="audio-input-options" placeholder="e.g. plughw:CARD=Device,DEV=0" />
+      </Field>
+      <Field label="Noise filter"><input type="checkbox" checked={v.audioDenoise ?? false} disabled={!v.audioDevice} onChange={e => update({ audioDenoise: e.target.checked })} /></Field>
       <Field label="Options (JSON)" hint='e.g. {"codec":"h264"}' className="col-span-2">
         <textarea className={inputClass + " font-mono w-full"} rows={2} value={v.optionsJson} onChange={e => update({ optionsJson: e.target.value })} />
       </Field>
@@ -233,6 +241,10 @@ export default function ChannelsPage() {
   const [applyingTemplate, setApplyingTemplate] = useState(false);
   const [availableControlTypes, setAvailableControlTypes] = useState<string[]>([]);
   const [availableTelemetryTypes, setAvailableTelemetryTypes] = useState<string[]>([]);
+  const [audioInputs, setAudioInputs] = useState<AudioDevice[]>([]);
+  const [audioOutputs, setAudioOutputs] = useState<AudioDevice[]>([]);
+  const [audioOutputDevice, setAudioOutputDevice] = useState("");
+  const [savedAudioOutputDevice, setSavedAudioOutputDevice] = useState("");
   const [loading, setLoading] = useState(true);
   const [editingPinManager, setEditingPinManager] = useState<{ key: string; pinManager: PinManager; isNew: boolean } | null>(null);
   const [editingControl, setEditingControl] = useState<{ key: string; channel: ControlChannel; isNew: boolean } | null>(null);
@@ -295,6 +307,8 @@ export default function ChannelsPage() {
         cameraDevice: v.cameraDevice ?? null,
         rpiCamId: v.rpiCamId ?? null,
         priority: v.priority ?? null,
+        audioDevice: v.audioDevice ?? null,
+        audioDenoise: v.audioDenoise ?? false,
         optionsJson: formatOptionsJson(v.options),
         modifiedAt: v.modifiedAt ?? null,
       })));
@@ -319,6 +333,31 @@ export default function ChannelsPage() {
       if (Array.isArray(t)) setAvailableTelemetryTypes(t);
     })();
   }, [carIdNum]);
+
+  useEffect(() => {
+    if (!carIdNum) return;
+    (async () => {
+      const [devices, settings] = await Promise.all([
+        fetch(`/api/cars/${carIdNum}/channels/available-audio-devices`).then(r => r.ok ? r.json() : null),
+        fetch(`/api/cars/${carIdNum}/channels/audio-settings`).then(r => r.ok ? r.json() : null),
+      ]);
+      setAudioInputs(Array.isArray(devices?.inputs) ? devices.inputs : []);
+      setAudioOutputs(Array.isArray(devices?.outputs) ? devices.outputs : []);
+      setAudioOutputDevice(settings?.outputDevice ?? "");
+      setSavedAudioOutputDevice(settings?.outputDevice ?? "");
+    })();
+  }, [carIdNum]);
+
+  const saveAudioSettings = async () => {
+    if (!carIdNum) return;
+    const r = await fetch(`/api/cars/${carIdNum}/channels/audio-settings`, {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ outputDevice: audioOutputDevice }),
+    });
+    if (!r.ok) { alert(await r.text()); return; }
+    const saved = await r.json();
+    setAudioOutputDevice(saved?.outputDevice ?? "");
+    setSavedAudioOutputDevice(saved?.outputDevice ?? "");
+  };
 
   const savePinManager = async (origKey: string, p: PinManager, isNew: boolean) => {
     if (!carIdNum) return;
@@ -421,6 +460,7 @@ export default function ChannelsPage() {
       streamId: v.streamId, name: v.name, type: v.type, location: v.location, enabled: v.enabled,
       width: v.width, height: v.height, framerate: v.framerate, bitrateKbps: v.bitrateKbps,
       cameraDevice: v.cameraDevice, rpiCamId: v.rpiCamId, priority: v.priority, options,
+      audioDevice: v.audioDevice, audioDenoise: v.audioDenoise ?? false,
     };
     const r = await fetch(`/api/cars/${carIdNum}/channels/video/${encodeURIComponent(isNew ? v.streamId : origKey)}`, {
       method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
@@ -593,7 +633,7 @@ export default function ChannelsPage() {
                   <div className="flex items-center justify-between">
                     <div className="font-mono text-xs">
                       <span className="text-zinc-100">{v.streamId}</span>
-                      <span className="text-zinc-500 ml-2">{v.name || "?"} {v.type ? `(${v.type})` : ""} {v.location ? `@ ${v.location}` : ""} {v.priority != null ? `· prio ${v.priority}` : ""}</span>
+                      <span className="text-zinc-500 ml-2">{v.name || "?"} {v.type ? `(${v.type})` : ""} {v.location ? `@ ${v.location}` : ""} {v.priority != null ? `· prio ${v.priority}` : ""} {v.audioDevice ? `· 🎤 ${v.audioDevice}` : ""}</span>
                     </div>
                     <div className="flex gap-1">
                       <button className={btnGhost} onClick={() => setEditingVideo({ key: v.streamId, stream: v, isNew: false })}>Edit</button>
@@ -609,6 +649,27 @@ export default function ChannelsPage() {
           </div>
         </CollapsibleSection>
 
+        <CollapsibleSection title="Audio" defaultCollapsed={false}>
+          <div className="space-y-2 text-xs text-zinc-400">
+            <p>Microphones are set per video stream (anyone watching the stream hears them). The speaker below is used for push-to-talk by the driver; leave it empty to hide push-to-talk.</p>
+            {audioInputs.length === 0 && audioOutputs.length === 0 && (
+              <p className="text-amber-400">The vehicle reported no ALSA devices (offline, alsa-utils missing, or no sound card).</p>
+            )}
+            <div className="flex items-end gap-2">
+              <Field label="Speaker (ALSA)" className="flex-1">
+                <input className={inputClass + " font-mono w-full"} value={audioOutputDevice} onChange={e => setAudioOutputDevice(e.target.value)} list="audio-output-options" placeholder="e.g. plughw:CARD=Device,DEV=0" />
+              </Field>
+              <button className={btnPrimary} disabled={audioOutputDevice === savedAudioOutputDevice} onClick={saveAudioSettings}>Save</button>
+            </div>
+          </div>
+        </CollapsibleSection>
+
+        <datalist id="audio-input-options">
+          {audioInputs.map(d => <option key={d.name} value={d.name}>{d.description ?? ""}</option>)}
+        </datalist>
+        <datalist id="audio-output-options">
+          {audioOutputs.map(d => <option key={d.name} value={d.name}>{d.description ?? ""}</option>)}
+        </datalist>
         <datalist id="control-type-options">
           {availableControlTypes.map(t => <option key={t} value={t} />)}
         </datalist>

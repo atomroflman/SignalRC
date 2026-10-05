@@ -13,6 +13,7 @@ import VersionBanner from "@/components/version-banner";
 import GamepadViewer from "@/components/gamepad-viewer";
 import CarFunctionsView from "@/components/car-functions-view";
 import AudioChat from "@/components/audio-chat";
+import { useCarAudioSettings } from "@/components/audio-store";
 import SshKeyManager from "@/components/ssh-key-manager";
 import SortableSectionList from "@/components/sortable-section-list";
 import { useI18n } from "@/i18n/provider";
@@ -33,6 +34,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const selectedCarId = useControlFlowStore(state => state.carId);
   const carSession = useControlFlowStore(state => state.carSession);
+  const { outputDevice: carAudioOutputDevice } = useCarAudioSettings(selectedCarId);
 
   useEffect(() => {
     fetch("/api/user/me")
@@ -81,7 +83,8 @@ export default function Home() {
       id: "audioChat",
       title: messages.audioChat.title,
       content: selectedCarId ? <AudioChat carId={selectedCarId} /> : null,
-      visible: Boolean(selectedCarId),
+      // Push-to-talk only exists when the vehicle has a speaker configured.
+      visible: Boolean(selectedCarId && carAudioOutputDevice),
     },
     {
       id: "sessionTransfer",

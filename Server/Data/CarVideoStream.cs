@@ -86,4 +86,10 @@ public class CarVideoStream : EntityBase, IVideoSettings
     public int? ServerId { get; set; }
 
     public DateTime? ModifiedAt { get; set; }
+
+    /// <summary>ALSA capture device sent alongside this stream; null = video only.</summary>
+    [MaxLength(100)]
+    public string? AudioDevice { get; set; }
+
+    public bool AudioDenoise { get; set; }
 }

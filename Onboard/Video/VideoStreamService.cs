@@ -161,6 +161,8 @@ public class VideoStreamService : ICarVideoClient, IHubConnectionObserver
         selectedStream.EV = settings.EV;
         selectedStream.Exposure = settings.Exposure;
         selectedStream.Port = settings.Port;
+        selectedStream.AudioDevice = settings.AudioDevice;
+        selectedStream.AudioDenoise = settings.AudioDenoise;
         Logger.LogInformation($"Stream: {streamId} updated.");
 
         await _mediaMtxConfigurator.GenerateFromChannelMapAsync(_channelMap);

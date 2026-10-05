@@ -53,7 +53,7 @@ builder.Services.AddKeyedSingleton("transfer", transferSqids);
 
 builder.Services.AddSingleton<VideoStreamReceiverService>();
 builder.Services.AddSingleton<ActiveVideoStreamViewerRegistry>();
-builder.Services.AddSingleton<VehicleAudioService>();
+builder.Services.AddSingleton<PushToTalkRegistry>();
 builder.Services.AddSingleton<CarConnectionStore>();
 builder.Services.AddSingleton<AvailableTypesRegistry>();
 builder.Services.AddSingleton<IServerBuildInfoService, ServerBuildInfoService>();

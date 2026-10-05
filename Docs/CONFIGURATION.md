@@ -23,19 +23,7 @@ Located in the config directory (see [Config Directory](#config-directory) below
 
 Optional feature-flag keys (`webSetup`, `bashTool`, `channelTester`, `audio`, `video`) can also be set here — see [Feature Flags](#feature-flags) for which of them actually do anything.
 
-Optional `Audio` section for two-way audio (see [FEATURES.md](FEATURES.md#audio-chat)):
-
-```json
-{
-  "Audio": {
-    "InputDevice": "default",
-    "OutputDevice": "default",
-    "UplinkBitrate": 32000
-  }
-}
-```
-
-`InputDevice` / `OutputDevice` are ALSA device names as ffmpeg's `-f alsa` expects them (e.g. `plughw:CARD=Device,DEV=0`; list them with `arecord -L` / `aplay -L`). The Onboard runs as a systemd service without a desktop session, so `default` only works when it points at the right card — on a Pi with a USB sound card set the device explicitly.
+Audio devices are not configured here but in the web UI (per video stream and per vehicle) — see [FEATURES.md](FEATURES.md#audio-chat).
 
 ### channelMap.json (Onboard)
 
@@ -98,7 +86,7 @@ There's no `minPulse`/`maxPulse`/`centerPulse` or `priority` field on channel it
 | `webSetup` | No — no code path checks it |
 | `bashTool` | **Yes** — `Onboard/Program.cs` reads `configuration.GetValue<bool?>("bashTool") ?? false` to decide whether to connect the bash relay; effectively **off by default** since the key is absent from the shipped file |
 | `channelTester` | No — no code path checks it |
-| `audio` | **Yes** — `AudioService` reads `configuration.GetValue<bool?>("audio") ?? true`; `false` rejects listen and push-to-talk. **On by default** |
+| `audio` | **Yes** — `AudioService` reads `configuration.GetValue<bool?>("audio") ?? true`; `false` refuses stream audio and push-to-talk. **On by default** |
 | `video` | No — no code path checks it; video streaming is not gated by a flag |
 
 ### Enabling Features

@@ -1,31 +1,18 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import type { Janus, JanusPluginHandle } from '@/types/janus';
 import { useControlFlowStore } from './control-flow-store';
+import { useCarAudioSettings, usePushToTalkStore } from './audio-store';
 import { useI18n } from '@/i18n/provider';
-import {
-  JANUS_SERVERS,
-  attachStreamingPlugin,
-  createAnswerAndStart,
-  createJanusSession,
-  fetchIceServers,
-  initJanus,
-  loadJanusScript,
-  watchStream,
-} from './janus-client';
 
 interface AudioDevice {
   deviceId: string;
   label: string;
-  kind: 'audioinput' | 'audiooutput';
 }
 
 interface AudioChatProps {
   carId?: number;
 }
-
-type ListenState = 'idle' | 'connecting' | 'live' | 'error';
 
 // Push-to-talk is recorded in a container the Onboard's ffmpeg can demux from a pipe.
 // Chromium records WebM, Firefox records Ogg; both carry Opus.
@@ -50,20 +37,20 @@ function toBase64(buffer: ArrayBuffer): string {
   return btoa(binary);
 }
 
+/**
+ * Push-to-talk to the vehicle speaker. Only the driver (active control session) can talk;
+ * listening to the vehicle happens in the video panel (audio track of the stream).
+ * Renders nothing if the vehicle has no speaker configured.
+ */
 export default function AudioChat({ carId }: AudioChatProps) {
   const { messages } = useI18n();
-  const [audioDevices, setAudioDevices] = useState<AudioDevice[]>([]);
+  const { outputDevice } = useCarAudioSettings(carId);
+  const [microphones, setMicrophones] = useState<AudioDevice[]>([]);
   const [selectedInput, setSelectedInput] = useState<string>('');
-  const [selectedOutput, setSelectedOutput] = useState<string>('');
-  const [volume, setVolume] = useState(100);
-  const [listenState, setListenState] = useState<ListenState>('idle');
-  const [talking, setTalking] = useState(false);
+  const [talking, setTalkingState] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const setTalkingGlobal = usePushToTalkStore((state) => state.setTalking);
 
-  const remoteAudioRef = useRef<HTMLAudioElement>(null);
-  const janusRef = useRef<Janus | null>(null);
-  const handleRef = useRef<JanusPluginHandle | null>(null);
-  const listeningRef = useRef(false);
   const talkingRef = useRef(false);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
@@ -73,123 +60,30 @@ export default function AudioChat({ carId }: AudioChatProps) {
   const { connection, carSession } = useControlFlowStore();
   const hasSession = carSession != null && connection != null && carId != null;
 
-  const loadAudioDevices = useCallback(async () => {
+  const setTalking = useCallback(
+    (value: boolean) => {
+      talkingRef.current = value;
+      setTalkingState(value);
+      setTalkingGlobal(value);
+    },
+    [setTalkingGlobal],
+  );
+
+  const loadMicrophones = useCallback(async () => {
     try {
       const devices = await navigator.mediaDevices.enumerateDevices();
-      const result: AudioDevice[] = [];
-      for (const device of devices) {
-        if (device.kind === 'audioinput') {
-          result.push({
+      setMicrophones(
+        devices
+          .filter((device) => device.kind === 'audioinput')
+          .map((device) => ({
             deviceId: device.deviceId,
             label: device.label || messages.audioChat.microphoneLabel(device.deviceId),
-            kind: 'audioinput',
-          });
-        } else if (device.kind === 'audiooutput') {
-          result.push({
-            deviceId: device.deviceId,
-            label: device.label || messages.audioChat.speakerLabel(device.deviceId),
-            kind: 'audiooutput',
-          });
-        }
-      }
-      setAudioDevices(result);
+          })),
+      );
     } catch (err) {
       console.error('Error enumerating audio devices:', err);
     }
   }, [messages]);
-
-  // -- Listen: vehicle microphone via Janus --------------------------------------------
-
-  const teardownJanus = useCallback(() => {
-    if (handleRef.current) {
-      try {
-        handleRef.current.detach();
-      } catch (err) {
-        console.warn('Janus detach error:', err);
-      }
-      handleRef.current = null;
-    }
-    if (janusRef.current) {
-      try {
-        janusRef.current.destroy({ cleanupHandles: true });
-      } catch (err) {
-        console.warn('Janus destroy error:', err);
-      }
-      janusRef.current = null;
-    }
-    if (remoteAudioRef.current) {
-      remoteAudioRef.current.srcObject = null;
-    }
-  }, []);
-
-  const stopListening = useCallback(async () => {
-    const wasListening = listeningRef.current;
-    listeningRef.current = false;
-    teardownJanus();
-    setListenState('idle');
-    if (wasListening && connection && carId != null) {
-      try {
-        await connection.invoke('StopAudioListen', carId);
-      } catch (err) {
-        console.warn('StopAudioListen failed:', err);
-      }
-    }
-  }, [connection, carId, teardownJanus]);
-
-  const startListening = useCallback(async () => {
-    if (!hasSession || listeningRef.current) return;
-    listeningRef.current = true;
-    setError(null);
-    setListenState('connecting');
-    try {
-      const mountpointId: number | null = await connection.invoke('StartAudioListen', carId, carSession);
-      if (mountpointId == null) {
-        throw new Error(messages.audioChat.listenRejected);
-      }
-
-      const JanusCtor = await loadJanusScript(
-        messages.videoStream.browserRequired,
-        messages.videoStream.janusUnavailable,
-        messages.videoStream.janusScriptFailed,
-      );
-      await initJanus(JanusCtor);
-      const janus = await createJanusSession(JanusCtor, JANUS_SERVERS, await fetchIceServers());
-      if (!listeningRef.current) {
-        janus.destroy({ cleanupHandles: true });
-        return;
-      }
-      janusRef.current = janus;
-
-      const handle = await attachStreamingPlugin(janus, {
-        onmessage: (msg, jsep) => {
-          if (msg.error) {
-            setError(msg.error);
-            setListenState('error');
-            return;
-          }
-          if (jsep && handleRef.current) {
-            createAnswerAndStart(handleRef.current, jsep).catch((err: Error) => {
-              setError(messages.videoStream.webRtcError(err.message));
-              setListenState('error');
-            });
-          }
-        },
-        onremotetrack: (track, _mid, on) => {
-          if (track.kind !== 'audio' || !remoteAudioRef.current) return;
-          remoteAudioRef.current.srcObject = on ? new MediaStream([track]) : null;
-          if (on) setListenState('live');
-        },
-      });
-      handleRef.current = handle;
-      await watchStream(handle, mountpointId);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      await stopListening();
-      setListenState('error');
-    }
-  }, [hasSession, connection, carId, carSession, messages, stopListening]);
-
-  // -- Talk: push-to-talk to the vehicle speaker ----------------------------------------
 
   const releaseMicrophone = useCallback(() => {
     micStreamRef.current?.getTracks().forEach((track) => track.stop());
@@ -199,7 +93,6 @@ export default function AudioChat({ carId }: AudioChatProps) {
 
   const stopTalking = useCallback(() => {
     if (!talkingRef.current) return;
-    talkingRef.current = false;
     setTalking(false);
     const recorder = recorderRef.current;
     if (recorder && recorder.state !== 'inactive') {
@@ -208,7 +101,7 @@ export default function AudioChat({ carId }: AudioChatProps) {
     } else {
       releaseMicrophone();
     }
-  }, [releaseMicrophone]);
+  }, [releaseMicrophone, setTalking]);
 
   const startTalking = useCallback(async () => {
     if (!hasSession || talkingRef.current) return;
@@ -224,7 +117,6 @@ export default function AudioChat({ carId }: AudioChatProps) {
       return;
     }
 
-    talkingRef.current = true;
     setTalking(true);
 
     let stream: MediaStream;
@@ -239,14 +131,13 @@ export default function AudioChat({ carId }: AudioChatProps) {
         video: false,
       });
     } catch (err) {
-      talkingRef.current = false;
       setTalking(false);
       setError(messages.audioChat.microphoneDenied(err instanceof Error ? err.message : String(err)));
       return;
     }
     micStreamRef.current = stream;
     // Device labels only become visible after the first permission grant.
-    loadAudioDevices();
+    loadMicrophones();
 
     let accepted = false;
     try {
@@ -255,7 +146,6 @@ export default function AudioChat({ carId }: AudioChatProps) {
       console.warn('StartAudioTalk failed:', err);
     }
     if (!accepted) {
-      talkingRef.current = false;
       setTalking(false);
       releaseMicrophone();
       setError(messages.audioChat.talkRejected);
@@ -290,71 +180,22 @@ export default function AudioChat({ carId }: AudioChatProps) {
     };
     recorderRef.current = recorder;
     recorder.start(TALK_TIMESLICE_MS);
-  }, [
-    hasSession,
-    connection,
-    carId,
-    carSession,
-    selectedInput,
-    messages,
-    loadAudioDevices,
-    releaseMicrophone,
-  ]);
-
-  // -- lifecycle ------------------------------------------------------------------------
+  }, [hasSession, connection, carId, carSession, selectedInput, messages, loadMicrophones, releaseMicrophone, setTalking]);
 
   useEffect(() => {
     if (hasSession) {
-      loadAudioDevices();
+      loadMicrophones();
     }
-  }, [hasSession, loadAudioDevices]);
+  }, [hasSession, loadMicrophones]);
 
-  // The vehicle tears down audio when the control session changes; mirror that here.
+  // The vehicle stops playback when the control session changes; mirror that here.
   useEffect(() => {
-    return () => {
-      stopTalking();
-      stopListening();
-    };
-  }, [carSession, carId, stopTalking, stopListening]);
+    return () => stopTalking();
+  }, [carSession, carId, stopTalking]);
 
-  useEffect(() => {
-    if (remoteAudioRef.current) {
-      remoteAudioRef.current.volume = volume / 100;
-    }
-  }, [volume]);
-
-  useEffect(() => {
-    const el = remoteAudioRef.current as (HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> }) | null;
-    if (el?.setSinkId && selectedOutput) {
-      el.setSinkId(selectedOutput).catch((err) => console.warn('setSinkId failed:', err));
-    }
-  }, [selectedOutput]);
-
-  const inputDevices = audioDevices.filter((d) => d.kind === 'audioinput');
-  const outputDevices = audioDevices.filter((d) => d.kind === 'audiooutput');
-  const listening = listenState === 'connecting' || listenState === 'live';
-
-  const statusColor = talking
-    ? 'bg-red-500'
-    : listenState === 'live'
-      ? 'bg-green-500'
-      : listenState === 'connecting'
-        ? 'bg-blue-500'
-        : listenState === 'error' || error
-          ? 'bg-red-500'
-          : hasSession
-            ? 'bg-zinc-400'
-            : 'bg-gray-500';
-
-  const statusText = talking
-    ? messages.audioChat.talking
-    : listenState === 'live'
-      ? messages.audioChat.listening
-      : listenState === 'connecting'
-        ? messages.audioChat.connecting
-        : listenState === 'error'
-          ? messages.audioChat.error
-          : messages.audioChat.ready;
+  if (!outputDevice) {
+    return null;
+  }
 
   return (
     <div className="bg-zinc-800 rounded-lg p-3 space-y-3">
@@ -362,20 +203,20 @@ export default function AudioChat({ carId }: AudioChatProps) {
         <h3 className="text-sm font-medium text-zinc-200">{messages.audioChat.title}</h3>
         {hasSession && (
           <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${statusColor}`} />
-            <span className="text-xs text-zinc-400">{statusText}</span>
+            <div className={`w-2 h-2 rounded-full ${talking ? 'bg-red-500' : error ? 'bg-red-500' : 'bg-zinc-400'}`} />
+            <span className="text-xs text-zinc-400">
+              {talking ? messages.audioChat.talking : error ? messages.audioChat.error : messages.audioChat.ready}
+            </span>
           </div>
         )}
       </div>
 
       {!hasSession ? (
-        <div className="text-xs text-zinc-500 text-center py-4">
-          {messages.audioChat.connectVehicle}
-        </div>
+        <div className="text-xs text-zinc-500 text-center py-4">{messages.audioChat.connectVehicle}</div>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
+          <div className="flex items-end gap-2">
+            <div className="flex-1">
               <label className="block text-xs text-zinc-400 mb-1">{messages.audioChat.microphone}</label>
               <select
                 value={selectedInput}
@@ -383,74 +224,17 @@ export default function AudioChat({ carId }: AudioChatProps) {
                 className="w-full text-xs p-1.5 bg-zinc-700 border border-zinc-600 rounded text-zinc-200"
                 disabled={talking}
               >
-                {inputDevices.map((device) => (
+                {microphones.map((device) => (
                   <option key={device.deviceId} value={device.deviceId}>
                     {device.label}
                     {device.deviceId === 'default' ? ` ${messages.audioChat.defaultDeviceSuffix}` : ''}
                   </option>
                 ))}
-                {inputDevices.length === 0 && <option value="">{messages.audioChat.noMicrophone}</option>}
+                {microphones.length === 0 && <option value="">{messages.audioChat.noMicrophone}</option>}
               </select>
             </div>
-
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">{messages.audioChat.speaker}</label>
-              <select
-                value={selectedOutput}
-                onChange={(e) => setSelectedOutput(e.target.value)}
-                className="w-full text-xs p-1.5 bg-zinc-700 border border-zinc-600 rounded text-zinc-200"
-              >
-                {outputDevices.map((device) => (
-                  <option key={device.deviceId} value={device.deviceId}>
-                    {device.label}
-                    {device.deviceId === 'default' ? ` ${messages.audioChat.defaultDeviceSuffix}` : ''}
-                  </option>
-                ))}
-                {outputDevices.length === 0 && <option value="">{messages.audioChat.noSpeaker}</option>}
-              </select>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-zinc-400">{messages.audioChat.volume}</label>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              value={volume}
-              onChange={(e) => setVolume(Number(e.target.value))}
-              className="flex-1 h-1 bg-zinc-600 rounded-lg appearance-none cursor-pointer"
-            />
-            <span className="text-xs text-zinc-400 w-8">{volume}%</span>
-          </div>
-
-          <div className="flex gap-2">
             <button
-              onClick={() => (listening ? stopListening() : startListening())}
-              className={`flex-1 px-3 py-1.5 text-xs rounded font-medium transition-colors ${
-                listening ? 'bg-green-700 hover:bg-green-800 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white'
-              }`}
-            >
-              {listening ? messages.audioChat.stopListening : messages.audioChat.listen}
-            </button>
-
-            <button
-              onPointerDown={(e) => {
-                e.currentTarget.setPointerCapture(e.pointerId);
-                startTalking();
-              }}
-              onPointerUp={stopTalking}
-              onPointerCancel={stopTalking}
-              onContextMenu={(e) => e.preventDefault()}
-              className={`flex-1 px-3 py-1.5 text-xs rounded font-medium transition-colors select-none touch-none ${
-                talking ? 'bg-red-600 text-white animate-pulse' : 'bg-zinc-600 hover:bg-zinc-500 text-zinc-200'
-              }`}
-            >
-              {talking ? messages.audioChat.releaseToStop : messages.audioChat.pushToTalk}
-            </button>
-
-            <button
-              onClick={loadAudioDevices}
+              onClick={loadMicrophones}
               className="px-3 py-1.5 text-xs bg-zinc-600 hover:bg-zinc-500 text-zinc-200 rounded font-medium transition-colors"
               title={messages.audioChat.refreshDevices}
             >
@@ -458,13 +242,24 @@ export default function AudioChat({ carId }: AudioChatProps) {
             </button>
           </div>
 
+          <button
+            onPointerDown={(e) => {
+              e.currentTarget.setPointerCapture(e.pointerId);
+              startTalking();
+            }}
+            onPointerUp={stopTalking}
+            onPointerCancel={stopTalking}
+            onContextMenu={(e) => e.preventDefault()}
+            className={`w-full px-3 py-2 text-xs rounded font-medium transition-colors select-none touch-none ${
+              talking ? 'bg-red-600 text-white animate-pulse' : 'bg-blue-600 hover:bg-blue-700 text-white'
+            }`}
+          >
+            {talking ? messages.audioChat.releaseToStop : messages.audioChat.pushToTalk}
+          </button>
+
           {error && <div className="text-xs text-red-400">{error}</div>}
         </>
       )}
-
-      {/* Muted while talking: half-duplex, so the driver doesn't hear their own voice
-          coming back from the vehicle speaker through the vehicle microphone. */}
-      <audio ref={remoteAudioRef} autoPlay playsInline muted={talking} className="hidden" />
     </div>
   );
 }

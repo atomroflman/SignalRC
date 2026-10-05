@@ -94,6 +94,8 @@ public class ChannelsController : ControllerBase
                     RpiCamId = s.RpiCamId,
                     Options = DeserializeOptions(s.OptionsJson),
                     ModifiedAt = s.ModifiedAt,
+                    AudioDevice = s.AudioDevice,
+                    AudioDenoise = s.AudioDenoise,
                 }),
         };
         return Ok(map);
@@ -322,6 +324,8 @@ public class ChannelsController : ControllerBase
         if (body.Protocol.HasValue) s.Protocol = body.Protocol.Value;
         s.CameraDevice = body.CameraDevice;
         s.RpiCamId = body.RpiCamId;
+        s.AudioDevice = string.IsNullOrWhiteSpace(body.AudioDevice) ? null : body.AudioDevice.Trim();
+        s.AudioDenoise = body.AudioDenoise ?? false;
         s.OptionsJson = SerializeOptions(body.Options);
         s.ProcessArguments = body.ProcessArguments;
         s.StreamPurpose = body.StreamPurpose;
@@ -395,6 +399,41 @@ public class ChannelsController : ControllerBase
         return Ok(_availableTypes.Get(carId)?.TelemetryTypes ?? Array.Empty<string>());
     }
 
+    [HttpGet("available-audio-devices")]
+    public async Task<IActionResult> GetAvailableAudioDevices(int carId)
+    {
+        var user = await GetCurrentUserAsync();
+        if (user == null) return Unauthorized();
+        var types = _availableTypes.Get(carId);
+        return Ok(new
+        {
+            inputs = types?.AudioInputDevices ?? Array.Empty<AudioDeviceInfo>(),
+            outputs = types?.AudioOutputDevices ?? Array.Empty<AudioDeviceInfo>(),
+        });
+    }
+
+    // Car-level audio: the speaker push-to-talk plays on. Microphones are configured per video stream.
+    [HttpGet("audio-settings")]
+    public async Task<IActionResult> GetAudioSettings(int carId)
+    {
+        var car = await _context.Cars.AsNoTracking().FirstOrDefaultAsync(c => c.Id == carId);
+        if (car == null) return NotFound("Car not found");
+        return Ok(new CarAudioSettingsDto { OutputDevice = car.AudioOutputDevice });
+    }
+
+    [HttpPut("audio-settings")]
+    public async Task<IActionResult> UpdateAudioSettings(int carId, [FromBody] CarAudioSettingsDto body)
+    {
+        var user = await GetCurrentUserAsync();
+        if (user == null) return Unauthorized();
+        var car = await _context.Cars.FirstOrDefaultAsync(c => c.Id == carId);
+        if (car == null) return NotFound("Car not found");
+        car.AudioOutputDevice = string.IsNullOrWhiteSpace(body.OutputDevice) ? null : body.OutputDevice.Trim();
+        await _context.SaveChangesAsync();
+        _logger.LogInformation("Audio output device for car {CarId} set to '{Device}' by {User}", carId, car.AudioOutputDevice, user.LoginName);
+        return Ok(new CarAudioSettingsDto { OutputDevice = car.AudioOutputDevice });
+    }
+
     private async Task UpdateCarChannelMapHashAsync(int carId)
     {
         var car = await _context.Cars.FirstOrDefaultAsync(c => c.Id == carId);
@@ -451,6 +490,8 @@ public class ChannelsController : ControllerBase
         RpiCamId = s.RpiCamId,
         Options = DeserializeOptions(s.OptionsJson),
         ModifiedAt = s.ModifiedAt,
+        AudioDevice = s.AudioDevice,
+        AudioDenoise = s.AudioDenoise,
     };
 
     private static Dictionary<string, object> DeserializeOptions(string? json)
@@ -523,4 +564,11 @@ public class VideoStreamDto
     public string? CameraDevice { get; set; }
     public int? RpiCamId { get; set; }
     public Dictionary<string, object>? Options { get; set; }
+    public string? AudioDevice { get; set; }
+    public bool? AudioDenoise { get; set; }
+}
+
+public class CarAudioSettingsDto
+{
+    public string? OutputDevice { get; set; }
 }

@@ -69,38 +69,43 @@ Janus's WebRTC media (all video streams) uses the UDP range configured on the `j
 
 ## Audio Chat
 
-Two-way audio between driver and vehicle. Both directions require an active control session (the SSH challenge from "Take control"); the Onboard checks the session id on every call and stops all audio when the session changes.
+Two-way audio between driver and vehicle. Everything is configured in the web UI on the vehicle's channel page (`/car/{id}/channels`); the Onboard reports its ALSA devices (`arecord -l/-L`, `aplay -l/-L`) on every connect, so the fields offer them as suggestions.
 
-### Listen (vehicle → browser)
+| Direction | Who | Configured where |
+|---|---|---|
+| Vehicle → browser (listen) | Everyone watching the video stream | Per video stream: *Audio input (ALSA)* + optional *Noise filter* |
+| Browser → vehicle (push-to-talk) | Only the driver (active control session) | Per vehicle: *Audio → Speaker (ALSA)* |
+
+### Listen (part of the video stream)
 
 ```
-Mic ─ALSA─► ffmpeg (Opus/RTP) ──UDP──► Janus audio mountpoint ──WebRTC──► Browser
+Mic ─ALSA─► ffmpeg (Opus/RTP) ──UDP──► Janus mountpoint (video + audio) ──WebRTC──► Browser
 ```
 
-1. Browser calls `StartAudioListen(carId, sessionId)` on `CarConnectionHub`.
-2. For the first listener the server reserves a UDP port from the Janus range and creates an audio-only mountpoint (id `1000000 + carId`, Opus PT 111) — `VehicleAudioService`.
-3. Server calls `StartAudioUplink(sessionId, port)` on the vehicle; `AudioService` starts `ffmpeg -f alsa … -c:a libopus -f rtp` towards `ServerName:port`. Outbound UDP like the video stream, so it works behind LTE CGNAT. ffmpeg is restarted if it dies.
-4. Browser watches the mountpoint via the Janus streaming plugin.
-5. When the last listener leaves (or disconnects) the mountpoint is destroyed and the vehicle gets `StopAudioUplink`. On a vehicle reconnect with listeners still present the uplink is restarted.
+- A video stream with an audio input gets an audio port on its Janus mountpoint (Opus, PT 111) next to the video port.
+- When the stream starts (first viewer), the server sends `StartVideoStream` and `StartAudioUplink(streamId, port)`; when it stops, `StopAudioUplink`. The Onboard's `AudioService` runs the capture in its **own** ffmpeg, so a broken microphone can't take the video down, and restarts it if it dies. Outbound UDP like the video, so it works behind LTE CGNAT.
+- *Noise filter* adds `highpass=f=100,afftdn=nf=-25` (rumble cut + FFT denoiser against steady motor/wind noise).
+- The video panel shows a *Vehicle audio* toggle for streams with audio; it starts muted (browser autoplay rules).
+- Changing the audio input takes effect the next time the stream starts.
 
-### Talk (browser → vehicle, push-to-talk)
+### Push-to-talk
 
 ```
 Browser mic ─MediaRecorder (WebM/Ogg, Opus)─► SignalR chunks ─► Server ─► Onboard ─stdin─► ffmpeg ─ALSA─► Speaker
 ```
 
 1. While the button is held, the browser records 100 ms chunks (`audio/webm;codecs=opus` in Chromium, `audio/ogg;codecs=opus` in Firefox; Safari is not supported).
-2. `StartAudioTalk` → vehicle starts ffmpeg reading from stdin; `SendAudioChunk` → chunks are piped in order; `StopAudioTalk` closes stdin.
-3. Playback stops automatically after 5 s without data or when the browser disconnects.
-4. Push-to-talk counts as driver activity, so the control session doesn't time out while talking.
+2. `StartAudioTalk` → the server looks up the car's speaker and calls `StartAudioPlayback(sessionId, format, device)`; the Onboard checks the control session and starts ffmpeg reading from stdin. `SendAudioChunk` pipes the chunks in order; `StopAudioTalk` closes stdin.
+3. Playback stops after 5 s without data, when the browser disconnects, or when the control session changes. Talking counts as driver activity, so the session doesn't time out meanwhile.
+4. While talking, the browser mutes the vehicle audio (half-duplex), so you don't hear yourself through the vehicle microphone. Janus does no acoustic echo cancellation; full duplex would need e.g. PipeWire `module-echo-cancel` on the vehicle.
 
-Expect a few hundred milliseconds of latency on the talk path (recording slices + TCP). The browser mutes the vehicle audio while you talk (half-duplex) so you don't hear yourself through the vehicle microphone.
+The push-to-talk panel only appears when the vehicle has a speaker configured. Expect a few hundred milliseconds of latency.
 
 ### Requirements
 
-- Vehicle: microphone and speaker on ALSA (a Raspberry Pi has no mic input — use a USB sound card), `ffmpeg` with `libopus`, service user in the `audio` group (`install.sh` sets this up). Configure the devices under `Audio` in `appSettings.json` — see [CONFIGURATION.md](CONFIGURATION.md).
-- Browser: the page must be served over HTTPS (or `localhost`), otherwise `getUserMedia` is blocked.
-- Feature flag `audio` (default `true`); `false` makes the vehicle reject all audio requests.
+- Vehicle: microphone/speaker on ALSA (a Raspberry Pi has no mic input — use a USB sound card), `ffmpeg` with `libopus`, `alsa-utils`, service user in the `audio` group (`install.sh` sets this up). Prefer the `plughw:CARD=…,DEV=…` entries: the service runs without a desktop session, so `default`/`pipewire`/`pulse` usually don't work.
+- Browser: HTTPS (or `localhost`) for microphone access.
+- Feature flag `audio` (default `true`); `false` makes the vehicle refuse both directions.
 
 ---
 
@@ -258,7 +263,7 @@ All five flags below can be set in `appSettings.json`. Two of them currently cha
 | `webSetup` | No — no such interface exists; toggling it has no effect |
 | `bashTool` | **Yes** — gates the bash relay connection (`Onboard/Program.cs`); defaults to `false` when the key is absent |
 | `channelTester` | No — the web client's test page works regardless of this flag |
-| `audio` | **Yes** — `AudioService` rejects listen and push-to-talk when `false`; defaults to `true` |
+| `audio` | **Yes** — `AudioService` refuses stream audio and push-to-talk when `false`; defaults to `true` |
 | `video` | No — video streaming isn't gated by this flag |
 
 Treat the others as reserved-for-future-use rather than as functioning on/off switches.
