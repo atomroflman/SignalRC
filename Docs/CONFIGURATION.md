@@ -23,6 +23,20 @@ Located in the config directory (see [Config Directory](#config-directory) below
 
 Optional feature-flag keys (`webSetup`, `bashTool`, `channelTester`, `audio`, `video`) can also be set here — see [Feature Flags](#feature-flags) for which of them actually do anything.
 
+Optional `Audio` section for two-way audio (see [FEATURES.md](FEATURES.md#audio-chat)):
+
+```json
+{
+  "Audio": {
+    "InputDevice": "default",
+    "OutputDevice": "default",
+    "UplinkBitrate": 32000
+  }
+}
+```
+
+`InputDevice` / `OutputDevice` are ALSA device names as ffmpeg's `-f alsa` expects them (e.g. `plughw:CARD=Device,DEV=0`; list them with `arecord -L` / `aplay -L`). The Onboard runs as a systemd service without a desktop session, so `default` only works when it points at the right card — on a Pi with a USB sound card set the device explicitly.
+
 ### channelMap.json (Onboard)
 
 Defines all hardware channels, telemetry, and video streams (`Shared/Channels/ChannelMap.cs`, `ChannelMapItem.cs`, `Shared/Video/VideoStreamMapItem.cs`):
@@ -77,19 +91,19 @@ There's no `minPulse`/`maxPulse`/`centerPulse` or `priority` field on channel it
 
 ## Feature Flags
 
-`appSettings.json` supports five boolean feature flags, but the shipped default doesn't set any of them, and only one is actually read anywhere at runtime:
+`appSettings.json` supports five boolean feature flags, but the shipped default doesn't set any of them, and only two are actually read anywhere at runtime:
 
 | Flag | Actually read at runtime? |
 |------|-------------|
 | `webSetup` | No — no code path checks it |
 | `bashTool` | **Yes** — `Onboard/Program.cs` reads `configuration.GetValue<bool?>("bashTool") ?? false` to decide whether to connect the bash relay; effectively **off by default** since the key is absent from the shipped file |
 | `channelTester` | No — no code path checks it |
-| `audio` | No — no code path checks it (and `CarAudioHub` isn't registered on the server either) |
+| `audio` | **Yes** — `AudioService` reads `configuration.GetValue<bool?>("audio") ?? true`; `false` rejects listen and push-to-talk. **On by default** |
 | `video` | No — no code path checks it; video streaming is not gated by a flag |
 
 ### Enabling Features
 
-Set the flag directly in `appSettings.json` — as shown above, only `bashTool` currently changes behavior:
+Set the flag directly in `appSettings.json` — as shown above, only `bashTool` and `audio` currently change behavior:
 
 ```json
 {
@@ -147,11 +161,6 @@ Hubs actually mapped in `Server/Program.cs`:
 | UserChannelHub | `/hubs/userchannel` | Browser/gamepad-side channel value updates |
 | CarBashHub | `/hubs/carbash` | Bash command dispatch (output streams back via `CarConnectionHub.SendBashOutput`, broadcast to all connected clients) |
 
-Exists in code but **not mapped/reachable**:
-
-| Hub | Would-be purpose |
-|-----|---------|
-| CarAudioHub | Audio chat signaling (`IAudioChatClient`/`IAudioChatServer`) — fully implemented but never registered in `Program.cs` |
 
 ---
 

@@ -46,6 +46,14 @@ public interface IConnectionHubServer
     Task StopVideoStream(int streamId);
     Task SetVideoStreamEnabled(int carId, int streamId, bool enabled);
 
+    // Audio (browser → server → onboard). All calls require the control session id.
+    // StartAudioListen returns the Janus streaming mountpoint id carrying the vehicle microphone.
+    Task<int?> StartAudioListen(int carId, string sessionId);
+    Task StopAudioListen(int carId);
+    Task<bool> StartAudioTalk(int carId, string sessionId, string format);
+    Task SendAudioChunk(int carId, string sessionId, byte[] chunk);
+    Task StopAudioTalk(int carId, string sessionId);
+
     // Diagnostics (browser → server → onboard)
     Task<OnboardDiagnosticsReport> GetOnboardDiagnostics(int carId);
     Task<OnboardDiagnosticsReport> RunOnboardStartupTest(int carId);

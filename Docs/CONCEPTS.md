@@ -15,10 +15,9 @@ The vehicle-side hubs were consolidated onto a single connection; `CarControlHub
 
 | Hub | Path | Purpose |
 |-----|------|-------|
-| `CarConnectionHub` | `/hubs/connection` | The one vehicle-side hub: registration, ChannelMap sync, control, telemetry, video signaling, file transfer |
+| `CarConnectionHub` | `/hubs/connection` | The one vehicle-side hub: registration, ChannelMap sync, control, telemetry, video and audio signaling, file transfer |
 | `CarBashHub` | `/hubs/carbash` | Bash command dispatch (output streams back over `CarConnectionHub.SendBashOutput`, broadcast to all clients) |
 | `UserChannelHub` | `/hubs/userchannel` | Gamepad sync between browsers |
-| `CarAudioHub` *(exists, not mapped)* | — | Audio chat signaling — implemented but not registered in `Program.cs` yet |
 
 ## Connection Model
 - The server is the single source of truth for the channel map.
@@ -38,21 +37,21 @@ There used to be an `LTE_USE_NEW_CONNECTION_MODEL` flag toggling between an old 
 
 ## Feature Flags
 
-Five flags can be set in `appSettings.json` — but only `bashTool` is actually read anywhere at runtime (`Onboard/Program.cs`, defaults to `false` when unset):
+Five flags can be set in `appSettings.json` — but only `bashTool` (`Onboard/Program.cs`, defaults to `false`) and `audio` (`AudioService`, defaults to `true`) are actually read at runtime:
 
 | Flag | Actually wired up? |
 |------|--------------|
 | `webSetup` | No — no web-based setup interface exists |
 | `bashTool` | **Yes** — gates the bash relay connection |
 | `channelTester` | No |
-| `audio` | No — and `CarAudioHub` isn't registered either |
+| `audio` | **Yes** — `false` makes the Onboard reject all audio requests (default: on) |
 | `video` | No — video streaming isn't gated by this flag |
 
 ## Onboard Services
 - **TelemetryService** – tick loop, reads `TelemetryReaderBase` implementations (CpuTemp, JBD BMS, lifetime), pushes over `CarConnectionHub`.
 - **ControlService** – receives control commands, SSH challenge auth, delegates to hardware (PCA9685/GPIO); also relays bash output via `SendBashOutput`.
 - **VideoStreamService** – manages the MediaMTX process and its configuration from the ChannelMap.
-- **AudioChatService** – bidirectional audio connection, device management, echo cancellation (not currently reachable — see `CarAudioHub` above).
+- **AudioService** – two-way audio via ffmpeg + ALSA: microphone → Opus/RTP → Janus (listen), push-to-talk chunks from SignalR → speaker (talk). Bound to the active control session.
 - **BashToolService** – subscribes to `ExecuteCommand` on `CarBashHub`, runs local processes, streams output back via `CarConnectionHub`.
 - **SshKeyService** – RSA-2048, challenge/verify, fingerprint logging; serves the private key over a LAN-only listener on ports 8080/8443.
 - **CarConfigurationService** – stores server-assigned config (Janus, video settings).

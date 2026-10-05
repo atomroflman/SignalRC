@@ -107,7 +107,7 @@ public class ServerConnectionService
         // Register each Onboard service under its own narrow SignalR-client
         // interface so the merged hub can push the matching subset of calls
         // back to us over this one connection. The hub is typed
-        // Hub<IControlClient, ITelemetryClient, ICarVideoClient>; SignalR
+        // Hub<IConnectionHubClient> (union of the subsets); SignalR
         // matches handlers by method name, so each service is reachable via
         // its declared subset.
         var controlService = ServiceProvider.GetRequiredService<ControlService>();
@@ -118,6 +118,8 @@ public class ServerConnectionService
         _connection.Register<ICarVideoClient>(videoStreamService);
         var diagnosticsService = ServiceProvider.GetRequiredService<OnboardDiagnosticsService>();
         _connection.Register<IDiagnosticsClient>(diagnosticsService);
+        var audioService = ServiceProvider.GetRequiredService<AudioService>();
+        _connection.Register<IAudioClient>(audioService);
 
         Logger.LogInformation($"Connected to server: {_connection.State}");
         await _connection.InvokeAsync("Test");

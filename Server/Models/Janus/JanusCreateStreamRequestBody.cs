@@ -15,11 +15,27 @@ public class JanusCreateStreamRequestBody
     [JsonPropertyName("video")]
     public bool Video { get; set; } = true;
     [JsonPropertyName("videoport")]
-    public int VideoPort { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? VideoPort { get; set; }
     [JsonPropertyName("videopt")]
-    public int VideoPt { get; set; } = 96;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? VideoPt { get; set; } = 96;
     [JsonPropertyName("videocodec")]
-    public string Videocodec { get; set; } = "h264";
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Videocodec { get; set; } = "h264";
+    [JsonPropertyName("audioport")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? AudioPort { get; set; }
+    [JsonPropertyName("audiopt")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? AudioPt { get; set; }
+    // Janus 1.x reads "audiocodec", 0.x needs "audiortpmap"; sending both keeps either version happy.
+    [JsonPropertyName("audiocodec")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Audiocodec { get; set; }
+    [JsonPropertyName("audiortpmap")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? AudioRtpMap { get; set; }
     [JsonPropertyName("secret")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Secret { get; set; }

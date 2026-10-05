@@ -71,7 +71,7 @@ docker compose down
 | Channel Tester | Test hardware channels from the web UI |
 | Templates | Share and reuse vehicle channel configurations |
 
-**Feature flags**: `appSettings.json` supports `webSetup`, `bashTool`, `channelTester`, `audio`, `video` flags. Of these, only `bashTool` currently gates real runtime behavior (it enables/disables the bash relay to the server, and defaults to off when unset). The others are stored for future use but don't gate anything yet — see [Docs/CONFIGURATION.md](Docs/CONFIGURATION.md#feature-flags) for details.
+**Feature flags**: `appSettings.json` supports `webSetup`, `bashTool`, `channelTester`, `audio`, `video` flags. Of these, only `bashTool` (enables the bash relay, off when unset) and `audio` (two-way audio, on when unset) currently gate real runtime behavior. The others are stored for future use but don't gate anything yet — see [Docs/CONFIGURATION.md](Docs/CONFIGURATION.md#feature-flags) for details.
 
 ---
 
@@ -130,7 +130,7 @@ Vehicle configuration (channels, name, hardware) and testing happen in the web c
 | `webSetup` | on in the flag model, but no such interface exists yet | No — toggle is inert |
 | `bashTool` | off (unset in appSettings.json falls back to `false`) | Yes — gates the bash relay |
 | `channelTester` | on in the flag model | No — toggle is inert |
-| `audio` | on in the flag model | No — `CarAudioHub` exists in code but isn't registered yet |
+| `audio` | on (unset falls back to `true`) | Yes — `false` makes the Onboard reject listen and push-to-talk |
 | `video` | on in the flag model | Video streaming itself always runs; not gated by this flag |
 
 **Details:** [Docs/CONFIGURATION.md](Docs/CONFIGURATION.md)
@@ -168,11 +168,9 @@ Vehicle configuration (channels, name, hardware) and testing happen in the web c
 
 | Hub | Path | Purpose |
 |-----|------|-------|
-| CarConnectionHub | `/hubs/connection` | The single vehicle-side hub: connection state, control, telemetry, video signaling, file transfer, channel sync |
+| CarConnectionHub | `/hubs/connection` | The single vehicle-side hub: connection state, control, telemetry, video and audio signaling, file transfer, channel sync |
 | UserChannelHub | `/hubs/userchannel` | Browser/gamepad-side channel value updates |
 | CarBashHub | `/hubs/carbash` | Bash command relay (dispatch only — output streams back over `CarConnectionHub`) |
-
-*(`CarAudioHub` exists in the codebase but is not yet registered/reachable.)*
 
 ---
 

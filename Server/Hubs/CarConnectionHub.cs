@@ -38,6 +38,8 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
     private readonly SqidsEncoder<long> _sqidsEncoder;
     private readonly ActiveVideoStreamViewerRegistry _viewerRegistry;
     private readonly AvailableTypesRegistry _availableTypes;
+    private readonly VehicleAudioService _audioService;
+    private readonly IHubContext<CarConnectionHub, IConnectionHubClient> _hubContext;
 
     public CarConnectionHub(
         IConfigurationService configService,
@@ -46,7 +48,9 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
         CarConnectionStore connectionStore,
         SqidsEncoder<long> sqidsEncoder,
         ActiveVideoStreamViewerRegistry viewerRegistry,
-        AvailableTypesRegistry availableTypes)
+        AvailableTypesRegistry availableTypes,
+        VehicleAudioService audioService,
+        IHubContext<CarConnectionHub, IConnectionHubClient> hubContext)
     {
         Logger = logger;
         _streamService = streamService;
@@ -55,6 +59,8 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
         _sqidsEncoder = sqidsEncoder;
         _viewerRegistry = viewerRegistry;
         _availableTypes = availableTypes;
+        _audioService = audioService;
+        _hubContext = hubContext;
     }
 
     public VideoStreamReceiverService VideoStreamReceiverService => _streamService;
@@ -211,6 +217,8 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
                 continue;
             await StopStreamForViewersAsync(stream);
         }
+
+        await CleanupAudioForConnectionAsync(Context.ConnectionId);
 
         await base.OnDisconnectedAsync(exception);
     }
@@ -648,6 +656,28 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
         {
             await StartStreamForViewersAsync(stream);
         }
+
+        if (_audioService.TryGetActiveUplink(car.Id, out var audioPort, out var audioSessionId))
+        {
+            Logger.LogInformation("Car {CarId} reconnected with active audio listeners, restarting uplink.", car.Id);
+            // Awaiting a client result from the caller inside its own invocation would deadlock
+            // (MaximumParallelInvocationsPerClient = 1), so ask once this call has returned.
+            var carConnectionId = Context.ConnectionId;
+            var carId = car.Id;
+            var logger = Logger;
+            var hubContext = _hubContext;
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await hubContext.Clients.Client(carConnectionId).StartAudioUplink(audioSessionId, audioPort);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Failed to restart audio uplink for car {CarId}", carId);
+                }
+            });
+        }
     }
 
     public async Task StartVideoStream(int streamId)
@@ -964,6 +994,105 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
         if (user.ActiveVehicleId != carId)
         {
             throw new HubException("You must actively control this vehicle to change stream enable state.");
+        }
+    }
+
+    // -- Audio (browser ↔ onboard) --------------------------------------------------
+    // Listen: the vehicle sends Opus/RTP to an audio-only Janus mountpoint, the browser watches it.
+    // Talk: push-to-talk chunks are relayed over SignalR to the vehicle's speaker.
+    // The Onboard validates the control session on every call.
+
+    private const int MaxAudioChunkBytes = 64 * 1024;
+
+    private bool TryGetCarConnectionId(int carId, out string connectionId)
+    {
+        if (_connectionStore.TryGetValue(carId.ToString(), out var info) && !string.IsNullOrEmpty(info.ConnectionId))
+        {
+            connectionId = info.ConnectionId;
+            return true;
+        }
+        connectionId = string.Empty;
+        return false;
+    }
+
+    public async Task<int?> StartAudioListen(int carId, string sessionId)
+    {
+        if (!TryGetCarConnectionId(carId, out var carConnectionId))
+            return null;
+
+        var port = await _audioService.AddListenerAsync(carId, Context.ConnectionId, sessionId, $"car-{carId}-audio");
+        bool accepted;
+        try
+        {
+            accepted = await Clients.Client(carConnectionId).StartAudioUplink(sessionId, port);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Car {CarId} failed to start audio uplink", carId);
+            accepted = false;
+        }
+
+        if (!accepted)
+        {
+            await StopAudioListen(carId);
+            return null;
+        }
+        Logger.LogInformation("Connection {ConnectionId} listens to car {CarId} audio (port {Port})", Context.ConnectionId, carId, port);
+        return (int)VehicleAudioService.MountpointId(carId);
+    }
+
+    public async Task StopAudioListen(int carId)
+    {
+        if (!await _audioService.RemoveListenerAsync(carId, Context.ConnectionId))
+            return;
+        if (TryGetCarConnectionId(carId, out var carConnectionId))
+            await Clients.Client(carConnectionId).StopAudioUplink();
+    }
+
+    public async Task<bool> StartAudioTalk(int carId, string sessionId, string format)
+    {
+        if (!TryGetCarConnectionId(carId, out var carConnectionId))
+            return false;
+        var accepted = await Clients.Client(carConnectionId).StartAudioPlayback(sessionId, format);
+        if (accepted)
+            _audioService.SetTalker(Context.ConnectionId, carId, sessionId);
+        return accepted;
+    }
+
+    public async Task SendAudioChunk(int carId, string sessionId, byte[] chunk)
+    {
+        if (chunk == null || chunk.Length == 0 || chunk.Length > MaxAudioChunkBytes)
+            return;
+        if (!TryGetCarConnectionId(carId, out var carConnectionId))
+            return;
+        await Clients.Client(carConnectionId).PlayAudioChunk(sessionId, chunk);
+    }
+
+    public async Task StopAudioTalk(int carId, string sessionId)
+    {
+        _audioService.TryRemoveTalker(Context.ConnectionId, out _, out _);
+        if (TryGetCarConnectionId(carId, out var carConnectionId))
+            await Clients.Client(carConnectionId).StopAudioPlayback(sessionId);
+    }
+
+    private async Task CleanupAudioForConnectionAsync(string connectionId)
+    {
+        try
+        {
+            foreach (var carId in await _audioService.RemoveConnectionAsync(connectionId))
+            {
+                if (TryGetCarConnectionId(carId, out var carConnectionId))
+                    await Clients.Client(carConnectionId).StopAudioUplink();
+            }
+            if (_audioService.TryRemoveTalker(connectionId, out var talkCarId, out var talkSessionId)
+                && TryGetCarConnectionId(talkCarId, out var talkCarConnectionId))
+            {
+                await Clients.Client(talkCarConnectionId).StopAudioPlayback(talkSessionId);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to clean up audio for connection {ConnectionId}", connectionId);
         }
     }
 

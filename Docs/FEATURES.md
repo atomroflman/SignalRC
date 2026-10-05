@@ -69,16 +69,38 @@ Janus's WebRTC media (all video streams) uses the UDP range configured on the `j
 
 ## Audio Chat
 
-### Features
+Two-way audio between driver and vehicle. Both directions require an active control session (the SSH challenge from "Take control"); the Onboard checks the session id on every call and stops all audio when the session changes.
 
-- Bidirectional audio between driver and vehicle (`AudioChatService` on the Onboard side)
-- Microphone and speaker selection
-- Echo cancellation enabled by default
-- Noise suppression
+### Listen (vehicle → browser)
 
-### Status
+```
+Mic ─ALSA─► ffmpeg (Opus/RTP) ──UDP──► Janus audio mountpoint ──WebRTC──► Browser
+```
 
-The audio signaling hub (`CarAudioHub`, `Server/Hubs/CarAudioHub.cs`) exists in the codebase but is **not currently registered** in `Server/Program.cs`, so it isn't reachable yet. The `audio` feature flag doesn't gate anything at runtime either way.
+1. Browser calls `StartAudioListen(carId, sessionId)` on `CarConnectionHub`.
+2. For the first listener the server reserves a UDP port from the Janus range and creates an audio-only mountpoint (id `1000000 + carId`, Opus PT 111) — `VehicleAudioService`.
+3. Server calls `StartAudioUplink(sessionId, port)` on the vehicle; `AudioService` starts `ffmpeg -f alsa … -c:a libopus -f rtp` towards `ServerName:port`. Outbound UDP like the video stream, so it works behind LTE CGNAT. ffmpeg is restarted if it dies.
+4. Browser watches the mountpoint via the Janus streaming plugin.
+5. When the last listener leaves (or disconnects) the mountpoint is destroyed and the vehicle gets `StopAudioUplink`. On a vehicle reconnect with listeners still present the uplink is restarted.
+
+### Talk (browser → vehicle, push-to-talk)
+
+```
+Browser mic ─MediaRecorder (WebM/Ogg, Opus)─► SignalR chunks ─► Server ─► Onboard ─stdin─► ffmpeg ─ALSA─► Speaker
+```
+
+1. While the button is held, the browser records 100 ms chunks (`audio/webm;codecs=opus` in Chromium, `audio/ogg;codecs=opus` in Firefox; Safari is not supported).
+2. `StartAudioTalk` → vehicle starts ffmpeg reading from stdin; `SendAudioChunk` → chunks are piped in order; `StopAudioTalk` closes stdin.
+3. Playback stops automatically after 5 s without data or when the browser disconnects.
+4. Push-to-talk counts as driver activity, so the control session doesn't time out while talking.
+
+Expect a few hundred milliseconds of latency on the talk path (recording slices + TCP). The browser mutes the vehicle audio while you talk (half-duplex) so you don't hear yourself through the vehicle microphone.
+
+### Requirements
+
+- Vehicle: microphone and speaker on ALSA (a Raspberry Pi has no mic input — use a USB sound card), `ffmpeg` with `libopus`, service user in the `audio` group (`install.sh` sets this up). Configure the devices under `Audio` in `appSettings.json` — see [CONFIGURATION.md](CONFIGURATION.md).
+- Browser: the page must be served over HTTPS (or `localhost`), otherwise `getUserMedia` is blocked.
+- Feature flag `audio` (default `true`); `false` makes the vehicle reject all audio requests.
 
 ---
 
@@ -118,7 +140,7 @@ Set it in `appSettings.json`:
 }
 ```
 
-This is the one feature flag that's actually read at startup (`Onboard/Program.cs`, falls back to `false` if the key is absent) — it's the only one of the five feature flags that currently has any runtime effect.
+This is the one feature flag that's actually read at startup (`Onboard/Program.cs`, falls back to `false` if the key is absent) — besides `audio`, it's the only one of the five feature flags that currently has any runtime effect.
 
 ### Usage
 
@@ -229,14 +251,14 @@ The server only needs to be reachable at whatever `ServerName`/`ServerPort`/`Use
 
 ## Feature Flags Summary
 
-All five flags below can be set in `appSettings.json`. Only one of them currently changes what the running Onboard process does:
+All five flags below can be set in `appSettings.json`. Two of them currently change what the running Onboard process does:
 
 | Feature | Actually wired up at runtime? |
 |---------|---------|
 | `webSetup` | No — no such interface exists; toggling it has no effect |
 | `bashTool` | **Yes** — gates the bash relay connection (`Onboard/Program.cs`); defaults to `false` when the key is absent |
 | `channelTester` | No — the web client's test page works regardless of this flag |
-| `audio` | No — `CarAudioHub` isn't registered on the server yet |
+| `audio` | **Yes** — `AudioService` rejects listen and push-to-talk when `false`; defaults to `true` |
 | `video` | No — video streaming isn't gated by this flag |
 
-Treat these as reserved-for-future-use rather than as functioning on/off switches, except for `bashTool`.
+Treat the others as reserved-for-future-use rather than as functioning on/off switches.

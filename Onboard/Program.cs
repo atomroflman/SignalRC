@@ -100,6 +100,7 @@ serviceCollection.AddSingleton<ControlService>();
 serviceCollection.AddSingleton<TelemetryService>();
 serviceCollection.AddSingleton<BashToolService>();
 serviceCollection.AddSingleton<OnboardDiagnosticsService>();
+serviceCollection.AddSingleton<AudioService>();
 
 serviceCollection.AddSingleton<SshKeyService>();
 serviceCollection.AddSingleton<TlsCertificateService>();

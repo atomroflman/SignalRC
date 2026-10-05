@@ -12,6 +12,7 @@ namespace SignalRC.Server;
 public class VideoStreamReceiverService
 {
     private readonly ConcurrentDictionary<long, Process> _activeStreamProxies = new();
+    private readonly HashSet<int> _reservedPorts = new();
     private readonly IServiceProvider _serviceProvider;
 
     public VideoStreamReceiverService(
@@ -156,112 +157,156 @@ public class VideoStreamReceiverService
     {
         var janusPort = stream.JanusPort ?? FindFreePort(StreamProtocol.UDP);
         stream.JanusPort = janusPort;
+        var description = $"{stream.Car?.Name ?? stream.CarId.ToString()}-{stream.Name ?? stream.StreamId}";
+        stream.JanusId = description;
         try
         {
-            var janusHost = JanusConfig.Value.HostName;
-            if (string.IsNullOrEmpty(janusHost)) janusHost = "localhost";
-            var janusBase = new UriBuilder("http", janusHost, 8088).Uri;
-
-            using var client = new HttpClient();
-            client.BaseAddress = janusBase;
-
-            // 1) Create session
-            var transaction = Guid.NewGuid().ToString("N");
-            var session = await client.PostJsonAsync<JanusRequestBase, JanusCreateTransactionResponse>("janus", new JanusRequestBase() { 
-                Janus = "create", 
-                Transaction = transaction
-            }, Logger, $"Creating Janus session for stream '{stream.StreamId}': ");
-            var sessionId = session!.Data.Id;
-
-            // 2) Attach streaming plugin
-            var pluginSession = await client.PostJsonAsync<JanusAttachPluginRequest, JanusAttachPluginResponse>($"janus/{sessionId}", new JanusAttachPluginRequest() { 
-                Janus = "attach", 
-                Transaction = transaction,
-                Plugin = "janus.plugin.streaming"
-            }, Logger, $"Attaching streaming plugin for stream '{stream.StreamId}': ");
-            var handleId = pluginSession!.Data.Id;
-
-            // If the DB had a JanusPort configured, ask Janus whether it already knows a stream
-            // bound to that port by issuing a "list" request to the streaming plugin.
-            try
-            {
-                var listResponse = await client.PostJsonAsync<JanusMessageRequest<JanusMessageBody>, JanusPluginMessageResponse<JanusPluginMessageListResponseBody>>(
-                    $"janus/{sessionId}/{handleId}",
-                    new JanusMessageRequest<JanusMessageBody>()
-                    {
-                        Janus = "message",
-                        Transaction = transaction,
-                        Body = new JanusMessageBody()
-                        {
-                            Request = "list"
-                        }
-                    },
-                    Logger,
-                    $"Checking existing streams for port {stream.JanusPort.Value}: ");
-
-                var existingStreams = listResponse?.Body?.Streams;
-                if (existingStreams != null && existingStreams.Count > 0)
-                {
-                    // If Janus already has a mountpoint with the same numeric Id as our DB Id
-                    // (e.g. leftover from a previous server run, or a default sample), destroy it
-                    // so we can recreate it cleanly bound to the current session/handle.
-                    var stale = existingStreams.FirstOrDefault(s => s.Id == (uint)stream.Id);
-                    if (stale != null)
-                    {
-                        Logger.LogInformation(
-                            $"Janus has stale mountpoint with id {stale.Id} (description='{stale.Description}'); destroying it before creating a new one for stream '{stream.StreamId}'");
-                        await client.PostJsonAsync<JanusMessageRequest<JanusMountpointActionBody>, JanusPluginMessageResponse<object>>(
-                            $"janus/{sessionId}/{handleId}",
-                            new JanusMessageRequest<JanusMountpointActionBody>()
-                            {
-                                Janus = "message",
-                                Transaction = transaction,
-                                Body = new JanusMountpointActionBody()
-                                {
-                                    Request = "destroy",
-                                    Id = stale.Id
-                                }
-                            },
-                            Logger,
-                            $"Destroying stale Janus mountpoint {stale.Id} for stream '{stream.StreamId}': ");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.LogWarning(ex, $"Failed to query Janus for existing streams while checking port {stream.JanusPort.Value}");
-            }
-
-            // 3) Create RTP stream entry
-            var body = new JanusCreateStreamRequestBody()
+            await CreateJanusMountpointAsync(new JanusCreateStreamRequestBody()
             {
                 Request = "create",
                 Type = "rtp",
                 Id = (uint)stream.Id,
-                Description = $"{stream.Car?.Name ?? stream.CarId.ToString()}-{stream.Name ?? stream.StreamId}",
+                Description = description,
                 Audio = false,
                 Video = true,
                 VideoPort = janusPort
-            };
-            stream.JanusId = $"{stream.Car?.Name ?? stream.CarId.ToString()}-{stream.Name ?? stream.StreamId}";
-            var createResponse = await client.PostJsonAsync<JanusMessageRequest<JanusCreateStreamRequestBody>, JanusPluginMessageResponse<object>>(
-                $"janus/{sessionId}/{handleId}",
-                new JanusMessageRequest<JanusCreateStreamRequestBody>()
-                {
-                    Janus = "message",
-                    Transaction = transaction,
-                    Body = body
-                }, 
-                Logger, 
-                $"Creating Janus RTP endpoint for stream '{stream.StreamId}': ");
-
-            Logger.LogInformation($"Created Janus RTP endpoint for stream '{stream.StreamId}' on UDP port {janusPort} (session {sessionId}, handle {handleId})");
+            }, $"stream '{stream.StreamId}'");
+            Logger.LogInformation($"Created Janus RTP endpoint for stream '{stream.StreamId}' on UDP port {janusPort}");
         }
         catch (Exception ex)
         {
             Logger.LogError(ex, $"Failed to create Janus endpoint for stream {stream.StreamId}");
             throw;
         }
+    }
+
+    /// <summary>
+    /// Opens an audio-only Janus RTP mountpoint (Opus, payload type 111) on <paramref name="audioPort"/>.
+    /// </summary>
+    public Task OpenJanusAudioEndpointAsync(uint mountpointId, string description, int audioPort)
+    {
+        return CreateJanusMountpointAsync(new JanusCreateStreamRequestBody()
+        {
+            Request = "create",
+            Type = "rtp",
+            Id = mountpointId,
+            Description = description,
+            Audio = true,
+            AudioPort = audioPort,
+            AudioPt = 111,
+            Audiocodec = "opus",
+            AudioRtpMap = "opus/48000/2",
+            Video = false,
+            VideoPort = null,
+            VideoPt = null,
+            Videocodec = null
+        }, $"audio mountpoint {mountpointId}");
+    }
+
+    /// <summary>
+    /// Creates a streaming-plugin mountpoint, destroying a stale one with the same id first
+    /// (e.g. left over from a previous server run).
+    /// </summary>
+    private async Task CreateJanusMountpointAsync(JanusCreateStreamRequestBody body, string label)
+    {
+        var janusHost = JanusConfig.Value.HostName;
+        if (string.IsNullOrEmpty(janusHost)) janusHost = "localhost";
+        var janusBase = new UriBuilder("http", janusHost, 8088).Uri;
+
+        using var client = new HttpClient();
+        client.BaseAddress = janusBase;
+
+        // 1) Create session
+        var transaction = Guid.NewGuid().ToString("N");
+        var session = await client.PostJsonAsync<JanusRequestBase, JanusCreateTransactionResponse>("janus", new JanusRequestBase() { 
+            Janus = "create", 
+            Transaction = transaction
+        }, Logger, $"Creating Janus session for {label}: ");
+        var sessionId = session!.Data.Id;
+
+        // 2) Attach streaming plugin
+        var pluginSession = await client.PostJsonAsync<JanusAttachPluginRequest, JanusAttachPluginResponse>($"janus/{sessionId}", new JanusAttachPluginRequest() { 
+            Janus = "attach", 
+            Transaction = transaction,
+            Plugin = "janus.plugin.streaming"
+        }, Logger, $"Attaching streaming plugin for {label}: ");
+        var handleId = pluginSession!.Data.Id;
+
+        // If Janus already knows a mountpoint with our id, destroy it so we can recreate it
+        // cleanly bound to the current session/handle.
+        try
+        {
+            var listResponse = await client.PostJsonAsync<JanusMessageRequest<JanusMessageBody>, JanusPluginMessageResponse<JanusPluginMessageListResponseBody>>(
+                $"janus/{sessionId}/{handleId}",
+                new JanusMessageRequest<JanusMessageBody>()
+                {
+                    Janus = "message",
+                    Transaction = transaction,
+                    Body = new JanusMessageBody()
+                    {
+                        Request = "list"
+                    }
+                },
+                Logger,
+                $"Checking existing mountpoints for {label}: ");
+
+            var stale = listResponse?.Body?.Streams?.FirstOrDefault(s => s.Id == body.Id);
+            if (stale != null)
+            {
+                Logger.LogInformation(
+                    $"Janus has stale mountpoint with id {stale.Id} (description='{stale.Description}'); destroying it before creating {label}");
+                await client.PostJsonAsync<JanusMessageRequest<JanusMountpointActionBody>, JanusPluginMessageResponse<object>>(
+                    $"janus/{sessionId}/{handleId}",
+                    new JanusMessageRequest<JanusMountpointActionBody>()
+                    {
+                        Janus = "message",
+                        Transaction = transaction,
+                        Body = new JanusMountpointActionBody()
+                        {
+                            Request = "destroy",
+                            Id = stale.Id
+                        }
+                    },
+                    Logger,
+                    $"Destroying stale Janus mountpoint {stale.Id} for {label}: ");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, $"Failed to query Janus for existing mountpoints for {label}");
+        }
+
+        // 3) Create RTP mountpoint
+        await client.PostJsonAsync<JanusMessageRequest<JanusCreateStreamRequestBody>, JanusPluginMessageResponse<object>>(
+            $"janus/{sessionId}/{handleId}",
+            new JanusMessageRequest<JanusCreateStreamRequestBody>()
+            {
+                Janus = "message",
+                Transaction = transaction,
+                Body = body
+            }, 
+            Logger, 
+            $"Creating Janus RTP endpoint for {label}: ");
+        Logger.LogDebug($"Created Janus mountpoint {body.Id} for {label} (session {sessionId}, handle {handleId})");
+    }
+
+    /// <summary>
+    /// Reserves a UDP port from the Janus range for a stream that isn't tracked in
+    /// CarVideoStreams (e.g. vehicle audio). Release it with <see cref="ReleasePort"/>.
+    /// </summary>
+    public int ReservePort()
+    {
+        lock (_reservedPorts)
+        {
+            var port = FindFreePort(StreamProtocol.UDP);
+            _reservedPorts.Add(port);
+            return port;
+        }
+    }
+
+    public void ReleasePort(int port)
+    {
+        lock (_reservedPorts) _reservedPorts.Remove(port);
     }
 
     public int FindFreePort(StreamProtocol protocol)
@@ -278,6 +323,7 @@ public class VideoStreamReceiverService
             .Select(p => p!.Value)
             .Distinct()
             .ToHashSet();
+        lock (_reservedPorts) takenPorts.UnionWith(_reservedPorts);
         for (int port = startPort; port <= endPort; port++)
         {
             if (!takenPorts.Contains(port))

@@ -71,7 +71,7 @@ docker compose down
 | Channel Tester | Hardware-Kanäle über die Web-UI testen |
 | Templates | Fahrzeugkonfigurationen teilen und wiederverwenden |
 
-**Feature Flags**: `appSettings.json` kennt die Flags `webSetup`, `bashTool`, `channelTester`, `audio`, `video`. Davon wirkt sich aktuell nur `bashTool` tatsächlich auf das Laufzeitverhalten aus (schaltet die Bash-Relay-Verbindung zum Server frei, Standard ist aus, wenn der Wert fehlt). Die übrigen Flags werden zwar in `appSettings.json` gespeichert, steuern aber derzeit nichts. Details siehe [Docs/CONFIGURATION.md](Docs/CONFIGURATION.md#feature-flags) (Englisch).
+**Feature Flags**: `appSettings.json` kennt die Flags `webSetup`, `bashTool`, `channelTester`, `audio`, `video`. Davon wirken sich aktuell nur `bashTool` (schaltet das Bash-Relay frei, Standard aus) und `audio` (Zwei-Wege-Audio, Standard an) tatsächlich auf das Laufzeitverhalten aus. Die übrigen Flags werden zwar in `appSettings.json` gespeichert, steuern aber derzeit nichts. Details siehe [Docs/CONFIGURATION.md](Docs/CONFIGURATION.md#feature-flags) (Englisch).
 
 ---
 
@@ -151,11 +151,9 @@ Die fahrzeugspezifische Konfiguration (Kanäle, Name, Hardware) sowie das Testen
 
 | Hub | Pfad | Zweck |
 |-----|------|-------|
-| CarConnectionHub | `/hubs/connection` | Der eine Fahrzeug-seitige Hub: Verbindungsstatus, Steuerung, Telemetrie, Video-Signaling, Filetransfer, Channel-Sync |
+| CarConnectionHub | `/hubs/connection` | Der eine Fahrzeug-seitige Hub: Verbindungsstatus, Steuerung, Telemetrie, Video- und Audio-Signaling, Filetransfer, Channel-Sync |
 | UserChannelHub | `/hubs/userchannel` | Browser-/Gamepad-seitige Channel-Wert-Updates |
 | CarBashHub | `/hubs/carbash` | Bash-Befehls-Relay (nur Dispatch – Output läuft über `CarConnectionHub` zurück) |
-
-*(`CarAudioHub` existiert im Code, ist aber noch nicht registriert/erreichbar.)*
 
 ---
 

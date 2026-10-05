@@ -527,7 +527,7 @@ if [ "$DEPLOY_MODE" = "onboard" ]; then
     echo "── Phase 1: System packages ──────────────────────────"
     pkg_update
 
-    base_packages=(git curl ffmpeg i2c-tools python3)
+    base_packages=(git curl ffmpeg alsa-utils i2c-tools python3)
     camera_packages=()
 
     if pkg_candidate_exists rpicam-apps; then
@@ -550,6 +550,12 @@ if [ "$DEPLOY_MODE" = "onboard" ]; then
     fi
 
     pkg_install "${base_packages[@]}" "${camera_packages[@]}"
+
+    # Two-way audio: the Onboard service talks to ALSA directly (no desktop
+    # session / PipeWire), so the service user needs the audio group.
+    if getent group audio >/dev/null; then
+        usermod -aG audio "$RUN_USER"
+    fi
 
     # ── Phase 2: mediamtx ───────────────────────────────────────────
     echo ""

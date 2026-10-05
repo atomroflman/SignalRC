@@ -68,14 +68,14 @@ SignalRC ist ein System zum Bau und Betrieb ferngesteuerter Fahrzeuge über LTE/
 
 ## Feature Flags
 
-`appSettings.json` kennt fünf Feature Flags – aktuell wirkt sich aber nur eines davon tatsächlich auf das Laufzeitverhalten aus:
+`appSettings.json` kennt fünf Feature Flags – aktuell wirken sich aber nur zwei davon tatsächlich auf das Laufzeitverhalten aus:
 
 | Feature | Tatsächlich wirksam? |
 |---------|-------------|
 | `webSetup` | Nein – es gibt noch keine webbasierte Setup-Oberfläche; der Schalter ist wirkungslos |
 | `bashTool` | **Ja** – schaltet das Bash-Relay zum Server frei; Standard ist aus, wenn nicht gesetzt |
 | `channelTester` | Nein – wirkungslos |
-| `audio` | Nein – `CarAudioHub` existiert im Code, ist aber noch nicht registriert/erreichbar |
+| `audio` | **Ja** – `false` lässt das Onboard Zuhören und Push-to-Talk ablehnen; Standard ist an |
 | `video` | Nein – Video-Streaming läuft ohnehin immer, unabhängig von diesem Flag |
 
 Details siehe [Configuration Reference](CONFIGURATION.md#feature-flags) (Englisch).

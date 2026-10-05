@@ -211,7 +211,7 @@ sequenceDiagram
 
 ## SignalR hubs
 
-The vehicle-side hubs were consolidated: `CarControlHub`, `TelemetryHub`, and `CarVideoHub` no longer exist as separate hub classes — control, telemetry, and video signaling all moved onto `CarConnectionHub`. `CarUiHub` still exists as a path constant in `Shared/HubPaths.cs`, but no hub class implements it and it is never mapped in `Server/Program.cs` — it is dead code. `CarAudioHub` exists as a hub class (`Server/Hubs/CarAudioHub.cs`) but is not registered/mapped in `Program.cs` either, so it is currently unreachable.
+The vehicle-side hubs were consolidated: `CarControlHub`, `TelemetryHub`, and `CarVideoHub` no longer exist as separate hub classes — control, telemetry, and video signaling all moved onto `CarConnectionHub`. `CarUiHub` still exists as a path constant in `Shared/HubPaths.cs`, but no hub class implements it and it is never mapped in `Server/Program.cs` — it is dead code. Audio signaling also runs over `CarConnectionHub` (see [FEATURES.md](FEATURES.md#audio-chat)).
 
 | Hub | Path | Direction | Purpose |
 |-----|------|----------|-------|

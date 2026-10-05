@@ -31,6 +31,20 @@ public class ControlService : IControlClient, IHubConnectionObserver
 
     private string? _sessionId;
     private DateTime _lastControlUpdate = DateTime.Now;
+
+    /// <summary>
+    /// Raised whenever the control session is replaced or released. Session-bound
+    /// resources (microphone uplink, speaker playback) must be torn down.
+    /// </summary>
+    public event Action? SessionChanged;
+
+    public bool IsActiveSession(string? sessionId) => _sessionId != null && _sessionId == sessionId;
+
+    /// <summary>
+    /// Counts non-channel activity (e.g. push-to-talk) as driver activity so the
+    /// session isn't considered idle and taken over while the driver is talking.
+    /// </summary>
+    public void MarkSessionActivity() => _lastControlUpdate = DateTime.Now;
     private IConnectionHubServer _server = null!;
 
     public ControlService(ILogger<ControlService> logger, TelemetryService telemetryService, ControlExecutionService control, IServiceProvider serviceProvider, IConfiguration configuration, ServerConnectionService serverConnectionService, SshKeyService sshKeyService, ServerCarConfigurationService carConfigurationService, OnboardChannelStore channelStore, ChannelMap channelMap)
@@ -134,6 +148,7 @@ public class ControlService : IControlClient, IHubConnectionObserver
             // Generate a new session ID using ShortGuid (22 chars instead of 36)
             var newSessionId = ShortGuid.NewGuid().ToString();
             _sessionId = newSessionId;
+            SessionChanged?.Invoke();
             Logger.LogInformation($"Acquired control for car using SSH key. SessionID: {_sessionId}.");
             await TelemetryService.UpdateTelemetry("Control Session", "Connected (SSH)");
             return newSessionId; // Return the newly generated session ID
@@ -159,6 +174,7 @@ public class ControlService : IControlClient, IHubConnectionObserver
         Control.ReleaseControl();
         await TelemetryService.UpdateTelemetry("Control Session", "Ended");
         _sessionId = null;
+        SessionChanged?.Invoke();
     }
 
     public Task UpdateChannel(string sessionId, string channelId, decimal value)

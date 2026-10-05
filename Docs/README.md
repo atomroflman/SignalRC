@@ -78,14 +78,14 @@ SignalRC is a system for building and operating remotely controlled cars over LT
 
 ## Feature Flags
 
-`appSettings.json` supports five feature flags, but only one of them currently gates real behavior:
+`appSettings.json` supports five feature flags, but only two of them currently gate real behavior:
 
 | Feature | Actually wired up? |
 |---------|-------------|
 | `webSetup` | No — no web-based setup interface exists yet; toggle is inert |
 | `bashTool` | **Yes** — enables the bash relay to the server; defaults to off when unset |
 | `channelTester` | No — toggle is inert |
-| `audio` | No — `CarAudioHub` exists in code but is not registered/reachable yet |
+| `audio` | **Yes** — `false` makes the Onboard reject listen and push-to-talk; defaults to on |
 | `video` | No — video streaming itself always runs; not gated by this flag |
 
 See [Configuration Reference](CONFIGURATION.md#feature-flags) for the full picture, including where each flag is (and isn't) read.
