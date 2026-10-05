@@ -12,7 +12,7 @@ public static class HttpClientExtensions
             response.EnsureSuccessStatusCode();
             var responseJson = await response.Content.ReadAsStringAsync();
             logger?.LogDebug($"{reason}{(reason == null ? "" : " ")}Response from {path}: {responseJson}");
-            return JsonSerializer.Deserialize<TResponse>(responseJson);
+            return JsonSerializer.Deserialize<TResponse>(responseJson)!;
         }
         catch (Exception ex)
         {

@@ -1,85 +1,95 @@
-import React, { JSX, useEffect, useState } from "react";
+import React, { JSX, useEffect, useRef, useState } from "react";
 import { useControlFlowStore } from "./control-flow-store";
 import CollapsibleSection from "./collapsible-section";
+import type { VideoSettingsPayload, VideoStreamInfo, VideoStreamMapItem } from "@/types/video-stream";
+import { useI18n } from "@/i18n/provider";
 
-type StreamInfo = {
-  id: number;
-  name: string;
-  streamId: string;
-  protocol?: string;
-  port?: number;
-  encoding?: string;
-  width?: number | null;
-  height?: number | null;
-  bitrateKbps?: number | null;
-  framerate?: number | null;
-  brightness?: number | null; // 0..1 float on server
+type VideoSettingsState = VideoSettingsPayload & {
+  resolutionMode?: 'preset'|'custom';
 };
 
-type VideoSettings = {
-  height?: number | null;
-  width?: number | null;
-  framerate?: number | null;
-  bitrate?: number | null; // bytes per second
-  brightness?: number | null; // 0..1
-};
+const STREAM_REFRESH_EVENT = 'videoStreams:refresh';
 
-export default function VideoSettingsControl(props: { carId?: number } = {}): JSX.Element {
+export default function VideoSettingsControl(props: { carId?: number; canManageEnabled?: boolean } = {}): JSX.Element {
+  const { messages } = useI18n();
   const carIdFromStore = useControlFlowStore(state => state.carId);
   const carId = props.carId ?? carIdFromStore;
 
   const [videoConnection, setVideoConnection] = useState<any>(undefined);
 
-  const [streams, setStreams] = useState<StreamInfo[]>([]);
-  const [settingsMap, setSettingsMap] = useState<Record<number, VideoSettings & { resolutionMode?: 'preset'|'custom'; preset?: string }>>({});
+  const [streams, setStreams] = useState<VideoStreamMapItem[]>([]);
+  const [settingsMap, setSettingsMap] = useState<Record<number, VideoSettingsState>>({});
+  const settingsMapRef = useRef<Record<number, VideoSettingsState>>({});
+  const loadedCarIdRef = useRef<number | undefined>(undefined);
   const [busyMap, setBusyMap] = useState<Record<number, boolean>>({});
   const [error, setError] = useState<string | null>(null);
+
+  async function loadStreams(hub: any, nextCarId: number) {
+    const list = await hub.invoke('GetVideoStreamsForCar', nextCarId) as VideoStreamMapItem[];
+    setStreams(list);
+
+    // const map: Record<number, VideoSettingsState> = {};
+    // list.forEach(stream => {
+    //   map[stream.serverId] = {
+    //     width: stream.width,
+    //     height: stream.height,
+    //     framerate: stream.framerate,
+    //     bitrateKbps: stream.bitrateKbps,
+    //     brightness: stream.brightness,
+    //     gain: stream.gain ?? null,
+    //     shutter: stream.shutter ?? null,
+    //     contrast: stream.contrast ?? null,
+    //     ev: stream.ev ?? null,
+    //     exposure: stream.exposure ?? 'normal',
+    //     resolutionMode: 'preset'
+    //   };
+    // });
+    // setSettingsMap(current => {
+    //   const next: Record<number, VideoSettingsState> = {};
+    //   list.forEach(stream => {
+    //     next[stream.serverId] = current[stream.serverId] ?? map[stream.serverId];
+    //   });
+    //   settingsMapRef.current = next;
+    //   return next;
+    // });
+  }
 
   useEffect(() => {
     setError(null);
     if (!carId) {
       setStreams([]);
       setSettingsMap({});
+      settingsMapRef.current = {};
+      loadedCarIdRef.current = undefined;
       return;
+    }
+
+    if (loadedCarIdRef.current !== carId) {
+      loadedCarIdRef.current = carId;
+      settingsMapRef.current = {};
+      setSettingsMap({});
     }
 
     // Prefer the dedicated CarVideoHub connection when available
     const hub = videoConnection;
-    // Try SignalR hub first
-    if (hub) {        
-      hub.invoke('GetVideoStreamsForCar', carId)
-        .then((data: Record<string, any>) => {
-          const list: StreamInfo[] = Object.entries(data).map(([k, v]) => ({
-            id: Number(k),
-            name: v?.StreamId ?? `Stream ${k}`,
-            streamId: v?.StreamId,
-            protocol: v?.Protocol,
-            port: v?.Port,
-            encoding: v?.Encoding,
-            width: v?.Width ?? null,
-            height: v?.Height ?? null,
-            bitrateKbps: v?.BitrateKbps ?? null,
-            framerate: v?.Framerate ?? null,
-            brightness: v?.Brightness ?? null,
-          }));
-
-          setStreams(list);
-          const map: Record<number, any> = {};
-          list.forEach(s => {
-            map[s.id] = {
-              width: s.width ?? null,
-              height: s.height ?? null,
-              framerate: s.framerate ?? null,
-              bitrate: s.bitrateKbps ? s.bitrateKbps * 1024 : null,
-              brightness: s.brightness ?? null,
-              resolutionMode: 'preset'
-            };
-          });
-          setSettingsMap(map);
-        });
+    if (hub) {
+      void loadStreams(hub, carId);
       return;
     }
   }, [videoConnection, carId]);
+
+  useEffect(() => {
+    if (!videoConnection || !carId) {
+      return;
+    }
+
+    const refresh = () => {
+      void loadStreams(videoConnection, carId);
+    };
+
+    window.addEventListener(STREAM_REFRESH_EVENT, refresh);
+    return () => window.removeEventListener(STREAM_REFRESH_EVENT, refresh);
+  }, [carId, videoConnection]);
 
   // Manage lifecycle of the CarVideoHub connection (component-local)
   useEffect(() => {
@@ -89,7 +99,7 @@ export default function VideoSettingsControl(props: { carId?: number } = {}): JS
       try {
         const signalR = await import("@microsoft/signalr");
         conn = new signalR.HubConnectionBuilder()
-          .withUrl('/hubs/video')
+          .withUrl('/hubs/connection')
           .withAutomaticReconnect()
           .build();
 
@@ -123,138 +133,258 @@ export default function VideoSettingsControl(props: { carId?: number } = {}): JS
     { key: 'custom', w: null, h: null }
   ];
 
-  function updateFieldFor(streamId: number, key: keyof VideoSettings, value: any) {
-    setSettingsMap(m => ({ ...m, [streamId]: { ...(m[streamId] || {}), [key]: value } }));
+  function updateFieldFor(serverId: number, key: keyof VideoSettingsPayload, value: number | string) {
+    const current = settingsMapRef.current;
+    const next = {
+      ...current,
+      [serverId]: { ...(current[serverId] || {}), [key]: value }
+    };
+    settingsMapRef.current = next;
+    setSettingsMap(next);
   }
 
-  async function handleSave(streamId: number) {
+  async function handleSave(serverId: number) {
     setError(null);
-    const cfg = settingsMap[streamId];
-    if (!cfg) return setError('No settings for stream');
-    setBusyMap(b => ({ ...b, [streamId]: true }));
-    const payload = {
-      height: cfg.height ?? null,
-      width: cfg.width ?? null,
-      framerate: cfg.framerate ?? null,
-      bitrate: cfg.bitrate ?? null,
-      brightness: cfg.brightness ?? null,
+    const cfg = settingsMapRef.current[serverId];
+    if (!cfg)
+      return setError(messages.videoSettings.noSettingsForStream);
+    setBusyMap(b => ({ ...b, [serverId]: true }));
+    const stream = streams.find(x => x.serverId === serverId);
+    if (!stream)
+      return setError(messages.videoSettings.noSettingsForStream);
+    const payload: VideoStreamMapItem = {
+      ...stream,
+      width: cfg.width,
+      height: cfg.height,
+      framerate: cfg.framerate,
+      bitrate: cfg.bitrate,
+      brightness: cfg.brightness,
+      gain: cfg.gain ?? null,
+      shutter: cfg.shutter ?? null,
+      contrast: cfg.contrast ?? null,
+      ev: cfg.ev ?? null,
+      exposure: cfg.exposure ?? 'normal',
     };
 
     try {
       const hub = videoConnection;
       if (hub) {
-        await hub.invoke('ChangeVideoStreamSettings', streamId, payload);
-      } else {
-        const res = await fetch(`/api/video/streams/${streamId}/settings`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-        if (!res.ok) window.dispatchEvent(new CustomEvent('videoSettings:change', { detail: { streamId, settings: payload } }));
+        await hub.invoke('ChangeVideoStreamSettings', serverId, payload);
       }
     } catch (e) {
-      window.dispatchEvent(new CustomEvent('videoSettings:change', { detail: { streamId, settings: payload } }));
+      console.error('Failed to save stream settings:', e);
+      setError(messages.videoSettings.saveFailed);
     } finally {
+      if (videoConnection && carId) {
+        await loadStreams(videoConnection, carId);
+      }
+      window.dispatchEvent(new Event(STREAM_REFRESH_EVENT));
+      setBusyMap(b => ({ ...b, [serverId]: false }));
+    }
+  }
+
+  async function handleEnable(streamId: number, enabled: boolean) {
+    if (!carId) {
+      return;
+    }
+
+    setBusyMap(b => ({ ...b, [streamId]: true }));
+    try {
+      const hub = videoConnection;
+      if (hub) {
+        await hub.invoke('SetVideoStreamEnabled', carId, streamId, enabled);
+      }
+    } catch (toggleError) {
+      console.error('Failed to change enabled state:', toggleError);
+      setError(messages.videoSettings.toggleEnabledFailed);
+    } finally {
+      if (videoConnection && carId) {
+        await loadStreams(videoConnection, carId);
+      }
+      window.dispatchEvent(new Event(STREAM_REFRESH_EVENT));
       setBusyMap(b => ({ ...b, [streamId]: false }));
     }
   }
 
-  async function handleStart(streamId: number) {
+  async function handleStartStream(streamId: number) {
     setBusyMap(b => ({ ...b, [streamId]: true }));
     try {
       const hub = videoConnection;
-      if (hub) await hub.invoke('StartVideoStream', streamId);
-      else {
-        const res = await fetch(`/api/video/streams/${streamId}/start`, { method: 'POST' });
-        if (!res.ok) window.dispatchEvent(new CustomEvent('videoSettings:start', { detail: { streamId } }));
+      if (hub) {
+        await hub.invoke('ActivateStream', streamId);
       }
-    } catch {
-      window.dispatchEvent(new CustomEvent('videoSettings:start', { detail: { streamId } }));
+    } catch (startError) {
+      console.error('Failed to start stream:', startError);
+      setError(messages.videoSettings.startStreamFailed);
     } finally {
+      if (videoConnection && carId) {
+        await loadStreams(videoConnection, carId);
+      }
+      window.dispatchEvent(new Event(STREAM_REFRESH_EVENT));
       setBusyMap(b => ({ ...b, [streamId]: false }));
     }
   }
 
-  async function handleStop(streamId: number) {
+  async function handleStopStream(streamId: number) {
     setBusyMap(b => ({ ...b, [streamId]: true }));
     try {
       const hub = videoConnection;
-      if (hub) await hub.invoke('StopVideoStream', streamId);
-      else {
-        const res = await fetch(`/api/video/streams/${streamId}/stop`, { method: 'POST' });
-        if (!res.ok) window.dispatchEvent(new CustomEvent('videoSettings:stop', { detail: { streamId } }));
+      if (hub) {
+        await hub.invoke('DeactivateStream', streamId);
       }
-    } catch {
-      window.dispatchEvent(new CustomEvent('videoSettings:stop', { detail: { streamId } }));
+    } catch (stopError) {
+      console.error('Failed to stop stream:', stopError);
+      setError(messages.videoSettings.stopStreamFailed);
     } finally {
+      if (videoConnection && carId) {
+        await loadStreams(videoConnection, carId);
+      }
+      window.dispatchEvent(new Event(STREAM_REFRESH_EVENT));
       setBusyMap(b => ({ ...b, [streamId]: false }));
     }
   }
 
   return (
-    <CollapsibleSection title="Video-Einstellungen" defaultCollapsed={true} className="px-2">
+    <CollapsibleSection title={messages.videoSettings.title} label={messages.videoSettings.title} defaultCollapsed={true} className="px-2">
       <div className="space-y-2 text-xs leading-tight">
-        {streams.length === 0 && <div className="text-zinc-400">Keine Streams gefunden.</div>}
+        {streams.length === 0 && <div className="text-zinc-400">{messages.videoSettings.noStreams}</div>}
 
         {streams.map(s => {
-          const cfg = settingsMap[s.id] || {};
-          const busy = !!busyMap[s.id];
+          const cfg = settingsMap[s.serverId] || {};
           const presetValue = cfg.resolutionMode === 'custom' ? 'custom' : ((cfg.width ?? s.width) && (cfg.height ?? s.height) ? `${cfg.width ?? s.width}x${cfg.height ?? s.height}` : '');
 
           return (
-            <div key={s.id} className="mb-2 p-2 bg-zinc-800 border border-zinc-700 rounded">
+            <div key={s.serverId} className="mb-2 p-2 bg-zinc-800 border border-zinc-700 rounded">
               <div className="flex items-center justify-between mb-2">
-                <div className="font-medium text-zinc-100">{s.name || s.streamId} <span className="text-[11px] text-zinc-400">(#{s.id})</span></div>
-                <div className="text-[11px] text-zinc-400">{s.protocol || ''}{s.port ? `:${s.port}` : ''}</div>
+                <div className="font-medium text-zinc-100">{s.name} <span className="text-[11px] text-zinc-400">(#{s.serverId})</span></div>
+                <div className="text-[11px] text-zinc-400">{s.location || s.type || messages.common.streamFallback}</div>
+              </div>
+
+              <div className="mb-2 flex items-center gap-2 text-[11px] text-zinc-400">
+                <span>{s.enabled ? messages.common.enabled : messages.common.disabled}</span>
+                <span>·</span>
+                <span>{s.isActive ? messages.common.live : messages.common.idle}</span>
+                <span>·</span>
+                <span>{messages.videoSettings.viewers(s.viewerCount)}</span>
               </div>
 
               <div className="grid grid-cols-2 gap-2 mb-2">
                 <div>
-                  <label className="block text-xs text-zinc-300">Auflösung</label>
+                  <label className="block text-xs text-zinc-300">{messages.videoSettings.resolution}</label>
                   <select className="w-full text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={presetValue} onChange={e => {
                     const val = e.target.value;
                     if (val === 'custom') {
-                      setSettingsMap(m => ({ ...m, [s.id]: { ...(m[s.id]||{}), resolutionMode: 'custom', width: m[s.id]?.width ?? s.width ?? null, height: m[s.id]?.height ?? s.height ?? null } }));
+                      const current = settingsMapRef.current[s.serverId] || {};
+                      const next = { ...settingsMapRef.current, [s.serverId]: { ...current, resolutionMode: 'custom' as const, width: current.width ?? s.width, height: current.height ?? s.height } };
+                      settingsMapRef.current = next;
+                      setSettingsMap(next);
                     } else {
                       const [w,h] = val.split('x').map(Number);
-                      setSettingsMap(m => ({ ...m, [s.id]: { ...(m[s.id]||{}), resolutionMode: 'preset', width: w, height: h } }));
+                      const current = settingsMapRef.current[s.serverId] || {};
+                      const next = { ...settingsMapRef.current, [s.serverId]: { ...current, resolutionMode: 'preset' as const, width: w, height: h } };
+                      settingsMapRef.current = next;
+                      setSettingsMap(next);
                     }
-                  }}>
+                  }} onBlur={() => void handleSave(s.serverId)}>
                     {resolutionPresets.map(p => (
-                      <option key={p.key} value={p.key === 'custom' ? 'custom' : `${p.w}x${p.h}`}>{p.key === 'custom' ? 'Custom…' : `${p.w}×${p.h}`}</option>
+                      <option key={p.key} value={p.key === 'custom' ? 'custom' : `${p.w}x${p.h}`}>{p.key === 'custom' ? `${messages.common.custom}...` : `${p.w}×${p.h}`}</option>
                     ))}
                   </select>
 
                   {cfg.resolutionMode === 'custom' && (
                     <div className="mt-1 flex gap-1">
-                      <input type="number" className="w-1/2 text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.width ?? ''} onChange={e => updateFieldFor(s.id, 'width', e.target.value ? Number(e.target.value) : null)} placeholder="Width" />
-                      <input type="number" className="w-1/2 text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.height ?? ''} onChange={e => updateFieldFor(s.id, 'height', e.target.value ? Number(e.target.value) : null)} placeholder="Height" />
+                      <input type="number" className="w-1/2 text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.width ?? ''} onChange={e => updateFieldFor(s.serverId, 'width', e.target.value ? Number(e.target.value) : s.width)} onBlur={() => void handleSave(s.serverId)} placeholder={messages.common.width} />
+                      <input type="number" className="w-1/2 text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.height ?? ''} onChange={e => updateFieldFor(s.serverId, 'height', e.target.value ? Number(e.target.value) : s.height)} onBlur={() => void handleSave(s.serverId)} placeholder={messages.common.height} />
                     </div>
                   )}
                 </div>
 
                 <div>
-                  <label className="block text-xs text-zinc-300">Framerate</label>
-                  <input type="number" className="w-full text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.framerate ?? s.framerate ?? ''} onChange={e => updateFieldFor(s.id, 'framerate', e.target.value ? Number(e.target.value) : null)} />
+                  <label className="block text-xs text-zinc-300">{messages.common.framerate}</label>
+                  <input type="number" className="w-full text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.framerate ?? s.framerate ?? ''} onChange={e => updateFieldFor(s.serverId, 'framerate', e.target.value ? Number(e.target.value) : s.framerate)} onBlur={() => void handleSave(s.serverId)} />
                 </div>
 
                 <div>
-                  <label className="block text-xs text-zinc-300">Bitrate (kbps)</label>
-                  <input type="number" className="w-full text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.bitrate ? Math.round((cfg.bitrate ?? 0) / 1024) : (s.bitrateKbps ?? '')} onChange={e => updateFieldFor(s.id, 'bitrate', e.target.value ? Number(e.target.value) * 1024 : null)} />
+                  <label className="block text-xs text-zinc-300">{messages.common.bitrateKbps}</label>
+                  <input type="number" className="w-full text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.bitrate ?? s.bitrate ?? ''} onChange={e => updateFieldFor(s.serverId, 'bitrate', e.target.value ? Number(e.target.value) : 0)} onBlur={() => void handleSave(s.serverId)} />
                 </div>
 
                 <div>
-                  <label className="block text-xs text-zinc-300">Helligkeit</label>
-                  <input type="range" min="0" max="100" className="w-full" value={Math.round(((cfg.brightness ?? s.brightness ?? 0.5) as number) * 100)} onChange={e => updateFieldFor(s.id, 'brightness', Number(e.target.value) / 100)} />
+                  <label className="block text-xs text-zinc-300">{messages.common.brightness}</label>
+                  <input type="range" min="0" max="100" className="w-full" value={Math.round(((cfg.brightness ?? s.brightness ?? 0.5) as number) * 100)} onChange={e => updateFieldFor(s.serverId, 'brightness', Number(e.target.value) / 100)} onBlur={() => void handleSave(s.serverId)} />
+                </div>
+
+                <div>
+                  <label className="block text-xs text-zinc-300">{messages.common.exposure ?? 'Exposure'}</label>
+                  <select className="w-full text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.exposure ?? s.exposure ?? 'normal'} onChange={e => updateFieldFor(s.serverId, 'exposure', e.target.value)} onBlur={() => void handleSave(s.serverId)}>
+                    <option value="normal">normal</option>
+                    <option value="short">short</option>
+                    <option value="long">long</option>
+                    <option value="custom">custom</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs text-zinc-300">{messages.common.gain ?? 'Gain'}</label>
+                  <input type="number" step="0.1" min="0" className="w-full text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.gain ?? s.gain ?? ''} onChange={e => updateFieldFor(s.serverId, 'gain', e.target.value ? Number(e.target.value) : null as any)} onBlur={() => void handleSave(s.serverId)} />
+                </div>
+
+                <div>
+                  <label className="block text-xs text-zinc-300">{messages.common.shutter ?? 'Shutter (µs)'}</label>
+                  <input type="number" min="0" className="w-full text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.shutter ?? s.shutter ?? ''} onChange={e => updateFieldFor(s.serverId, 'shutter', e.target.value ? Number(e.target.value) : null as any)} onBlur={() => void handleSave(s.serverId)} />
+                </div>
+
+                <div>
+                  <label className="block text-xs text-zinc-300">{messages.common.contrast ?? 'Contrast'}</label>
+                  <input type="number" step="0.1" min="0" max="16" className="w-full text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.contrast ?? s.contrast ?? ''} onChange={e => updateFieldFor(s.serverId, 'contrast', e.target.value ? Number(e.target.value) : null as any)} onBlur={() => void handleSave(s.serverId)} />
+                </div>
+
+                <div>
+                  <label className="block text-xs text-zinc-300">{messages.common.ev ?? 'EV'}</label>
+                  <input type="number" step="0.1" min="-10" max="10" className="w-full text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.ev ?? s.ev ?? ''} onChange={e => updateFieldFor(s.serverId, 'ev', e.target.value ? Number(e.target.value) : null as any)} onBlur={() => void handleSave(s.serverId)} />
                 </div>
               </div>
 
-              <div className="flex gap-2">
-                <button className="px-2 py-1 text-xs rounded bg-zinc-700 hover:bg-zinc-600 text-zinc-100" onClick={() => handleSave(s.id)} disabled={busyMap[s.id]}>{busyMap[s.id] ? '...' : 'Speichern'}</button>
-                <button className="px-2 py-1 text-xs rounded bg-green-700 hover:bg-green-600 text-zinc-100" onClick={() => handleStart(s.id)} disabled={busyMap[s.id]}>Start</button>
-                <button className="px-2 py-1 text-xs rounded bg-zinc-700 hover:bg-zinc-600 text-zinc-100" onClick={() => handleStop(s.id)} disabled={busyMap[s.id]}>Stop</button>
+              <div className="flex gap-2 flex-wrap">
+                <button className="px-2 py-1 text-xs rounded bg-zinc-700 hover:bg-zinc-600 text-zinc-100" onClick={() => handleSave(s.serverId)} disabled={busyMap[s.serverId]}>{busyMap[s.serverId] ? '...' : messages.videoSettings.save}</button>
+                {props.canManageEnabled && (
+                  <button
+                    className={`px-2 py-1 text-xs rounded text-zinc-100 ${s.enabled ? 'bg-amber-700 hover:bg-amber-600' : 'bg-green-700 hover:bg-green-600'}`}
+                    onClick={() => handleEnable(s.serverId, !s.enabled)}
+                    disabled={busyMap[s.serverId]}
+                  >
+                    {s.enabled ? messages.videoSettings.disable : messages.videoSettings.enable}
+                  </button>
+                )}
+                {s.enabled && (
+                  <>
+                    <button
+                      className="px-2 py-1 text-xs rounded bg-blue-700 hover:bg-blue-600 text-zinc-100"
+                      onClick={() => handleStartStream(s.serverId)}
+                      disabled={busyMap[s.serverId]}
+                    >
+                      {messages.videoSettings.startStream}
+                    </button>
+                    <button
+                      className="px-2 py-1 text-xs rounded bg-red-700 hover:bg-red-600 text-zinc-100"
+                      onClick={() => handleStopStream(s.serverId)}
+                      disabled={busyMap[s.serverId]}
+                    >
+                      {messages.videoSettings.stopStream}
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           );
         })}
 
         {error && <div className="text-red-600 text-sm">{error}</div>}
+        {!props.canManageEnabled && carId && (
+          <div className="text-[11px] text-zinc-400">
+            {messages.videoSettings.toggleEnabledHint}
+          </div>
+        )}
       </div>
     </CollapsibleSection>
   );

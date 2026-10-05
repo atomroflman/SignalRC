@@ -6,22 +6,26 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   output: 'standalone',
   async rewrites() {
+    const serverOrigin = process.env.SERVER_ORIGIN ?? 'http://localhost:5000';
+    const janusHttpOrigin = process.env.JANUS_HTTP_ORIGIN ?? 'http://localhost:8088';
+    const janusWsOrigin = process.env.JANUS_WS_ORIGIN ?? 'http://localhost:8188';
+
     return [
       {
         source: '/api/:path*',
-        destination: 'http://localhost:5000/api/:path*', // Proxy API-Anfragen an den .NET Webservice
+        destination: `${serverOrigin}/api/:path*`, // Proxy API-Anfragen an den .NET Webservice
       },
       {
         source: '/hubs/:path*',
-        destination: 'http://localhost:5000/hubs/:path*', // Proxy WebSocket/SingalR
+        destination: `${serverOrigin}/hubs/:path*`, // Proxy WebSocket/SingalR
       },
       {
         source: '/janus/:path*',
-        destination: 'http://localhost:8088/janus/:path*',
+        destination: `${janusHttpOrigin}/janus/:path*`,
       },
       {
         source: '/janus-ws/:path*',
-        destination: 'http://localhost:8188/janus/:path*',
+        destination: `${janusWsOrigin}/janus/:path*`,
       },
     ];
   }

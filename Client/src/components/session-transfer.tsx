@@ -1,7 +1,9 @@
 import React, { useState } from "react";
 import { useControlFlowStore } from "./control-flow-store";
+import { useI18n } from "@/i18n/provider";
 
 export default function SessionTransfer() {
+  const { messages } = useI18n();
   const [transferCode, setTransferCode] = useState<string>("");
   const [generatedCode, setGeneratedCode] = useState<string>("");
   const [showTransfer, setShowTransfer] = useState(false);
@@ -13,7 +15,7 @@ export default function SessionTransfer() {
   // Generate a transfer code for the current session
   const generateTransferCode = async () => {
     setError("");
-    setStatus("Generating transfer code...");
+    setStatus(messages.sessionTransfer.generating);
     
     try {
       // Get current session data
@@ -31,14 +33,14 @@ export default function SessionTransfer() {
       });
       
       if (!response.ok) {
-        throw new Error('Failed to generate transfer code');
+        throw new Error(messages.sessionTransfer.generateFailed);
       }
       
       const data = await response.json();
       setGeneratedCode(data.transferCode);
-      setStatus("Transfer code generated! Valid for 5 minutes.");
+      setStatus(messages.sessionTransfer.generated);
     } catch (e: any) {
-      setError(e.message || "Failed to generate transfer code");
+      setError(e.message || messages.sessionTransfer.generateFailed);
       setStatus("");
     }
   };
@@ -46,12 +48,12 @@ export default function SessionTransfer() {
   // Apply a transfer code to restore session on this device
   const applyTransferCode = async () => {
     if (!transferCode.trim()) {
-      setError("Please enter a transfer code");
+      setError(messages.sessionTransfer.enterCodeError);
       return;
     }
     
     setError("");
-    setStatus("Applying transfer code...");
+    setStatus(messages.sessionTransfer.applying);
     
     try {
       // Restore session from transfer code
@@ -63,7 +65,7 @@ export default function SessionTransfer() {
       
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'Invalid or expired transfer code');
+        throw new Error(errorData.message || messages.sessionTransfer.invalidOrExpired);
       }
       
       const data = await response.json();
@@ -72,7 +74,7 @@ export default function SessionTransfer() {
       flowControl.setCarId(data.carId);
       flowControl.load(data.carId);
       
-      setStatus("Session transferred successfully! Reloading...");
+      setStatus(messages.sessionTransfer.applied);
       setTransferCode("");
       
       // Reload the page after a short delay
@@ -80,7 +82,7 @@ export default function SessionTransfer() {
         window.location.reload();
       }, 1500);
     } catch (e: any) {
-      setError(e.message || "Failed to apply transfer code");
+      setError(e.message || messages.sessionTransfer.applyFailed);
       setStatus("");
     }
   };
@@ -89,10 +91,10 @@ export default function SessionTransfer() {
   const copyToClipboard = async () => {
     try {
       await navigator.clipboard.writeText(generatedCode);
-      setStatus("Transfer code copied to clipboard!");
-      setTimeout(() => setStatus("Transfer code generated! Valid for 5 minutes."), 2000);
+      setStatus(messages.sessionTransfer.copied);
+      setTimeout(() => setStatus(messages.sessionTransfer.generated), 2000);
     } catch (e) {
-      setError("Failed to copy to clipboard");
+      setError(messages.sessionTransfer.copyFailed);
     }
   };
 
@@ -101,10 +103,10 @@ export default function SessionTransfer() {
       <button
         className="mb-2 px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded text-xs border border-zinc-700 transition-colors duration-150 w-full flex items-center justify-between"
         onClick={() => setShowTransfer(!showTransfer)}
-        aria-label={showTransfer ? "Collapse Session Transfer" : "Expand Session Transfer"}
+        aria-label={showTransfer ? messages.common.collapseSection(messages.sessionTransfer.title) : messages.common.expandSection(messages.sessionTransfer.title)}
         style={showTransfer ? {} : { marginBottom: 0 }}
       >
-        <span>🔄 Session Transfer</span>
+        <span>🔄 {messages.sessionTransfer.title}</span>
         <span className="ml-2">{showTransfer ? '▲' : '▼'}</span>
       </button>
       
@@ -112,35 +114,35 @@ export default function SessionTransfer() {
         <div className="px-2 pb-2 space-y-3">
           {/* Generate Transfer Code Section */}
           <div className="bg-zinc-800 border border-zinc-700 rounded p-2">
-            <h3 className="text-xs font-bold text-cyan-300 mb-2">📤 Export Session to Other Device</h3>
+            <h3 className="text-xs font-bold text-cyan-300 mb-2">📤 {messages.sessionTransfer.exportTitle}</h3>
             <p className="text-xs text-zinc-400 mb-2">
-              Generate a transfer code to use this session on another device.
+              {messages.sessionTransfer.exportDescription}
             </p>
             
             <button
               className="w-full px-2 py-1 bg-cyan-800 hover:bg-cyan-700 text-cyan-100 rounded text-xs border border-cyan-700 transition-colors duration-150 mb-2"
               onClick={generateTransferCode}
             >
-              Generate Transfer Code
+              {messages.sessionTransfer.generateCode}
             </button>
             
             {generatedCode && (
               <div className="bg-zinc-900 border border-cyan-700 rounded p-2 mb-2">
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-zinc-400">Transfer Code:</span>
+                  <span className="text-xs text-zinc-400">{messages.sessionTransfer.transferCode}</span>
                   <button
                     className="px-2 py-0.5 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 rounded text-[10px]"
                     onClick={copyToClipboard}
-                    title="Copy to clipboard"
+                    title={messages.sessionTransfer.copyToClipboard}
                   >
-                    📋 Copy
+                    📋 {messages.common.copy}
                   </button>
                 </div>
                 <div className="font-mono text-lg text-cyan-300 text-center break-all">
                   {generatedCode}
                 </div>
                 <div className="text-xs text-zinc-500 mt-1 text-center">
-                  Valid for 5 minutes
+                  {messages.sessionTransfer.validForFiveMinutes}
                 </div>
               </div>
             )}
@@ -148,16 +150,16 @@ export default function SessionTransfer() {
           
           {/* Apply Transfer Code Section */}
           <div className="bg-zinc-800 border border-zinc-700 rounded p-2">
-            <h3 className="text-xs font-bold text-green-300 mb-2">📥 Import Session from Other Device</h3>
+            <h3 className="text-xs font-bold text-green-300 mb-2">📥 {messages.sessionTransfer.importTitle}</h3>
             <p className="text-xs text-zinc-400 mb-2">
-              Enter a transfer code to restore a session on this device.
+              {messages.sessionTransfer.importDescription}
             </p>
             
             <input
               className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-200 mb-2 focus:border-green-500 focus:outline-none font-mono"
               value={transferCode}
               onChange={(e) => setTransferCode(e.target.value)}
-              placeholder="Enter transfer code..."
+              placeholder={messages.sessionTransfer.enterCode}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   applyTransferCode();
@@ -170,7 +172,7 @@ export default function SessionTransfer() {
               onClick={applyTransferCode}
               disabled={!transferCode.trim()}
             >
-              Apply Transfer Code
+              {messages.sessionTransfer.applyCode}
             </button>
           </div>
           
@@ -189,12 +191,12 @@ export default function SessionTransfer() {
           
           {/* Info Section */}
           <div className="bg-zinc-800 border border-zinc-700 rounded p-2">
-            <h4 className="text-xs font-bold text-zinc-300 mb-1">ℹ️ How it works</h4>
+            <h4 className="text-xs font-bold text-zinc-300 mb-1">ℹ️ {messages.sessionTransfer.howItWorks}</h4>
             <ul className="text-xs text-zinc-400 space-y-1 list-disc list-inside">
-              <li>Generate a code on device A</li>
-              <li>Enter the code on device B</li>
-              <li>Your session (car setup, control flow) transfers</li>
-              <li>Continue controlling from device B</li>
+              <li>{messages.sessionTransfer.howStepOne}</li>
+              <li>{messages.sessionTransfer.howStepTwo}</li>
+              <li>{messages.sessionTransfer.howStepThree}</li>
+              <li>{messages.sessionTransfer.howStepFour}</li>
             </ul>
           </div>
         </div>

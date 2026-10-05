@@ -7,7 +7,7 @@ namespace LteCar.Onboard.Telemetry
     {
         private readonly DateTime _startTime;
 
-        public ApplicationLifetimeReader(ILogger logger) : base(logger)
+        public ApplicationLifetimeReader(ILogger<ApplicationLifetimeReader> logger) : base(logger)
         {
             _startTime = DateTime.UtcNow;
         }

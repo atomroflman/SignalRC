@@ -20,7 +20,7 @@ public class CarVideoStream : EntityBase, IVideoSettings
     // Transport details (existing)
     [Required]
     [MaxLength(10)]
-    public StreamProtocol Protocol { get; set; } // TCP, UDP
+    public StreamProtocol Protocol { get; set; } = StreamProtocol.UDP; // TCP, UDP
 
     [Required]
     public int Port { get; set; }
@@ -65,8 +65,25 @@ public class CarVideoStream : EntityBase, IVideoSettings
 
     public int Height { get; set; } = 720;
     public int Width { get; set; } = 1280;
-    public int BitrateKbps { get; set; } = 1500;
+    public int Bitrate { get; set; } = 1_000_000;
     public int Framerate { get; set; } = 30;
     public float Brightness { get; set; } = 0.5f;
+    public float? Gain { get; set; }
+    public int? Shutter { get; set; }
+    public float? Contrast { get; set; }
+    public float? EV { get; set; }
+    [MaxLength(20)]
+    public string? Exposure { get; set; }
     public string? JanusId { get; set; }
+
+    [MaxLength(100)]
+    public string? CameraDevice { get; set; }
+
+    public int? RpiCamId { get; set; }
+
+    public string? OptionsJson { get; set; }
+
+    public int? ServerId { get; set; }
+
+    public DateTime? ModifiedAt { get; set; }
 }

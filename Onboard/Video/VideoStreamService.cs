@@ -1,11 +1,12 @@
 using System.Diagnostics;
-using System.Text.Json;
 using LteCar.Server.Hubs;
 using LteCar.Shared;
+using LteCar.Shared.Channels;
+using LteCar.Shared.HubClients;
+using LteCar.Shared.Hubs;
 using LteCar.Shared.Video;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using TypedSignalR.Client;
 
 namespace LteCar.Onboard.Video;
 
@@ -23,227 +24,57 @@ namespace LteCar.Onboard.Video;
 //     }
 // }
 
-public class VideoStreamService : IDisposable, ICarVideoClient, IHubConnectionObserver
+public class VideoStreamService : ICarVideoClient, IHubConnectionObserver
 {
-    // public Dictionary<string, CameraProcessInfo> CameraProcesses { get; set; } = new Dictionary<string, CameraProcessInfo>();
     public ILogger<VideoStreamService> Logger { get; }
     public ServerCarConfigurationService ConfigService { get; }
     public ServerConnectionService ServerConnectionService { get; }
     public IConfiguration Configuration { get; }
-    public ICarVideoServer CarVideoServer { get; set; }
-    public Process? MediamtxProcess { get; set; }
+    public IConnectionHubServer CarVideoServer { get; set; } = null!;
+    private readonly ChannelMap _channelMap;
+    private readonly IMediaMtxConfigurator _mediaMtxConfigurator;
 
-    public VideoStreamService(ILogger<VideoStreamService> logger, ServerCarConfigurationService configService, ServerConnectionService serverConnectionService, IConfiguration configuration)
+    public VideoStreamService(
+        ILogger<VideoStreamService> logger,
+        ServerCarConfigurationService configService,
+        ServerConnectionService serverConnectionService,
+        IConfiguration configuration,
+        ChannelMap channelMap,
+        IMediaMtxConfigurator mediaMtxConfigurator)
     {
         Logger = logger;
         ConfigService = configService;
         ServerConnectionService = serverConnectionService;
         Configuration = configuration;
-        ConfigService.OnConfigurationChanged += () =>
-        {
-            RestartCameraProcesses();
-        };
+        _channelMap = channelMap;
+        _mediaMtxConfigurator = mediaMtxConfigurator;
     }
 
     public void RestartCameraProcesses()
     {
-        Logger.LogInformation("Restarting camera processes due to configuration change...");
-        StopCameraProcess().Wait();
-        StartCameraProcess().Wait();
+        RestartCameraProcessesAsync().Wait();
     }
 
-    private async Task StartCameraProcess()
+    private async Task RestartCameraProcessesAsync()
     {
-    //     if (!CameraProcesses.ContainsKey(streamId))
-    //     {
-    //         Logger.LogWarning($"Cannot start camera process, streamId '{streamId}' has not been initialized.");
-    //     }
-    //     var cameraProcessInfo = CameraProcesses[streamId];
-    //     if (cameraProcessInfo.IsProcessRunning)
-    //     {
-    //         Logger.LogInformation($"Camera process for streamId '{streamId}' is already running.");
-    //         return;
-    //     }
-
-    //     var videoSettings = cameraProcessInfo.VideoSettings;
-    //     var newProcessStart = new ProcessStartInfo();
-    //     newProcessStart.FileName = "/bin/bash"; // Start with bash to allow piping and binaries in PATH
-    //     var cameraLib = Configuration.GetSection("CameraOptions:CameraLib").Get<string>();
-    //     var cameraBinary = cameraLib switch
-    //     {
-    //         "libcamera-vid" => "libcamera-vid",
-    //         "rpicam-vid" => "rpicam-vid",
-    //         _ => throw new NotSupportedException($"Camera library '{cameraLib}' is not supported.")
-    //     };
-    //     var cameraParameters = $"-t 0 --inline --framerate {videoSettings.Framerate} --width {videoSettings.Width} --height {videoSettings.Height} --libav-format mpeg --codec h264 --nopreview -o -";
-    //     var transportFfmpegParameters = $"-i - -c copy -f mpegts tcp://{videoSettings.JanusServer}:{videoSettings.TargetPort}";
-    //     if (videoSettings.Protocol == StreamProtocol.UDP)
-    //     {
-    //         transportFfmpegParameters = $"-i - -c copy -f rtp rtp://{videoSettings.JanusServer}:{videoSettings.TargetPort}";
-    //     }
-    //     var command = $"{cameraBinary} {cameraParameters} | /usr/bin/ffmpeg {transportFfmpegParameters}";
-        
-
-        var newProcessStart = new ProcessStartInfo();        
-
-        var command = $"{Path.GetFullPath("./Extern/mediamtx")} {Path.GetFullPath("./Extern/mediamtx.yml")}";
-        Logger.LogInformation($"Starting camera process with command: {command}");
-        newProcessStart.FileName = "bash";
-        newProcessStart.Arguments = $"-c \"{command}\"";
-        newProcessStart.UseShellExecute = false;
-        newProcessStart.RedirectStandardOutput = true;
-        newProcessStart.RedirectStandardError = true;
-        newProcessStart.CreateNoWindow = true;
-        MediamtxProcess = new Process();
-        MediamtxProcess.StartInfo = newProcessStart;
-        MediamtxProcess.OutputDataReceived += (sender, e) =>
-        {
-            if (e.Data != null)
-            {
-                Logger.LogInformation(e.Data);
-            }
-        };
-        MediamtxProcess.ErrorDataReceived += (sender, e) =>
-        {
-            if (e.Data != null && e.Data.StartsWith("ERR"))
-            {
-                Logger.LogError($"Mediamtx process exited with error: {e.Data}");
-            }
-
-            Logger.LogWarning(e.Data);
-        };
-        MediamtxProcess.Exited += (sender, e) =>
-        {
-            Logger.LogWarning("Mediamtx process has exited!");
-            Logger.LogInformation(MediamtxProcess.StandardOutput.ReadToEnd());
-            Logger.LogInformation(MediamtxProcess.StandardError.ReadToEnd());
-            //Task.WhenAll(StartCameraProcess(), Task.Delay(5000));
-        };
-        MediamtxProcess.EnableRaisingEvents = true;
-        MediamtxProcess.Start();
-
-        // cameraProcessInfo.StartTime = DateTime.Now;
-        // cameraProcessInfo.Process = new Process();
-        // cameraProcessInfo.Process.StartInfo = newProcessStart;
-        // cameraProcessInfo.Process.OutputDataReceived += (sender, e) =>
-        // {
-        //     if (e.Data != null)
-        //     {
-        //         Logger.LogInformation(e.Data);
-        //     }
-        // };
-
-        // cameraProcessInfo.Process.ErrorDataReceived += (sender, e) =>
-        // {
-        //     if (e.Data != null && e.Data.StartsWith("ERR"))
-        //     {
-        //         cameraProcessInfo.RestartCount++;
-        //         var runtime = DateTime.Now - cameraProcessInfo.StartTime;
-        //         if (runtime.TotalMinutes + 1 < cameraProcessInfo.RestartCount)
-        //         {
-        //             Logger.LogError($"Camera process for streamId '{streamId}' is crashing too frequently. Stopping further restarts.");
-        //             Task.Run(() => StopCameraProcess(streamId));
-        //             return;
-        //         }
-        //         Logger.LogError($"Camera process for streamId '{streamId}' exited with code: {e.Data}");
-        //         var errorParts = e.Data.Split(' ');
-        //         if (errorParts.Length == 2 && int.TryParse(errorParts[1], out var exitCode))
-        //         {
-        //             switch (exitCode)
-        //             {
-        //                 case 0:
-        //                     Logger.LogInformation($"Camera process for streamId '{streamId}' exited normally.");
-        //                     break;
-        //                 case 1:
-        //                     Logger.LogWarning("Camera process encountered an error starting the camera. Check camera connection, previous output and settings.");
-        //                     break;
-        //                 default:
-        //                     Logger.LogError("Camera process exited with unexpected code: {ExitCode}", exitCode);
-        //                     break;
-        //             }
-        //         }
-        //     }
-
-        //     Logger.LogWarning(e.Data);
-        // };
-        // cameraProcessInfo.Process.Exited += (sender, e) =>
-        // {
-        //     Logger.LogWarning($"Camera process for streamId '{streamId}' has exited.");
-        //     using var scope = Logger.BeginScope(new {StreamId = streamId});
-        //     Logger.LogInformation(cameraProcessInfo.Process.StandardError.ReadToEnd());
-        // };
-        // cameraProcessInfo.Process.EnableRaisingEvents = true;
-        // cameraProcessInfo.Process.Start();
+        Logger.LogInformation("Rebuilding MediaMTX config for {Count} active video streams.",_channelMap.VideoStreams.Count(e => e.Value.Enabled));
+        await _mediaMtxConfigurator.GenerateFromChannelMapAsync(_channelMap);
+        // await _mediaMtxConfigurator.StopAsync();
+        // await _mediaMtxConfigurator.StartProcessAsync();
     }
+    
 
-    private async Task StopCameraProcess()
-    {
-        if (MediamtxProcess != null && !MediamtxProcess.HasExited)
-        {
-            Logger.LogInformation($"Stopping Mediamtx process...");
-            MediamtxProcess.Kill();
-            await MediamtxProcess.WaitForExitAsync();
-            MediamtxProcess.Dispose();
-            MediamtxProcess = null;
-            Logger.LogInformation($"Mediamtx process stopped.");
-        }
-        // var cameraProcessInfo = CameraProcesses[streamId];
-        // if (cameraProcessInfo.Process != null && !cameraProcessInfo.Process.HasExited)
-        // {
-        //     Logger.LogInformation($"Stopping camera process for streamId '{streamId}'...");
-        //     cameraProcessInfo.Process.Kill();
-        //     await cameraProcessInfo.Process.WaitForExitAsync();
-        //     cameraProcessInfo.Process.Dispose();
-        //     cameraProcessInfo.Process = null;
-        //     Logger.LogInformation($"Camera process for streamId '{streamId}' stopped.");
-        //     CameraProcesses.Remove(streamId);
-        // }
-    }
-
-    public void Dispose()
-    {
-        StopCameraProcess().Wait();
-    }
-
-    public async Task StartVideoStream(string streamId, VideoSettings settings)
-    {
-        await StartCameraProcess();
-        // if (!CameraProcesses.TryGetValue(streamId, out var cameraProcessInfo) )
-        // {
-        //     cameraProcessInfo = new CameraProcessInfo(settings);
-        //     CameraProcesses.Add(streamId, cameraProcessInfo);
-        //     await StartCameraProcess(streamId);
-        //     return;
-        // }
-        // if (JsonSerializer.Serialize(cameraProcessInfo.VideoSettings) != JsonSerializer.Serialize(settings))
-        // {
-        //     Logger.LogInformation($"Video settings for streamId '{streamId}' have changed. Updating settings.");
-        //     cameraProcessInfo.VideoSettings = settings;
-        //     await StopCameraProcess(streamId);
-        //     await StartCameraProcess(streamId);
-        // }
-        // else
-        // {
-        //     Logger.LogInformation($"Video settings for streamId '{streamId}' already exists.");
-        // }
-    }
-
-    public async Task StopVideoStream(string streamId)
-    {
-        // await StopCameraProcess(streamId);
-    }
 
     public async Task OnClosed(Exception? exception)
     {
         Logger.LogWarning("VideoStreamService is closed.");
-        // foreach (var streamId in CameraProcesses.Keys.ToList())
-        //     await StopCameraProcess(streamId);
+        // await _mediaMtxConfigurator.StopAsync();
     }
 
     public async Task OnReconnected(string? connectionId)
     {
         Logger.LogInformation("VideoStreamService reconnected. ConnectionId: {ConnectionId}", connectionId);
-        await CarVideoServer.ConnectCar(Configuration.GetValue<string>("CarIdentityKey"));
+        await CarVideoServer.ConnectCar(Configuration.GetValue<string>("CarIdentityKey")!);
     }
 
     public async Task OnReconnecting(Exception? exception)
@@ -253,10 +84,85 @@ public class VideoStreamService : IDisposable, ICarVideoClient, IHubConnectionOb
 
     public async Task Connect()
     {
-        var hubConnection = ServerConnectionService.ConnectToHub(HubPaths.CarVideoHub);
-        CarVideoServer = hubConnection.CreateHubProxy<ICarVideoServer>();
-        hubConnection.Register<ICarVideoClient>(this);
-        await hubConnection.StartAsync();
-        await CarVideoServer.ConnectCar(Configuration.GetValue<string>("CarIdentityKey"));
+        CarVideoServer = ServerConnectionService.GetProxy();
+        await CarVideoServer.ConnectCar(Configuration.GetValue<string>("CarIdentityKey")!);
+    }
+
+    public async Task StopVideoStream(string streamId)
+    {
+        var selectedStream = await GetStream(streamId);
+        if (selectedStream == null)
+            return;
+
+        selectedStream.Enabled = false;
+        Logger.LogInformation($"Stream: {streamId} disabled.");
+
+        await _mediaMtxConfigurator.GenerateFromChannelMapAsync(_channelMap);
+    }
+
+    public async Task StartVideoStream(string streamId)
+    {
+        var selectedStream = await GetStream(streamId);
+        if (selectedStream == null)
+            return;
+
+        selectedStream.Enabled = true;
+        Logger.LogInformation($"Stream: {streamId} started.");
+
+        await _mediaMtxConfigurator.GenerateFromChannelMapAsync(_channelMap);
+    }
+
+    private async Task<VideoStreamMapItem?> GetStream(string streamId)
+    {
+        if (!_channelMap.VideoStreams.TryGetValue(streamId, out var selectedStream))
+        {
+            if (this.ConfigService.ServerAssignedCarId == null)
+            {
+                Logger.LogError($"Unknown video stream update requested and no server Car ID set yet! ({streamId})");
+                return null;
+            }
+            Logger.LogWarning($"Syncronizing streams for update...");
+            var allStreams = await CarVideoServer.GetVideoStreamsForCar(this.ConfigService.ServerAssignedCarId.Value);
+            var unnamedCounter = 0;
+            _channelMap.VideoStreams = allStreams.ToDictionary(s => !string.IsNullOrEmpty(s.StreamId) ? s.StreamId : (unnamedCounter++).ToString(), s => s);
+            if (!_channelMap.VideoStreams.TryGetValue(streamId, out selectedStream))
+            {
+                Logger.LogError($"Update to unknown stream requested: '{streamId}'!");
+                return null;
+            }
+        }
+        return selectedStream;
+    }
+
+    public async Task UpdateVideoStream(string streamId, VideoStreamMapItem settings)
+    {
+        var selectedStream = await GetStream(streamId);
+        if (selectedStream == null)
+            return;
+
+        selectedStream.ServerId = settings.ServerId;
+        selectedStream.StreamId = settings.StreamId;
+        selectedStream.Name = settings.Name;
+        selectedStream.Location = settings.Location;
+        selectedStream.Type = settings.Type;
+        selectedStream.Enabled = settings.Enabled;
+        selectedStream.CameraDevice = settings.CameraDevice;
+        selectedStream.RpiCamId = settings.RpiCamId;
+        selectedStream.Width = settings.Width;
+        selectedStream.Height = settings.Height;
+        selectedStream.Framerate = settings.Framerate;
+        selectedStream.Bitrate = settings.Bitrate;
+        selectedStream.Options = settings.Options;
+        selectedStream.ModifiedAt = settings.ModifiedAt;
+        selectedStream.Gain = settings.Gain;
+        selectedStream.Shutter = settings.Shutter;
+        selectedStream.Brightness = settings.Brightness;
+        selectedStream.Contrast = settings.Contrast;
+        selectedStream.EV = settings.EV;
+        selectedStream.Exposure = settings.Exposure;
+        selectedStream.Port = settings.Port;
+        Logger.LogInformation($"Stream: {streamId} updated.");
+
+        await _mediaMtxConfigurator.GenerateFromChannelMapAsync(_channelMap);
     }
 }

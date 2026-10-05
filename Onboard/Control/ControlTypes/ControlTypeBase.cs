@@ -8,7 +8,7 @@ public abstract class ControlTypeBase : IControlType
     public string Name { get; set; } = string.Empty;
     public bool TestDisabled { get; set; } = false;
     public Dictionary<string, object> Options { get; set; } = new Dictionary<string, object>();
-    public IModuleManager PinManager { get; set; }
+    public IModuleManager PinManager { get; set; } = null!;
 
     public virtual void Initialize() { }
     public async Task RunTestAsync()

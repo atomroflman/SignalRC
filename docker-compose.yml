@@ -1,0 +1,200 @@
+services:
+  postgres:
+    image: docker.io/library/postgres:18.3
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ltecar
+      POSTGRES_USER: ltecar
+      POSTGRES_PASSWORD: ltecar
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ltecar -d ltecar"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  janus:
+    image: docker.io/canyan/janus-gateway:latest
+    restart: unless-stopped
+    # Public hostname/IP for WebRTC NAT traversal. Optional override — if
+    # unset, the start script queries Azure IMDS at 169.254.169.254 for the
+    # public IP and passes that to --nat-1-1. Hard-fails if neither is set
+    # (127.0.0.1 would only work for in-network clients and breaks WebRTC).
+    environment:
+      JANUS_NAT_1_1: ${JANUS_NAT_1_1:-}
+    command: >-
+      sh -c '
+        IP="${JANUS_NAT_1_1}";
+        if [ -z "$$IP" ]; then
+          IP=$$(curl -fsS -H "Metadata: true" "http://169.254.169.254/metadata/instance/network/interface/0/ipv4/ipAddress/0/publicIpAddress?api-version=2021-02-01&format=text" 2>/dev/null);
+        fi;
+        if [ -z "$$IP" ]; then echo "Need JANUS_NAT_1_1 or Azure IMDS public IP"; exit 1; fi;
+        exec janus --nat-1-1="$$IP" --full-trickle'
+    ports:
+      - "10000-10200:10000-10200/udp"
+      # Required: HTTP/WebSocket control plane so the Server and Browser
+      # can reach Janus. The default `canyan/janus-gateway` image binds
+      # IPv6-only; an explicit `ip = "0.0.0.0"` in the mounted
+      # `janus.transport.http.jcfg` / `janus.transport.websockets.jcfg`
+      # (see `janus-config/`) is required to expose them on IPv4.
+      - "8088:8088"
+      - "8188:8188"
+    volumes:
+      - ./janus-config/janus.transport.http.jcfg:/usr/local/etc/janus/janus.transport.http.jcfg:ro
+      - ./janus-config/janus.transport.websockets.jcfg:/usr/local/etc/janus/janus.transport.websockets.jcfg:ro
+      # Override the canyanjanus image's hardcoded sample mountpoints.
+      # The LteCar Server is the single source of truth for mountpoints;
+      # see janus-config/janus.plugin.streaming.jcfg.
+      - ./janus-config/janus.plugin.streaming.jcfg:/usr/local/etc/janus/janus.plugin.streaming.jcfg:ro
+      # Override the main janus.jcfg to enable WebRTC ICE NAT traversal.
+      # Without these the canyanjanus image runs without a STUN server
+      # and tries to resolve browser-sent mDNS (.local) candidates,
+      # which always fails in the container (no avahi / libnss-mdns),
+      # so every browser→Janus WebRTC peer connection fails ICE.
+      # Configured:
+      #   stun_server = stun.l.google.com:19302 — for srflx candidates
+      #   ignore_mdns = true — drop .local candidates entirely
+      #   ice_enforce_list = "eth0" — restrict to container NIC
+      #   ignore_unreachable_ice_server = true — survive STUN outages
+      - ./janus-config/janus.jcfg:/usr/local/etc/janus/janus.jcfg:ro
+    healthcheck:
+      # canyanjanus ships without curl/wget. Use bash's /dev/tcp built-in to
+      # do a raw HTTP/1.0 GET and check for "200" in the status line.
+      # Works on the canyanjanus base image which only includes bash + apt.
+      test:
+        - "CMD-SHELL"
+        - "bash -c 'exec 3<>/dev/tcp/localhost/8088 && printf \"GET /janus/info HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n\" >&3 && head -1 <&3 | grep -q \"200\"'"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  server:
+    build:
+      context: .
+      dockerfile: Server/Dockerfile
+      args:
+        GIT_BRANCH: ${GIT_BRANCH:-}
+        GIT_COMMIT: ${GIT_COMMIT:-}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      janus:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://0.0.0.0:5000
+      ConnectionStrings__DefaultConnection: Host=postgres;Database=ltecar;Username=ltecar;Password=ltecar
+      JanusConfiguration__HostName: janus
+      JanusConfiguration__PortRangeStart: "10000"
+      JanusConfiguration__PortRangeEnd: "10200"
+      FileTransfer__StoragePath: /app/data/ltecar
+      WebRtc__Username: ${COTURN_USERNAME:-ltecar}
+      WebRtc__Credential: ${COTURN_CREDENTIAL:-}
+      COTURN_EXTERNAL_IP: ${COTURN_EXTERNAL_IP:-}
+    # Resolve public IP from COTURN_EXTERNAL_IP or Azure IMDS, build TURN URLs
+    # into WebRtc__Urls__0/1 before starting the .NET process. Manual override
+    # via COTURN_EXTERNAL_IP wins; otherwise curl IMDS at 169.254.169.254.
+    # Override Dockerfile ENTRYPOINT so we can shell-wrap the dotnet start.
+    entrypoint: ["/bin/sh", "-c"]
+    command: |
+      IP="${COTURN_EXTERNAL_IP}";
+      if [ -z "$$IP" ]; then
+        IP=$$(curl -fsS -H "Metadata: true" "http://169.254.169.254/metadata/instance/network/interface/0/ipv4/ipAddress/0/publicIpAddress?api-version=2021-02-01&format=text" 2>/dev/null);
+      fi;
+      if [ -n "$$IP" ]; then
+        export WebRtc__Urls__0="turn:$$IP:3478?transport=udp";
+        export WebRtc__Urls__1="turn:$$IP:3478?transport=tcp";
+      fi;
+      exec dotnet LteCar.Server.dll
+    volumes:
+      - ltecar-server-data:/app/DataProtectionKeys
+    healthcheck:
+      # Server image is mcr.microsoft.com/dotnet/aspnet (debian-slim) with curl
+      # added for Azure IMDS lookup. We still use bash's /dev/tcp built-in
+      # instead of curl here to avoid pulling curl into every healthcheck run.
+      # Calls the public InstallController endpoint — needs only config +
+      # the install.sh template, no DB, no auth.
+      test:
+        - "CMD-SHELL"
+        - "bash -c 'exec 3<>/dev/tcp/localhost/5000 && printf \"GET /api/install/onboard-command HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n\" >&3 && head -1 <&3 | grep -q \"200\"'"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  client:
+    build:
+      context: ./Client
+    restart: unless-stopped
+    depends_on:
+      server:
+        condition: service_healthy
+      janus:
+        condition: service_healthy
+    healthcheck:
+      # Next.js standalone server on :3000. wget is in node:alpine (busybox).
+      test: ["CMD-SHELL", "wget -qO/dev/null http://localhost:3000/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  turn:
+    image: docker.io/coturn/coturn:latest
+    restart: unless-stopped
+    # Public IP for TURN srflx/relay candidates. Optional COTURN_EXTERNAL_IP
+    # override — if unset, the start script queries Azure IMDS at
+    # 169.254.169.254. COTURN_CREDENTIAL is the shared secret the browser
+    # authenticates with — match it in server env via the same var name.
+    # Username is configurable too.
+    environment:
+      COTURN_EXTERNAL_IP: ${COTURN_EXTERNAL_IP:-}
+      COTURN_USERNAME: ${COTURN_USERNAME:-ltecar}
+      COTURN_CREDENTIAL: ${COTURN_CREDENTIAL:-}
+    command: >-
+      sh -c '
+        IP="${COTURN_EXTERNAL_IP}";
+        if [ -z "$$IP" ]; then
+          IP=$$(curl -fsS -H "Metadata: true" "http://169.254.169.254/metadata/instance/network/interface/0/ipv4/ipAddress/0/publicIpAddress?api-version=2021-02-01&format=text" 2>/dev/null);
+        fi;
+        if [ -z "$$IP" ] || [ -z "$$COTURN_CREDENTIAL" ]; then echo "Need COTURN_CREDENTIAL and either COTURN_EXTERNAL_IP or Azure IMDS public IP"; exit 1; fi;
+        exec turnserver --no-tls --no-dtls --realm=ltecar.local --external-ip="$$IP" --lt-cred-mech --user="$$COTURN_USERNAME:$$COTURN_CREDENTIAL" --fingerprint --no-loopback-stun --no-multicast-peers --listening-port=3478 --min-port=49152 --max-port=50152'
+    ports:
+      - "3478:3478/udp"
+      - "3478:3478/tcp"
+      - "49152-50152:49152-50152/udp"
+
+  nginx:
+    image: docker.io/library/nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      client:
+        condition: service_healthy
+      server:
+        condition: service_healthy
+      janus:
+        condition: service_healthy
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    healthcheck:
+      # nginx itself only proxies. The test calls all three upstream paths through
+      # nginx on :80, so this exercises client (/), server (/api/...) and janus
+      # (/janus/info) end-to-end before nginx is reported healthy.
+      test:
+        - "CMD-SHELL"
+        - "wget -qO/dev/null http://localhost:80/ && wget -qO/dev/null http://localhost:80/api/install/onboard-command && wget -qO/dev/null http://localhost:80/janus/info"
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  postgres-data:
+  ltecar-server-data:

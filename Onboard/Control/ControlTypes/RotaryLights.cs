@@ -54,7 +54,7 @@ namespace LteCar.Onboard.Control.ControlTypes
             _currentMode = (byte)((_currentMode + 1) % AvailableModes);
             _isHigh = !_isHigh;
             var pulseWidth = _isHigh ? HIGH_PWM : LOW_PWM;
-            _pwm.SetPulseWidthMilliseconds(pulseWidth);
+            _pwm?.SetPulseWidthMilliseconds(pulseWidth);
             Logger.LogDebug($"RotaryLight: Set mode {_currentMode} with pulse width {pulseWidth}ms");
             return Task.CompletedTask;
         }

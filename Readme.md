@@ -1,13 +1,77 @@
-# LteCar – Dokumentation
+# LteCar – Remote Control over LTE/Internet
 
-## Zweck
+*[Deutsche Version](Readme.de.md)*
 
-LteCar ist ein System zum Bau und Betrieb von ferngesteuerten Autos über LTE/Internet. Es ermöglicht:
-- **Quasi unbegrenzte Anzahl von Steuerkanälen** (z.B. Motor, Lenkung, Licht, Sensoren)
-- **Echtzeit-Videoübertragung** vom Fahrzeug zur Weboberfläche
-- **Reaktionsschnelle Steuerung** über das Internet
-- **Mehrere Autos pro Server** – Verwaltung und Steuerung verschiedener Fahrzeuge gleichzeitig
-- **Webseite** zur Steuerung, Videoanzeige und Konfiguration
+## Quick Start
+
+### 1. Install the server
+
+Run this on the machine (VM, home server, …) that will host the stack. It clones the repo and walks you through choosing a container engine and the Compose stack to deploy:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/atomroflman/SignalRC/master/install.sh | sudo bash
+# → choose "1) Server"
+```
+
+This installs the full container stack (`nginx` + `client` + `server` + `janus` + `postgres` + `turn`) via Docker or Podman Compose, and can optionally register a `ltecar.service` systemd unit so the stack survives reboots.
+
+### 2. Install onboard (the vehicle) — via the web UI
+
+Once the server is running, open it in a browser (`https://your-server/`). With no vehicle selected yet, the page shows an **install button** that generates a ready-to-paste command, preconfigured with your server's URL and branch:
+
+```bash
+curl -fsSL https://YOUR-SERVER/api/install/onboard.sh | sudo bash
+```
+
+Paste that on the Raspberry Pi. It runs the same `install.sh`, pre-filled for `onboard` mode, and can register `ltecar-onboard.service` (+ `ltecar-mediamtx.service`) for autostart. Vehicle-specific configuration (channels, name, hardware) happens afterwards from the web client at `/car/[carId]`.
+
+Prefer to do it by hand instead? Run the installer directly on the vehicle and choose option 2:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/atomroflman/SignalRC/master/install.sh | sudo bash
+# → choose "2) Onboard"
+```
+
+### Local development
+
+```bash
+# Server
+cd Server && dotnet run
+
+# Onboard (vehicle)
+cd Onboard && dotnet run             # normal start
+
+# Full stack (client + server + nginx + janus + postgres + turn)
+docker compose up --build
+
+# Stop the stack
+docker compose down
+```
+
+**Documentation:** see [Docs/README.md](Docs/README.md) for the full documentation (English, with a [German overview page](Docs/README.de.md)).
+
+---
+
+## Key Notes
+
+> **LTE connectivity**: The onboard vehicle client initiates an **outbound-only connection** to the server. The vehicle is **not directly reachable from the internet** — all communication is initiated by the vehicle.
+
+> **Database**: Never modify the database manually. Always use EF Core migrations.
+
+---
+
+## Features
+
+| Feature | Description |
+|---------|--------------|
+| Remote Control | Low-latency control over LTE/Internet |
+| Video Streaming | Real-time video from the vehicle's camera |
+| Audio Chat | Bidirectional audio communication |
+| Bash Tool | Run remote bash commands on the vehicle |
+| Channel Tester | Test hardware channels from the web UI |
+| Templates | Share and reuse vehicle channel configurations |
+
+**Feature flags**: `appSettings.json` supports `webSetup`, `bashTool`, `channelTester`, `audio`, `video` flags. Of these, only `bashTool` currently gates real runtime behavior (it enables/disables the bash relay to the server, and defaults to off when unset). The others are stored for future use but don't gate anything yet — see [Docs/CONFIGURATION.md](Docs/CONFIGURATION.md#feature-flags) for details.
 
 ---
 
@@ -15,65 +79,124 @@ LteCar ist ein System zum Bau und Betrieb von ferngesteuerten Autos über LTE/In
 
 ### Server
 
-1. Voraussetzungen: Linux, Docker oder .NET 8, Node.js, Janus Gateway
-2. Repository klonen und Basisinstallation:
 ```bash
-git clone https://github.com/atomroflman/LteCar.git
-cd LteCar
-bash install-server.sh
+curl -fsSL https://raw.githubusercontent.com/atomroflman/SignalRC/master/install.sh | sudo bash
 ```
-3. Janus Gateway installieren (siehe `Server/bash/install-janus.sh` für Details).
-4. Server starten:
-```bash
-bash start-server.sh
-```
-    oder als Systemdienst (`Server/install.sh`).
 
-### Onboard (Fahrzeug)
+Or manually:
 
-1. Raspberry Pi vorbereiten.
-2. 
 ```bash
-git clone https://github.com/atomroflman/LteCar.git
-cd LteCar
-sudo ./pi-install-car.sh
+git clone https://github.com/atomroflman/SignalRC.git
+cd SignalRC && sudo bash install.sh
 ```
-3. Konfiguration anpassen (siehe unten).
-4. Onboard-Software starten:
+
+### Onboard (Raspberry Pi)
+
+Use the **install button in the server's web UI** (see Quick Start above) to get a preconfigured command, or run the installer directly on the vehicle:
+
 ```bash
-cd Onboard
-dotnet run
+git clone https://github.com/atomroflman/SignalRC.git
+cd SignalRC && sudo bash install.sh
+# → choose "2) Onboard"
+```
+
+**Details:** [Docs/INSTALLATION.md](Docs/INSTALLATION.md)
+
+---
+
+## Configuration
+
+Vehicle configuration (channels, name, hardware) and testing happen in the web client at `/car/[carId]` — see the "Install New Vehicle" flow above. There is no console setup tool anymore.
+
+### Onboard (appSettings.json)
+
+```json
+{
+  "ServerName": "your-server.example.com",
+  "ServerPort": 443,
+  "UseHttps": true,
+  "CarName": "My RC Car",
+  "CarSecret": "change-me",
+  "CameraOptions": {
+    "CameraLib": "rpicam-vid"
+  }
+}
+```
+
+### Feature Flags
+
+| Flag | Default | Actually wired up? |
+|------|---------|------|
+| `webSetup` | on in the flag model, but no such interface exists yet | No — toggle is inert |
+| `bashTool` | off (unset in appSettings.json falls back to `false`) | Yes — gates the bash relay |
+| `channelTester` | on in the flag model | No — toggle is inert |
+| `audio` | on in the flag model | No — `CarAudioHub` exists in code but isn't registered yet |
+| `video` | on in the flag model | Video streaming itself always runs; not gated by this flag |
+
+**Details:** [Docs/CONFIGURATION.md](Docs/CONFIGURATION.md)
+
+---
+
+## Architecture
+
+```
+┌──────────────┐     WebRTC      ┌──────────────┐
+│   Browser    │◄──────────────►│    Server    │
+│   (Client)   │    SignalR     │  (ASP.NET)   │
+└──────────────┘                └──────┬───────┘
+                                       │
+                              SignalR  │  WebRTC
+                                       │
+┌──────────────────────────────────────▼───────────────┐
+│                    Onboard (Raspberry Pi)             │
+│  ┌────────────┐  ┌────────────┐  ┌─────────────┐   │
+│  │  Vehicle   │  │   Video    │  │    Audio    │   │
+│  │ Connection │  │  Service   │  │    Chat     │   │
+│  │  Manager   │  │            │  │             │   │
+│  └────────────┘  └────────────┘  └─────────────┘   │
+│  ┌────────────┐  ┌────────────┐  ┌─────────────┐   │
+│  │  Telemetry │  │  Control   │  │  BashTool   │   │
+│  │  (via      │  │  Service   │  │  Service    │   │
+│  │  Connection)│ │            │  │             │   │
+│  └────────────┘  └────────────┘  └─────────────┘   │
+└────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Konfiguration Onboard
+## SignalR Hubs
 
-- **carId.txt**: Eindeutige Fahrzeug-ID (wird beim ersten Start erzeugt).
-- **channelMap.json**: Definition aller Steuerkanäle (z.B. Motor, Lenkung, Sensoren).
-- **appSettings.json**: Netzwerk- und Servereinstellungen.
-- **VideoSettings**: Videoauflösung, Bitrate etc. (im Server und Onboard konfigurierbar).
+| Hub | Path | Purpose |
+|-----|------|-------|
+| CarConnectionHub | `/hubs/connection` | The single vehicle-side hub: connection state, control, telemetry, video signaling, file transfer, channel sync |
+| UserChannelHub | `/hubs/userchannel` | Browser/gamepad-side channel value updates |
+| CarBashHub | `/hubs/carbash` | Bash command relay (dispatch only — output streams back over `CarConnectionHub`) |
 
----
-
-## Features
-
-- **SignalR** für Echtzeit-Kommunikation (Steuerung, Telemetrie)
-- **Janus Gateway** für WebRTC Video-Streaming
-- **Flexible Channel-Konfiguration**: beliebige Funktionen und Sensoren
-- **Mehrbenutzerfähig**: mehrere Nutzer und Fahrzeuge pro Server
-- **Weboberfläche**: Steuerung, Video, Setup, Gamepad-Unterstützung
+*(`CarAudioHub` exists in the codebase but is not yet registered/reachable.)*
 
 ---
 
-## Weitere Infos
+## Documentation
 
-- Quellcode und Beispiele: siehe die jeweiligen Unterordner (`Server`, `Onboard`, `Client`)
-- API-Dokumentation: `/api/*` Endpunkte am Server
-- Anpassung der Kanäle: `channelMap.json` und Weboberfläche
+- [Docs/README.md](Docs/README.md) – Overview
+- [Docs/INSTALLATION.md](Docs/INSTALLATION.md) – Installation guide
+- [Docs/FEATURES.md](Docs/FEATURES.md) – Feature documentation
+- [Docs/CONFIGURATION.md](Docs/CONFIGURATION.md) – Configuration reference
+- [Docs/README.de.md](Docs/README.de.md) – Deutsche Übersicht
 
 ---
 
-## Kontakt & Support
+## Environment Variables
 
-Fragen, Feedback oder Beiträge bitte direkt im GitHub-Repository stellen.
+| Variable | Description |
+|----------|--------------|
+| `CONFIG_DIR` | Config directory (Onboard) |
+| `VEHICLE_TEMPLATES_PATH` | Template base path (filesystem vehicle templates in `VehicleTemplates/`/`vehicleTemplates/`) |
+| `COTURN_EXTERNAL_IP` / `COTURN_USERNAME` / `COTURN_CREDENTIAL` | TURN server public IP and credentials (Docker Compose) |
+| `JANUS_NAT_1_1` | Public IP for Janus WebRTC NAT traversal (Docker Compose); falls back to Azure IMDS if unset |
+
+---
+
+## Contact & Support
+
+Questions, feedback, or contributions — please open an issue or discussion directly on the GitHub repository.

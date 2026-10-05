@@ -51,14 +51,16 @@ namespace LteCar.Server.Hubs
 
         public static Task AddUserToGroupAsync(this Hub hub)
         {
-            var userId = hub.Context?.UserIdentifier ?? hub.Context.ConnectionId;
-            return hub.Groups.AddToGroupAsync(hub.Context.ConnectionId, UserGroup(userId));
+            var context = hub.Context;
+            var userId = context.UserIdentifier ?? context.ConnectionId;
+            return hub.Groups.AddToGroupAsync(context.ConnectionId, UserGroup(userId));
         }
 
         public static Task RemoveUserFromGroupAsync(this Hub hub)
         {
-            var userId = hub.Context?.UserIdentifier ?? hub.Context.ConnectionId;
-            return hub.Groups.RemoveFromGroupAsync(hub.Context.ConnectionId, UserGroup(userId));
+            var context = hub.Context;
+            var userId = context.UserIdentifier ?? context.ConnectionId;
+            return hub.Groups.RemoveFromGroupAsync(context.ConnectionId, UserGroup(userId));
         }
 
         // Helpers

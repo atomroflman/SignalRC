@@ -1,21 +1,14 @@
 #!/bin/bash
+set -e
 
-mkdir janus
-cd janus
-set -e  # Stop on error
+if [ -x /opt/janus/bin/janus ]; then
+    echo "Janus Gateway already installed at /opt/janus, skipping."
+    exit 0
+fi
 
-# 1. Update and install packages
-apt update
-apt install -y \
-  git tcpdump build-essential automake libtool \
-  pkg-config gengetopt gtk-doc-tools \
-  libmicrohttpd-dev libjansson-dev libnice-dev \
-  libssl-dev libsrtp2-dev libsofia-sip-ua-dev \
-  libglib2.0-dev libopus-dev libogg-dev \
-  libini-config-dev libcollection-dev \
-  cmake libusrsctp-dev libglib2.0-dev libssl-dev zlib1g-dev libconfig-dev libwebsockets-dev
+JANUS_BUILD_DIR=$(mktemp -d)
+cd "$JANUS_BUILD_DIR"
 
-# 2. Clone Janus
 git clone https://github.com/meetecho/janus-gateway.git
 cd janus-gateway
 
@@ -49,8 +42,7 @@ make -j$(nproc)
 make install
 make configs
 
-# 5. Done
-echo "✅ Janus built successful!"
-echo "👉 Start Janus with: /opt/janus/bin/janus"
+rm -rf "$JANUS_BUILD_DIR"
 
-cd ..
+echo "Janus Gateway built successfully!"
+echo "Start Janus with: /opt/janus/bin/janus"

@@ -1,8 +1,9 @@
-﻿using LteCar.Server;
+using LteCar.Server;
 using LteCar.Server.Configuration;
 using LteCar.Server.Data;
 using LteCar.Server.Extensions;
 using LteCar.Server.Hubs;
+using LteCar.Server.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.DataProtection;
 
@@ -51,11 +52,16 @@ builder.Services.AddSingleton(sqids);
 builder.Services.AddKeyedSingleton("transfer", transferSqids);
 
 builder.Services.AddSingleton<VideoStreamReceiverService>();
+builder.Services.AddSingleton<ActiveVideoStreamViewerRegistry>();
 builder.Services.AddSingleton<CarConnectionStore>();
+builder.Services.AddSingleton<AvailableTypesRegistry>();
+builder.Services.AddSingleton<IServerBuildInfoService, ServerBuildInfoService>();
+builder.Services.AddSingleton<IOnboardInstallScriptService, OnboardInstallScriptService>();
+builder.Services.AddSingleton<ChannelTemplateService>();
 builder.Services.AddDbContext<LteCarContext>((serviceProvider, options) =>
 {
     var configService = serviceProvider.GetRequiredService<IConfigurationService>();
-    options.UseSqlServer(configService.DefaultConnectionString, opt =>
+    options.UseNpgsql(configService.DefaultConnectionString, opt =>
     {
         opt.EnableRetryOnFailure(5, TimeSpan.FromSeconds(10), null);
     });
@@ -69,9 +75,12 @@ builder.Services.AddSignalR()
     .AddMessagePackProtocol()
     .AddJsonProtocol();
 
+var dataProtectionKeysPath = Path.Combine(Directory.GetCurrentDirectory(), "DataProtectionKeys");
+Directory.CreateDirectory(dataProtectionKeysPath);
 builder.Services.AddDataProtection()
-    .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(Directory.GetCurrentDirectory(), "DataProtectionKeys")))
-    .SetApplicationName("LteCar.Server");
+    .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeysPath))
+    .SetApplicationName("LteCar.Server")
+    .SetDefaultKeyLifetime(TimeSpan.FromDays(90));
 builder.Services.AddAuthentication("cookie")
     .AddCookie("cookie", options =>
     {
@@ -79,7 +88,9 @@ builder.Services.AddAuthentication("cookie")
         options.LoginPath = "/";
         options.Cookie.HttpOnly = true;
         options.Cookie.SameSite = SameSiteMode.Lax;
-        options.Cookie.MaxAge = TimeSpan.MaxValue;
+        options.Cookie.IsEssential = true;
+        options.Cookie.MaxAge = TimeSpan.FromDays(3650);
+        options.SlidingExpiration = false;
         options.Events.OnRedirectToLogin = ctx =>
         {
             ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
@@ -87,28 +98,13 @@ builder.Services.AddAuthentication("cookie")
         };
     });
 
+// builder.Services.AddUserCleanupService(); // TODO: Implement UserCleanupService
+
 var app = builder.Build();
 var configuration = app.Configuration;
-using (var scope = app.Services.CreateScope())
-{
-    var dbContext = scope.ServiceProvider.GetRequiredService<LteCarContext>();
-    dbContext.Database.Migrate();
-}
-
 var logger = app.Services.GetRequiredService<ILogger<Program>>();
-
-logger.LogInformation("Database migrations applied successfully.");
-var vss = app.Services.GetRequiredService<VideoStreamReceiverService>();
-
-var configService = app.Services.GetRequiredService<IConfigurationService>();
-if (configService.Application.RunJanusServer)
-{
-    app.Services.GetRequiredService<VideoStreamReceiverService>().RunVideoStreamServer();
-}
-else
-{
-    logger.LogWarning("Running Janus server is disabled.");
-}
+ApplyDatabaseMigrations(app.Services, logger);
+await SeedChannelTemplatesAsync(app.Services, logger);
 
 app.Use(async(ctx, next) => {
     try
@@ -138,13 +134,56 @@ app.UseAuthorization();
 
 app.MapControllers();
 app.MapHub<CarConnectionHub>(HubPaths.CarConnectionHub);
-app.MapHub<CarControlHub>(HubPaths.CarControlHub);
-app.MapHub<TelemetryHub>(HubPaths.TelemetryHub);
-app.MapHub<CarUiHub>(HubPaths.CarUiHub);
-app.MapHub<CarVideoHub>(HubPaths.CarVideoHub);
 app.MapHub<UserChannelHub>(HubPaths.UserChannelHub);
+app.MapHub<CarBashHub>(HubPaths.CarBashHub);
 
 // Validate configuration during startup
 app.Services.ValidateConfiguration();
 
 app.Run();
+
+static async Task SeedChannelTemplatesAsync(IServiceProvider services, ILogger logger)
+{
+    try
+    {
+        using var scope = services.CreateScope();
+        var templateService = scope.ServiceProvider.GetRequiredService<ChannelTemplateService>();
+        await templateService.SeedAsync();
+        logger.LogInformation("Channel templates seeded successfully.");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Failed to seed channel templates.");
+    }
+}
+
+static void ApplyDatabaseMigrations(IServiceProvider services, ILogger logger)
+{
+    const int maxAttempts = 10;
+    var delay = TimeSpan.FromSeconds(5);
+
+    for (var attempt = 1; attempt <= maxAttempts; attempt++)
+    {
+        try
+        {
+            using var scope = services.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<LteCarContext>();
+            dbContext.Database.Migrate();
+            logger.LogInformation("Database migrations applied successfully.");
+            return;
+        }
+        catch (Exception ex) when (attempt < maxAttempts)
+        {
+            logger.LogWarning(ex,
+                "Database migration attempt {Attempt} of {MaxAttempts} failed. Retrying in {DelaySeconds} seconds.",
+                attempt,
+                maxAttempts,
+                delay.TotalSeconds);
+            Thread.Sleep(delay);
+        }
+    }
+
+    using var finalScope = services.CreateScope();
+    var finalDbContext = finalScope.ServiceProvider.GetRequiredService<LteCarContext>();
+    finalDbContext.Database.Migrate();
+}

@@ -1,8 +1,8 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
       <OutputType>Exe</OutputType>
-      <TargetFramework>net8.0</TargetFramework>
+      <TargetFramework>net10.0</TargetFramework>
       <ImplicitUsings>enable</ImplicitUsings>
       <Nullable>enable</Nullable>
       <EnvironmentVariables>
@@ -12,15 +12,15 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.DataProtection" Version="9.0.9" />
+    <PackageReference Include="Microsoft.AspNetCore.DataProtection" Version="9.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Common" Version="9.0.3" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Protocols.Json" Version="9.0.3" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Protocols.MessagePack" Version="9.0.3" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.10">
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.0">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.10" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.0" />
     <PackageReference Include="Sqids" Version="3.1.0" />
   </ItemGroup>
 
@@ -32,9 +32,49 @@
     <None Update="appSettings.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+    <EmbeddedResource Include="Generated/server-build-info.txt" LogicalName="LteCar.Server.Generated.server-build-info.txt" />
   </ItemGroup>
   
   <ItemGroup>
     <Folder Include="Migrations\" />
   </ItemGroup>
+
+  <Target Name="GenerateServerBuildInfo" BeforeTargets="BeforeBuild">
+    <MakeDir Directories="$(MSBuildProjectDirectory)/Generated" />
+
+    <!-- Allow overriding via MSBuild properties passed from Docker build args -->
+    <Exec Condition="'$(BuildInfoBranch)' == ''"
+          Command="git -C &quot;$(MSBuildProjectDirectory)/..&quot; branch --show-current"
+          ConsoleToMSBuild="true"
+          IgnoreExitCode="true">
+      <Output TaskParameter="ConsoleOutput" ItemName="_BuildBranchOutput" />
+    </Exec>
+
+    <Exec Condition="'$(BuildInfoCommit)' == ''"
+          Command="git -C &quot;$(MSBuildProjectDirectory)/..&quot; rev-parse HEAD"
+          ConsoleToMSBuild="true"
+          IgnoreExitCode="true">
+      <Output TaskParameter="ConsoleOutput" ItemName="_BuildCommitOutput" />
+    </Exec>
+
+    <PropertyGroup>
+      <ResolvedBuildBranch Condition="'$(BuildInfoBranch)' != ''">$(BuildInfoBranch)</ResolvedBuildBranch>
+      <ResolvedBuildBranch Condition="'$(ResolvedBuildBranch)' == ''">@(_BuildBranchOutput->'%(Identity)')</ResolvedBuildBranch>
+      <ResolvedBuildCommit Condition="'$(BuildInfoCommit)' != ''">$(BuildInfoCommit)</ResolvedBuildCommit>
+      <ResolvedBuildCommit Condition="'$(ResolvedBuildCommit)' == ''">@(_BuildCommitOutput->'%(Identity)')</ResolvedBuildCommit>
+      <ResolvedBuildBranch Condition="'$(ResolvedBuildBranch)' == ''">master</ResolvedBuildBranch>
+      <ResolvedBuildCommit Condition="'$(ResolvedBuildCommit)' == ''">unknown</ResolvedBuildCommit>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <_BuildInfoLines Include="Branch=$(ResolvedBuildBranch)" />
+      <_BuildInfoLines Include="Commit=$(ResolvedBuildCommit)" />
+    </ItemGroup>
+
+    <WriteLinesToFile
+      File="$(MSBuildProjectDirectory)/Generated/server-build-info.txt"
+      Lines="@(_BuildInfoLines)"
+      Overwrite="true"
+      Encoding="UTF-8" />
+  </Target>
 </Project>

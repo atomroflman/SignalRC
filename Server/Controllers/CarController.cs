@@ -9,14 +9,26 @@ namespace LteCar.Server.Controllers
     [Route("api/[controller]")]
     public class CarController : ControllerBase
     {
-        public CarController(LteCarContext context) : base(context)
+        private readonly CarConnectionStore _connectionStore;
+
+        public CarController(LteCarContext context, CarConnectionStore connectionStore) : base(context)
         {
+            _connectionStore = connectionStore;
         }
 
         [HttpGet]
         public async Task<IActionResult> GetCars()
         {
-            var cars = await _context.Cars.ToListAsync();
+            var cars = await _context.Cars
+                .OrderBy(c => c.Name)
+                .Select(c => new
+                {
+                    c.Id,
+                    c.Name,
+                    c.LastSeen,
+                    IsConnected = _connectionStore.ContainsKey(c.Id.ToString())
+                })
+                .ToListAsync();
             return Ok(cars);
         }
 
@@ -43,7 +55,37 @@ namespace LteCar.Server.Controllers
                 displayName = cf.DisplayName,
                 channelName = cf.ChannelName,
                 isEnabled = cf.IsEnabled,
-                requiresAxis = cf.RequiresAxis
+                requiresAxis = cf.RequiresAxis,
+                maxResendInterval = cf.MaxResendInterval
+            }));
+        }
+
+        [HttpGet("{id}/telemetry")]
+        public async Task<IActionResult> GetCarTelemetryChannels(int id)
+        {
+            var user = await GetCurrentUserAsync();
+            if (user == null) return Unauthorized();
+
+            var setup = await _context.UserSetups
+                .FirstOrDefaultAsync(s => s.UserId == user.Id && s.CarId == id);
+
+            var channels = await _context.CarTelemetry.Where(c => c.CarId == id).ToListAsync();
+
+            var subscribedIds = setup != null
+                ? await _context.UserSetupTelemetries
+                    .Where(t => t.UserSetupId == setup.Id)
+                    .Select(t => t.CarTelemetryId)
+                    .ToListAsync()
+                : new List<int>();
+
+            return Ok(channels.Select(c => new
+            {
+                id = c.Id,
+                channelName = c.ChannelName,
+                dataType = c.DataType.ToString().ToLowerInvariant(),
+                unit = c.Unit,
+                decimals = c.Decimals,
+                subscribed = subscribedIds.Contains(c.Id),
             }));
         }
 

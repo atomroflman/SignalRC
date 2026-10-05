@@ -10,7 +10,6 @@ LteCar/
 │   ├── Hardware/           # Hardware abstraction layer and drivers
 │   ├── Telemetry/          # Telemetry channel implementations (GPS, IMU, etc.)
 │   ├── Video/              # Video streaming and camera handling
-│   ├── Setup/              # Interactive setup tool for configuring the car
 │   ├── appSettings.json    # Application settings and configuration
 │   └── channelMap.json     # Hardware and channel mapping configuration
 ├── VehicleTemplates/       # Predefined vehicle templates

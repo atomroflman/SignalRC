@@ -34,31 +34,13 @@ VehicleTemplates/
 
 ## 🔧 Template erstellen
 
-### Über das Setup-Tool:
-```bash
-cd /path/to/LteCar/Onboard
-./setup-vehicle.sh
-# Wähle "💾 Aktuelle Konfiguration als Vorlage speichern"
-```
-
-### Manuell:
 1. Erstelle einen neuen Ordner in `VehicleTemplates/`
 2. Erstelle `config.json` mit der Fahrzeug-Konfiguration
 3. Füge optional Skripte, Modelle und Dokumentation hinzu
 
 ## 📋 Template verwenden
 
-### Über das Setup-Tool:
-```bash
-cd /path/to/LteCar/Onboard
-./setup-vehicle.sh
-# Wähle "📋 Vorlage laden und anwenden"
-```
-
-### Programmgesteuert:
-```csharp
-var channelMap = VehicleTemplateManager.LoadTemplate("PropagandaTruck");
-```
+Es gibt kein Kommandozeilen-Tool mehr, das Templates lädt/anwendet. Übernimm die gewünschte Konfiguration aus `config.json` manuell, bzw. konfiguriere und teste das Fahrzeug über die Web-UI.
 
 ## 📝 config.json Format
 
@@ -103,17 +85,7 @@ Die `config.json` Datei enthält die vollständige Fahrzeug-Konfiguration:
 
 ## 🔄 Template-Verwaltung
 
-### Template auflisten:
-```bash
-# Zeigt alle verfügbaren Templates mit Details
-VehicleTemplateManager.ListTemplates()
-```
-
-### Template löschen:
-```bash
-# Löscht Template und alle zugehörigen Dateien
-VehicleTemplateManager.DeleteTemplate("TemplateName")
-```
+Templates auflisten oder löschen erfolgt manuell im Dateisystem (`VehicleTemplates/<TemplateName>/` anzeigen bzw. löschen) — ein Verwaltungswerkzeug dafür gibt es nicht mehr.
 
 ### Template kopieren:
 ```bash

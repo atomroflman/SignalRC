@@ -5,7 +5,7 @@ namespace LteCar.Onboard.Control.ControlTypes;
 
 public abstract class ServoControlBase : ControlTypeBase
 {
-    IPwmModule _pinInstance;
+    IPwmModule _pinInstance = null!;
 
     public ILogger<ServoControlBase> Logger { get; }
 

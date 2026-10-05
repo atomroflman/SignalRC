@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 public class JanusAttachPluginResponse : JanusResponseBase
 {
     [JsonPropertyName("data")]
-    public JanusAttachPluginData Data { get; set; }
+    public JanusAttachPluginData Data { get; set; } = null!;
 }
 
 public class JanusAttachPluginData

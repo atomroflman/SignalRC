@@ -7,13 +7,14 @@ public class ApplicationConfiguration
     public const string SectionName = "";
 
     [Required]
-    public bool RunJanusServer { get; set; } = true;
-
-    [Required]
     public ConnectionStrings ConnectionStrings { get; set; } = new();
 
     [Required]
     public JanusConfiguration JanusConfiguration { get; set; } = new();
+
+    public FileTransferConfiguration FileTransfer { get; set; } = new();
+
+    public WebRtcConfiguration WebRtc { get; set; } = new();
 }
 
 public class ConnectionStrings
@@ -41,4 +42,15 @@ public class JanusConfiguration
         if (PortRangeStart > PortRangeEnd)
             throw new InvalidOperationException("UdpPortRangeStart must be less than UdpPortRangeEnd");
     }
+}
+
+public class WebRtcConfiguration
+{
+    public const string SectionName = "WebRtc";
+
+    public List<string> Urls { get; set; } = new();
+
+    public string Username { get; set; } = string.Empty;
+
+    public string Credential { get; set; } = string.Empty;
 }

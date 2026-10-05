@@ -65,20 +65,32 @@
     },
     "videoStreams": {
       "mainCamera": {
+        "streamId": "mainCamera",
         "name": "Main Camera",
         "description": "Primary vehicle camera for navigation and monitoring",
-        "type": "camera",
+        "type": "rpiCamera",
         "location": "front",
         "enabled": true,
-        "priority": 1
+        "priority": 1,
+        "rpiCamId": 0,
+        "width": 1024,
+        "height": 768,
+        "framerate": 22,
+        "bitrate": 1000000
       },
       "rearCamera": {
+        "streamId": "rearCamera",
         "name": "Rear Camera",
         "description": "Rear view camera for backing assistance",
-        "type": "camera",
+        "type": "v4l2",
         "location": "rear",
         "enabled": false,
-        "priority": 2
+        "priority": 2,
+        "cameraDevice": "/dev/video1",
+        "width": 1024,
+        "height": 768,
+        "framerate": 22,
+        "bitrate": 1000000
       }
     },
     "telemetryChannels": {

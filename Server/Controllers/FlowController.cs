@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using LteCar.Server.Data;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -9,15 +8,18 @@ namespace LteCar.Server.Controllers;
 [Route("api/[controller]")]
 public partial class FlowController : ControllerBase
 {
-    public FlowController(LteCarContext context) : base(context)
+    private readonly ILogger<FlowController> _logger;
+
+    public FlowController(LteCarContext context, ILogger<FlowController> logger) : base(context)
     {
+        _logger = logger;
     }
 
     [HttpGet("{userSetupId}")]
     public async Task<IActionResult> GetFlow(int userSetupId)
     {
         var flowNodes = await _context.Set<UserSetupFlowNodeBase>()
-            .Include(n => (n as UserSetupFunctionNode).Parameters)
+            .Include(n => (n as UserSetupFunctionNode)!.Parameters)
             .Where(n => n.UserSetupId == userSetupId)
             .ToListAsync();
         if (flowNodes == null || !flowNodes.Any())
@@ -29,7 +31,7 @@ public partial class FlowController : ControllerBase
             });
         }
 
-        var loadedNodes = flowNodes.Select(n => n.Id).ToArray();
+        var loadedNodes = flowNodes.Select(n => n.Id).ToList();
 
         return Ok(new
         {
@@ -51,6 +53,7 @@ public partial class FlowController : ControllerBase
     [HttpPost("{nodetype}/{id?}")]
     public async Task<IActionResult> AddNode(string nodetype, int? id, [FromBody] AddNodeRequest req)
     {
+        _logger.LogDebug("AddNode: nodetype={Nodetype}, id={Id}, userSetupId={UserSetupId}", nodetype, id, req.UserSetupId);
         var user = await GetCurrentUserAsync();
         if (user == null)
             return Unauthorized("User not found");
@@ -61,7 +64,10 @@ public partial class FlowController : ControllerBase
                 var channel = await _context.Set<UserChannel>()
                     .FirstOrDefaultAsync(c => c.UserChannelDevice.UserId == user.Id && c.Id == id);
                 if (channel == null)
+                {
+                    _logger.LogWarning("AddNode: UserChannel not found for userId={UserId}, channelId={ChannelId}", user.Id, id);
                     return NotFound("UserChannel not found");
+                }
 
                 node = new UserSetupUserChannelNode
                 {
@@ -75,11 +81,17 @@ public partial class FlowController : ControllerBase
                 var setup = await _context.Set<UserCarSetup>()
                     .FirstOrDefaultAsync(s => s.Id == req.UserSetupId && s.UserId == user.Id);
                 if (setup == null)
+                {
+                    _logger.LogWarning("AddNode: UserCarSetup not found for userId={UserId}, userSetupId={UserSetupId}", user.Id, req.UserSetupId);
                     return NotFound("UserSetup not found");
+                }
                 var carChannel = await _context.Set<CarChannel>()
                     .FirstOrDefaultAsync(c => c.Id == id && c.CarId == setup.CarId);
                 if (carChannel == null)
+                {
+                    _logger.LogWarning("AddNode: CarChannel not found for channelId={ChannelId}, carId={CarId}", id, setup.CarId);
                     return NotFound("CarChannel not found");
+                }
                 node = new UserSetupCarChannelNode
                 {
                     UserSetupId = req.UserSetupId,
@@ -148,6 +160,7 @@ public partial class FlowController : ControllerBase
                     return result;
                 result.Label = output.DisplayName ?? output.ChannelName;
                 result.RepresentingId = carChannel.CarChannelId;
+                result.MaxResendInterval = output.MaxResendInterval;
                 result.Type = "output";
                 break;
             case UserSetupFunctionNode fn:

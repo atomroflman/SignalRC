@@ -1,10 +1,13 @@
 import React, { JSX, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import { HubConnection, HubConnectionBuilder, LogLevel } from "@microsoft/signalr";
+import LanguageSwitcher from "@/components/language-switcher";
+import { useI18n } from "@/i18n/provider";
 
 type OutputLine = { text: string; isError?: boolean; time: string };
 
 export default function CarBashPage(): JSX.Element {
+    const { messages } = useI18n();
     const router = useRouter();
     const carId = Array.isArray(router.query.carId) ? router.query.carId[0] : router.query.carId;
     const [output, setOutput] = useState<OutputLine[]>([]);
@@ -18,13 +21,13 @@ export default function CarBashPage(): JSX.Element {
         if (!carId) return;
 
         var uiConnection = new HubConnectionBuilder()
-            .withUrl("/hubs/carui")
+            .withUrl("/hubs/connection")
             .withAutomaticReconnect()
             .configureLogging(LogLevel.Warning)
             .build();
 
         var controlConnection = new HubConnectionBuilder()
-            .withUrl("/hubs/carcontrol")
+            .withUrl("/hubs/connection")
             .withAutomaticReconnect()
             .configureLogging(LogLevel.Warning)
             .build();
@@ -77,11 +80,13 @@ export default function CarBashPage(): JSX.Element {
     async function sendChunk(chunk: string) {
         if (!carControlConn.current) return;
         try {
-            // Use ExecuteBashCommand from CarControlHub (carId, sessionId, command)
-            // sessionId is currently unknown on client; send empty string and let server handle authentication if needed.
+            // Send bash command via the merged hub. sessionId is unknown on the client;
+            // the server previously threw NotImplementedException for this so the path was
+            // already broken — left here for context. The Onboard's BashToolService +
+            // CarBashHub are the actual bash path; wiring the UI to those is a separate task.
             await carControlConn.current.invoke("ExecuteBashCommand", Number(carId), "", chunk);
         } catch (ex) {
-            appendOutput(`Send failed: ${String(ex)}`, true);
+            appendOutput(messages.bashPage.sendFailed(String(ex)), true);
         }
     }
 
@@ -113,10 +118,16 @@ export default function CarBashPage(): JSX.Element {
     }
 
     return (
-        <div style={{ padding: 12, height: "100%", display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ padding: 12, height: "100vh", display: "flex", flexDirection: "column", gap: 8, background: "linear-gradient(180deg, #12141a 0%, #0e1015 100%)", color: "#e5e7eb" }}>
+            <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.34em", textTransform: "uppercase", color: "#7dd3fc", padding: "2px 0 6px 0" }}>
+                {messages.bashPage.title}
+            </div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>Car Bash: {carId}</div>
-                <div>{connected ? "Connected" : "Disconnected"}</div>
+                <div>{messages.bashPage.pageTitle(String(carId))}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <LanguageSwitcher />
+                    <div>{connected ? messages.common.connected : messages.common.disconnected}</div>
+                </div>
             </div>
 
             <div
@@ -144,7 +155,7 @@ export default function CarBashPage(): JSX.Element {
                 value={inputValue}
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
-                placeholder="Type command and press Enter (or paste text with newline to send)..."
+                placeholder={messages.bashPage.placeholder}
                 style={{
                     resize: "none",
                     height: 80,

@@ -4,6 +4,7 @@ import { useGamepadStore } from "./controller-store";
 import GamepadAxisCalibration from "./gamepad-axis-calibration";
 import GamepadAxisView from "./gamepad-axis-view";
 import GamepadButtonView from "./gamepad-button-view";
+import { useI18n } from "@/i18n/provider";
 
 // Unified event model for ReactFlow: { name: string, value: number, gamepadId: string }
 export type GamepadUnifiedEvent = {
@@ -13,8 +14,9 @@ export type GamepadUnifiedEvent = {
 };
 
 export default function GamepadViewer({ onUpdate, onRegisterInputChannelValue, hideFlowButtons }: { onUpdate?: (event: GamepadUnifiedEvent) => void, onRegisterInputChannelValue?: (input: { name: string, value: number, gamepadId: string }) => void, hideFlowButtons?: boolean }) {
+  const { messages } = useI18n();
   const [fps, setFps] = React.useState(15);
-  const [collapsed, setCollapsed] = React.useState(false);
+  const [collapsed, setCollapsed] = React.useState(true);
   const [axesCollapsed, setAxesCollapsed] = useState<{ [gpId: string]: boolean }>({});
   const [buttonsCollapsed, setButtonsCollapsed] = useState<{ [gpId: string]: boolean }>({});
   const [calibCollapsed, setCalibCollapsed] = useState<{ [gpId: string]: boolean }>({});
@@ -50,15 +52,15 @@ export default function GamepadViewer({ onUpdate, onRegisterInputChannelValue, h
       <button
         className="mb-2 px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded text-xs border border-zinc-700 transition-colors duration-150 w-full flex items-center justify-between"
         onClick={() => setCollapsed(c => !c)}
-        aria-label={collapsed ? 'Expand Gamepad Viewer' : 'Collapse Gamepad Viewer'}
+        aria-label={collapsed ? messages.common.expandSection(messages.gamepadViewer.title) : messages.common.collapseSection(messages.gamepadViewer.title)}
         style={collapsed ? { marginBottom: 0 } : {}}
       >
-        <span>Gamepad Viewer</span>
+        <span>{messages.gamepadViewer.title}</span>
         <span className="ml-2">{collapsed ? '▼' : '▲'}</span>
       </button>
       {!collapsed && (
         <>
-          <div className="mt-2 mb-1 font-semibold text-zinc-200 text-xs">Poll Interval (FPS):</div>
+          <div className="mt-2 mb-1 font-semibold text-zinc-200 text-xs">{messages.gamepadViewer.pollInterval}</div>
           <div className="flex items-center mb-1">
             <input
               type="range"
@@ -73,8 +75,8 @@ export default function GamepadViewer({ onUpdate, onRegisterInputChannelValue, h
             <span className="ml-1 text-zinc-400 text-xs">{fps} Hz</span>
           </div>
           <div className="mt-3">
-            <div className="font-bold mb-1 text-zinc-200 text-xs">Gamepads:</div>
-            {Object.values(gamepadStore.knownGamepads).length === 0 && <div className="text-zinc-400 text-xs">No gamepad connected.</div>}
+            <div className="font-bold mb-1 text-zinc-200 text-xs">{messages.gamepadViewer.gamepads}</div>
+            {Object.values(gamepadStore.knownGamepads).length === 0 && <div className="text-zinc-400 text-xs">{messages.gamepadViewer.noGamepad}</div>}
             {Object.values(gamepadStore.knownGamepads).map(gp => {
               // Determine gamepad status based on device ID
               const isConnected = gp.connected;
@@ -82,13 +84,13 @@ export default function GamepadViewer({ onUpdate, onRegisterInputChannelValue, h
               
               // Status: green = local connected, yellow = remote, red = not connected
               let statusColor = "bg-red-700 border-zinc-400";
-              let statusTitle = "Not connected";
+              let statusTitle = messages.gamepadViewer.notConnected;
               if (isConnected) {
                 statusColor = "bg-green-700 border-zinc-400";
-                statusTitle = "Local controller";
+                statusTitle = messages.gamepadViewer.localController;
               } else if (isRemote) {
                 statusColor = "bg-yellow-500 border-zinc-400";
-                statusTitle = "Remote controller (via hub)";
+                statusTitle = messages.gamepadViewer.remoteController;
               }
               
               return (
@@ -99,7 +101,7 @@ export default function GamepadViewer({ onUpdate, onRegisterInputChannelValue, h
                 />{gp.id}: {gp.name.length > 40 ? gp.name.slice(0, 40) + "…" : gp.name}</div>
                 {/* Calibration Section */}
                 <div className="mt-2 mb-1 font-semibold text-zinc-200 text-xs flex items-center justify-between cursor-pointer" onClick={() => setCalibCollapsed(c => ({ ...c, [gp.id]: !c[gp.id] }))}>
-                  <span>Axis Accuracy Calibration</span>
+                  <span>{messages.gamepadViewer.axisAccuracyCalibration}</span>
                   <span>{calibCollapsed[gp.id] ? '▼' : '▲'}</span>
                 </div>
                 {!calibCollapsed[gp.id] && Array.isArray(gp.axes) && gp.axes.length > 0 && (
@@ -116,7 +118,7 @@ export default function GamepadViewer({ onUpdate, onRegisterInputChannelValue, h
                 )}
                 {/* Axes Section */}
                 <div className="mt-2 mb-1 font-semibold text-zinc-200 text-xs flex items-center justify-between cursor-pointer" onClick={() => setAxesCollapsed(c => ({ ...c, [gp.id]: !c[gp.id] }))}>
-                  <span>Axes</span>
+                  <span>{messages.gamepadViewer.axes}</span>
                   <span>{axesCollapsed[gp.id] ? '▼' : '▲'}</span>
                 </div>
                 {!axesCollapsed[gp.id] && Array.isArray(gp.axes) && (
@@ -142,7 +144,7 @@ export default function GamepadViewer({ onUpdate, onRegisterInputChannelValue, h
                 )}
                 {/* Buttons Section */}
                 <div className="mt-2 mb-1 font-semibold text-zinc-200 text-xs flex items-center justify-between cursor-pointer" onClick={() => setButtonsCollapsed(c => ({ ...c, [gp.id]: !c[gp.id] }))}>
-                  <span>Buttons</span>
+                  <span>{messages.gamepadViewer.buttons}</span>
                   <span>{buttonsCollapsed[gp.id] ? '▼' : '▲'}</span>
                 </div>
                 {!buttonsCollapsed[gp.id] && Array.isArray(gp.buttons) && (

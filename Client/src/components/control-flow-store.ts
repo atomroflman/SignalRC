@@ -10,11 +10,12 @@ export type ControlFlowNode = {
   type: string;
   data: any;
   position: { x: number; y: number };
-  nodeTypeName: string; // Name of Db Node Type für evaluation
+  nodeTypeName: string;
   latestValue?: number | number[];
-  params: Record<string, any>; // explizit als Objekt
-  inputPorts?: number; // Anzahl Eingänge
-  outputPorts?: number; // Anzahl Ausgänge
+  params: Record<string, any>;
+  inputPorts?: number;
+  outputPorts?: number;
+  maxResendInterval?: number;
 };
 
 export type FunctionMetadata = {
@@ -92,6 +93,18 @@ export type ControlFlowState = {
   getSshKeyDownloadUrl: (carId: number, vehicleIp: string) => Promise<string | null>;
 };
 
+const _resendTimers = new Map<number, ReturnType<typeof setInterval>>();
+const _lastSentValues = new Map<number, number>();
+const _channelResendIntervals = new Map<number, number>();
+
+function clearAllResendTimers() {
+  for (const timer of _resendTimers.values()) {
+    clearInterval(timer);
+  }
+  _resendTimers.clear();
+  _lastSentValues.clear();
+}
+
 export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
   nodeLatestValues: {},
   nodes: [],
@@ -120,6 +133,14 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
       const flowData = await flowRes.json() as {nodes: ControlFlowNode[], edges: ControlFlowEdge[]};
       console.log("Loaded flow data", flowData);
       
+      clearAllResendTimers();
+      _channelResendIntervals.clear();
+      for (const node of (flowData.nodes || [])) {
+        if (node.nodeTypeName === "UserSetupCarChannelNode" && node.representingId != null && node.maxResendInterval) {
+          _channelResendIntervals.set(node.representingId, node.maxResendInterval);
+        }
+      }
+
       set({
         nodes: flowData.nodes || [],
         edges: flowData.edges || [],
@@ -497,9 +518,22 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
     const { carId, carSession, connection, updatesEnabled, isInConfigMode } = get();
     console.log("send out", carId, carSession, connection?.state, "updatesEnabled:", updatesEnabled, "isInConfigMode:", isInConfigMode);
     
-    // Only send updates if updates are enabled (regardless of config mode)
     if (connection && carId && carSession && updatesEnabled) {
       await connection.invoke("UpdateChannel", carId, carSession, channelId, value);
+      _lastSentValues.set(channelId, value);
+
+      const resendMs = _channelResendIntervals.get(channelId);
+      if (resendMs && !_resendTimers.has(channelId)) {
+        const interval = Math.floor(resendMs / 2);
+        _resendTimers.set(channelId, setInterval(() => {
+          const { connection: conn, carId: cId, carSession: sess, updatesEnabled: enabled } = get();
+          const lastVal = _lastSentValues.get(channelId);
+          if (conn && cId && sess && enabled && lastVal !== undefined) {
+            conn.invoke("UpdateChannel", cId, sess, channelId, lastVal)
+              .catch((err: any) => console.error("Resend failed:", err));
+          }
+        }, interval));
+      }
     } else if (isInConfigMode && !updatesEnabled) {
       console.log("Updates disabled: In configuration mode (default off)");
     } else if (!updatesEnabled) {
@@ -511,13 +545,19 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
     var { connection } = get();
     if (!get().connection) {
         connection = new signalR.HubConnectionBuilder()
-        .withUrl(`/hubs/control`)
+        .withUrl(`/hubs/connection`)
         .withAutomaticReconnect()
         .build();
         await connection.start();
+        // ponytail: only wipe carSession when the connection is brand-new.
+        // On a remount (page nav, / → /car/[id] → /) the zustand store
+        // survives but this useEffect re-runs and would clobber the
+        // already-authenticated session, flipping UpdateControl to
+        // "Disconnected" while the Onboard still has _sessionId.
+        set({ connection, carId, carSession: undefined });
+    } else {
+        set({ carId });
     }
-    // Just establish connection, authentication happens via authenticateWithSshKey
-    set({ connection, carId, carSession: undefined });
   },
   async downloadSshKey(carId: number, vehicleIp: string, saveToStorage: boolean = true): Promise<{ success: boolean; key?: string; error?: string }> {
     try {
@@ -528,8 +568,11 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
       }
       const { hash } = await hashResponse.json();
 
-      // Download SSH key directly from vehicle (local network only)
-      const response = await fetch(`http://${vehicleIp}:8080/ssh-key?hash=${hash}`);
+      // Download SSH key directly from vehicle (local network only).
+      // HTTPS so fetch() works from an HTTPS UI without mixed-content blocking;
+      // the vehicle serves a self-signed cert and only Firefox can persist the
+      // user-accepted exception, so the caller gates this path to Firefox.
+      const response = await fetch(`https://${vehicleIp}:8443/ssh-key?hash=${hash}`);
       if (response.status === 400) {
         return { success: false, error: "Invalid request to vehicle" };
       }
@@ -751,13 +794,17 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
       const hashResponse = await fetch(`/api/car/${carId}/identity-hash`);
       if (!hashResponse.ok) return null;
       const { hash } = await hashResponse.json();
-      return `http://${vehicleIp}:8080/ssh-key?hash=${hash}`;
+      // HTTPS to match scheme of the UI page; vehicle uses a self-signed cert
+      // (Firefox only). Used by the "Open link" button (browser-native nav,
+      // lets the user accept the cert once via the address-bar warning).
+      return `https://${vehicleIp}:8443/ssh-key?hash=${hash}`;
     } catch (e) {
       console.error("Failed to build SSH key download URL:", e);
       return null;
     }
   },
   async stopConnection() {
+    clearAllResendTimers();
     const { connection, carId, carSession } = get();
     try {
       if (connection && carId && carSession) {
@@ -911,7 +958,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
   setConfigMode: (isConfig: boolean) => {
     const state = get();
     if (isConfig) {
-      // Entering config mode: disable updates by default
+      clearAllResendTimers();
       set({ 
         isInConfigMode: true,
         updatesEnabled: false
@@ -928,6 +975,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
   },
 
   setUpdatesEnabled: (enabled: boolean) => {
+    if (!enabled) clearAllResendTimers();
     set({ updatesEnabled: enabled });
     console.log("Updates enabled:", enabled);
   },

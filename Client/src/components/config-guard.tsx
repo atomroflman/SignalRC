@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useControlFlowStore } from "./control-flow-store";
 import { useRouter } from "next/router";
+import { useI18n } from "@/i18n/provider";
 
 interface ConfigGuardProps {
   children: React.ReactNode;
@@ -10,6 +11,7 @@ interface ConfigGuardProps {
 }
 
 export default function ConfigGuard({ children, carId }: ConfigGuardProps) {
+  const { messages } = useI18n();
   const { hasAuthenticatedWithCar } = useControlFlowStore();
   const router = useRouter();
   const [hasServerAccess, setHasServerAccess] = useState<boolean | null>(null);
@@ -44,7 +46,7 @@ export default function ConfigGuard({ children, carId }: ConfigGuardProps) {
       <div className="flex flex-col items-center justify-center min-h-screen bg-zinc-950 text-white p-8">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-gray-300">Checking access permissions...</p>
+          <p className="text-gray-300">{messages.configGuard.checkingAccess}</p>
         </div>
       </div>
     );
@@ -58,18 +60,18 @@ export default function ConfigGuard({ children, carId }: ConfigGuardProps) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-zinc-950 text-white p-8">
         <div className="text-center max-w-md">
-          <h1 className="text-2xl font-bold mb-4 text-red-400">Access Denied</h1>
+          <h1 className="text-2xl font-bold mb-4 text-red-400">{messages.configGuard.accessDenied}</h1>
           <p className="text-gray-300 mb-6">
-            You need to authenticate with this vehicle before accessing the configuration.
+            {messages.configGuard.authenticationRequired}
           </p>
           <p className="text-sm text-gray-400 mb-8">
-            Please go back to the main page, select the vehicle, and authenticate using your SSH key.
+            {messages.configGuard.returnToMainHint}
           </p>
           <button
             onClick={() => router.push("/")}
             className="px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
           >
-            Go to Main Page
+            {messages.configGuard.goToMainPage}
           </button>
         </div>
       </div>

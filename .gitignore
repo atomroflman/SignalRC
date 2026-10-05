@@ -8,6 +8,9 @@
 **/*.crt
 
 # Onboard excludes
+Onboard/Extern/mediamtx
+__pycache__/
+*.py[cod]
 
 # Server excludes
 LteCar.Server/CarConfigStore/**/*
@@ -16,3 +19,19 @@ LteCar.Server/bash/dotnet-install.sh
 LteCar.Server/janus/janus-gateway/**/*
 /.vs/**
 LteCar.Server/configuration.db*
+Builds/*/ssh_key
+Builds/*/ssh_key.pub
+Builds/**/*.sqlite
+Server/Generated/**/*
+
+# opencode config (project-local agent/skill config, not part of the app)
+.opencode/
+
+# Onboard runtime config (truck-local, edited in place)
+Onboard/channelMap.json
+Onboard/*.bak
+.configdir
+channelMap.server.json
+
+# Server runtime env (deployment-specific, contains public hostname)
+.env

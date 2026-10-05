@@ -14,9 +14,12 @@ namespace LteCar.Server.Data
         public DbSet<CarChannel> CarChannels { get; set; }
         public DbSet<CarTelemetry> CarTelemetry { get; set; }
         public DbSet<CarVideoStream> CarVideoStreams { get; set; }
+        public DbSet<CarPinManager> CarPinManagers { get; set; }
+        public DbSet<ChannelTemplate> ChannelTemplates { get; set; }
         public DbSet<UserCarSetup> UserSetups { get; set; }
         public DbSet<UserSetupTelemetry> UserSetupTelemetries { get; set; }
         public DbSet<SetupFilterType> SetupFilterTypes { get; set; }
+        public DbSet<FileTransfer> FileTransfers { get; set; }
 
         public async Task<long> GetNextUserSessionId() 
         {
@@ -28,7 +31,7 @@ namespace LteCar.Server.Data
             }
 
             await using var command = connection.CreateCommand();
-            command.CommandText = "SELECT NEXT VALUE FOR [dbo].[UserSessionSeq]";
+            command.CommandText = "SELECT nextval('\"UserSessionSeq\"')";
 
             var result = await command.ExecuteScalarAsync();
 

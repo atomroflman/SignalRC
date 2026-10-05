@@ -1,9 +1,9 @@
 using LteCar.Shared;
 
 public class ServerCarConfigurationService {
-    public event Action OnConfigurationChanged;
+    public event Action OnConfigurationChanged = delegate { };
 
-    private CarConfiguration _configuration;
+    private CarConfiguration _configuration = null!;
     public CarConfiguration Configuration {
         get { return _configuration;}
         set {
@@ -28,8 +28,8 @@ public class ServerCarConfigurationService {
             return true;
         if (newConfig == null && configuration == null)
             return false;
-        var t = newConfig.GetType();
-        if (t != configuration.GetType())
+        var t = newConfig!.GetType();
+        if (t != configuration!.GetType())
             throw new ArgumentException("Objects must be of the same type");
         foreach (var prop in t.GetProperties()) {
             var newValue = prop.GetValue(newConfig, null);
@@ -40,7 +40,7 @@ public class ServerCarConfigurationService {
                 return true;
             if (prop.PropertyType.IsAssignableTo(typeof(IConfigurationModel)))
             {
-                if (CheckForChanges(newValue, currentValue))
+                if (CheckForChanges(newValue!, currentValue!))
                     return true;
             }
             if (newValue != currentValue)
@@ -53,9 +53,9 @@ public class ServerCarConfigurationService {
     public object MergeObjects(object current, object next) 
     {
         if (current == null && next == null)
-            return null;
+            return null!;
         if (current == null)
-            return next;
+            return next!;
         var t = current.GetType();
         if (t != next.GetType())
             throw new ArgumentException("Objects must be of the same type");
@@ -69,7 +69,7 @@ public class ServerCarConfigurationService {
                 continue;
             if (prop.PropertyType.IsAssignableTo(typeof(IConfigurationModel)))
             {
-                currentValue = MergeObjects(currentValue, nextValue);
+                currentValue = MergeObjects(currentValue!, nextValue!);
             }
             if (Object.ReferenceEquals(currentValue, nextValue))
                 continue;

@@ -14,5 +14,8 @@ public class UserMapping : IEntityTypeConfiguration<User>
         builder.Property(u => u.TransferCode).HasMaxLength(6);
         builder.Property(u => u.TransferCodeExpiresAt);
         builder.HasIndex(u => u.TransferCode).IsUnique();
+        builder.Property(u => u.RecoveryKeyHash).HasMaxLength(64);
+        builder.Property(u => u.RecoveryKeyCreatedAt);
+        builder.HasIndex(u => u.RecoveryKeyHash).IsUnique();
     }
 }

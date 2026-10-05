@@ -9,6 +9,7 @@ public class Car : EntityBase
     public ICollection<CarChannel> Functions { get; set; } = new List<CarChannel>();
     public ICollection<UserCarSetup> UserCarSetups { get; set; } = new List<UserCarSetup>();
     public ICollection<CarVideoStream> VideoStreams { get; set; } = new List<CarVideoStream>();
+    public ICollection<CarPinManager> PinManagers { get; set; } = new List<CarPinManager>();
 
     public override string ToString()
     {

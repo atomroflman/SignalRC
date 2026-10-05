@@ -8,8 +8,7 @@ namespace LteCar.Shared.Channels;
 [MessagePackObject]
 public class ChannelMap
 {
-    // Pin managers are client-only; excluded from MessagePack payload to save bandwidth.
-    [IgnoreMember]
+    [Key(0)]
     [JsonPropertyName("pinManagers")] 
     public Dictionary<string, PinManagerMapItem> PinManagers { get; set; } = new();
     [Key(1)]

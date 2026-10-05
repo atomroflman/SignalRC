@@ -36,6 +36,8 @@ public class ControlExecutionService
         foreach (var channel in _channelMap.ControlChannels)
         {
             var controlType = GetControlType(channel.Value.ControlType);
+            if (controlType == null)
+                continue;
             Logger.LogDebug($"Got type {controlType.Name} for channel {channel.Key}.");
             var control = ServiceProvider.GetService(controlType) as IControlType;
             if (control == null)
@@ -43,16 +45,17 @@ public class ControlExecutionService
             
             var pinManagerName = channel.Value.PinManager;
             if (string.IsNullOrWhiteSpace(pinManagerName))
-                pinManagerName = "default"; // Default pin manager if not specified
+                pinManagerName = "default";
             var pinManager = ServiceProvider.GetRequiredService<IModuleManagerFactory>().Create(pinManagerName);
             if (pinManager == null)
                 throw new Exception($"Pin manager '{pinManagerName}' not found in ChannelMap.");
-            control.PinManager = pinManager;
-            control.Name = channel.Key;
-            control.Options = channel.Value.Options;
-            control.TestDisabled = channel.Value.TestDisabled;
-            control.Address = channel.Value.Address;
-            if (channel.Value.MaxResendInterval is not null)
+            baseControl.PinManager = pinManager;
+            baseControl.Name = channel.Key;
+            baseControl.Options = channel.Value.Options;
+            baseControl.TestDisabled = channel.Value.TestDisabled;
+            baseControl.Address = channel.Value.Address;
+            IControlType control = baseControl;
+            if (channel.Value.MaxResendInterval is { } resendMs)
             {
                 control = new ResendRequiredContolDecorator(control, TimeSpan.FromMilliseconds((double)channel.Value.MaxResendInterval!.Value), TimeSpan.FromMilliseconds((double)channel.Value.MaxResendInterval!.Value) / 3);
             }
@@ -110,16 +113,14 @@ public class ControlExecutionService
         }
     }
 
-    private Type GetControlType(string valueControlType)
+    private Type? GetControlType(string valueControlType)
     {
         var t = typeof(ControlTypeBase).Assembly.GetTypes()
             .FirstOrDefault(type => (type.GetCustomAttributes(typeof(ControlTypeAttribute), false).FirstOrDefault() as ControlTypeAttribute)?.TypeName == valueControlType);
         if (t == null)
         {
-            Logger.LogError($"ControlType {valueControlType} not found!");
-            if (!RunInTestMode)
-                throw new Exception($"ControlType {valueControlType} not found!");
-            return null;
+            Logger.LogError($"ControlType {valueControlType} not found! Just logging inputs.");
+            return typeof(LoggingOnlyControl);
         }
         return t;
     }

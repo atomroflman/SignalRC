@@ -25,7 +25,7 @@ namespace LteCar.Onboard.Hardware
             if (address < 0)
             {
                 _logger.LogWarning($"Invalid address {address} for module type {typeof(T).Name}. Returning null.");
-                return null;
+                return null!;
             }
             var initType = typeof(RaspberryPiPwmPin);
             switch (typeof(T))
@@ -44,11 +44,11 @@ namespace LteCar.Onboard.Hardware
             var pinProp = typeof(RaspberryPiPinMap).GetProperty($"PIN_{address}", BindingFlags.Public | BindingFlags.Static);
 
             if (pinProp == null)
-                return null;
+                return null!;
 
             var pinValue = pinProp.GetValue(null);
             if (pinValue == null)
-                return null;
+                return null!;
 
             var pinFuncAttr = pinProp.GetCustomAttributes(typeof(PinFunctionAttribute), false)
                 .OfType<PinFunctionAttribute>()
@@ -59,11 +59,11 @@ namespace LteCar.Onboard.Hardware
                 _logger.LogWarning(
                     $"Pin {address} does not support the required function {requiredFunction}. " +
                     $"Available functions: {pinFuncAttr?.Functions ?? PinFunctionFlags.None}");
-                return null;
+                return null!;
             }
 
             var module = ActivatorUtilities.CreateInstance(_serviceProvider, initType, address) as T;
-            return module;
+            return module!;
         }
     }
 

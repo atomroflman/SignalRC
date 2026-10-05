@@ -7,16 +7,27 @@ import GearboxFlowNode from "./gearbox-flow-node";
 import IifFlowNode from "./iif-flow-node";
 import SmoothFlowNode from "./smooth-flow-node";
 import { ParamInput } from "./param-input";
+import { useI18n } from "@/i18n/provider";
 
 export type CustomFlowNodeProps = NodeProps & {
   data: any;
   handleParamChange: (key: string, value: any) => void;
 };
 
+// Specialized node renderers keyed by function name. Add new ones here
+// instead of growing the if-chain in CustomFlowNode below.
+const SPECIALIZED_NODES: Record<string, React.ComponentType<CustomFlowNodeProps>> = {
+  FloatValue: FloatValueFlowNode,
+  Gearbox: GearboxFlowNode,
+  Iif: IifFlowNode,
+  Smooth: SmoothFlowNode,
+};
+
 export default function CustomFlowNode(props: NodeProps) {
+  const { messages } = useI18n();
   if (!props || !props.data) {
     console.warn('CustomFlowNode: props oder props.data ist null/undefined', { props });
-    return <div className="bg-zinc-800 border border-zinc-700 rounded p-2">Loading...</div>;
+    return <div className="bg-zinc-800 border border-zinc-700 rounded p-2">{messages.flowNode.loading}</div>;
   }
 
   const id = props.data.nodeId;
@@ -45,7 +56,7 @@ export default function CustomFlowNode(props: NodeProps) {
     <button
           className="ml-2 px-1 py-0.5 bg-red-900 hover:bg-red-800 text-red-100 rounded text-[10px] border border-red-800 transition-colors duration-150"
           onClick={() => flowControl.deleteNode(Number(id))}
-          title="Node löschen"
+          title={messages.flowNode.deleteNode}
         >
           ✕
         </button>
@@ -54,19 +65,9 @@ export default function CustomFlowNode(props: NodeProps) {
 
   // Resolve known function names with their respective components
   if (data?.metadata?.functionName) {
-    const functionName = data.metadata.functionName;
-    
-    if (functionName === 'FloatValue') {
-      return <FloatValueFlowNode {...props} handleParamChange={handleParamChange} data={data} />;
-    }
-    if (functionName === 'Gearbox') {
-      return <GearboxFlowNode {...props} handleParamChange={handleParamChange} data={data} />;
-    }
-    if (functionName === 'Iif') {
-      return <IifFlowNode {...props} handleParamChange={handleParamChange} data={data} />;
-    }
-    if (functionName === 'Smooth') {
-      return <SmoothFlowNode {...props} handleParamChange={handleParamChange} data={data} />;
+    const Specialized = SPECIALIZED_NODES[data.metadata.functionName];
+    if (Specialized) {
+      return <Specialized {...props} handleParamChange={handleParamChange} data={data} />;
     }
   }
 
@@ -101,7 +102,7 @@ export default function CustomFlowNode(props: NodeProps) {
   if (data?.type !== "input" && data?.type !== "output" && data?.metadata?.functionName) {
     const definition = filterFunctionRegistry[data?.metadata?.functionName as keyof typeof filterFunctionRegistry];
     if (!definition) {
-      return (<>Function not found! {removeButton()}</>);
+      return (<>{messages.flowNode.functionNotFound} {removeButton()}</>);
     }
   }
   

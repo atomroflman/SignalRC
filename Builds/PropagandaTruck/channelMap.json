@@ -9,41 +9,41 @@
     }
   },
   "controlChannels": {
-    "throttle": {
+    "steering": {
       "pinManager": "Pca9685",
       "address": 15,
-      "controlType": "Throttle",
+      "controlType": "Steering",
       "testDisabled": true
     },
-    "cameraTilt": {
-      "pinManager": "Pca9685",
-      "address": 14,
-      "controlType": "Steering"
-    },
-    "steer": {      
-      "pinManager": "Pca9685",
-      "address": 13,
-      "controlType": "Steering"
-    },    
     "physicalGears": {
       "pinManager": "Pca9685",
-      "address": 12,
+      "address": 14,
       "controlType": "ServoOnOff"
     },
     "differentialLockFront": {
       "pinManager": "Pca9685",
-      "address": 11,
+      "address": 13,
       "controlType": "ServoOnOff"
+    },    
+    "throttle": {
+      "pinManager": "Pca9685",
+      "address": 12,
+      "controlType": "Steering"
     },
     "differentialLockRear": {
       "pinManager": "Pca9685",
-      "address": 10,
+      "address": 11,
       "controlType": "ServoOnOff"
     },
-    "brakeLight": {
-      "controlType": "PwmBlinker",
+    "frontCamera": {
       "pinManager": "Pca9685",
-      "address": 9,
+      "address": 6,
+      "controlType": "Steering"
+    },
+    "headLight": {
+      "controlType": "PwmLight",
+      "pinManager": "Pca9685",
+      "address": 7,
       "options": {
         "blinkCycleMs": 500
       }
@@ -51,20 +51,42 @@
     "headWarningLight": {
       "controlType": "RotaryLight",
       "pinManager": "Pca9685",
-      "address": 7
+      "address": 1
     },
     "reverseLight": {
-      "controlType": "PwmBlinker",
+      "controlType": "PwmLight",
       "pinManager": "Pca9685",
       "address": 2,
       "options": {
         "blinkCycleMs": 500
       }
     },
+    "frontSearchLight": {
+      "controlType": "PwmLight",
+      "pinManager": "Pca9685",
+      "address": 5,
+      "options": {
+        "blinkCycleMs": 500
+      }
+    },    
+    "backWarnLightLeft": {
+      "controlType": "ServoOnOff",
+      "pinManager": "Pca9685",
+      "address": 4,
+      "options": {
+      }
+    },    
+    "backWarnLightRight": {
+      "controlType": "ServoOnOff",
+      "pinManager": "Pca9685",
+      "address": 3,
+      "options": {
+      }
+    },
     "leftTurnLight": {
       "controlType": "PwmBlinker",
       "pinManager": "Pca9685",
-      "address": 0,
+      "address": 9,
       "options": {
         "blinkCycleMs": 500
       }
@@ -72,24 +94,27 @@
     "rightTurnLight": {
       "controlType": "PwmBlinker",
       "pinManager": "Pca9685",
-      "address": 1,
+      "address": 8,
       "options": {
         "blinkCycleMs": 500
       }
     },
-
-    "gearDown": {
-      "controlType": "GearShift",
-      "testDisabled": true,
+    "videoInit": {
+      "controlType": "CustomBash",
       "options": {
-        "shiftDirection": "down"
+        "Command": "/home/greg-e/LteCar/Builds/PropagandaTruck/init-video-player.sh"
       }
     },
-    "gearUp": {
-      "controlType": "GearShift",
-      "testDisabled": true,
+     "videoLoad": {
+      "controlType": "CustomBash",
       "options": {
-        "shiftDirection": "up"
+        "Command": "/home/greg-e/LteCar/Builds/PropagandaTruck/all-video-playlist.sh"
+      }
+    },
+     "videoNext": {
+      "controlType": "CustomBash",
+      "options": {
+        "Command": "/home/greg-e/LteCar/Builds/PropagandaTruck/next.sh"
       }
     }
   },
@@ -97,12 +122,132 @@
     "lifetime": {
       "telemetryType": "LteCar.Onboard.Telemetry.ApplicationLifetimeReader"
     },
+    "battery.voltage": {
+      "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
+      "readIntervalTicks": 50,
+      "dataType": "Number",
+      "unit": "V",
+      "decimals": 2,
+      "options": {
+        "groupKey": "battery",
+        "jbdToolPath": "/home/greg-e/jbdtool/jbdtool",
+        "channel": "A5:C2:37:55:36:B6"
+      }
+    },
+    "battery.current": {
+      "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
+      "readIntervalTicks": 50,
+      "dataType": "Number",
+      "unit": "A",
+      "decimals": 2,
+      "options": {
+        "groupKey": "battery",
+        "jbdToolPath": "/home/greg-e/jbdtool/jbdtool",
+        "channel": "A5:C2:37:55:36:B6"
+      }
+    },
+    "battery.soc": {
+      "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
+      "readIntervalTicks": 50,
+      "dataType": "Integer",
+      "unit": "%",
+      "decimals": 0,
+      "options": {
+        "groupKey": "battery",
+        "jbdToolPath": "/home/greg-e/jbdtool/jbdtool",
+        "channel": "A5:C2:37:55:36:B6"
+      }
+    },
+    "battery.capacity": {
+      "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
+      "readIntervalTicks": 50,
+      "dataType": "Number",
+      "unit": "Ah",
+      "decimals": 1,
+      "options": {
+        "groupKey": "battery",
+        "jbdToolPath": "/home/greg-e/jbdtool/jbdtool",
+        "channel": "A5:C2:37:55:36:B6"
+      }
+    },
+    "battery.cycles": {
+      "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
+      "readIntervalTicks": 50,
+      "dataType": "Integer",
+      "options": {
+        "groupKey": "battery",
+        "jbdToolPath": "/home/greg-e/jbdtool/jbdtool",
+        "channel": "A5:C2:37:55:36:B6"
+      }
+    },
+    "battery.cellsMin": {
+      "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
+      "readIntervalTicks": 50,
+      "dataType": "Number",
+      "unit": "V",
+      "decimals": 3,
+      "options": {
+        "groupKey": "battery",
+        "jbdToolPath": "/home/greg-e/jbdtool/jbdtool",
+        "channel": "A5:C2:37:55:36:B6"
+      }
+    },
+    "battery.cellsMax": {
+      "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
+      "readIntervalTicks": 50,
+      "dataType": "Number",
+      "unit": "V",
+      "decimals": 3,
+      "options": {
+        "groupKey": "battery",
+        "jbdToolPath": "/home/greg-e/jbdtool/jbdtool",
+        "channel": "A5:C2:37:55:36:B6"
+      }
+    },
+    "battery.cellsDiff": {
+      "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
+      "readIntervalTicks": 50,
+      "dataType": "Number",
+      "unit": "V",
+      "decimals": 3,
+      "options": {
+        "groupKey": "battery",
+        "jbdToolPath": "/home/greg-e/jbdtool/jbdtool",
+        "channel": "A5:C2:37:55:36:B6"
+      }
+    },
+    "battery.temperature": {
+      "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
+      "readIntervalTicks": 50,
+      "dataType": "Number",
+      "unit": "°C",
+      "decimals": 1,
+      "options": {
+        "groupKey": "battery",
+        "jbdToolPath": "/home/greg-e/jbdtool/jbdtool",
+        "channel": "A5:C2:37:55:36:B6"
+      }
+    },
     "battery": {
       "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
       "readIntervalTicks": 50,
       "options": {
         "jbdToolPath": "/home/greg-e/jbdtool/jbdtool",
         "channel": "A5:C2:37:55:36:B6"
+      }
+    }
+  },
+  "videoStreams": {
+    "frontCamera": {
+      "enabled": true,
+      "streamId": "frontCamera",
+      "options": {
+        "videoSettings": {
+          "width": 1280,
+          "height": 720,
+          "framerate": 30,
+          "bitrate": 2000000
+        }
       }
     }
   }

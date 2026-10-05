@@ -1,0 +1,35 @@
+{
+  "pinManagers": {},
+  "controlChannels": {
+    "log": {
+      "controlType": "LoggingOnly",
+      "testDisabled": true
+    },
+    "debug": {
+      "controlType": "LoopbackToTelemetry",
+      "testDisabled": true
+    }
+  },
+  "telemetryChannels": {
+    "cpuTemperature": {
+      "telemetryType": "LteCar.Onboard.Telemetry.CpuTemperatureReader",
+      "readIntervalTicks": 1000
+    },
+    "debug": {
+      "telemetryType": "LteCar.Onboard.Telemetry.StoreBackedTelemetryReader",
+      "readIntervalTicks": 10
+    }
+  },
+  "videoStreams": {
+    "webcam": {
+      "enabled": true,
+      "streamId": "webcam",
+      "type": "v4l2",
+      "cameraDevice": "/dev/video0",
+      "width": 1280,
+      "height": 720,
+      "framerate": 30,
+      "bitrate": 1000000
+    }
+  }
+}

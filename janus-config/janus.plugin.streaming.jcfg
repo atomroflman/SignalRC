@@ -1,0 +1,8 @@
+general: {
+	# Disable the canyanjanus image's hardcoded sample mountpoints
+	# (rtp-sample, file-live-sample, file-ondemand-sample, multistream-test).
+	# The LteCar Server creates and destroys mountpoints itself, so the
+	# image defaults would otherwise collide with our DB-Id-based mountpoint
+	# ids and require a secret we don't have.
+	no_default_streams = true
+}

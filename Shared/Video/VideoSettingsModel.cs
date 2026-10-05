@@ -10,6 +10,11 @@ public class VideoSettingsModel
     public int Framerate { get; set; }
     public float Brightness { get; set; }
     public int BitrateKbps { get; set; }
+    public float? Gain { get; set; }
+    public int? Shutter { get; set; }
+    public float? Contrast { get; set; }
+    public float? EV { get; set; }
+    public string? Exposure { get; set; }
     public bool Enabled { get; set; }
 
     public void ApplySettings(IVideoSettings settings)
@@ -20,6 +25,11 @@ public class VideoSettingsModel
         settings.Framerate = Framerate;
         settings.Brightness = Brightness;
     
-        settings.BitrateKbps = BitrateKbps * 1024;
+        settings.Bitrate = BitrateKbps;
+        settings.Gain = Gain;
+        settings.Shutter = Shutter;
+        settings.Contrast = Contrast;
+        settings.EV = EV;
+        settings.Exposure = Exposure;
     }
 }

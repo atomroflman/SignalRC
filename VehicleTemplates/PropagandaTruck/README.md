@@ -18,11 +18,7 @@ Fahrzeug-Konfiguration für einen Propaganda-Truck mit Kamera-System und Lautspr
 - `docs/`: Zusätzliche Dokumentation
 
 ## Installation
-```bash
-cd /path/to/LteCar/Onboard
-./setup-vehicle.sh
-# Wähle "📋 Vorlage laden und anwenden" -> "PropagandaTruck"
-```
+Übernimm die Konfiguration aus `config.json` manuell (siehe [VehicleTemplates/README.md](../README.md)); es gibt kein Kommandozeilen-Tool mehr, das Templates lädt/anwendet. Konfiguration und Test des Fahrzeugs erfolgen anschließend über die Web-UI.
 
 ## Hardware-Anforderungen
 - Raspberry Pi 4

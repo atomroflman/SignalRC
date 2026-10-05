@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useControlFlowStore } from "./control-flow-store";
 import CollapsibleSection from "./collapsible-section";
+import { useI18n } from "@/i18n/provider";
 
 export type CarFunction = {
   id: number;
@@ -11,6 +12,7 @@ export type CarFunction = {
 };
 
 export default function CarFunctionsView({ carId, hideFlowButtons }: { carId: number, hideFlowButtons?: boolean }) {
+  const { messages } = useI18n();
   const [functions, setFunctions] = useState<CarFunction[]>([]);
   const controlFlow = useControlFlowStore();
 
@@ -36,10 +38,10 @@ export default function CarFunctionsView({ carId, hideFlowButtons }: { carId: nu
     return controlFlow.nodes.some((n) => n.type === "output" && n.data?.id === dbId);
   };
   return (
-    <CollapsibleSection title="Car functions">
+    <CollapsibleSection title={messages.collapsible.carFunctions} label={messages.collapsible.carFunctions}>
       <div className="bg-zinc-900 rounded-lg p-2 border border-zinc-800 text-xs mt-2">
-        <div className="font-bold mb-2 text-zinc-200 text-xs">Car functions</div>
-        {functions.length === 0 && <div className="text-zinc-400 text-xs">No functions registered.</div>}
+        <div className="font-bold mb-2 text-zinc-200 text-xs">{messages.carFunctions.title}</div>
+        {functions.length === 0 && <div className="text-zinc-400 text-xs">{messages.carFunctions.none}</div>}
         <ul className="space-y-1">
           {functions.map((f) => {
             const alreadyUsed = hasOutputNode(f.id);
@@ -47,7 +49,7 @@ export default function CarFunctionsView({ carId, hideFlowButtons }: { carId: nu
               <li key={f.channelName} className="flex items-center justify-between">
                 <div>
                   <span className="font-mono text-zinc-100 text-xs">{f.displayName || f.channelName}</span>
-                  {f.requiresAxis && <span className="ml-2 text-zinc-400">(Axis)</span>}
+                  {f.requiresAxis && <span className="ml-2 text-zinc-400">({messages.carFunctions.axis})</span>}
                 </div>
                 {!hideFlowButtons &&  (
                   <button
@@ -55,7 +57,7 @@ export default function CarFunctionsView({ carId, hideFlowButtons }: { carId: nu
                     hidden={alreadyUsed}
                     onClick={() => controlFlow.registerOutput(f.id)}
                   >
-                    +Flow
+                    {messages.carFunctions.addFlow}
                   </button>
                 )}
               </li>

@@ -10,12 +10,9 @@
   },
   "dependencies": {
     "@microsoft/signalr": "^8.0.7",
-    "@microsoft/signalr-protocol-msgpack": "^8.0.7",
-    "@types/signalr": "^2.4.3",
     "next": "^15.5.9",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-flow": "^1.0.3",
     "reactflow": "^11.11.4",
     "zustand": "^5.0.5"
   },

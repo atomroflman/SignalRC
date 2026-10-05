@@ -5,19 +5,29 @@ using Microsoft.Extensions.Logging;
 
 namespace LteCar.Onboard;
 
+// SECURITY: the Onboard's private SSH key authenticates the driver session
+// against this specific vehicle. It MUST stay inside the local network —
+// do NOT add any path (SignalR, REST, WebSocket, anything that traverses
+// the public-internet Server) that streams `ssh_key` out of the LAN.
+// The only supported delivery channel is the LAN-bound HTTP listener on
+// port 8080 in Program.cs (binds to "+"), which the browser reaches via
+// `http://<vehicle-lan-ip>:8080/ssh-key?hash=...` after the Server has
+// confirmed the vehicle's identity hash. Adding a SignalR/Server-routed
+// equivalent would expose the key to any browser session the Server's
+// auth cookie accepts — out of scope.
 public class SshKeyService
 {
     private readonly ILogger<SshKeyService> _logger;
+    private readonly ConfigLoader _configLoader;
     private readonly IConfiguration _configuration;
-    private readonly string _privateKeyPath;
-    private readonly string _publicKeyPath;
+    private string _privateKeyPath => _configLoader.SshKeyPath;
+    private string _publicKeyPath => _configLoader.SshPublicKeyPath;
 
-    public SshKeyService(ILogger<SshKeyService> logger, IConfiguration configuration)
+    public SshKeyService(ILogger<SshKeyService> logger, ConfigLoader configLoader, IConfiguration configuration)
     {
         _logger = logger;
+        _configLoader = configLoader;
         _configuration = configuration;
-        _privateKeyPath = "ssh_key";
-        _publicKeyPath = "ssh_key.pub";
     }
 
     public byte[]? GetPublicKey()
@@ -87,7 +97,7 @@ public class SshKeyService
             var signatureBytes = Convert.FromBase64String(signature);
 
             var isValid = rsa.VerifyData(dataBytes, signatureBytes, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-            
+
             if (isValid)
             {
                 _logger.LogInformation("Signature verification succeeded");
@@ -96,7 +106,7 @@ public class SshKeyService
             {
                 _logger.LogWarning("Signature verification failed - signature does not match");
             }
-            
+
             return isValid;
         }
         catch (Exception ex)
@@ -148,17 +158,17 @@ public class SshKeyService
             // Generate a deterministic session ID from the private key
             using var rsa = RSA.Create();
             rsa.ImportFromPem(privateKeyPem);
-            
+
             // Get the public key bytes for consistent hashing
             var publicKeyBytes = rsa.ExportRSAPublicKey();
-            
+
             // Create a hash of the public key for consistent session ID
             using var sha256 = SHA256.Create();
             var hashBytes = sha256.ComputeHash(publicKeyBytes);
-            
+
             // Convert to a shorter, consistent string
             var sessionId = Convert.ToBase64String(hashBytes)[..16]; // First 16 characters
-            
+
             return sessionId;
         }
         catch (Exception ex)

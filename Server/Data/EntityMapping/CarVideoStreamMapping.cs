@@ -43,7 +43,7 @@ public class CarVideoStreamMapping : IEntityTypeConfiguration<CarVideoStream>
             .IsRequired();
         builder.Property(x => x.Height)
             .IsRequired();
-        builder.Property(x => x.BitrateKbps)    
+        builder.Property(x => x.Bitrate)    
             .IsRequired();
         builder.Property(x => x.Framerate)
             .IsRequired();

@@ -8,6 +8,11 @@ namespace LteCar.Shared.Channels;
 public class ChannelMapSyncRequest
 {
     [Key(0)][JsonPropertyName("carId")] public int CarId { get; set; }
+
+    /// <summary>
+    /// Kept for wire compatibility. Server-as-SPOT ignores the client's channel map;
+    /// the response always contains the server's current configuration.
+    /// </summary>
     [Key(1)][JsonPropertyName("channelMap")] public ChannelMap ChannelMap { get; set; } = new();
 }
 

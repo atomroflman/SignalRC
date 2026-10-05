@@ -8,7 +8,7 @@ namespace LteCar.Server.Controllers
     [Route("api/[controller]")]
     public class UserConfigController : ControllerBase
     {
-        private readonly LteCarContext _context;
+        private new readonly LteCarContext _context;
 
         public UserConfigController(LteCarContext context) : base(context)
         {
@@ -212,7 +212,7 @@ namespace LteCar.Server.Controllers
 
         public class RegisterGamepadRequest
         {
-            public string DeviceName { get; set; }
+            public string DeviceName { get; set; } = string.Empty;
             public int Axes { get; set; }
             public int Buttons { get; set; }
         }
@@ -220,7 +220,7 @@ namespace LteCar.Server.Controllers
 
     public class SetGamepadAxisAccuracyRequest
     {
-        public string GamepadId { get; set; }
+        public string GamepadId { get; set; } = string.Empty;
         public int ChannelIndex { get; set; }
         public int Accuracy { get; set; }
     }

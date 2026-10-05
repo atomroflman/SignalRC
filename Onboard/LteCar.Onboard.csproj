@@ -1,8 +1,8 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
-        <TargetFramework>net8.0</TargetFramework>
+        <TargetFramework>net10.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
       <UserSecretsId>a4995393-a0b4-4060-8810-10aedec03387</UserSecretsId>
@@ -17,11 +17,14 @@
       <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="9.0.3" />
       <PackageReference Include="Microsoft.AspNetCore.SignalR.Client.Core" Version="9.0.3" />
       <PackageReference Include="Microsoft.AspNetCore.SignalR.Protocols.Json" Version="9.0.3" />
+      <PackageReference Include="MessagePack" Version="2.5.187" />
       <PackageReference Include="Microsoft.AspNetCore.SignalR.Protocols.MessagePack" Version="9.0.3" />
-      <PackageReference Include="Microsoft.Extensions.Configuration" Version="9.0.3" />
-      <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="9.0.3" />
-      <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="9.0.3" />
-      <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.3" />
+      <PackageReference Include="Microsoft.Extensions.Configuration" Version="9.0.0" />
+      <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="9.0.0" />
+      <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="9.0.0" />
+      <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="9.0.0" />
+      <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.0" />
+      <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.0" />
       <PackageReference Include="Spectre.Console" Version="0.50.0" />
       <PackageReference Include="System.Device.Gpio" Version="4.0.1" />
       <PackageReference Include="TypedSignalR.Client" Version="3.6.0">
@@ -55,11 +58,54 @@
       <None Update="appSettings.json">
         <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       </None>
+      <None Update="Tools\video_stack_check.py">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </None>
     </ItemGroup>
     
     <ItemGroup>
       <EmbeddedResource Update="Setup/translations.json">
       </EmbeddedResource>
+      <EmbeddedResource Include="Generated/onboard-build-info.txt" LogicalName="LteCar.Onboard.Generated.onboard-build-info.txt" />
     </ItemGroup>
+
+  <Target Name="GenerateOnboardBuildInfo" BeforeTargets="BeforeBuild">
+    <MakeDir Directories="$(MSBuildProjectDirectory)/Generated" />
+
+    <Exec Condition="'$(BuildInfoBranch)' == ''"
+          Command="git -C &quot;$(MSBuildProjectDirectory)/..&quot; branch --show-current"
+          ConsoleToMSBuild="true"
+          IgnoreExitCode="true">
+      <Output TaskParameter="ConsoleOutput" ItemName="_BuildBranchOutput" />
+    </Exec>
+
+    <Exec Condition="'$(BuildInfoCommit)' == ''"
+          Command="git -C &quot;$(MSBuildProjectDirectory)/..&quot; rev-parse HEAD"
+          ConsoleToMSBuild="true"
+          IgnoreExitCode="true">
+      <Output TaskParameter="ConsoleOutput" ItemName="_BuildCommitOutput" />
+    </Exec>
+
+    <PropertyGroup>
+      <ResolvedBuildBranch Condition="'$(BuildInfoBranch)' != ''">$(BuildInfoBranch)</ResolvedBuildBranch>
+      <ResolvedBuildBranch Condition="'$(ResolvedBuildBranch)' == ''">@(_BuildBranchOutput->'%(Identity)')</ResolvedBuildBranch>
+      <ResolvedBuildCommit Condition="'$(BuildInfoCommit)' != ''">$(BuildInfoCommit)</ResolvedBuildCommit>
+      <ResolvedBuildCommit Condition="'$(ResolvedBuildCommit)' == ''">@(_BuildCommitOutput->'%(Identity)')</ResolvedBuildCommit>
+      <ResolvedBuildBranch Condition="'$(ResolvedBuildBranch)' == ''">master</ResolvedBuildBranch>
+      <ResolvedBuildCommit Condition="'$(ResolvedBuildCommit)' == ''">unknown</ResolvedBuildCommit>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <_BuildInfoLines Include="Branch=$(ResolvedBuildBranch)" />
+      <_BuildInfoLines Include="Commit=$(ResolvedBuildCommit)" />
+    </ItemGroup>
+
+    <WriteLinesToFile
+      File="$(MSBuildProjectDirectory)/Generated/onboard-build-info.txt"
+      Lines="@(_BuildInfoLines)"
+      Overwrite="true"
+      Encoding="UTF-8" />
+  </Target>
 
 </Project>

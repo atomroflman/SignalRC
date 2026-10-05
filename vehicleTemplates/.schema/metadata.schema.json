@@ -1,0 +1,85 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "VehicleTemplate",
+  "description": "Schema for a vehicle template describing hardware configuration",
+  "type": "object",
+  "required": ["name", "version", "hardware"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Template name (e.g., PropagandaTruck, SimpleRC)"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Semantic version (e.g., 1.0.0)"
+    },
+    "author": {
+      "type": "string",
+      "description": "Template author"
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable description"
+    },
+    "hardware": {
+      "type": "object",
+      "description": "Hardware description",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["tank", "truck", "car", "drone", "boat", "custom"],
+          "description": "Vehicle type"
+        },
+        "chassis": {
+          "type": "string",
+          "description": "Chassis model/brand"
+        },
+        "motors": {
+          "type": "array",
+          "description": "Motor configuration",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "type": { "type": "string" },
+              "channel": { "type": "string" }
+            }
+          }
+        },
+        "sensors": {
+          "type": "array",
+          "description": "Sensor configuration",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "type": { "type": "string" },
+              "channel": { "type": "string" }
+            }
+          }
+        },
+        "extensions": {
+          "type": "array",
+          "description": "Hardware extensions (e.g., PCA9685, specific HATs)",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "type": { "type": "string" },
+              "options": { "type": "object" }
+            }
+          }
+        }
+      }
+    },
+    "features": {
+      "type": "array",
+      "description": "Required features for this template",
+      "items": {
+        "type": "string",
+        "enum": ["webSetup", "bashTool", "channelTester", "audio", "video"]
+      }
+    }
+  }
+}

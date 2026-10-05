@@ -76,6 +76,7 @@ export interface JanusStreamingMessage {
 	streaming?: 'event' | 'list';
 	list?: JanusStreamInfo[];
 	error?: string;
+	error_code?: number;
 	result?: {
 		status?: string;
 	};
@@ -86,6 +87,7 @@ export interface JanusStreamInfo {
 	description?: string;
 	enabled?: boolean;
 	metadata?: string;
+	type?: string;
 }
 
 export {};

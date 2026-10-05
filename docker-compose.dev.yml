@@ -1,0 +1,9 @@
+services:
+  janus:
+    ports:
+      - "8088:8088/tcp"
+      - "8188:8188/tcp"
+
+  postgres:
+    ports:
+      - "5432:5432"

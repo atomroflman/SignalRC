@@ -13,8 +13,8 @@ namespace LteCar.Onboard.Hardware
     /// </summary>
     public class ModuleManagerFactory : IModuleManagerFactory
     {
-    private readonly ILoggerFactory _loggerFactory;
-    private readonly IServiceProvider _serviceProvider;
+        private readonly ILoggerFactory _loggerFactory;
+        private readonly IServiceProvider _serviceProvider;
         private readonly ChannelMap _channelMap;
         private readonly Dictionary<string, IModuleManager> _instances = new();
 
@@ -34,6 +34,7 @@ namespace LteCar.Onboard.Hardware
         /// </summary>
         public IModuleManager Create(string name)
         {
+            var logger = _loggerFactory.CreateLogger<ModuleManagerFactory>();
             if (_instances.ContainsKey(name))
             {
                 // Return existing instance if already created
@@ -41,11 +42,17 @@ namespace LteCar.Onboard.Hardware
             }
             // Find pin manager config by name
             if (!_channelMap.PinManagers.TryGetValue(name, out var managerConfig))
-                throw new ArgumentException($"No pinManager named '{name}' in ChannelMap.");
+            {
+                logger.LogError($"No pinManager named '{name}' in ChannelMap.");
+                return new NullModuleManager(logger);
+            }
 
             var typeName = managerConfig.Type;
             if (string.IsNullOrWhiteSpace(typeName))
-                throw new ArgumentException($"No type defined for pinManager '{name}'.");
+            {
+                logger.LogError($"No type defined for pinManager '{name}'.");
+                return new NullModuleManager(logger);
+            }
 
             // Find all types matching the type name (without namespace)
             var matchingTypes = Assembly.GetExecutingAssembly().GetTypes();
@@ -59,7 +66,7 @@ namespace LteCar.Onboard.Hardware
                 throw new NotSupportedException($"Type '{typeName}' not found.");
             if (foundTypes.Count > 1)
             {
-                _loggerFactory.CreateLogger<ModuleManagerFactory>()
+                logger
                     .LogWarning($"Multiple types named '{typeName}' found. Using the first: {foundTypes[0].FullName}");
             }
             var type = foundTypes[0];
@@ -68,8 +75,7 @@ namespace LteCar.Onboard.Hardware
             object? instance = null;
             if (type == typeof(Pca9685PwmExtension))
             {
-                var logger = _loggerFactory.CreateLogger<Pca9685PwmExtension>();
-                instance = ActivatorUtilities.CreateInstance(_serviceProvider, type, logger);
+                instance = ActivatorUtilities.CreateInstance(_serviceProvider, type, _serviceProvider);
             }
             else
             {
@@ -137,6 +143,8 @@ namespace LteCar.Onboard.Hardware
                     }
                     else
                     {
+                        if (kv.Value is not IConvertible)
+                            continue;
                         // Handle primitive types directly
                         if (pi.PropertyType == typeof(string))
                             pi.SetValue(instance, kv.Value.ToString());
@@ -154,6 +162,63 @@ namespace LteCar.Onboard.Hardware
             var res = instance as IModuleManager ?? throw new InvalidCastException($"{typeName} does not implement IModuleManager");
             _instances.Add(name, res);
             return res;
+        }
+
+        private class NullModuleManager : IModuleManager
+        {
+            public NullModuleManager(ILogger<ModuleManagerFactory> logger)
+            {
+                Logger = logger;
+            }
+
+            public ILogger<ModuleManagerFactory> Logger { get; }
+
+            T IModuleManager.GetModule<T>(int address)
+            {
+                return new NullModule(Logger) as T;
+            }
+
+            private class NullModule : IModule, IPwmModule, IGpioModule
+            {
+                private ILogger<ModuleManagerFactory> Logger;
+
+                public NullModule(ILogger<ModuleManagerFactory> logger)
+                {
+                    this.Logger = logger;
+                }
+
+                public async Task<float> GetPwmValue()
+                {
+                    Logger.LogWarning("GetPwmValue on NullModule!");
+                    return 0f;
+                }
+
+                public async Task<bool> GetValue()
+                {
+                    Logger.LogWarning("GetValue on NullModule!");
+                    return false;
+                }
+
+                public async Task SetPulseWidthMilliseconds(float pulseWidthMs)
+                {
+                    Logger.LogWarning($"SetPulseWidthMilliseconds({pulseWidthMs}) on NullModule!");
+                }
+
+                public async Task SetPwmCyclePercentage(float value)
+                {
+                    Logger.LogWarning($"SetPwmCyclePercentage({value}) on NullModule!");
+                }
+
+                public async Task SetServoPosition(float position)
+                {
+                    Logger.LogWarning($"SetServoPosition({position}) on NullModule!");
+                }
+
+                public async Task SetValue(bool value)
+                {
+                    Logger.LogWarning($"SetValue({value}) on NullModule!");
+                }
+            }
         }
     }
 }

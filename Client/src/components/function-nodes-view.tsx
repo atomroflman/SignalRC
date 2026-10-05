@@ -2,8 +2,10 @@ import React from "react";
 import { filterFunctionRegistry } from "./filters/filter-function-registry";
 import { useControlFlowStore } from "./control-flow-store";
 import CollapsibleSection from "./collapsible-section";
+import { useI18n } from "@/i18n/provider";
 
 export default function FunctionNodesView({ hideFlowButtons }: { hideFlowButtons?: boolean }) {
+  const { messages } = useI18n();
   const controlFlow = useControlFlowStore();
   const functionNames = Object.keys(filterFunctionRegistry);
   const [params, setParams] = React.useState<Record<string, any>>({});
@@ -11,9 +13,9 @@ export default function FunctionNodesView({ hideFlowButtons }: { hideFlowButtons
   const [outputPorts, setOutputPorts] = React.useState<Record<string, number>>({});
 
   return (
-    <CollapsibleSection title="Filter/Function Nodes">
+    <CollapsibleSection title={messages.collapsible.filterFunctionNodes} label={messages.collapsible.filterFunctionNodes}>
       {functionNames.length === 0 && (
-        <div className="text-zinc-400 text-xs">Keine Funktionen registriert.</div>
+        <div className="text-zinc-400 text-xs">{messages.functionNodes.none}</div>
       )}
       <ul className="space-y-2">
         {functionNames.map((fn) => {
@@ -32,7 +34,7 @@ export default function FunctionNodesView({ hideFlowButtons }: { hideFlowButtons
                       );
                     }}
                   >
-                    +Flow
+                    {messages.functionNodes.addFlow}
                   </button>
                 )}
               </div>

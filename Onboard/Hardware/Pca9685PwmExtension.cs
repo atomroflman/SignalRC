@@ -1,6 +1,7 @@
 using System;
 using System.Device.I2c;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace LteCar.Onboard.Hardware
@@ -21,9 +22,9 @@ namespace LteCar.Onboard.Hardware
         public int I2cBus { get; set; } = 1; // Default I2C bus
         public int BoardI2cAddress => BoardAddress + PCA9685_DEFAULT_ADDRESS;
 
-        public Pca9685PwmExtension(ILogger<Pca9685PwmExtension> logger)
+        public Pca9685PwmExtension(IServiceProvider provider)
         {
-            Logger = logger;
+            Logger = provider.GetRequiredService<ILogger<Pca9685PwmExtension>>();
         }
 
         private I2cDevice Device => _device ?? throw new InvalidOperationException("PCA9685 device not initialized.");

@@ -9,7 +9,7 @@ public class JanusCreateStreamRequestBody
     [JsonPropertyName("id")]
     public uint Id { get; set; }
     [JsonPropertyName("description")]
-    public string Description { get; set; }
+    public string Description { get; set; } = string.Empty;
     [JsonPropertyName("audio")]
     public bool Audio { get; set; } = false;
     [JsonPropertyName("video")]

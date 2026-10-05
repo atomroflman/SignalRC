@@ -4,10 +4,12 @@ import { filterFunctionRegistry } from "./filters/filter-function-registry";
 import { useControlFlowStore } from "./control-flow-store";
 import { CustomFlowNodeProps } from "./custom-flow-node";
 import { ParamInputField } from "./param-input";
+import { useI18n } from "@/i18n/provider";
 
 export default function SmoothFlowNode(props: CustomFlowNodeProps) {
+  const { messages } = useI18n();
   if (!props || !props.data) {
-    return <div className="bg-zinc-800 border border-zinc-700 rounded p-2">Loading...</div>;
+    return <div className="bg-zinc-800 border border-zinc-700 rounded p-2">{messages.flowNode.loading}</div>;
   }
 
   const id = props.data.nodeId;
@@ -149,7 +151,7 @@ export default function SmoothFlowNode(props: CustomFlowNodeProps) {
             e.stopPropagation();
             flowControl.deleteNode(Number(id));
           }}
-          title="Delete Node"
+          title={messages.flowNode.deleteNode}
         >
           ✕
         </button>

@@ -13,7 +13,7 @@ public class CustomBash : ControlTypeBase
     private bool _lastOn;
 
     // Options werden direkt auf Properties gemappt
-    public string Command { get; set; }
+    public string Command { get; set; } = string.Empty;
 
     public CustomBash(ILogger<CustomBash> logger)
     {
@@ -25,7 +25,7 @@ public class CustomBash : ControlTypeBase
     // Executes the command from the mapped Command property on the rising edge (0 -> 1).
     public override void OnControlRecived(decimal newValue)
     {
-        this.Command = this.Options.ContainsKey("Command") ? this.Options["Command"].ToString() : string.Empty;
+        this.Command = this.Options.ContainsKey("Command") ? this.Options["Command"].ToString() ?? string.Empty : string.Empty;
         var rounded = Math.Round(newValue);
         var isOn = rounded != 0;
 
