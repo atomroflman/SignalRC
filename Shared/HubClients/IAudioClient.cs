@@ -1,3 +1,5 @@
+using SignalRC.Shared.Video;
+
 namespace SignalRC.Shared.HubClients;
 
 // ponytail: subset of the merged hub's client interface used by the Onboard's
@@ -26,4 +28,10 @@ public interface IAudioClient
     Task PlayAudioChunk(string sessionId, byte[] chunk);
 
     Task StopAudioPlayback(string sessionId);
+
+    /// <summary>
+    /// Audio checks appended to the onboard diagnostics: ffmpeg/ALSA tooling, permissions, and a short
+    /// open test of every configured microphone and of <paramref name="outputDevice"/> (the car's speaker).
+    /// </summary>
+    Task<DiagnosticCheck[]> GetAudioDiagnostics(string? outputDevice);
 }

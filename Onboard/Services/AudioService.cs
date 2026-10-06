@@ -2,6 +2,7 @@ using System.Diagnostics;
 using SignalRC.Onboard.Control;
 using SignalRC.Shared.Channels;
 using SignalRC.Shared.HubClients;
+using SignalRC.Shared.Video;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -302,6 +303,137 @@ public class AudioService : IAudioClient
             KillProcess(process, "playback");
         }
         _logger.LogInformation("Audio playback stopped.");
+    }
+
+    // -- Diagnostics ------------------------------------------------------------------
+
+    public async Task<DiagnosticCheck[]> GetAudioDiagnostics(string? outputDevice)
+    {
+        var checks = new List<DiagnosticCheck>();
+        void Add(string step, string title, DiagnosticStatus status, string message) =>
+            checks.Add(new DiagnosticCheck { Step = step, Title = title, Status = status, Message = message });
+
+        if (!AudioEnabled)
+        {
+            Add("A0", "Audio", DiagnosticStatus.Info, "Feature-Flag 'audio' ist aus – Audio wird abgelehnt.");
+            return checks.ToArray();
+        }
+
+        var encoders = await RunToolAsync("ffmpeg", "-hide_banner -encoders");
+        if (encoders.ExitCode != 0)
+            Add("A1", "ffmpeg", DiagnosticStatus.Error, "ffmpeg nicht gefunden oder nicht ausführbar.");
+        else if (!encoders.Output.Contains(" libopus "))
+            Add("A1", "ffmpeg Opus", DiagnosticStatus.Error, "ffmpeg ist ohne libopus gebaut – Audio kann nicht kodiert werden.");
+        else
+            Add("A1", "ffmpeg Opus", DiagnosticStatus.Ok, "libopus-Encoder vorhanden.");
+
+        var devices = await RunToolAsync("ffmpeg", "-hide_banner -devices");
+        if (devices.ExitCode == 0)
+        {
+            Add("A2", "ffmpeg ALSA", devices.Output.Contains(" alsa ") ? DiagnosticStatus.Ok : DiagnosticStatus.Error,
+                devices.Output.Contains(" alsa ") ? "ALSA-Ein-/Ausgabe vorhanden." : "ffmpeg ist ohne ALSA-Unterstützung gebaut.");
+        }
+
+        var arecord = await RunToolAsync("arecord", "--version");
+        Add("A3", "alsa-utils", arecord.ExitCode == 0 ? DiagnosticStatus.Ok : DiagnosticStatus.Warning,
+            arecord.ExitCode == 0 ? "arecord/aplay vorhanden." : "alsa-utils fehlen – Geräteliste in der UI bleibt leer (apt install alsa-utils).");
+
+        var groups = await RunToolAsync("id", "-nG");
+        if (groups.ExitCode == 0)
+        {
+            var inAudioGroup = groups.Output.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Contains("audio");
+            Add("A4", "Gruppe 'audio'", inAudioGroup ? DiagnosticStatus.Ok : DiagnosticStatus.Warning,
+                inAudioGroup ? "Service-User ist in der Gruppe 'audio'."
+                             : $"Service-User ({Environment.UserName}) ist nicht in der Gruppe 'audio' – ALSA-Geräte sind evtl. nicht zugreifbar (sudo usermod -aG audio {Environment.UserName}, danach Dienst neu starten).");
+        }
+
+        var step = 5;
+        var microphones = _channelMap.VideoStreams.Where(kv => !string.IsNullOrWhiteSpace(kv.Value.AudioDevice)).ToList();
+        if (microphones.Count == 0)
+            Add($"A{step++}", "Mikrofon", DiagnosticStatus.Info, "Kein Video-Stream hat ein Audio-Gerät konfiguriert.");
+        foreach (var (streamId, stream) in microphones)
+        {
+            bool running;
+            lock (_lock) running = _uplinks.ContainsKey(streamId);
+            var title = $"Mikrofon '{streamId}' ({stream.AudioDevice})";
+            if (running)
+            {
+                Add($"A{step++}", title, DiagnosticStatus.Ok, "Uplink läuft gerade (Gerät ist belegt, kein Test nötig).");
+                continue;
+            }
+            var test = await RunToolAsync("arecord", $"-q -D {stream.AudioDevice} -f S16_LE -r 48000 -c 1 -d 1 /dev/null", TimeSpan.FromSeconds(5));
+            Add($"A{step++}", title, test.ExitCode == 0 ? DiagnosticStatus.Ok : DiagnosticStatus.Error,
+                test.ExitCode == 0 ? "1 s Aufnahme erfolgreich." : $"Aufnahme fehlgeschlagen: {DescribeAlsaError(test.Error)}");
+        }
+
+        if (string.IsNullOrWhiteSpace(outputDevice))
+        {
+            Add($"A{step}", "Lautsprecher", DiagnosticStatus.Info, "Kein Lautsprecher konfiguriert – Push-to-Talk ist ausgeblendet.");
+        }
+        else
+        {
+            bool playing;
+            lock (_lock) playing = _playbackProcess != null;
+            var title = $"Lautsprecher ({outputDevice})";
+            if (playing)
+            {
+                Add($"A{step}", title, DiagnosticStatus.Ok, "Push-to-Talk spielt gerade (Gerät ist belegt, kein Test nötig).");
+            }
+            else
+            {
+                // Plays one second of silence: proves the device opens without making noise.
+                var test = await RunToolAsync("aplay", $"-q -D {outputDevice} -f S16_LE -r 48000 -c 2 -d 1 /dev/zero", TimeSpan.FromSeconds(5));
+                Add($"A{step}", title, test.ExitCode == 0 ? DiagnosticStatus.Ok : DiagnosticStatus.Error,
+                    test.ExitCode == 0 ? "Gerät lässt sich öffnen (1 s Stille abgespielt)." : $"Wiedergabe fehlgeschlagen: {DescribeAlsaError(test.Error)}");
+            }
+        }
+
+        return checks.ToArray();
+    }
+
+    // arecord/aplay print ALSA lib noise first; the "audio open error: …" line at the end is the useful one.
+    private static string DescribeAlsaError(string stderr)
+    {
+        var lines = stderr.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var line = lines.LastOrDefault(l => l.Contains("error", StringComparison.OrdinalIgnoreCase)) ?? lines.LastOrDefault();
+        if (string.IsNullOrEmpty(line)) return "keine Fehlermeldung";
+        if (line.Contains("busy", StringComparison.OrdinalIgnoreCase))
+            line += " – das Gerät ist von einem anderen Prozess belegt (z. B. PipeWire/PulseAudio oder ein zweiter Stream mit demselben Gerät).";
+        return line;
+    }
+
+    private static async Task<(int ExitCode, string Output, string Error)> RunToolAsync(string tool, string args, TimeSpan? timeout = null)
+    {
+        try
+        {
+            var startInfo = new ProcessStartInfo(tool, args)
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            };
+            startInfo.Environment["LC_ALL"] = "C";
+            using var process = Process.Start(startInfo);
+            if (process == null) return (-1, string.Empty, $"{tool} konnte nicht gestartet werden");
+            var stdout = process.StandardOutput.ReadToEndAsync();
+            var stderr = process.StandardError.ReadToEndAsync();
+            using var cts = new CancellationTokenSource(timeout ?? TimeSpan.FromSeconds(5));
+            try
+            {
+                await process.WaitForExitAsync(cts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                process.Kill(entireProcessTree: true);
+                return (-1, await stdout, "Zeitüberschreitung");
+            }
+            return (process.ExitCode, await stdout, await stderr);
+        }
+        catch (Exception ex)
+        {
+            return (-1, string.Empty, ex.Message);
+        }
     }
 
     // -- helpers ----------------------------------------------------------------------

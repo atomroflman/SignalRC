@@ -880,6 +880,8 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
         var report = methodName == "RunOnboardStartupTest"
             ? await Clients.Client(connectionInfo.ConnectionId).RunOnboardStartupTest()
             : await Clients.Client(connectionInfo.ConnectionId).GetOnboardDiagnostics();
+        if (report != null)
+            await AppendAudioDiagnosticsAsync(carId, connectionInfo.ConnectionId, report);
         return report ?? new OnboardDiagnosticsReport
         {
             Timestamp = DateTime.UtcNow,
@@ -896,6 +898,30 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
                 }
             }
         };
+    }
+
+    private async Task AppendAudioDiagnosticsAsync(int carId, string carConnectionId, OnboardDiagnosticsReport report)
+    {
+        try
+        {
+            var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<SignalRCContext>();
+            var outputDevice = await dbContext.Cars.Where(c => c.Id == carId).Select(c => c.AudioOutputDevice).FirstOrDefaultAsync();
+            var checks = await Clients.Client(carConnectionId).GetAudioDiagnostics(outputDevice);
+            report.Checks.AddRange(checks ?? Array.Empty<DiagnosticCheck>());
+        }
+        catch (Exception ex)
+        {
+            // Older Onboard builds don't implement GetAudioDiagnostics.
+            Logger.LogWarning(ex, "Audio diagnostics failed for car {CarId}", carId);
+            report.Checks.Add(new DiagnosticCheck
+            {
+                Step = "A0",
+                Title = "Audio",
+                Status = DiagnosticStatus.Warning,
+                Message = $"Audio-Diagnose nicht verfügbar (Onboard zu alt?): {ex.Message}",
+            });
+        }
+        report.HasErrors = report.HasErrors || report.Checks.Any(c => c.Status == DiagnosticStatus.Error);
     }
 
     public async Task SetVideoStreamEnabled(int carId, int streamId, bool enabled)

@@ -370,6 +370,9 @@ function useJanusStreaming(
             if (['stopped', 'destroyed', 'offline'].includes(status)) {
               setPhase('waiting-for-vehicle');
               setVehicleSending(false);
+              // A stopped/destroyed mountpoint never comes back on this handle (the server recreates
+              // it on stream restart or audio changes), so watch it again via the normal retry.
+              if (status !== 'offline') scheduleRetry();
             } else if (['started', 'live'].includes(status)) {
               resetRetryState();
               setPhase('receiving');
@@ -438,6 +441,7 @@ function useJanusStreaming(
     resetMedia,
     cleanupJanus,
     handleError,
+    scheduleRetry,
     resetRetryState,
   ]);
 

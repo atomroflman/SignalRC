@@ -86,7 +86,7 @@ Mic ─ALSA─► ffmpeg (Opus/RTP) ──UDP──► Janus mountpoint (video +
 - When the stream starts (first viewer), the server sends `StartVideoStream` and `StartAudioUplink(streamId, port)`; when it stops, `StopAudioUplink`. The Onboard's `AudioService` runs the capture in its **own** ffmpeg, so a broken microphone can't take the video down, and restarts it if it dies. Outbound UDP like the video, so it works behind LTE CGNAT.
 - *Noise filter* adds `highpass=f=100,afftdn=nf=-25` (rumble cut + FFT denoiser against steady motor/wind noise).
 - The video panel shows a *Vehicle audio* toggle for streams with audio; it starts muted (browser autoplay rules).
-- Changing the audio input takes effect the next time the stream starts.
+- Changing the audio input or noise filter of a running stream applies immediately: the server recreates the stream's Janus mountpoint and restarts/stops the uplink. Viewers drop for a moment and re-watch automatically.
 
 ### Push-to-talk
 
@@ -94,12 +94,18 @@ Mic ─ALSA─► ffmpeg (Opus/RTP) ──UDP──► Janus mountpoint (video +
 Browser mic ─MediaRecorder (WebM/Ogg, Opus)─► SignalR chunks ─► Server ─► Onboard ─stdin─► ffmpeg ─ALSA─► Speaker
 ```
 
-1. While the button is held, the browser records 100 ms chunks (`audio/webm;codecs=opus` in Chromium, `audio/ogg;codecs=opus` in Firefox; Safari is not supported).
+1. While the button — or the bound key / gamepad button — is held, the browser records 100 ms chunks (`audio/webm;codecs=opus` in Chromium, `audio/ogg;codecs=opus` in Firefox; Safari is not supported).
 2. `StartAudioTalk` → the server looks up the car's speaker and calls `StartAudioPlayback(sessionId, format, device)`; the Onboard checks the control session and starts ffmpeg reading from stdin. `SendAudioChunk` pipes the chunks in order; `StopAudioTalk` closes stdin.
 3. Playback stops after 5 s without data, when the browser disconnects, or when the control session changes. Talking counts as driver activity, so the session doesn't time out meanwhile.
 4. While talking, the browser mutes the vehicle audio (half-duplex), so you don't hear yourself through the vehicle microphone. Janus does no acoustic echo cancellation; full duplex would need e.g. PipeWire `module-echo-cancel` on the vehicle.
 
 The push-to-talk panel only appears when the vehicle has a speaker configured. Expect a few hundred milliseconds of latency.
+
+**Key / gamepad binding:** *Assign* in the push-to-talk panel, then press a key or a gamepad button (Esc cancels). The binding is stored per browser (`localStorage`). Keys are ignored while typing in input fields; releasing focus stops talking. Don't map the same gamepad button to a vehicle channel in the flow as well.
+
+### Diagnostics
+
+The onboard diagnostics (web UI → *Onboard diagnostics*) append audio checks (`A*`): ffmpeg with libopus and ALSA, alsa-utils, `audio` group membership, a 1 s capture test of every configured stream microphone, and a 1 s silence playback on the car speaker. Devices currently in use by a running uplink or push-to-talk are reported as OK without testing; "busy" errors usually mean PipeWire/PulseAudio or a second stream holds the device.
 
 ### Requirements
 

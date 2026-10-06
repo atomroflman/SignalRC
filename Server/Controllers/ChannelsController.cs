@@ -21,12 +21,22 @@ public class ChannelsController : ControllerBase
 {
     private readonly IHubContext<CarConnectionHub, IConnectionHubClient> _controlHub;
     private readonly AvailableTypesRegistry _availableTypes;
+    private readonly VideoStreamReceiverService _streamService;
+    private readonly ActiveVideoStreamViewerRegistry _viewerRegistry;
     private readonly ILogger<ChannelsController> _logger;
 
-    public ChannelsController(SignalRCContext context, IHubContext<CarConnectionHub, IConnectionHubClient> controlHub, AvailableTypesRegistry availableTypes, ILogger<ChannelsController> logger) : base(context)
+    public ChannelsController(
+        SignalRCContext context,
+        IHubContext<CarConnectionHub, IConnectionHubClient> controlHub,
+        AvailableTypesRegistry availableTypes,
+        VideoStreamReceiverService streamService,
+        ActiveVideoStreamViewerRegistry viewerRegistry,
+        ILogger<ChannelsController> logger) : base(context)
     {
         _controlHub = controlHub;
         _availableTypes = availableTypes;
+        _streamService = streamService;
+        _viewerRegistry = viewerRegistry;
         _logger = logger;
     }
 
@@ -308,6 +318,8 @@ public class ChannelsController : ControllerBase
                     _context.CarVideoStreams.Remove(old);
             }
         }
+        var previousAudioDevice = s.AudioDevice;
+        var previousAudioDenoise = s.AudioDenoise;
         s.Name = body.Name ?? s.Name;
         s.Type = body.Type ?? s.Type;
         s.Location = body.Location;
@@ -338,6 +350,12 @@ public class ChannelsController : ControllerBase
         var mapItem = ToMapItem(s);
         await _controlHub.Clients.Group($"Car-{carId}").UpsertVideoStream(s.StreamId, mapItem);
         _logger.LogInformation("Upsert video stream {Stream} for car {CarId} by {User}", s.StreamId, carId, user.LoginName);
+
+        if ((previousAudioDevice != s.AudioDevice || previousAudioDenoise != s.AudioDenoise)
+            && s.Enabled && _viewerRegistry.GetViewerCount(s.Id) > 0)
+        {
+            await ApplyAudioChangeToRunningStreamAsync(carId, s);
+        }
         return Ok(mapItem);
     }
 
@@ -352,6 +370,7 @@ public class ChannelsController : ControllerBase
         await _context.SaveChangesAsync();
         await UpdateCarChannelMapHashAsync(carId);
 
+        await _controlHub.Clients.Group($"Car-{carId}").StopAudioUplink(streamId);
         await _controlHub.Clients.Group($"Car-{carId}").DeleteVideoStream(streamId);
         _logger.LogInformation("Delete video stream {Stream} for car {CarId} by {User}", streamId, carId, user.LoginName);
         return NoContent();
@@ -397,6 +416,31 @@ public class ChannelsController : ControllerBase
         var user = await GetCurrentUserAsync();
         if (user == null) return Unauthorized();
         return Ok(_availableTypes.Get(carId)?.TelemetryTypes ?? Array.Empty<string>());
+    }
+
+    /// <summary>
+    /// A running stream only picks up audio changes when its Janus mountpoint is recreated (Janus can't
+    /// add or remove media on an existing mountpoint). Recreate it now and (re)start or stop the uplink,
+    /// so the change is live without waiting for the next stream start. Watching browsers see the
+    /// mountpoint go away and reconnect through their normal retry.
+    /// </summary>
+    private async Task ApplyAudioChangeToRunningStreamAsync(int carId, CarVideoStream stream)
+    {
+        try
+        {
+            _logger.LogInformation("Audio config of running stream {Stream} (car {CarId}) changed, recreating its Janus mountpoint", stream.StreamId, carId);
+            await _streamService.StartStreamAsync(stream.Id);
+            var audioPort = _streamService.GetAudioPort(stream.Id);
+            // Same connection as the UpsertVideoStream above, so the Onboard already has the new device.
+            if (audioPort != null)
+                await _controlHub.Clients.Group($"Car-{carId}").StartAudioUplink(stream.StreamId, audioPort.Value);
+            else
+                await _controlHub.Clients.Group($"Car-{carId}").StopAudioUplink(stream.StreamId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to apply audio change to running stream {Stream} of car {CarId}; it takes effect on the next stream start", stream.StreamId, carId);
+        }
     }
 
     [HttpGet("available-audio-devices")]

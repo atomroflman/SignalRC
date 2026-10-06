@@ -28,6 +28,46 @@ function pickTalkFormat() {
   return TALK_FORMATS.find((f) => MediaRecorder.isTypeSupported(f.mimeType));
 }
 
+// Push-to-talk can also be held on a keyboard key or a gamepad button. Bindings are per browser
+// (the gamepad is local hardware), so they live in localStorage.
+type PttBinding =
+  | { kind: 'key'; code: string }
+  | { kind: 'gamepad'; gamepadId: string; button: number };
+
+const PTT_BINDING_STORAGE_KEY = 'signalrc.pushToTalkBinding';
+const GAMEPAD_POLL_MS = 30;
+
+function loadBinding(): PttBinding | null {
+  try {
+    const raw = window.localStorage.getItem(PTT_BINDING_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as PttBinding) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveBinding(binding: PttBinding | null) {
+  try {
+    if (binding) window.localStorage.setItem(PTT_BINDING_STORAGE_KEY, JSON.stringify(binding));
+    else window.localStorage.removeItem(PTT_BINDING_STORAGE_KEY);
+  } catch {
+    // Storage blocked (private mode) — binding just isn't remembered.
+  }
+}
+
+function isEditableTarget(target: EventTarget | null) {
+  const el = target as HTMLElement | null;
+  return !!el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName));
+}
+
+function isButtonPressed(button: GamepadButton | undefined) {
+  return !!button && (button.pressed || button.value > 0.5);
+}
+
+function keyLabel(code: string) {
+  return code.replace(/^Key/, '').replace(/^Digit/, '');
+}
+
 function toBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
   let binary = '';
@@ -188,6 +228,103 @@ export default function AudioChat({ carId }: AudioChatProps) {
     }
   }, [hasSession, loadMicrophones]);
 
+  // -- key / gamepad binding -------------------------------------------------------------
+
+  const [binding, setBinding] = useState<PttBinding | null>(null);
+  const [learning, setLearning] = useState(false);
+  // Handlers read the latest callbacks without re-subscribing on every render.
+  const startRef = useRef(startTalking);
+  const stopRef = useRef(stopTalking);
+  startRef.current = startTalking;
+  stopRef.current = stopTalking;
+
+  useEffect(() => {
+    setBinding(loadBinding());
+  }, []);
+
+  const assignBinding = useCallback((next: PttBinding | null) => {
+    setBinding(next);
+    saveBinding(next);
+    setLearning(false);
+  }, []);
+
+  // Learn mode: the next key press or newly pressed gamepad button becomes the binding.
+  useEffect(() => {
+    if (!learning) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.code === 'Escape') setLearning(false);
+      else assignBinding({ kind: 'key', code: e.code });
+    };
+    const initiallyPressed = new Set<string>();
+    for (const gp of navigator.getGamepads?.() ?? []) {
+      gp?.buttons.forEach((b, i) => isButtonPressed(b) && initiallyPressed.add(`${gp.id}#${i}`));
+    }
+    const timer = window.setInterval(() => {
+      for (const gp of navigator.getGamepads?.() ?? []) {
+        if (!gp) continue;
+        const index = gp.buttons.findIndex((b, i) => isButtonPressed(b) && !initiallyPressed.has(`${gp.id}#${i}`));
+        if (index >= 0) {
+          assignBinding({ kind: 'gamepad', gamepadId: gp.id, button: index });
+          return;
+        }
+      }
+    }, GAMEPAD_POLL_MS);
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('keydown', onKeyDown, true);
+    };
+  }, [learning, assignBinding]);
+
+  // Active binding: hold to talk.
+  useEffect(() => {
+    if (!binding || learning || !hasSession || !outputDevice) return;
+
+    if (binding.kind === 'key') {
+      const onKeyDown = (e: KeyboardEvent) => {
+        if (e.code !== binding.code || e.repeat || isEditableTarget(e.target)) return;
+        e.preventDefault();
+        startRef.current();
+      };
+      const onKeyUp = (e: KeyboardEvent) => {
+        if (e.code !== binding.code) return;
+        stopRef.current();
+      };
+      // Releasing the key while the window is unfocused never fires keyup.
+      const onBlur = () => stopRef.current();
+      window.addEventListener('keydown', onKeyDown);
+      window.addEventListener('keyup', onKeyUp);
+      window.addEventListener('blur', onBlur);
+      return () => {
+        window.removeEventListener('keydown', onKeyDown);
+        window.removeEventListener('keyup', onKeyUp);
+        window.removeEventListener('blur', onBlur);
+        stopRef.current();
+      };
+    }
+
+    let wasPressed = false;
+    const timer = window.setInterval(() => {
+      const gp = (navigator.getGamepads?.() ?? []).find((g) => g?.id === binding.gamepadId);
+      const pressed = isButtonPressed(gp?.buttons[binding.button]);
+      if (pressed && !wasPressed) startRef.current();
+      if (!pressed && wasPressed) stopRef.current();
+      wasPressed = pressed;
+    }, GAMEPAD_POLL_MS);
+    return () => {
+      window.clearInterval(timer);
+      if (wasPressed) stopRef.current();
+    };
+  }, [binding, learning, hasSession, outputDevice]);
+
+  const bindingText = !binding
+    ? messages.audioChat.bindingNone
+    : binding.kind === 'key'
+      ? messages.audioChat.bindingKey(keyLabel(binding.code))
+      : messages.audioChat.bindingGamepad(binding.button, binding.gamepadId);
+
   // The vehicle stops playback when the control session changes; mirror that here.
   useEffect(() => {
     return () => stopTalking();
@@ -256,6 +393,31 @@ export default function AudioChat({ carId }: AudioChatProps) {
           >
             {talking ? messages.audioChat.releaseToStop : messages.audioChat.pushToTalk}
           </button>
+
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-zinc-400">{messages.audioChat.bindingLabel}</span>
+            <span className={`flex-1 truncate ${learning ? 'text-amber-300' : 'text-zinc-200'}`} title={bindingText}>
+              {learning ? messages.audioChat.bindingWaiting : bindingText}
+            </span>
+            <button
+              onClick={() => setLearning((l) => !l)}
+              className="px-2 py-1 bg-zinc-600 hover:bg-zinc-500 text-zinc-200 rounded"
+            >
+              {learning ? messages.audioChat.bindingCancel : messages.audioChat.bindingAssign}
+            </button>
+            {binding && !learning && (
+              <button
+                onClick={() => assignBinding(null)}
+                className="px-2 py-1 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 rounded"
+                title={messages.audioChat.bindingClear}
+              >
+                ✕
+              </button>
+            )}
+          </div>
+          {binding?.kind === 'gamepad' && (
+            <div className="text-[10px] text-zinc-500">{messages.audioChat.bindingGamepadHint}</div>
+          )}
 
           {error && <div className="text-xs text-red-400">{error}</div>}
         </>
