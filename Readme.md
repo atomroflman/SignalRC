@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="logo-mono-white.svg">
+    <img src="logo-mono.svg" alt="SignalRC logo" width="160">
+  </picture>
+</p>
+
 # SignalRC – Remote Control over LTE/Internet
 
 *[Deutsche Version](Readme.de.md)*
