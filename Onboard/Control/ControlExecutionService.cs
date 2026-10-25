@@ -39,8 +39,8 @@ public class ControlExecutionService
             if (controlType == null)
                 continue;
             Logger.LogDebug($"Got type {controlType.Name} for channel {channel.Key}.");
-            var baseControl = ServiceProvider.GetService(controlType) as ControlTypeBase;
-            if (baseControl == null)
+            var control = ServiceProvider.GetService(controlType) as IControlType;
+            if (control == null)
                 throw new Exception($"ControlType '{channel.Value.ControlType}' can not be instantiated");
             
             var pinManagerName = channel.Value.PinManager;
@@ -57,7 +57,7 @@ public class ControlExecutionService
             IControlType control = baseControl;
             if (channel.Value.MaxResendInterval is { } resendMs)
             {
-                control = new ResendRequiredContolDecorator(baseControl, TimeSpan.FromMilliseconds(resendMs), TimeSpan.FromMilliseconds(resendMs) / 3);
+                control = new ResendRequiredContolDecorator(control, TimeSpan.FromMilliseconds((double)channel.Value.MaxResendInterval!.Value), TimeSpan.FromMilliseconds((double)channel.Value.MaxResendInterval!.Value) / 3);
             }
             control.Initialize();
             _controls.Add(channel.Key, control);
