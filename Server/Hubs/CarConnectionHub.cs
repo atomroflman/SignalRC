@@ -1045,6 +1045,21 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
     public Task UnsubscribeFromAudioStatus(int carId) =>
         Groups.RemoveFromGroupAsync(Context.ConnectionId, CarAudioService.StatusGroup(carId));
 
+    public async Task<float?> SetSpeakerVolume(int carId, float volume)
+    {
+        var user = await GetCurrentUserAsync();
+        if (user == null || user.ActiveVehicleId != carId)
+            throw new HubException("Only the driver can change the speaker volume.");
+        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<SignalRCContext>();
+        var car = await dbContext.Cars.FirstOrDefaultAsync(c => c.Id == carId);
+        if (car == null)
+            return null;
+        car.AudioOutputVolume = float.IsFinite(volume) ? Math.Clamp(volume, 0f, AudioSettings.MaxOutputVolume) : car.AudioOutputVolume;
+        await dbContext.SaveChangesAsync();
+        await _carAudio.OnSettingsChangedAsync(carId);
+        return car.AudioOutputVolume;
+    }
+
     // -- Push-to-talk (browser → onboard) --------------------------------------------
     // Chunks are relayed over SignalR to the vehicle's speaker. Only the user who controls the car may
     // start talking, and only the connection that started may send chunks — anything else is dropped

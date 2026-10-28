@@ -58,6 +58,10 @@ public interface IConnectionHubServer
     Task<AudioStatus?> SubscribeToAudioStatus(int carId);
     Task UnsubscribeFromAudioStatus(int carId);
 
+    // Speaker volume (browser → server → onboard), driver only. Persisted as the car's speaker volume
+    // and applied live. Returns the stored value.
+    Task<float?> SetSpeakerVolume(int carId, float volume);
+
     // Push-to-talk (browser → server → onboard). Requires the control session id.
     Task<bool> StartAudioTalk(int carId, string sessionId, string format);
     Task SendAudioChunk(int carId, string sessionId, byte[] chunk);

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import type { HubConnection } from '@microsoft/signalr';
 import { create } from 'zustand';
 
 // Shared push-to-talk state: the vehicle audio player mutes while the driver talks (half-duplex),
@@ -100,4 +101,82 @@ export function useStoredNumber(key: string, fallback: number) {
   );
 
   return [value, update] as const;
+}
+
+/** Live audio state reported by the Onboard (SignalRC.Shared.Audio.AudioStatus). Levels in dBFS, null = silent. */
+export type CarAudioStatus = {
+  uplinkRunning: boolean;
+  inputLevelDb: number | null;
+  inputMuted: boolean;
+  outputOpen: boolean;
+  outputLevelDb: number | null;
+  talking: boolean;
+  outputVolume: number;
+  sounds: string[];
+};
+
+type AudioStatusState = { statusByCar: Record<number, CarAudioStatus | null> };
+
+const useAudioStatusStore = create<AudioStatusState>(() => ({ statusByCar: {} }));
+
+// One shared hub connection for all status subscribers on the page, ref-counted per car.
+let statusConnection: Promise<HubConnection> | null = null;
+const statusRefs = new Map<number, number>();
+
+function setStatus(carId: number, status: CarAudioStatus | null) {
+  useAudioStatusStore.setState((state) => ({ statusByCar: { ...state.statusByCar, [carId]: status } }));
+}
+
+async function subscribeStatus(connection: HubConnection, carId: number) {
+  const last = (await connection.invoke('SubscribeToAudioStatus', carId)) as CarAudioStatus | null;
+  setStatus(carId, last ?? null);
+}
+
+function getStatusConnection(): Promise<HubConnection> {
+  if (!statusConnection) {
+    statusConnection = (async () => {
+      const signalR = await import('@microsoft/signalr');
+      const connection = new signalR.HubConnectionBuilder().withUrl('/hubs/connection').withAutomaticReconnect().build();
+      connection.on('AudioStatusUpdated', (carId: number, status: CarAudioStatus) => setStatus(carId, status));
+      // Groups don't survive a reconnect: subscribe again.
+      connection.onreconnected(() => {
+        for (const carId of statusRefs.keys()) void subscribeStatus(connection, carId).catch(() => {});
+      });
+      await connection.start();
+      return connection;
+    })().catch((err) => {
+      statusConnection = null;
+      throw err;
+    });
+  }
+  return statusConnection;
+}
+
+/**
+ * Live audio status of a car (levels, talking, speaker volume). undefined until the first answer,
+ * null when the car hasn't reported anything yet.
+ */
+export function useCarAudioStatus(carId?: number): CarAudioStatus | null | undefined {
+  const status = useAudioStatusStore((state) => (carId == null ? undefined : state.statusByCar[carId]));
+
+  useEffect(() => {
+    if (carId == null) return;
+    statusRefs.set(carId, (statusRefs.get(carId) ?? 0) + 1);
+    void getStatusConnection()
+      .then((connection) => subscribeStatus(connection, carId))
+      .catch(() => {});
+    return () => {
+      const remaining = (statusRefs.get(carId) ?? 1) - 1;
+      if (remaining > 0) {
+        statusRefs.set(carId, remaining);
+        return;
+      }
+      statusRefs.delete(carId);
+      void getStatusConnection()
+        .then((connection) => connection.invoke('UnsubscribeFromAudioStatus', carId))
+        .catch(() => {});
+    };
+  }, [carId]);
+
+  return status;
 }

@@ -13,7 +13,7 @@ import {
   loadJanusScript,
   watchStream,
 } from './janus-client';
-import { useCarAudioSettings, usePushToTalkStore, useStoredNumber } from './audio-store';
+import { useCarAudioSettings, useCarAudioStatus, usePushToTalkStore, useStoredNumber } from './audio-store';
 import { LevelMeter, useAnalyserLevel } from './level-meter';
 import { useI18n } from '@/i18n/provider';
 
@@ -202,6 +202,8 @@ export default function VehicleAudio({ carId }: { carId?: number }) {
   const talking = usePushToTalkStore((state) => state.talking);
   const { phase, error, analyser } = useVehicleAudioPlayer(carId, listening && !!inputDevice, talking ? 0 : volume);
   const level = useAnalyserLevel(analyser);
+  // Only while listening: tells why it went quiet (the driver talks and the vehicle mutes its mic).
+  const status = useCarAudioStatus(listening ? carId : undefined);
 
   // Stop listening when switching cars; the next car starts muted like the first one.
   useEffect(() => setListening(false), [carId]);
@@ -216,7 +218,9 @@ export default function VehicleAudio({ carId }: { carId?: number }) {
     phase === 'live'
       ? talking
         ? messages.vehicleAudio.mutedWhileTalking
-        : messages.vehicleAudio.live
+        : status?.inputMuted
+          ? messages.vehicleAudio.mutedByDriver
+          : messages.vehicleAudio.live
       : phase === 'connecting'
         ? messages.vehicleAudio.connecting
         : phase === 'waiting'

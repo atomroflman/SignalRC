@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useControlFlowStore } from './control-flow-store';
-import { useCarAudioSettings, usePushToTalkStore } from './audio-store';
+import { useCarAudioSettings, useCarAudioStatus, usePushToTalkStore, useStoredNumber } from './audio-store';
+import { LevelMeter, dbToLevel, useAnalyserLevel } from './level-meter';
 import { useI18n } from '@/i18n/provider';
 
 interface AudioDevice {
@@ -22,6 +23,41 @@ const TALK_FORMATS: Array<{ mimeType: string; format: string }> = [
 ];
 const TALK_TIMESLICE_MS = 100;
 const TALK_BITRATE = 32000;
+const MIC_GAIN_STORAGE_KEY = 'signalrc.pttMicGain';
+const MAX_MIC_GAIN = 3;
+const MAX_SPEAKER_VOLUME = 2;
+// The speaker slider sends at most this often while dragging; the last value always goes out.
+const SPEAKER_VOLUME_SEND_MS = 150;
+
+// The browser microphone runs through Web Audio so its gain can be set and a meter can tap it;
+// the recorder records the graph's output.
+type MicGraph = {
+  stream: MediaStream;
+  context: AudioContext;
+  gain: GainNode;
+  analyser: AnalyserNode;
+  output: MediaStream;
+};
+
+function createMicGraph(stream: MediaStream, gainValue: number): MicGraph {
+  const context = new AudioContext();
+  const source = context.createMediaStreamSource(stream);
+  const gain = context.createGain();
+  gain.gain.value = gainValue;
+  const analyser = context.createAnalyser();
+  analyser.fftSize = 1024;
+  const destination = context.createMediaStreamDestination();
+  source.connect(gain);
+  gain.connect(analyser);
+  gain.connect(destination);
+  void context.resume();
+  return { stream, context, gain, analyser, output: destination.stream };
+}
+
+function closeMicGraph(graph: MicGraph) {
+  graph.stream.getTracks().forEach((track) => track.stop());
+  void graph.context.close();
+}
 
 function pickTalkFormat() {
   if (typeof MediaRecorder === 'undefined') return undefined;
@@ -84,7 +120,11 @@ function toBase64(buffer: ArrayBuffer): string {
  */
 export default function AudioChat({ carId }: AudioChatProps) {
   const { messages } = useI18n();
-  const { outputDevice } = useCarAudioSettings(carId);
+  const { outputDevice, settings } = useCarAudioSettings(carId);
+  const status = useCarAudioStatus(carId);
+  const [micGain, setMicGain] = useStoredNumber(MIC_GAIN_STORAGE_KEY, 1);
+  const [micAnalyser, setMicAnalyser] = useState<AnalyserNode | null>(null);
+  const micLevel = useAnalyserLevel(micAnalyser);
   const [microphones, setMicrophones] = useState<AudioDevice[]>([]);
   const [selectedInput, setSelectedInput] = useState<string>('');
   const [talking, setTalkingState] = useState(false);
@@ -93,7 +133,9 @@ export default function AudioChat({ carId }: AudioChatProps) {
 
   const talkingRef = useRef(false);
   const recorderRef = useRef<MediaRecorder | null>(null);
-  const micStreamRef = useRef<MediaStream | null>(null);
+  const micGraphRef = useRef<MicGraph | null>(null);
+  const micGainRef = useRef(micGain);
+  micGainRef.current = micGain;
   // Chunks are converted asynchronously; chaining keeps them in recording order.
   const sendChainRef = useRef<Promise<unknown>>(Promise.resolve());
 
@@ -126,10 +168,16 @@ export default function AudioChat({ carId }: AudioChatProps) {
   }, [messages]);
 
   const releaseMicrophone = useCallback(() => {
-    micStreamRef.current?.getTracks().forEach((track) => track.stop());
-    micStreamRef.current = null;
+    if (micGraphRef.current) closeMicGraph(micGraphRef.current);
+    micGraphRef.current = null;
     recorderRef.current = null;
+    setMicAnalyser(null);
   }, []);
+
+  useEffect(() => {
+    const graph = micGraphRef.current;
+    if (graph) graph.gain.gain.setTargetAtTime(micGain, graph.context.currentTime, 0.02);
+  }, [micGain]);
 
   const stopTalking = useCallback(() => {
     if (!talkingRef.current) return;
@@ -175,7 +223,9 @@ export default function AudioChat({ carId }: AudioChatProps) {
       setError(messages.audioChat.microphoneDenied(err instanceof Error ? err.message : String(err)));
       return;
     }
-    micStreamRef.current = stream;
+    const graph = createMicGraph(stream, micGainRef.current);
+    micGraphRef.current = graph;
+    setMicAnalyser(graph.analyser);
     // Device labels only become visible after the first permission grant.
     loadMicrophones();
 
@@ -198,7 +248,7 @@ export default function AudioChat({ carId }: AudioChatProps) {
       return;
     }
 
-    const recorder = new MediaRecorder(stream, {
+    const recorder = new MediaRecorder(graph.output, {
       mimeType: talkFormat.mimeType,
       audioBitsPerSecond: TALK_BITRATE,
     });
@@ -227,6 +277,46 @@ export default function AudioChat({ carId }: AudioChatProps) {
       loadMicrophones();
     }
   }, [hasSession, loadMicrophones]);
+
+  // -- speaker volume (driver, live on the vehicle) ---------------------------------------
+
+  // Local value while this browser changes it; otherwise the car's stored volume.
+  const [speakerVolume, setSpeakerVolume] = useState<number | undefined>(undefined);
+  const shownSpeakerVolume = speakerVolume ?? settings?.outputVolume ?? 1;
+  const pendingVolumeRef = useRef<number | null>(null);
+  const volumeTimerRef = useRef<number | null>(null);
+  const volumeTargetRef = useRef({ connection, carId });
+  volumeTargetRef.current = { connection, carId };
+
+  useEffect(() => setSpeakerVolume(undefined), [carId]);
+
+  const flushSpeakerVolume = useCallback(() => {
+    volumeTimerRef.current = null;
+    const next = pendingVolumeRef.current;
+    const { connection: conn, carId: id } = volumeTargetRef.current;
+    if (next == null || !conn || id == null) return;
+    pendingVolumeRef.current = null;
+    conn.invoke('SetSpeakerVolume', id, next).catch((err: unknown) => console.warn('SetSpeakerVolume failed:', err));
+    volumeTimerRef.current = window.setTimeout(() => flushSpeakerVolumeRef.current(), SPEAKER_VOLUME_SEND_MS);
+  }, []);
+  const flushSpeakerVolumeRef = useRef(flushSpeakerVolume);
+  flushSpeakerVolumeRef.current = flushSpeakerVolume;
+
+  const changeSpeakerVolume = useCallback(
+    (value: number) => {
+      setSpeakerVolume(value);
+      pendingVolumeRef.current = value;
+      if (volumeTimerRef.current == null) flushSpeakerVolume();
+    },
+    [flushSpeakerVolume],
+  );
+
+  useEffect(
+    () => () => {
+      if (volumeTimerRef.current != null) window.clearTimeout(volumeTimerRef.current);
+    },
+    [],
+  );
 
   // -- key / gamepad binding -------------------------------------------------------------
 
@@ -418,6 +508,37 @@ export default function AudioChat({ carId }: AudioChatProps) {
           {binding?.kind === 'gamepad' && (
             <div className="text-[10px] text-zinc-500">{messages.audioChat.bindingGamepadHint}</div>
           )}
+
+          <div className="space-y-1.5 border-t border-zinc-700 pt-2">
+            <label className="flex items-center gap-2 text-xs text-zinc-400">
+              <span className="w-16 shrink-0">{messages.audioChat.micGain}</span>
+              <input
+                type="range"
+                min={0}
+                max={MAX_MIC_GAIN}
+                step={0.05}
+                value={micGain}
+                onChange={(e) => setMicGain(Number(e.target.value))}
+                className="flex-1"
+              />
+              <span className="w-10 text-right tabular-nums text-zinc-300">{Math.round(micGain * 100)} %</span>
+            </label>
+            <LevelMeter level={micLevel} label={messages.audioChat.micLevel} />
+            <label className="flex items-center gap-2 text-xs text-zinc-400">
+              <span className="w-16 shrink-0">{messages.audioChat.speakerVolume}</span>
+              <input
+                type="range"
+                min={0}
+                max={MAX_SPEAKER_VOLUME}
+                step={0.05}
+                value={shownSpeakerVolume}
+                onChange={(e) => changeSpeakerVolume(Number(e.target.value))}
+                className="flex-1"
+              />
+              <span className="w-10 text-right tabular-nums text-zinc-300">{Math.round(shownSpeakerVolume * 100)} %</span>
+            </label>
+            <LevelMeter level={dbToLevel(status?.outputLevelDb)} label={messages.audioChat.speakerLevel} />
+          </div>
 
           {error && <div className="text-xs text-red-400">{error}</div>}
         </>
