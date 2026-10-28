@@ -117,7 +117,14 @@ public class AudioService : IAudioClient
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to start audio uplink ffmpeg for stream {StreamId}.", streamId);
+                // Forget the uplink, otherwise the next StartAudioUplink with the same args is
+                // taken for "already running" and the microphone stays off until a restart.
+                _logger.LogError(ex, "Failed to start audio uplink ffmpeg for stream {StreamId}; the next stream start retries.", streamId);
+                lock (_lock)
+                {
+                    if (_uplinks.TryGetValue(streamId, out var current) && current == uplink)
+                        _uplinks.Remove(streamId);
+                }
                 return;
             }
             uplink.Process = process;

@@ -12,6 +12,10 @@ public class PushToTalkRegistry
 
     public void Set(string connectionId, int carId, string sessionId) => _talkers[connectionId] = (carId, sessionId);
 
+    /// <summary>True if this connection started push-to-talk for exactly this car and session.</summary>
+    public bool IsTalking(string connectionId, int carId, string sessionId) =>
+        _talkers.TryGetValue(connectionId, out var talker) && talker.CarId == carId && talker.SessionId == sessionId;
+
     public bool TryRemove(string connectionId, out int carId, out string sessionId)
     {
         if (_talkers.TryRemove(connectionId, out var talker))

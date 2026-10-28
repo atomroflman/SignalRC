@@ -1009,8 +1009,10 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
     }
 
     // -- Push-to-talk (browser → onboard) --------------------------------------------
-    // Chunks are relayed over SignalR to the vehicle's speaker; the Onboard validates the control
-    // session on every call. Listening to the vehicle is part of the video stream (audio track).
+    // Chunks are relayed over SignalR to the vehicle's speaker. Only the user who controls the car may
+    // start talking, and only the connection that started may send chunks — anything else is dropped
+    // here instead of costing LTE bandwidth. The Onboard still validates the control session on every call.
+    // Listening to the vehicle is part of the video stream (audio track).
 
     private const int MaxAudioChunkBytes = 64 * 1024;
 
@@ -1029,6 +1031,12 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
     {
         if (!TryGetCarConnectionId(carId, out var carConnectionId))
             return false;
+        var user = await GetCurrentUserAsync();
+        if (user == null || user.ActiveVehicleId != carId)
+        {
+            Logger.LogWarning("Push-to-talk for car {CarId} rejected: connection {ConnectionId} does not control it", carId, Context.ConnectionId);
+            return false;
+        }
         var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<SignalRCContext>();
         var outputDevice = await dbContext.Cars.Where(c => c.Id == carId).Select(c => c.AudioOutputDevice).FirstOrDefaultAsync();
         if (string.IsNullOrWhiteSpace(outputDevice))
@@ -1046,6 +1054,8 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
     {
         if (chunk == null || chunk.Length == 0 || chunk.Length > MaxAudioChunkBytes)
             return;
+        if (!_pushToTalk.IsTalking(Context.ConnectionId, carId, sessionId))
+            return;
         if (!TryGetCarConnectionId(carId, out var carConnectionId))
             return;
         await Clients.Client(carConnectionId).PlayAudioChunk(sessionId, chunk);
@@ -1053,6 +1063,8 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
 
     public async Task StopAudioTalk(int carId, string sessionId)
     {
+        if (!_pushToTalk.IsTalking(Context.ConnectionId, carId, sessionId))
+            return;
         _pushToTalk.TryRemove(Context.ConnectionId, out _, out _);
         if (TryGetCarConnectionId(carId, out var carConnectionId))
             await Clients.Client(carConnectionId).StopAudioPlayback(sessionId);
