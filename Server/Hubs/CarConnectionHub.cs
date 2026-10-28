@@ -6,6 +6,7 @@ using SignalRC.Server.Configuration;
 using SignalRC.Server.Data;
 using SignalRC.Server.Services;
 using SignalRC.Shared;
+using SignalRC.Shared.Audio;
 using SignalRC.Shared.Channels;
 using SignalRC.Shared.FileTransfer;
 using SignalRC.Shared.HubClients;
@@ -215,6 +216,8 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
                 DriverId = connectionInfo?.DriverId,
                 DriverName = connectionInfo?.DriverName
             });
+            if (int.TryParse(carId, out var carIdInt))
+                await _carAudio.OnCarDisconnectedAsync(carIdInt);
         }
 
         var stoppedStreamIds = _viewerRegistry.RemoveConnection(Context.ConnectionId);
@@ -1021,6 +1024,26 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
     }
 
     public Task StopAudioListening(int carId) => _carAudio.RemoveListenerAsync(carId, Context.ConnectionId);
+
+    // -- Audio status (onboard → browsers) --------------------------------------------
+
+    public async Task ReportAudioStatus(AudioStatus status)
+    {
+        // The car is taken from the connection, not from the payload, so nobody can report for another car.
+        var carKey = _connectionStore.FirstOrDefault(kv => kv.Value.ConnectionId == Context.ConnectionId).Key;
+        if (carKey == null || !int.TryParse(carKey, out var carId))
+            return;
+        await _carAudio.PublishStatusAsync(carId, status);
+    }
+
+    public async Task<AudioStatus?> SubscribeToAudioStatus(int carId)
+    {
+        await Groups.AddToGroupAsync(Context.ConnectionId, CarAudioService.StatusGroup(carId));
+        return _carAudio.GetLastStatus(carId);
+    }
+
+    public Task UnsubscribeFromAudioStatus(int carId) =>
+        Groups.RemoveFromGroupAsync(Context.ConnectionId, CarAudioService.StatusGroup(carId));
 
     // -- Push-to-talk (browser → onboard) --------------------------------------------
     // Chunks are relayed over SignalR to the vehicle's speaker. Only the user who controls the car may

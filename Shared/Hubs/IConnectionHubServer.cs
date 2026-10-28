@@ -1,4 +1,5 @@
 using SignalRC.Shared;
+using SignalRC.Shared.Audio;
 using SignalRC.Shared.Channels;
 using SignalRC.Shared.FileTransfer;
 using SignalRC.Shared.Video;
@@ -50,6 +51,12 @@ public interface IConnectionHubServer
     // at least one browser listens. Returns the mountpoint id, or null if the car has no microphone.
     Task<int?> StartAudioListening(int carId);
     Task StopAudioListening(int carId);
+
+    // Audio status (onboard → server → browsers): levels and state a few times per second while audio
+    // runs. Subscribing returns the last known status (null if none yet).
+    Task ReportAudioStatus(AudioStatus status);
+    Task<AudioStatus?> SubscribeToAudioStatus(int carId);
+    Task UnsubscribeFromAudioStatus(int carId);
 
     // Push-to-talk (browser → server → onboard). Requires the control session id.
     Task<bool> StartAudioTalk(int carId, string sessionId, string format);

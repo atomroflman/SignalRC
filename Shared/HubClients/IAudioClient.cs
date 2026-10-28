@@ -39,4 +39,9 @@ public interface IAudioClient
     /// open test of the configured microphone and speaker.
     /// </summary>
     Task<DiagnosticCheck[]> GetAudioDiagnostics();
+
+    /// <summary>
+    /// Browser-only broadcast (relayed <see cref="AudioStatus"/>); the Onboard ignores it.
+    /// </summary>
+    Task AudioStatusUpdated(int carId, AudioStatus status);
 }

@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using Spectre.Console;
 using SignalRC.Onboard;
+using SignalRC.Onboard.Audio;
 using SignalRC.Onboard.Control;
 using SignalRC.Onboard.Control.ControlTypes;
 using SignalRC.Onboard.Data;
@@ -100,6 +101,7 @@ serviceCollection.AddSingleton<ControlService>();
 serviceCollection.AddSingleton<TelemetryService>();
 serviceCollection.AddSingleton<BashToolService>();
 serviceCollection.AddSingleton<OnboardDiagnosticsService>();
+serviceCollection.AddSingleton<AudioMixer>();
 serviceCollection.AddSingleton<AudioService>();
 
 serviceCollection.AddSingleton<SshKeyService>();

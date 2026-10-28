@@ -33,6 +33,8 @@ public class CarAudioService
     private readonly ActiveVideoStreamViewerRegistry _listeners = new();
     // Cars whose audio mountpoint currently exists.
     private readonly ConcurrentDictionary<int, byte> _running = new();
+    // Last status the Onboard reported, handed to browsers that subscribe later.
+    private readonly ConcurrentDictionary<int, AudioStatus> _lastStatus = new();
     private readonly ConcurrentDictionary<int, SemaphoreSlim> _carLocks = new();
 
     public CarAudioService(
@@ -113,6 +115,15 @@ public class CarAudioService
     }
 
     /// <summary>
+    /// The Onboard went away: whatever it reported last is no longer playing.
+    /// </summary>
+    public async Task OnCarDisconnectedAsync(int carId)
+    {
+        if (_lastStatus.TryRemove(carId, out _))
+            await _hub.Clients.Group(StatusGroup(carId)).AudioStatusUpdated(carId, new AudioStatus());
+    }
+
+    /// <summary>
     /// Settings were changed in the UI: push them to the Onboard and start or stop listening accordingly.
     /// </summary>
     public async Task OnSettingsChangedAsync(int carId)
@@ -123,6 +134,19 @@ public class CarAudioService
         if (TryGetCarClient(carId, out var client))
             await client.ApplyAudioSettings(ToSettings(car));
         await TryReconcileAsync(carId);
+    }
+
+    public static string StatusGroup(int carId) => $"audio:{carId}";
+
+    public AudioStatus? GetLastStatus(int carId) => _lastStatus.TryGetValue(carId, out var status) ? status : null;
+
+    /// <summary>
+    /// Relays an Onboard status report to the browsers subscribed to <see cref="StatusGroup"/>.
+    /// </summary>
+    public async Task PublishStatusAsync(int carId, AudioStatus status)
+    {
+        _lastStatus[carId] = status;
+        await _hub.Clients.Group(StatusGroup(carId)).AudioStatusUpdated(carId, status);
     }
 
     /// <summary>
