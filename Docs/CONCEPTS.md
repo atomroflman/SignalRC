@@ -51,7 +51,7 @@ Five flags can be set in `appSettings.json` — but only `bashTool` (`Onboard/Pr
 - **TelemetryService** – tick loop, reads `TelemetryReaderBase` implementations (CpuTemp, JBD BMS, lifetime), pushes over `CarConnectionHub`.
 - **ControlService** – receives control commands, SSH challenge auth, delegates to hardware (PCA9685/GPIO); also relays bash output via `SendBashOutput`.
 - **VideoStreamService** – manages the MediaMTX process and its configuration from the ChannelMap.
-- **AudioService** – two-way audio via ffmpeg + ALSA: a video stream's microphone → Opus/RTP → the stream's Janus mountpoint (everyone watching hears it); push-to-talk chunks from SignalR → vehicle speaker (driver only, bound to the control session).
+- **AudioService** – the vehicle's audio engine (`Onboard/Audio/`): the car microphone → Opus/RTP → the car's own Janus audio mountpoint while someone listens; an `AudioMixer` that plays push-to-talk (driver only, bound to the control session) and `SoundPlayer` sound channels together on the speaker; mic mute while talking; live levels to the UI; sound library sync.
 - **BashToolService** – subscribes to `ExecuteCommand` on `CarBashHub`, runs local processes, streams output back via `CarConnectionHub`.
 - **SshKeyService** – RSA-2048, challenge/verify, fingerprint logging; serves the private key over a LAN-only listener on ports 8080/8443.
 - **CarConfigurationService** – stores server-assigned config (Janus, video settings).

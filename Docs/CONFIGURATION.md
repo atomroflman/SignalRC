@@ -23,7 +23,7 @@ Located in the config directory (see [Config Directory](#config-directory) below
 
 Optional feature-flag keys (`webSetup`, `bashTool`, `channelTester`, `audio`, `video`) can also be set here — see [Feature Flags](#feature-flags) for which of them actually do anything.
 
-Audio devices are not configured here but in the web UI (per video stream and per vehicle) — see [FEATURES.md](FEATURES.md#audio-chat).
+Audio devices, volumes and sound files are not configured here but per vehicle in the web UI — see [FEATURES.md](FEATURES.md#audio-chat).
 
 ### channelMap.json (Onboard)
 

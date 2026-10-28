@@ -73,7 +73,7 @@ docker compose down
 |---------|--------------|
 | Remote Control | Low-latency control over LTE/Internet |
 | Video Streaming | Real-time video from the vehicle's camera |
-| Audio Chat | Bidirectional audio communication |
+| Audio Chat | Listen to the vehicle, push-to-talk, sound files as control channels |
 | Bash Tool | Run remote bash commands on the vehicle |
 | Channel Tester | Test hardware channels from the web UI |
 | Templates | Share and reuse vehicle channel configurations |

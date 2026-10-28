@@ -6,7 +6,7 @@ SignalRC provides the following features for remote vehicle control:
 
 - **Remote Control**: Drive your car over LTE/Internet with low latency
 - **Video Streaming**: Real-time video from on-board camera
-- **Audio Chat**: Bidirectional audio communication
+- **Audio Chat**: Listen to the vehicle, push-to-talk, sound channels
 - **Telemetry**: Monitor battery, CPU temperature, and other sensors
 - **Bash Tool**: Execute bash commands on the vehicle remotely
 - **Channel Tester**: Test hardware channels from the web interface
@@ -69,49 +69,80 @@ Janus's WebRTC media (all video streams) uses the UDP range configured on the `j
 
 ## Audio Chat
 
-Two-way audio between driver and vehicle. Everything is configured in the web UI on the vehicle's channel page (`/car/{id}/channels`); the Onboard reports its ALSA devices (`arecord -l/-L`, `aplay -l/-L`) on every connect, so the fields offer them as suggestions.
+Two-way audio between driver and vehicle, plus sound files the driver can trigger like any other control channel. Everything is configured in the web UI on the vehicle's config page (`/car/{id}/channels`, sections *Audio* and *Sounds*); the Onboard reports its ALSA devices (`arecord -l/-L`, `aplay -l/-L`) on every connect, so the fields offer them as suggestions.
 
 | Direction | Who | Configured where |
 |---|---|---|
-| Vehicle → browser (listen) | Everyone watching the video stream | Per video stream: *Audio input (ALSA)* + optional *Noise filter* |
-| Browser → vehicle (push-to-talk) | Only the driver (active control session) | Per vehicle: *Audio → Speaker (ALSA)* |
+| Vehicle → browser (listen) | Every logged-in user, independent of video | *Audio → Microphone*: device, channel (mix/left/right), recording gain, noise filter, bitrate |
+| Browser → vehicle (push-to-talk) | Only the driver (active control session) | *Audio → Speaker*: device, default volume, mute microphone while talking |
+| Sound channels → vehicle | Whoever drives (control channels) | *Sounds* (files) + control channels of type `SoundPlayer` |
 
-### Listen (part of the video stream)
+The settings are stored per car (`Car.Audio*`, `SignalRC.Shared.Audio.AudioSettings`) and pushed to the Onboard on every (re)connect and on every change; a running uplink or speaker adapts without a restart where possible.
+
+### Audio engine on the vehicle
 
 ```
-Mic ─ALSA─► ffmpeg (Opus/RTP) ──UDP──► Janus mountpoint (video + audio) ──WebRTC──► Browser
+Mic ─ALSA─► ffmpeg capture ─PCM─► gain + mute ─► ffmpeg Opus/RTP ──UDP──► Janus audio mountpoint ─WebRTC─► Browser
+
+Push-to-talk chunks ─► ffmpeg decoder ─► jitter buffer ─┐
+SoundPlayer channels ─► clip cache / ffmpeg stream ─────┼─► AudioMixer (20 ms frames, master volume) ─► aplay ─ALSA─► Speaker
 ```
 
-- A video stream with an audio input gets an audio port on its Janus mountpoint (Opus, PT 111) next to the video port.
-- When the stream starts (first viewer), the server sends `StartVideoStream` and `StartAudioUplink(streamId, port)`; when it stops, `StopAudioUplink`. The Onboard's `AudioService` runs the capture in its **own** ffmpeg, so a broken microphone can't take the video down, and restarts it if it dies. Outbound UDP like the video, so it works behind LTE CGNAT.
-- *Noise filter* adds `highpass=f=100,afftdn=nf=-25` (rumble cut + FFT denoiser against steady motor/wind noise).
-- The video panel shows a *Vehicle audio* toggle for streams with audio; it starts muted (browser autoplay rules).
-- Changing the audio input or noise filter of a running stream applies immediately: the server recreates the stream's Janus mountpoint and restarts/stops the uplink. Viewers drop for a moment and re-watch automatically.
+- **MicUplink**: ffmpeg captures from ALSA (channel pick, optional denoise `highpass=f=100,afftdn=nf=-25`) and hands raw PCM to the Onboard, which applies the gain and the push-to-talk mute live (10 ms fade); a second ffmpeg encodes Opus and sends RTP. Restarted automatically if it dies. Outbound UDP like the video, so it works behind LTE CGNAT.
+- **AudioMixer**: one `aplay` per speaker session; all sources are mixed, so push-to-talk and sounds play at the same time. The pipe into `aplay` is shrunk to one page, so the mixer runs at the device clock with about 100 ms of buffer. The device is opened when something plays and closed after 3 s of silence (free for other programs again). Volume changes ramp, no clicks.
+- **Status**: while the uplink or the speaker runs, the Onboard reports levels and state (`AudioStatus`) four times per second; the server relays it to subscribed browsers (`SubscribeToAudioStatus`) for meters and the "playing" line.
+
+### Listen
+
+- The car's microphone has its **own audio-only Janus mountpoint** (id `1000000 + carId`, Opus PT 111), separate from the video mountpoints. Listening works without video, and audio changes never interrupt a running video stream.
+- The *Vehicle audio* panel (right column) has the listen toggle (starts off — browser autoplay rules), a local volume up to 200 % and a level meter. The browser registers as listener with `StartAudioListening(carId)`; the server (`CarAudioService`) creates the mountpoint and sends `StartAudioUplink(port)` for the first listener and tears both down after the last one leaves (`StopAudioListening`, or the browser disconnects).
+- Listeners see when the vehicle mic is muted because the driver is talking.
 
 ### Push-to-talk
 
 ```
-Browser mic ─MediaRecorder (WebM/Ogg, Opus)─► SignalR chunks ─► Server ─► Onboard ─stdin─► ffmpeg ─ALSA─► Speaker
+Browser mic ─Web Audio (gain)─► MediaRecorder (WebM/Ogg, Opus)─► SignalR chunks ─► Server ─► Onboard ─► decoder ─► mixer ─► Speaker
 ```
 
-1. While the button — or the bound key / gamepad button — is held, the browser records 100 ms chunks (`audio/webm;codecs=opus` in Chromium, `audio/ogg;codecs=opus` in Firefox; Safari is not supported).
-2. `StartAudioTalk` → the server looks up the car's speaker and calls `StartAudioPlayback(sessionId, format, device)`; the Onboard checks the control session and starts ffmpeg reading from stdin. `SendAudioChunk` pipes the chunks in order; `StopAudioTalk` closes stdin.
+1. While the button — or the bound key / gamepad button — is held, the browser records 60 ms chunks (`audio/webm;codecs=opus` in Chromium, `audio/ogg;codecs=opus` in Firefox; Safari is not supported). The microphone stays open for the whole control session after the first press (*Close mic* releases it), and recording starts at the press: chunks are held until the vehicle accepted, so no words are lost to the start-up round trip.
+2. `StartAudioTalk` (driver only) → `StartAudioPlayback(sessionId, format)`; the Onboard checks the control session and adds a decoder source to the mixer. `SendAudioChunk` is only relayed for the connection that started talking; `StopAudioTalk` lets the buffered rest play out.
 3. Playback stops after 5 s without data, when the browser disconnects, or when the control session changes. Talking counts as driver activity, so the session doesn't time out meanwhile.
-4. While talking, the browser mutes the vehicle audio (half-duplex), so you don't hear yourself through the vehicle microphone. Janus does no acoustic echo cancellation; full duplex would need e.g. PipeWire `module-echo-cancel` on the vehicle.
+4. **Echo**: with *Mute microphone while talking* (default on) the vehicle mutes its own microphone while push-to-talk plays plus 400 ms, so listeners don't hear the driver a second time; the driver's own player mutes locally too. There is no acoustic echo cancellation (half-duplex by design: the driver mostly listens).
+5. The push-to-talk panel also has the driver's microphone gain (per browser), the **vehicle speaker volume** (driver only, `SetSpeakerVolume`, stored as the car's speaker volume and applied live) and meters for the own microphone and the vehicle speaker.
 
-The push-to-talk panel only appears when the vehicle has a speaker configured. Expect a few hundred milliseconds of latency.
+The push-to-talk panel only appears when the vehicle has a speaker configured. Expect roughly 200–300 ms from mouth to speaker.
 
 **Key / gamepad binding:** *Assign* in the push-to-talk panel, then press a key or a gamepad button (Esc cancels). The binding is stored per browser (`localStorage`). Keys are ignored while typing in input fields; releasing focus stops talking. Don't map the same gamepad button to a vehicle channel in the flow as well.
 
+### Sound channels
+
+- **Library**: *Sounds* section of the config page — upload (mp3, wav, ogg/oga/opus, flac, m4a/aac, webm; up to 20 MB each), preview, delete. Files are stored in the server database (`CarSoundFiles`). The Onboard keeps a copy in `<config dir>/sounds/`: the server pushes the list on connect and after every change (`SyncSoundFiles`), missing or changed files (by SHA-256) are downloaded in 128 KB chunks over the hub (`GetSoundFileChunk`), files no longer listed are deleted.
+- **Channel**: a control channel with control type `SoundPlayer`; the config page shows a structured editor for its options. The channel value is a button (|value| ≥ 0.5 = pressed), so it is bound in the flow like a light or a horn.
+
+| Option | Default | Meaning |
+|---|---|---|
+| `file` | — | Library file name |
+| `mode` | `toEnd` | `toEnd`: press starts, plays to the end · `hold`: plays while pressed · `toggle`: press starts, next press stops |
+| `retrigger` | `restart` | (`toEnd`) pressing while it plays: `restart`, `ignore` or `stop` |
+| `loop` | `false` | Repeat until stopped |
+| `volumePercent` | `100` | 0–200 |
+| `startSeconds` / `endSeconds` | `0` / end | Play only this part of the file |
+| `fadeInMs` / `fadeOutMs` | `0` / `0` | Fades on start / on stop (stopping always fades at least 10 ms) |
+| `duckOnTalk` | `false` | Quieter (25 %) while push-to-talk plays |
+
+- Short clips (≤ 30 s per range) are decoded once and played from memory, so they start immediately; longer files are streamed through ffmpeg. Options are read on every press — edits apply without restarting the Onboard, and new channels are set up on first use.
+- When control is lost (session ended, connection gone), looping, `hold` and `toggle` sounds stop; a plain one-shot plays to its end.
+- Sounds only play when the vehicle has a speaker configured.
+
 ### Diagnostics
 
-The onboard diagnostics (web UI → *Onboard diagnostics*) append audio checks (`A*`): ffmpeg with libopus and ALSA, alsa-utils, `audio` group membership, a 1 s capture test of every configured stream microphone, and a 1 s silence playback on the car speaker. Devices currently in use by a running uplink or push-to-talk are reported as OK without testing; "busy" errors usually mean PipeWire/PulseAudio or a second stream holds the device.
+The onboard diagnostics (web UI → *Onboard diagnostics*) append audio checks (`A*`): ffmpeg with libopus and ALSA, alsa-utils (`aplay` drives the speaker), `audio` group membership, a 1 s capture test of the microphone, and a 1 s silence playback on the speaker. Devices currently in use by the uplink or the mixer are reported as OK without testing; "busy" errors usually mean PipeWire/PulseAudio holds the device.
 
 ### Requirements
 
 - Vehicle: microphone/speaker on ALSA (a Raspberry Pi has no mic input — use a USB sound card), `ffmpeg` with `libopus`, `alsa-utils`, service user in the `audio` group (`install.sh` sets this up). Prefer the `plughw:CARD=…,DEV=…` entries: the service runs without a desktop session, so `default`/`pipewire`/`pulse` usually don't work.
 - Browser: HTTPS (or `localhost`) for microphone access.
-- Feature flag `audio` (default `true`); `false` makes the vehicle refuse both directions.
+- Feature flag `audio` (default `true`); `false` makes the vehicle refuse all audio (listening, push-to-talk, sounds).
 
 ---
 
