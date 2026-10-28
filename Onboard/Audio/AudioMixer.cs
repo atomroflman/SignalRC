@@ -23,6 +23,7 @@ public sealed class AudioMixer
     private Thread? _thread;
     private int _session;
     private float _peak;
+    private volatile bool _talkActive;
 
     public AudioMixer(ILogger<AudioMixer> logger)
     {
@@ -46,6 +47,9 @@ public sealed class AudioMixer
     {
         get { lock (_lock) return _volume; }
     }
+
+    /// <summary>Push-to-talk is among the playing sources (sound channels may duck under it).</summary>
+    public bool TalkActive => _talkActive;
 
     public IReadOnlyList<IMixerSource> Sources
     {
@@ -143,6 +147,7 @@ public sealed class AudioMixer
                     sources = _sources.ToArray();
                     targetGain = _volume;
                 }
+                _talkActive = sources.Any(s => s is PushToTalkSource);
 
                 Array.Clear(mix);
                 foreach (var source in sources)
@@ -194,6 +199,7 @@ public sealed class AudioMixer
                         {
                             if (session == _session)
                                 _thread = null;
+                            _talkActive = false;
                             _logger.LogInformation("Closing speaker (idle).");
                             return;
                         }

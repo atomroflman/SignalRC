@@ -20,6 +20,7 @@ namespace SignalRC.Onboard;
 /// <item>While push-to-talk plays (plus a short hangover for the speaker tail and room echo) the
 /// microphone is muted, so listeners don't hear the driver a second time.</item>
 /// <item>Levels and state go to the server as <see cref="AudioStatus"/> while anything runs.</item>
+/// <item>The sound library for SoundPlayer channels is kept in sync (<see cref="SoundLibrary"/>).</item>
 /// </list>
 /// Configuration comes from the server (<see cref="ApplyAudioSettings"/>) on every connect and change.
 /// </summary>
@@ -37,6 +38,7 @@ public class AudioService : IAudioClient
     private readonly ControlService _controlService;
     private readonly ServerConnectionService _serverConnection;
     private readonly AudioMixer _mixer;
+    private readonly SoundLibrary _library;
     private readonly object _lock = new();
     private readonly object _uplinkLock = new();
     private readonly Timer _timer;
@@ -58,13 +60,15 @@ public class AudioService : IAudioClient
         IConfiguration configuration,
         ControlService controlService,
         ServerConnectionService serverConnection,
-        AudioMixer mixer)
+        AudioMixer mixer,
+        SoundLibrary library)
     {
         _logger = logger;
         _configuration = configuration;
         _controlService = controlService;
         _serverConnection = serverConnection;
         _mixer = mixer;
+        _library = library;
         _mixer.SourceFinished += OnSourceFinished;
         _controlService.SessionChanged += () =>
         {
@@ -89,6 +93,12 @@ public class AudioService : IAudioClient
             normalized.InputDevice, normalized.InputChannel, normalized.InputGain, normalized.Denoise, normalized.BitrateKbps, normalized.OutputDevice, normalized.OutputVolume);
         _mixer.Configure(AudioEnabled ? normalized.OutputDevice : null, normalized.OutputVolume);
         ReconcileUplink();
+        return Task.CompletedTask;
+    }
+
+    public Task SyncSoundFiles(SoundFileInfo[] files)
+    {
+        _library.Sync(files);
         return Task.CompletedTask;
     }
 

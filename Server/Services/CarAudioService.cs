@@ -112,6 +112,27 @@ public class CarAudioService
         await client.ApplyAudioSettings(ToSettings(car));
         if (_running.ContainsKey(carId) && _streamService.GetAudioPort(carId) is { } port)
             await client.StartAudioUplink(port);
+        await client.SyncSoundFiles(await LoadSoundFilesAsync(carId));
+    }
+
+    /// <summary>
+    /// The sound library changed: the Onboard fetches what is new and drops what is gone.
+    /// </summary>
+    public async Task OnSoundFilesChangedAsync(int carId)
+    {
+        if (TryGetCarClient(carId, out var client))
+            await client.SyncSoundFiles(await LoadSoundFilesAsync(carId));
+    }
+
+    private async Task<SoundFileInfo[]> LoadSoundFilesAsync(int carId)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SignalRCContext>();
+        return await db.CarSoundFiles.AsNoTracking()
+            .Where(f => f.CarId == carId)
+            .OrderBy(f => f.FileName)
+            .Select(f => new SoundFileInfo { Name = f.FileName, Sha256 = f.Sha256, SizeBytes = f.SizeBytes })
+            .ToArrayAsync();
     }
 
     /// <summary>

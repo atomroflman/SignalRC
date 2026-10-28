@@ -1045,6 +1045,27 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
     public Task UnsubscribeFromAudioStatus(int carId) =>
         Groups.RemoveFromGroupAsync(Context.ConnectionId, CarAudioService.StatusGroup(carId));
 
+    public async Task<byte[]?> GetSoundFileChunk(string name, long offset, int length)
+    {
+        // Only the calling car's own files.
+        var carKey = _connectionStore.FirstOrDefault(kv => kv.Value.ConnectionId == Context.ConnectionId).Key;
+        if (carKey == null || !int.TryParse(carKey, out var carId) || offset < 0 || offset >= SoundFileInfo.MaxFileBytes)
+            return null;
+        length = Math.Clamp(length, 1, SoundFileInfo.MaxChunkBytes);
+        var from = (int)offset + 1; // SQL substring is 1-based and takes int, not bigint
+        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<SignalRCContext>();
+        var fileId = await dbContext.CarSoundFiles
+            .Where(f => f.CarId == carId && f.FileName == name)
+            .Select(f => (int?)f.Id)
+            .FirstOrDefaultAsync();
+        if (fileId == null)
+            return null;
+        // substring() reads just the slice instead of loading the whole file per chunk.
+        return await dbContext.Database
+            .SqlQuery<byte[]>($"SELECT substring(\"Data\" from {from} for {length}) AS \"Value\" FROM \"CarSoundFiles\" WHERE \"Id\" = {fileId.Value}")
+            .FirstOrDefaultAsync();
+    }
+
     public async Task<float?> SetSpeakerVolume(int carId, float volume)
     {
         var user = await GetCurrentUserAsync();

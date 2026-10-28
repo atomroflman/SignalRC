@@ -41,6 +41,12 @@ public interface IAudioClient
     Task<DiagnosticCheck[]> GetAudioDiagnostics();
 
     /// <summary>
+    /// The car's sound library, pushed on connect and after every upload/delete. The Onboard downloads
+    /// missing or changed files (GetSoundFileChunk) and removes the ones no longer listed.
+    /// </summary>
+    Task SyncSoundFiles(SoundFileInfo[] files);
+
+    /// <summary>
     /// Browser-only broadcast (relayed <see cref="AudioStatus"/>); the Onboard ignores it.
     /// </summary>
     Task AudioStatusUpdated(int carId, AudioStatus status);

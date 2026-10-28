@@ -35,34 +35,39 @@ public class ControlExecutionService
         }
         foreach (var channel in _channelMap.ControlChannels)
         {
-            var controlType = GetControlType(channel.Value.ControlType);
-            if (controlType == null)
-                continue;
-            Logger.LogDebug($"Got type {controlType.Name} for channel {channel.Key}.");
-            var baseControl = ServiceProvider.GetService(controlType) as ControlTypeBase;
-            if (baseControl == null)
-                throw new Exception($"ControlType '{channel.Value.ControlType}' can not be instantiated");
-            
-            var pinManagerName = channel.Value.PinManager;
-            if (string.IsNullOrWhiteSpace(pinManagerName))
-                pinManagerName = "default";
-            var pinManager = ServiceProvider.GetRequiredService<IModuleManagerFactory>().Create(pinManagerName);
-            if (pinManager == null)
-                throw new Exception($"Pin manager '{pinManagerName}' not found in ChannelMap.");
-            baseControl.PinManager = pinManager;
-            baseControl.Name = channel.Key;
-            baseControl.Options = channel.Value.Options;
-            baseControl.TestDisabled = channel.Value.TestDisabled;
-            baseControl.Address = channel.Value.Address;
-            IControlType control = baseControl;
-            if (channel.Value.MaxResendInterval is { } resendMs)
-            {
-                control = new ResendRequiredContolDecorator(baseControl, TimeSpan.FromMilliseconds(resendMs), TimeSpan.FromMilliseconds(resendMs) / 3);
-            }
-            control.Initialize();
-            _controls.Add(channel.Key, control);
-            Logger.LogInformation($"Initialized Channel: {channel.Key} - {channel.Value.ControlType}@{pinManagerName}:{channel.Value.Address}");
+            InitializeChannel(channel.Key, channel.Value);
         }
+    }
+
+    private void InitializeChannel(string name, ControlChannelMapItem item)
+    {
+        var controlType = GetControlType(item.ControlType);
+        if (controlType == null)
+            return;
+        Logger.LogDebug($"Got type {controlType.Name} for channel {name}.");
+        var baseControl = ServiceProvider.GetService(controlType) as ControlTypeBase;
+        if (baseControl == null)
+            throw new Exception($"ControlType '{item.ControlType}' can not be instantiated");
+
+        var pinManagerName = item.PinManager;
+        if (string.IsNullOrWhiteSpace(pinManagerName))
+            pinManagerName = "default";
+        var pinManager = ServiceProvider.GetRequiredService<IModuleManagerFactory>().Create(pinManagerName);
+        if (pinManager == null)
+            throw new Exception($"Pin manager '{pinManagerName}' not found in ChannelMap.");
+        baseControl.PinManager = pinManager;
+        baseControl.Name = name;
+        baseControl.Options = item.Options;
+        baseControl.TestDisabled = item.TestDisabled;
+        baseControl.Address = item.Address;
+        IControlType control = baseControl;
+        if (item.MaxResendInterval is { } resendMs)
+        {
+            control = new ResendRequiredContolDecorator(baseControl, TimeSpan.FromMilliseconds(resendMs), TimeSpan.FromMilliseconds(resendMs) / 3);
+        }
+        control.Initialize();
+        _controls.Add(name, control);
+        Logger.LogInformation($"Initialized Channel: {name} - {item.ControlType}@{pinManagerName}:{item.Address}");
     }
 
     public async Task RunControlTestsAsync() 
@@ -92,8 +97,21 @@ public class ControlExecutionService
         }
         if (!_controls.ContainsKey(channel))
         {
-            Logger.LogError($"Channel not configured: {channel}");
-            return;
+            // Added in the UI after startup (e.g. a new sound channel): set it up on first use.
+            if (!_channelMap.ControlChannels.TryGetValue(channel, out var item))
+            {
+                Logger.LogError($"Channel not configured: {channel}");
+                return;
+            }
+            try
+            {
+                InitializeChannel(channel, item);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, $"Channel {channel} could not be initialized.");
+                return;
+            }
         }
         var control = _controls[channel];
         Logger.LogDebug($"New Channel Value: {channel}: {value} => PIN: {control}");

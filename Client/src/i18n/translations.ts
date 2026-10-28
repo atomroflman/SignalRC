@@ -285,6 +285,7 @@ const deMessages = {
     micLevel: 'Mein Pegel',
     speakerVolume: 'Lautspr.',
     speakerLevel: 'Lautspr.-Pegel',
+    playingSounds: (names: string) => `Spielt: ${names}`,
   },
   videoStream: {
     browserRequired: 'Browserumgebung erforderlich',
@@ -705,6 +706,7 @@ const enMessages: Messages = {
     micLevel: 'My level',
     speakerVolume: 'Speaker',
     speakerLevel: 'Speaker level',
+    playingSounds: (names: string) => `Playing: ${names}`,
   },
   videoStream: {
     browserRequired: 'Browser environment required',

@@ -179,6 +179,49 @@ namespace SignalRC.Server.Migrations
                     b.ToTable("CarPinManagers", (string)null);
                 });
 
+            modelBuilder.Entity("SignalRC.Server.Data.CarSoundFile", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CarId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ContentType")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<byte[]>("Data")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Sha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("UploadedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CarId", "FileName")
+                        .IsUnique();
+
+                    b.ToTable("CarSoundFiles");
+                });
+
             modelBuilder.Entity("SignalRC.Server.Data.CarTelemetry", b =>
                 {
                     b.Property<int>("Id")
@@ -857,6 +900,17 @@ namespace SignalRC.Server.Migrations
                 {
                     b.HasOne("SignalRC.Server.Data.Car", "Car")
                         .WithMany("PinManagers")
+                        .HasForeignKey("CarId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Car");
+                });
+
+            modelBuilder.Entity("SignalRC.Server.Data.CarSoundFile", b =>
+                {
+                    b.HasOne("SignalRC.Server.Data.Car", "Car")
+                        .WithMany()
                         .HasForeignKey("CarId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();

@@ -58,6 +58,10 @@ public interface IConnectionHubServer
     Task<AudioStatus?> SubscribeToAudioStatus(int carId);
     Task UnsubscribeFromAudioStatus(int carId);
 
+    // Sound library download (onboard → server): a piece of one of the calling car's sound files,
+    // at most SoundFileInfo.MaxChunkBytes. Null if the file doesn't exist.
+    Task<byte[]?> GetSoundFileChunk(string name, long offset, int length);
+
     // Speaker volume (browser → server → onboard), driver only. Persisted as the car's speaker volume
     // and applied live. Returns the stored value.
     Task<float?> SetSpeakerVolume(int carId, float volume);

@@ -102,6 +102,7 @@ serviceCollection.AddSingleton<TelemetryService>();
 serviceCollection.AddSingleton<BashToolService>();
 serviceCollection.AddSingleton<OnboardDiagnosticsService>();
 serviceCollection.AddSingleton<AudioMixer>();
+serviceCollection.AddSingleton<SoundLibrary>();
 serviceCollection.AddSingleton<AudioService>();
 
 serviceCollection.AddSingleton<SshKeyService>();

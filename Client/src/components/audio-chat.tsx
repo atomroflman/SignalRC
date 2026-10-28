@@ -576,6 +576,9 @@ export default function AudioChat({ carId }: AudioChatProps) {
               <span className="w-10 text-right tabular-nums text-zinc-300">{Math.round(shownSpeakerVolume * 100)} %</span>
             </label>
             <LevelMeter level={dbToLevel(status?.outputLevelDb)} label={messages.audioChat.speakerLevel} />
+            {status?.sounds && status.sounds.length > 0 && (
+              <div className="truncate text-[10px] text-sky-300">♪ {messages.audioChat.playingSounds(status.sounds.join(', '))}</div>
+            )}
           </div>
 
           {error && <div className="text-xs text-red-400">{error}</div>}

@@ -121,9 +121,69 @@ function PinManagerEditor({
   );
 }
 
+type SoundFile = { name: string; sizeBytes: number; sha256: string; uploadedAt?: string };
+
+const SOUND_EXTENSIONS = [".mp3", ".wav", ".ogg", ".oga", ".opus", ".flac", ".m4a", ".aac", ".webm"];
+
+function formatBytes(bytes: number) {
+  return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+// Structured view of a SoundPlayer channel's options; edits the same JSON as the raw field below it.
+function SoundPlayerOptionsEditor({
+  optionsJson, onChange, soundFiles, hasSpeaker,
+}: { optionsJson: string; onChange: (json: string) => void; soundFiles: SoundFile[]; hasSpeaker: boolean }) {
+  const options: Record<string, any> = parseOptionsJson(optionsJson) ?? {};
+  const set = (key: string, value: unknown) => {
+    const next = { ...options };
+    if (value === undefined || value === "" || value === null) delete next[key];
+    else next[key] = value;
+    onChange(formatOptionsJson(next));
+  };
+  const num = (value: string) => (value === "" ? undefined : Number(value));
+  const mode = options.mode ?? "toEnd";
+  const fileNames = soundFiles.map(f => f.name);
+  return (
+    <div className="col-span-2 grid grid-cols-2 gap-2 p-2 border border-sky-900 rounded bg-sky-950/30">
+      <div className="col-span-2 text-sky-200">Sound</div>
+      {!hasSpeaker && <div className="col-span-2 text-amber-400">No speaker configured for this vehicle (Audio section) — the channel stays silent.</div>}
+      <Field label="File" className="col-span-2">
+        <select className={inputClass} value={options.file ?? ""} onChange={e => set("file", e.target.value)}>
+          <option value="">-- select sound --</option>
+          {fileNames.map(name => <option key={name} value={name}>{name}</option>)}
+          {options.file && !fileNames.includes(options.file) && <option value={options.file}>{options.file} (missing)</option>}
+        </select>
+      </Field>
+      <Field label="Mode">
+        <select className={inputClass} value={mode} onChange={e => set("mode", e.target.value === "toEnd" ? undefined : e.target.value)}>
+          <option value="toEnd">Press: play to end</option>
+          <option value="hold">Hold: play while pressed</option>
+          <option value="toggle">Toggle: press to start/stop</option>
+        </select>
+      </Field>
+      <Field label="Press while playing" hint="Only for 'play to end'">
+        <select className={inputClass} value={options.retrigger ?? "restart"} disabled={mode !== "toEnd"} onChange={e => set("retrigger", e.target.value === "restart" ? undefined : e.target.value)}>
+          <option value="restart">Restart</option>
+          <option value="ignore">Ignore</option>
+          <option value="stop">Stop</option>
+        </select>
+      </Field>
+      <Field label={`Volume: ${options.volumePercent ?? 100} %`}>
+        <input type="range" min={0} max={200} step={5} value={options.volumePercent ?? 100} onChange={e => set("volumePercent", Number(e.target.value) === 100 ? undefined : Number(e.target.value))} />
+      </Field>
+      <Field label="Loop"><input type="checkbox" checked={!!options.loop} onChange={e => set("loop", e.target.checked || undefined)} /></Field>
+      <Field label="Start (s)"><input className={inputClass} type="number" min={0} step={0.1} value={options.startSeconds ?? ""} onChange={e => set("startSeconds", num(e.target.value))} /></Field>
+      <Field label="End (s)" hint="empty = end of file"><input className={inputClass} type="number" min={0} step={0.1} value={options.endSeconds ?? ""} onChange={e => set("endSeconds", num(e.target.value))} /></Field>
+      <Field label="Fade in (ms)"><input className={inputClass} type="number" min={0} step={10} value={options.fadeInMs ?? ""} onChange={e => set("fadeInMs", num(e.target.value))} /></Field>
+      <Field label="Fade out (ms)" hint="when stopped early"><input className={inputClass} type="number" min={0} step={10} value={options.fadeOutMs ?? ""} onChange={e => set("fadeOutMs", num(e.target.value))} /></Field>
+      <Field label="Quieter during push-to-talk"><input type="checkbox" checked={!!options.duckOnTalk} onChange={e => set("duckOnTalk", e.target.checked || undefined)} /></Field>
+    </div>
+  );
+}
+
 function ControlEditor({
-  initial, isNew, onSave, onCancel, controlTypes,
-}: { initial?: ControlChannel; isNew: boolean; onSave: (c: ControlChannel) => Promise<void>; onCancel: () => void; controlTypes: string[] }) {
+  initial, isNew, onSave, onCancel, controlTypes, soundFiles, hasSpeaker,
+}: { initial?: ControlChannel; isNew: boolean; onSave: (c: ControlChannel) => Promise<void>; onCancel: () => void; controlTypes: string[]; soundFiles: SoundFile[]; hasSpeaker: boolean }) {
   const [c, setC] = useState<ControlChannel>(initial ?? {
     channelName: "", displayName: "", isEnabled: true, requiresAxis: false, maxResendInterval: null,
     controlType: "", pinManager: "default", address: null, testDisabled: false, optionsJson: "",
@@ -142,6 +202,9 @@ function ControlEditor({
       <Field label="Enabled"><input type="checkbox" checked={c.isEnabled} onChange={e => update({ isEnabled: e.target.checked })} /></Field>
       <Field label="Requires axis"><input type="checkbox" checked={c.requiresAxis} onChange={e => update({ requiresAxis: e.target.checked })} /></Field>
       <Field label="Test disabled"><input type="checkbox" checked={c.testDisabled} onChange={e => update({ testDisabled: e.target.checked })} /></Field>
+      {c.controlType === "SoundPlayer" && (
+        <SoundPlayerOptionsEditor optionsJson={c.optionsJson} onChange={json => update({ optionsJson: json })} soundFiles={soundFiles} hasSpeaker={hasSpeaker} />
+      )}
       <Field label="Options (JSON)" hint='e.g. {"blinkCycleMs":500}'>
         <textarea className={inputClass + " font-mono"} rows={2} value={c.optionsJson} onChange={e => update({ optionsJson: e.target.value })} />
       </Field>
@@ -216,6 +279,56 @@ function VideoEditor({
       <div className="col-span-2 flex gap-2 justify-end">
         <button className={btnGhost} onClick={onCancel}>Cancel</button>
         <button className={btnPrimary} onClick={() => onSave(v)}>Save</button>
+      </div>
+    </div>
+  );
+}
+
+// Files for SoundPlayer channels. Stored on the server; the vehicle keeps a synced copy.
+function SoundLibraryEditor({
+  carId, files, onChanged, hasSpeaker,
+}: { carId: number; files: SoundFile[]; onChanged: () => void; hasSpeaker: boolean }) {
+  const [uploading, setUploading] = useState(false);
+  const upload = async (list: FileList | null) => {
+    if (!list || list.length === 0) return;
+    setUploading(true);
+    try {
+      for (const file of Array.from(list)) {
+        const form = new FormData();
+        form.append("file", file);
+        const r = await fetch(`/api/cars/${carId}/sounds`, { method: "POST", body: form });
+        if (!r.ok) alert(`${file.name}: ${await r.text()}`);
+      }
+    } finally {
+      setUploading(false);
+      onChanged();
+    }
+  };
+  const remove = async (name: string) => {
+    if (!confirm(`Delete sound "${name}"? Channels using it stay silent.`)) return;
+    const r = await fetch(`/api/cars/${carId}/sounds/${encodeURIComponent(name)}`, { method: "DELETE" });
+    if (!r.ok) { alert(await r.text()); return; }
+    onChanged();
+  };
+  return (
+    <div className="space-y-2 text-xs text-zinc-400">
+      <p>Sound files for control channels of type <span className="font-mono text-zinc-200">SoundPlayer</span> (horn, sirens, music …). The vehicle downloads them automatically; up to 20 MB per file.</p>
+      {!hasSpeaker && <p className="text-amber-400">No speaker configured yet (Audio section) — sounds can be uploaded but won&apos;t play.</p>}
+      <label className={btnPrimary + " inline-block cursor-pointer"}>
+        {uploading ? "Uploading…" : "+ Upload sounds"}
+        <input type="file" multiple accept={SOUND_EXTENSIONS.join(",")} className="hidden" disabled={uploading} onChange={e => { void upload(e.target.files); e.target.value = ""; }} />
+      </label>
+      <div className="space-y-1">
+        {files.map(f => (
+          <div key={f.name} className="flex items-center justify-between gap-2 border border-zinc-800 rounded p-2 bg-zinc-900">
+            <div className="font-mono text-zinc-100 truncate">{f.name} <span className="text-zinc-500">{formatBytes(f.sizeBytes)}</span></div>
+            <div className="flex items-center gap-2">
+              <audio controls preload="none" className="h-6 w-48" src={`/api/cars/${carId}/sounds/${encodeURIComponent(f.name)}`} />
+              <button className={btnDanger} onClick={() => remove(f.name)}>Delete</button>
+            </div>
+          </div>
+        ))}
+        {files.length === 0 && <div className="text-zinc-500">No sounds yet.</div>}
       </div>
     </div>
   );
@@ -310,6 +423,7 @@ export default function ChannelsPage() {
   const [audioOutputs, setAudioOutputs] = useState<AudioDevice[]>([]);
   const [audioSettings, setAudioSettings] = useState<CarAudioSettings>(DEFAULT_CAR_AUDIO_SETTINGS);
   const [savedAudioSettings, setSavedAudioSettings] = useState<CarAudioSettings>(DEFAULT_CAR_AUDIO_SETTINGS);
+  const [soundFiles, setSoundFiles] = useState<SoundFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingPinManager, setEditingPinManager] = useState<{ key: string; pinManager: PinManager; isNew: boolean } | null>(null);
   const [editingControl, setEditingControl] = useState<{ key: string; channel: ControlChannel; isNew: boolean } | null>(null);
@@ -411,6 +525,14 @@ export default function ChannelsPage() {
       setSavedAudioSettings(loaded);
     })();
   }, [carIdNum]);
+
+  const reloadSounds = useCallback(async () => {
+    if (!carIdNum) return;
+    const r = await fetch(`/api/cars/${carIdNum}/sounds`);
+    setSoundFiles(r.ok ? await r.json() : []);
+  }, [carIdNum]);
+
+  useEffect(() => { void reloadSounds(); }, [reloadSounds]);
 
   const saveAudioSettings = async () => {
     if (!carIdNum) return;
@@ -636,7 +758,7 @@ export default function ChannelsPage() {
             {controls.map(c => (
               <div key={c.channelName} className="border border-zinc-800 rounded p-2 bg-zinc-900">
                 {editingControl?.key === c.channelName && !editingControl.isNew ? (
-                  <ControlEditor initial={c} isNew={false} onSave={(nc) => saveControl(c.channelName, nc, false)} onCancel={() => setEditingControl(null)} controlTypes={availableControlTypes} />
+                  <ControlEditor initial={c} isNew={false} onSave={(nc) => saveControl(c.channelName, nc, false)} onCancel={() => setEditingControl(null)} controlTypes={availableControlTypes} soundFiles={soundFiles} hasSpeaker={!!savedAudioSettings.outputDevice} />
                 ) : (
                   <div className="flex items-center justify-between">
                     <div className="font-mono text-xs">
@@ -653,7 +775,7 @@ export default function ChannelsPage() {
               </div>
             ))}
             {editingControl?.isNew && (
-              <ControlEditor isNew={true} onSave={(nc) => saveControl("__new__", nc, true)} onCancel={() => setEditingControl(null)} controlTypes={availableControlTypes} />
+              <ControlEditor isNew={true} onSave={(nc) => saveControl("__new__", nc, true)} onCancel={() => setEditingControl(null)} controlTypes={availableControlTypes} soundFiles={soundFiles} hasSpeaker={!!savedAudioSettings.outputDevice} />
             )}
           </div>
         </CollapsibleSection>
@@ -721,6 +843,10 @@ export default function ChannelsPage() {
             onReset={() => setAudioSettings(savedAudioSettings)}
             noDevicesReported={audioInputs.length === 0 && audioOutputs.length === 0}
           />
+        </CollapsibleSection>
+
+        <CollapsibleSection title={`Sounds (${soundFiles.length})`} defaultCollapsed={false}>
+          <SoundLibraryEditor carId={carIdNum} files={soundFiles} onChanged={() => void reloadSounds()} hasSpeaker={!!savedAudioSettings.outputDevice} />
         </CollapsibleSection>
 
         <datalist id="audio-input-options">
