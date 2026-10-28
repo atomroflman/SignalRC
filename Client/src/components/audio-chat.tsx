@@ -21,7 +21,8 @@ const TALK_FORMATS: Array<{ mimeType: string; format: string }> = [
   { mimeType: 'audio/webm;codecs=opus', format: 'webm' },
   { mimeType: 'audio/ogg;codecs=opus', format: 'ogg' },
 ];
-const TALK_TIMESLICE_MS = 100;
+// Small chunks: the vehicle can start playing sooner and each late chunk hurts less.
+const TALK_TIMESLICE_MS = 60;
 const TALK_BITRATE = 32000;
 const MIC_GAIN_STORAGE_KEY = 'signalrc.pttMicGain';
 const MAX_MIC_GAIN = 3;
@@ -30,8 +31,9 @@ const MAX_SPEAKER_VOLUME = 2;
 const SPEAKER_VOLUME_SEND_MS = 150;
 
 // The browser microphone runs through Web Audio so its gain can be set and a meter can tap it;
-// the recorder records the graph's output.
+// the recorder records the graph's output. It stays open for the whole control session.
 type MicGraph = {
+  deviceId: string;
   stream: MediaStream;
   context: AudioContext;
   gain: GainNode;
@@ -39,7 +41,7 @@ type MicGraph = {
   output: MediaStream;
 };
 
-function createMicGraph(stream: MediaStream, gainValue: number): MicGraph {
+function createMicGraph(stream: MediaStream, gainValue: number, deviceId: string): MicGraph {
   const context = new AudioContext();
   const source = context.createMediaStreamSource(stream);
   const gain = context.createGain();
@@ -51,7 +53,7 @@ function createMicGraph(stream: MediaStream, gainValue: number): MicGraph {
   gain.connect(analyser);
   gain.connect(destination);
   void context.resume();
-  return { stream, context, gain, analyser, output: destination.stream };
+  return { deviceId, stream, context, gain, analyser, output: destination.stream };
 }
 
 function closeMicGraph(graph: MicGraph) {
@@ -124,6 +126,7 @@ export default function AudioChat({ carId }: AudioChatProps) {
   const status = useCarAudioStatus(carId);
   const [micGain, setMicGain] = useStoredNumber(MIC_GAIN_STORAGE_KEY, 1);
   const [micAnalyser, setMicAnalyser] = useState<AnalyserNode | null>(null);
+  const micOpen = micAnalyser != null;
   const micLevel = useAnalyserLevel(micAnalyser);
   const [microphones, setMicrophones] = useState<AudioDevice[]>([]);
   const [selectedInput, setSelectedInput] = useState<string>('');
@@ -170,7 +173,6 @@ export default function AudioChat({ carId }: AudioChatProps) {
   const releaseMicrophone = useCallback(() => {
     if (micGraphRef.current) closeMicGraph(micGraphRef.current);
     micGraphRef.current = null;
-    recorderRef.current = null;
     setMicAnalyser(null);
   }, []);
 
@@ -183,13 +185,36 @@ export default function AudioChat({ carId }: AudioChatProps) {
     if (!talkingRef.current) return;
     setTalking(false);
     const recorder = recorderRef.current;
-    if (recorder && recorder.state !== 'inactive') {
-      // onstop sends StopAudioTalk after the last chunk.
-      recorder.stop();
-    } else {
-      releaseMicrophone();
+    // onstop sends StopAudioTalk after the last chunk. The microphone stays open for the next press.
+    if (recorder && recorder.state !== 'inactive') recorder.stop();
+  }, [setTalking]);
+
+  /**
+   * Opens the microphone on first use and keeps it for the whole control session, so later presses
+   * record at once (no permission prompt, no device start-up). Reopens when another microphone is picked.
+   */
+  const ensureMicrophone = useCallback(async (): Promise<MicGraph> => {
+    const current = micGraphRef.current;
+    if (current && current.deviceId === selectedInput && current.stream.getAudioTracks().some((t) => t.readyState === 'live')) {
+      return current;
     }
-  }, [releaseMicrophone, setTalking]);
+    releaseMicrophone();
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        deviceId: selectedInput ? { exact: selectedInput } : undefined,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+      video: false,
+    });
+    const graph = createMicGraph(stream, micGainRef.current, selectedInput);
+    micGraphRef.current = graph;
+    setMicAnalyser(graph.analyser);
+    // Device labels only become visible after the first permission grant.
+    loadMicrophones();
+    return graph;
+  }, [selectedInput, releaseMicrophone, loadMicrophones]);
 
   const startTalking = useCallback(async () => {
     if (!hasSession || talkingRef.current) return;
@@ -207,27 +232,50 @@ export default function AudioChat({ carId }: AudioChatProps) {
 
     setTalking(true);
 
-    let stream: MediaStream;
+    let graph: MicGraph;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          deviceId: selectedInput ? { exact: selectedInput } : undefined,
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-        video: false,
-      });
+      graph = await ensureMicrophone();
     } catch (err) {
       setTalking(false);
       setError(messages.audioChat.microphoneDenied(err instanceof Error ? err.message : String(err)));
       return;
     }
-    const graph = createMicGraph(stream, micGainRef.current);
-    micGraphRef.current = graph;
-    setMicAnalyser(graph.analyser);
-    // Device labels only become visible after the first permission grant.
-    loadMicrophones();
+    if (!talkingRef.current) return; // released while the microphone was opening
+
+    // Record right away and hold the chunks until the vehicle accepted, so the start-up round trip
+    // costs no words.
+    const burst = { accepted: false, rejected: false, stopped: false, queue: [] as Blob[] };
+    const sendChunk = (data: Blob) => {
+      sendChainRef.current = sendChainRef.current
+        .then(async () => {
+          const payload = toBase64(await data.arrayBuffer());
+          await connection.send('SendAudioChunk', carId, carSession, payload);
+        })
+        .catch((err) => console.warn('SendAudioChunk failed:', err));
+    };
+    const sendStop = () => {
+      sendChainRef.current = sendChainRef.current
+        .then(() => connection.invoke('StopAudioTalk', carId, carSession))
+        .catch((err) => console.warn('StopAudioTalk failed:', err));
+    };
+
+    const recorder = new MediaRecorder(graph.output, {
+      mimeType: talkFormat.mimeType,
+      audioBitsPerSecond: TALK_BITRATE,
+    });
+    recorder.ondataavailable = (event) => {
+      if (event.data.size === 0 || burst.rejected) return;
+      if (burst.accepted) sendChunk(event.data);
+      else burst.queue.push(event.data);
+    };
+    recorder.onstop = () => {
+      if (recorderRef.current === recorder) recorderRef.current = null;
+      burst.stopped = true;
+      // Not accepted yet: the accept handler sends the stop once the queue is out.
+      if (burst.accepted) sendStop();
+    };
+    recorderRef.current = recorder;
+    recorder.start(TALK_TIMESLICE_MS);
 
     let accepted = false;
     try {
@@ -236,41 +284,18 @@ export default function AudioChat({ carId }: AudioChatProps) {
       console.warn('StartAudioTalk failed:', err);
     }
     if (!accepted) {
+      burst.rejected = true;
+      burst.queue = [];
+      if (recorder.state !== 'inactive') recorder.stop();
       setTalking(false);
-      releaseMicrophone();
       setError(messages.audioChat.talkRejected);
       return;
     }
-    if (!talkingRef.current) {
-      // Button was released while we were still negotiating.
-      releaseMicrophone();
-      connection.invoke('StopAudioTalk', carId, carSession).catch(() => {});
-      return;
-    }
-
-    const recorder = new MediaRecorder(graph.output, {
-      mimeType: talkFormat.mimeType,
-      audioBitsPerSecond: TALK_BITRATE,
-    });
-    recorder.ondataavailable = (event) => {
-      if (event.data.size === 0) return;
-      const data = event.data;
-      sendChainRef.current = sendChainRef.current
-        .then(async () => {
-          const payload = toBase64(await data.arrayBuffer());
-          await connection.send('SendAudioChunk', carId, carSession, payload);
-        })
-        .catch((err) => console.warn('SendAudioChunk failed:', err));
-    };
-    recorder.onstop = () => {
-      releaseMicrophone();
-      sendChainRef.current = sendChainRef.current
-        .then(() => connection.invoke('StopAudioTalk', carId, carSession))
-        .catch((err) => console.warn('StopAudioTalk failed:', err));
-    };
-    recorderRef.current = recorder;
-    recorder.start(TALK_TIMESLICE_MS);
-  }, [hasSession, connection, carId, carSession, selectedInput, messages, loadMicrophones, releaseMicrophone, setTalking]);
+    burst.accepted = true;
+    burst.queue.forEach(sendChunk);
+    burst.queue = [];
+    if (burst.stopped) sendStop(); // released before the vehicle answered
+  }, [hasSession, connection, carId, carSession, messages, ensureMicrophone, setTalking]);
 
   useEffect(() => {
     if (hasSession) {
@@ -415,10 +440,14 @@ export default function AudioChat({ carId }: AudioChatProps) {
       ? messages.audioChat.bindingKey(keyLabel(binding.code))
       : messages.audioChat.bindingGamepad(binding.button, binding.gamepadId);
 
-  // The vehicle stops playback when the control session changes; mirror that here.
+  // The vehicle stops playback when the control session changes; mirror that here and give the
+  // microphone back (it was only held open for this session).
   useEffect(() => {
-    return () => stopTalking();
-  }, [carSession, carId, stopTalking]);
+    return () => {
+      stopTalking();
+      releaseMicrophone();
+    };
+  }, [carSession, carId, stopTalking, releaseMicrophone]);
 
   if (!outputDevice) {
     return null;
@@ -430,10 +459,19 @@ export default function AudioChat({ carId }: AudioChatProps) {
         <h3 className="text-sm font-medium text-zinc-200">{messages.audioChat.title}</h3>
         {hasSession && (
           <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${talking ? 'bg-red-500' : error ? 'bg-red-500' : 'bg-zinc-400'}`} />
+            <div className={`w-2 h-2 rounded-full ${talking || error ? 'bg-red-500' : micOpen ? 'bg-green-500' : 'bg-zinc-400'}`} />
             <span className="text-xs text-zinc-400">
-              {talking ? messages.audioChat.talking : error ? messages.audioChat.error : messages.audioChat.ready}
+              {talking ? messages.audioChat.talking : error ? messages.audioChat.error : micOpen ? messages.audioChat.micReady : messages.audioChat.ready}
             </span>
+            {micOpen && !talking && (
+              <button
+                onClick={releaseMicrophone}
+                className="px-1.5 py-0.5 text-[10px] bg-zinc-700 hover:bg-zinc-600 text-zinc-300 rounded"
+                title={messages.audioChat.releaseMicHint}
+              >
+                {messages.audioChat.releaseMic}
+              </button>
+            )}
           </div>
         )}
       </div>
