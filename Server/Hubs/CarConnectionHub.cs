@@ -39,6 +39,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
     private readonly ActiveVideoStreamViewerRegistry _viewerRegistry;
     private readonly AvailableTypesRegistry _availableTypes;
     private readonly PushToTalkRegistry _pushToTalk;
+    private readonly CarAudioService _carAudio;
 
     public CarConnectionHub(
         IConfigurationService configService,
@@ -48,7 +49,8 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
         SqidsEncoder<long> sqidsEncoder,
         ActiveVideoStreamViewerRegistry viewerRegistry,
         AvailableTypesRegistry availableTypes,
-        PushToTalkRegistry pushToTalk)
+        PushToTalkRegistry pushToTalk,
+        CarAudioService carAudio)
     {
         Logger = logger;
         _streamService = streamService;
@@ -58,6 +60,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
         _viewerRegistry = viewerRegistry;
         _availableTypes = availableTypes;
         _pushToTalk = pushToTalk;
+        _carAudio = carAudio;
     }
 
     public VideoStreamReceiverService VideoStreamReceiverService => _streamService;
@@ -149,6 +152,15 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
         var connectionInfo = _connectionStore.RegisterConnection(car.Id.ToString(), Context.ConnectionId);
         connectionInfo.CarConfiguration = carConfig;
 
+        try
+        {
+            await _carAudio.OnCarConnectedAsync(car.Id);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to push audio settings to car {CarId}", car.Id);
+        }
+
         await Clients.All.CarStateUpdated(new CarStateModel() {
             Id = car.Id.ToString(),
             IsConnected = true,
@@ -216,6 +228,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
         }
 
         await CleanupAudioForConnectionAsync(Context.ConnectionId);
+        await _carAudio.RemoveConnectionAsync(Context.ConnectionId);
 
         await base.OnDisconnectedAsync(exception);
     }
@@ -760,8 +773,6 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
                 Port = s.Port,
                 RpiCamId = s.RpiCamId,
                 ServerId = s.Id,
-                AudioDevice = s.AudioDevice,
-                AudioDenoise = s.AudioDenoise,
             })
             .ToList();
     }
@@ -823,8 +834,6 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
         settings.Location = stream.Location;
         settings.Enabled = stream.Enabled;
         settings.CameraDevice = stream.CameraDevice;
-        settings.AudioDevice = stream.AudioDevice;
-        settings.AudioDenoise = stream.AudioDenoise;
         settings.RpiCamId = stream.RpiCamId;
         settings.Port = stream.Port;
         settings.Width = stream.Width;
@@ -904,9 +913,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
     {
         try
         {
-            var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<SignalRCContext>();
-            var outputDevice = await dbContext.Cars.Where(c => c.Id == carId).Select(c => c.AudioOutputDevice).FirstOrDefaultAsync();
-            var checks = await Clients.Client(carConnectionId).GetAudioDiagnostics(outputDevice);
+            var checks = await Clients.Client(carConnectionId).GetAudioDiagnostics();
             report.Checks.AddRange(checks ?? Array.Empty<DiagnosticCheck>());
         }
         catch (Exception ex)
@@ -967,11 +974,6 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
         stream.IsActive = true;
         await dbContext.SaveChangesAsync();
         await Clients.Car(stream.CarId).StartVideoStream(stream.StreamId);
-        var audioPort = _streamService.GetAudioPort(stream.Id);
-        if (audioPort != null)
-            await Clients.Car(stream.CarId).StartAudioUplink(stream.StreamId, audioPort.Value);
-        else
-            await Clients.Car(stream.CarId).StopAudioUplink(stream.StreamId);
     }
 
     private async Task StopStreamForViewersAsync(CarVideoStream stream)
@@ -979,7 +981,6 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
         var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<SignalRCContext>();
         Logger.LogInformation("Stopping video stream {StreamId} ({StreamName}) for car {CarId}", stream.Id, stream.Name, stream.CarId);
         await Clients.Car(stream.CarId).StopVideoStream(stream.StreamId);
-        await Clients.Car(stream.CarId).StopAudioUplink(stream.StreamId);
         await _streamService.StopStream(stream.Id);
         stream.IsActive = false;
         await dbContext.SaveChangesAsync();
@@ -1008,11 +1009,23 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
         }
     }
 
+    // -- Listening (vehicle microphone → browser) -------------------------------------
+    // The car's microphone runs on its own audio-only Janus mountpoint while at least one logged-in
+    // browser listens; CarAudioService starts and stops it. Independent of video.
+
+    public async Task<int?> StartAudioListening(int carId)
+    {
+        if (await GetCurrentUserAsync() == null)
+            throw new HubException("You must be logged in to listen to a vehicle.");
+        return await _carAudio.AddListenerAsync(carId, Context.ConnectionId);
+    }
+
+    public Task StopAudioListening(int carId) => _carAudio.RemoveListenerAsync(carId, Context.ConnectionId);
+
     // -- Push-to-talk (browser → onboard) --------------------------------------------
     // Chunks are relayed over SignalR to the vehicle's speaker. Only the user who controls the car may
     // start talking, and only the connection that started may send chunks — anything else is dropped
     // here instead of costing LTE bandwidth. The Onboard still validates the control session on every call.
-    // Listening to the vehicle is part of the video stream (audio track).
 
     private const int MaxAudioChunkBytes = 64 * 1024;
 
@@ -1044,7 +1057,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
             Logger.LogWarning("Push-to-talk for car {CarId} rejected: no speaker configured", carId);
             return false;
         }
-        var accepted = await Clients.Client(carConnectionId).StartAudioPlayback(sessionId, format, outputDevice);
+        var accepted = await Clients.Client(carConnectionId).StartAudioPlayback(sessionId, format);
         if (accepted)
             _pushToTalk.Set(Context.ConnectionId, carId, sessionId);
         return accepted;

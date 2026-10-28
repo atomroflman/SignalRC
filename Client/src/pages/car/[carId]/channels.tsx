@@ -5,6 +5,7 @@ import CollapsibleSection from "@/components/collapsible-section";
 import LanguageSwitcher from "@/components/language-switcher";
 import ConfigGuard from "@/components/config-guard";
 import { useI18n } from "@/i18n/provider";
+import { CarAudioSettings, DEFAULT_CAR_AUDIO_SETTINGS } from "@/components/audio-store";
 
 type PinManager = {
   name: string;
@@ -53,8 +54,6 @@ type VideoStream = {
   cameraDevice?: string | null;
   rpiCamId?: number | null;
   priority?: number | null;
-  audioDevice?: string | null;
-  audioDenoise?: boolean;
   optionsJson: string;
   modifiedAt?: string | null;
 };
@@ -211,16 +210,82 @@ function VideoEditor({
       <Field label="Height"><input className={inputClass} type="number" value={v.height ?? ""} onChange={e => update({ height: e.target.value === "" ? null : Number(e.target.value) })} /></Field>
       <Field label="Framerate"><input className={inputClass} type="number" value={v.framerate ?? ""} onChange={e => update({ framerate: e.target.value === "" ? null : Number(e.target.value) })} /></Field>
       <Field label="Bitrate (kbps)"><input className={inputClass} type="number" value={v.bitrateKbps ?? ""} onChange={e => update({ bitrateKbps: e.target.value === "" ? null : Number(e.target.value) })} /></Field>
-      <Field label="Audio input (ALSA)" hint="Microphone sent with this stream; empty = video only">
-        <input className={inputClass + " font-mono"} value={v.audioDevice ?? ""} onChange={e => update({ audioDevice: e.target.value })} list="audio-input-options" placeholder="e.g. plughw:CARD=Device,DEV=0" />
-      </Field>
-      <Field label="Noise filter"><input type="checkbox" checked={v.audioDenoise ?? false} disabled={!v.audioDevice} onChange={e => update({ audioDenoise: e.target.checked })} /></Field>
       <Field label="Options (JSON)" hint='e.g. {"codec":"h264"}' className="col-span-2">
         <textarea className={inputClass + " font-mono w-full"} rows={2} value={v.optionsJson} onChange={e => update({ optionsJson: e.target.value })} />
       </Field>
       <div className="col-span-2 flex gap-2 justify-end">
         <button className={btnGhost} onClick={onCancel}>Cancel</button>
         <button className={btnPrimary} onClick={() => onSave(v)}>Save</button>
+      </div>
+    </div>
+  );
+}
+
+const BITRATES_KBPS = [16, 24, 32, 48, 64, 96];
+
+function percent(value: number) {
+  return `${Math.round(value * 100)} %`;
+}
+
+// Car-level audio: one microphone (listening) and one speaker (push-to-talk, sound channels).
+// Volumes here are the defaults; the driver can change the speaker volume live in the control UI.
+function AudioSettingsEditor({
+  settings, onChange, dirty, onSave, onReset, noDevicesReported,
+}: {
+  settings: CarAudioSettings;
+  onChange: (patch: Partial<CarAudioSettings>) => void;
+  dirty: boolean;
+  onSave: () => Promise<void>;
+  onReset: () => void;
+  noDevicesReported: boolean;
+}) {
+  const hasInput = !!settings.inputDevice?.trim();
+  const hasOutput = !!settings.outputDevice?.trim();
+  return (
+    <div className="space-y-3 text-xs text-zinc-400">
+      <p>The microphone is heard by everyone who listens to the vehicle (independent of video). The speaker plays the driver&apos;s push-to-talk and sound channels. Leave a device empty to switch that direction off.</p>
+      {noDevicesReported && (
+        <p className="text-amber-400">The vehicle reported no ALSA devices (offline, alsa-utils missing, or no sound card).</p>
+      )}
+      <div className="grid grid-cols-2 gap-2 p-2 border border-zinc-700 rounded bg-zinc-950">
+        <div className="col-span-2 text-zinc-200">Microphone (vehicle → browser)</div>
+        <Field label="Input device (ALSA)" hint="Prefer plughw:CARD=…,DEV=… entries" className="col-span-2">
+          <input className={inputClass + " font-mono w-full"} value={settings.inputDevice ?? ""} onChange={e => onChange({ inputDevice: e.target.value })} list="audio-input-options" placeholder="e.g. plughw:CARD=Device,DEV=0" />
+        </Field>
+        <Field label="Channel" hint="One side of a stereo card, or both mixed">
+          <select className={inputClass} value={settings.inputChannel} disabled={!hasInput} onChange={e => onChange({ inputChannel: e.target.value as CarAudioSettings["inputChannel"] })}>
+            <option value="mix">Mix (all channels)</option>
+            <option value="left">Left</option>
+            <option value="right">Right</option>
+          </select>
+        </Field>
+        <Field label="Bitrate">
+          <select className={inputClass} value={settings.bitrateKbps} disabled={!hasInput} onChange={e => onChange({ bitrateKbps: Number(e.target.value) })}>
+            {BITRATES_KBPS.map(b => <option key={b} value={b}>{b} kbit/s</option>)}
+          </select>
+        </Field>
+        <Field label={`Recording gain: ${percent(settings.inputGain)}`}>
+          <input type="range" min={0} max={4} step={0.05} value={settings.inputGain} disabled={!hasInput} onChange={e => onChange({ inputGain: Number(e.target.value) })} />
+        </Field>
+        <Field label="Noise filter" hint="Against wind and steady motor noise">
+          <input type="checkbox" checked={settings.denoise} disabled={!hasInput} onChange={e => onChange({ denoise: e.target.checked })} />
+        </Field>
+
+        <div className="col-span-2 mt-2 text-zinc-200">Speaker (browser → vehicle)</div>
+        <Field label="Output device (ALSA)" className="col-span-2">
+          <input className={inputClass + " font-mono w-full"} value={settings.outputDevice ?? ""} onChange={e => onChange({ outputDevice: e.target.value })} list="audio-output-options" placeholder="e.g. plughw:CARD=Device,DEV=0" />
+        </Field>
+        <Field label={`Speaker volume: ${percent(settings.outputVolume)}`}>
+          <input type="range" min={0} max={2} step={0.05} value={settings.outputVolume} disabled={!hasOutput} onChange={e => onChange({ outputVolume: Number(e.target.value) })} />
+        </Field>
+        <Field label="Mute microphone while talking" hint="Listeners don't hear the driver as echo">
+          <input type="checkbox" checked={settings.muteInputWhileTalking} disabled={!hasInput || !hasOutput} onChange={e => onChange({ muteInputWhileTalking: e.target.checked })} />
+        </Field>
+
+        <div className="col-span-2 flex gap-2 justify-end">
+          <button className={btnGhost} disabled={!dirty} onClick={onReset}>Reset</button>
+          <button className={btnPrimary} disabled={!dirty} onClick={onSave}>Save</button>
+        </div>
       </div>
     </div>
   );
@@ -243,8 +308,8 @@ export default function ChannelsPage() {
   const [availableTelemetryTypes, setAvailableTelemetryTypes] = useState<string[]>([]);
   const [audioInputs, setAudioInputs] = useState<AudioDevice[]>([]);
   const [audioOutputs, setAudioOutputs] = useState<AudioDevice[]>([]);
-  const [audioOutputDevice, setAudioOutputDevice] = useState("");
-  const [savedAudioOutputDevice, setSavedAudioOutputDevice] = useState("");
+  const [audioSettings, setAudioSettings] = useState<CarAudioSettings>(DEFAULT_CAR_AUDIO_SETTINGS);
+  const [savedAudioSettings, setSavedAudioSettings] = useState<CarAudioSettings>(DEFAULT_CAR_AUDIO_SETTINGS);
   const [loading, setLoading] = useState(true);
   const [editingPinManager, setEditingPinManager] = useState<{ key: string; pinManager: PinManager; isNew: boolean } | null>(null);
   const [editingControl, setEditingControl] = useState<{ key: string; channel: ControlChannel; isNew: boolean } | null>(null);
@@ -307,8 +372,6 @@ export default function ChannelsPage() {
         cameraDevice: v.cameraDevice ?? null,
         rpiCamId: v.rpiCamId ?? null,
         priority: v.priority ?? null,
-        audioDevice: v.audioDevice ?? null,
-        audioDenoise: v.audioDenoise ?? false,
         optionsJson: formatOptionsJson(v.options),
         modifiedAt: v.modifiedAt ?? null,
       })));
@@ -343,20 +406,21 @@ export default function ChannelsPage() {
       ]);
       setAudioInputs(Array.isArray(devices?.inputs) ? devices.inputs : []);
       setAudioOutputs(Array.isArray(devices?.outputs) ? devices.outputs : []);
-      setAudioOutputDevice(settings?.outputDevice ?? "");
-      setSavedAudioOutputDevice(settings?.outputDevice ?? "");
+      const loaded = { ...DEFAULT_CAR_AUDIO_SETTINGS, ...(settings ?? {}) };
+      setAudioSettings(loaded);
+      setSavedAudioSettings(loaded);
     })();
   }, [carIdNum]);
 
   const saveAudioSettings = async () => {
     if (!carIdNum) return;
     const r = await fetch(`/api/cars/${carIdNum}/channels/audio-settings`, {
-      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ outputDevice: audioOutputDevice }),
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(audioSettings),
     });
     if (!r.ok) { alert(await r.text()); return; }
-    const saved = await r.json();
-    setAudioOutputDevice(saved?.outputDevice ?? "");
-    setSavedAudioOutputDevice(saved?.outputDevice ?? "");
+    const saved = { ...DEFAULT_CAR_AUDIO_SETTINGS, ...(await r.json()) };
+    setAudioSettings(saved);
+    setSavedAudioSettings(saved);
   };
 
   const savePinManager = async (origKey: string, p: PinManager, isNew: boolean) => {
@@ -460,7 +524,6 @@ export default function ChannelsPage() {
       streamId: v.streamId, name: v.name, type: v.type, location: v.location, enabled: v.enabled,
       width: v.width, height: v.height, framerate: v.framerate, bitrateKbps: v.bitrateKbps,
       cameraDevice: v.cameraDevice, rpiCamId: v.rpiCamId, priority: v.priority, options,
-      audioDevice: v.audioDevice, audioDenoise: v.audioDenoise ?? false,
     };
     const r = await fetch(`/api/cars/${carIdNum}/channels/video/${encodeURIComponent(isNew ? v.streamId : origKey)}`, {
       method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
@@ -633,7 +696,7 @@ export default function ChannelsPage() {
                   <div className="flex items-center justify-between">
                     <div className="font-mono text-xs">
                       <span className="text-zinc-100">{v.streamId}</span>
-                      <span className="text-zinc-500 ml-2">{v.name || "?"} {v.type ? `(${v.type})` : ""} {v.location ? `@ ${v.location}` : ""} {v.priority != null ? `· prio ${v.priority}` : ""} {v.audioDevice ? `· 🎤 ${v.audioDevice}` : ""}</span>
+                      <span className="text-zinc-500 ml-2">{v.name || "?"} {v.type ? `(${v.type})` : ""} {v.location ? `@ ${v.location}` : ""} {v.priority != null ? `· prio ${v.priority}` : ""}</span>
                     </div>
                     <div className="flex gap-1">
                       <button className={btnGhost} onClick={() => setEditingVideo({ key: v.streamId, stream: v, isNew: false })}>Edit</button>
@@ -650,18 +713,14 @@ export default function ChannelsPage() {
         </CollapsibleSection>
 
         <CollapsibleSection title="Audio" defaultCollapsed={false}>
-          <div className="space-y-2 text-xs text-zinc-400">
-            <p>Microphones are set per video stream (anyone watching the stream hears them). The speaker below is used for push-to-talk by the driver; leave it empty to hide push-to-talk.</p>
-            {audioInputs.length === 0 && audioOutputs.length === 0 && (
-              <p className="text-amber-400">The vehicle reported no ALSA devices (offline, alsa-utils missing, or no sound card).</p>
-            )}
-            <div className="flex items-end gap-2">
-              <Field label="Speaker (ALSA)" className="flex-1">
-                <input className={inputClass + " font-mono w-full"} value={audioOutputDevice} onChange={e => setAudioOutputDevice(e.target.value)} list="audio-output-options" placeholder="e.g. plughw:CARD=Device,DEV=0" />
-              </Field>
-              <button className={btnPrimary} disabled={audioOutputDevice === savedAudioOutputDevice} onClick={saveAudioSettings}>Save</button>
-            </div>
-          </div>
+          <AudioSettingsEditor
+            settings={audioSettings}
+            onChange={patch => setAudioSettings(prev => ({ ...prev, ...patch }))}
+            dirty={JSON.stringify(audioSettings) !== JSON.stringify(savedAudioSettings)}
+            onSave={saveAudioSettings}
+            onReset={() => setAudioSettings(savedAudioSettings)}
+            noDevicesReported={audioInputs.length === 0 && audioOutputs.length === 0}
+          />
         </CollapsibleSection>
 
         <datalist id="audio-input-options">

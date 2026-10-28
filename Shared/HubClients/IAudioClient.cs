@@ -1,3 +1,4 @@
+using SignalRC.Shared.Audio;
 using SignalRC.Shared.Video;
 
 namespace SignalRC.Shared.HubClients;
@@ -7,20 +8,24 @@ namespace SignalRC.Shared.HubClients;
 public interface IAudioClient
 {
     /// <summary>
-    /// Starts sending the microphone configured on video stream <paramref name="streamId"/>
-    /// (VideoStreamMapItem.AudioDevice) as Opus/RTP to the Janus audio port of that stream's mountpoint.
-    /// Sent alongside StartVideoStream; anyone watching the stream hears it.
+    /// Car-level audio configuration, pushed on every (re)connect and whenever it changes in the UI.
+    /// A running uplink or playback adapts to it.
     /// </summary>
-    Task StartAudioUplink(string streamId, int port);
+    Task ApplyAudioSettings(AudioSettings settings);
 
-    Task StopAudioUplink(string streamId);
+    /// <summary>
+    /// Starts sending the vehicle microphone (<see cref="AudioSettings.InputDevice"/>) as Opus/RTP to
+    /// <paramref name="port"/> of the car's Janus audio mountpoint. Sent while at least one browser listens.
+    /// </summary>
+    Task StartAudioUplink(int port);
+
+    Task StopAudioUplink();
 
     /// <summary>
     /// Prepares the vehicle speaker for a push-to-talk burst. Only the active control session may talk.
-    /// <paramref name="format"/> is the container the browser records into ("webm" or "ogg", Opus inside),
-    /// <paramref name="outputDevice"/> the ALSA playback device configured for the car.
+    /// <paramref name="format"/> is the container the browser records into ("webm" or "ogg", Opus inside).
     /// </summary>
-    Task<bool> StartAudioPlayback(string sessionId, string format, string outputDevice);
+    Task<bool> StartAudioPlayback(string sessionId, string format);
 
     /// <summary>
     /// One chunk of the recorded container stream, in recording order.
@@ -31,7 +36,7 @@ public interface IAudioClient
 
     /// <summary>
     /// Audio checks appended to the onboard diagnostics: ffmpeg/ALSA tooling, permissions, and a short
-    /// open test of every configured microphone and of <paramref name="outputDevice"/> (the car's speaker).
+    /// open test of the configured microphone and speaker.
     /// </summary>
-    Task<DiagnosticCheck[]> GetAudioDiagnostics(string? outputDevice);
+    Task<DiagnosticCheck[]> GetAudioDiagnostics();
 }

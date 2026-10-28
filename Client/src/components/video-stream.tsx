@@ -20,14 +20,11 @@ import {
 } from './janus-client';
 import { useI18n } from '@/i18n/provider';
 import type { Messages } from '@/i18n/translations';
-import { usePushToTalkStore } from './audio-store';
 
+// Video only: the vehicle microphone has its own mountpoint, see vehicle-audio.tsx.
 interface VideoStreamProps {
   streamId?: number;
   streamName?: string;
-  audioEnabled?: boolean;
-  audioInputDeviceId?: string;
-  onAudioTrack?: (track: MediaStreamTrack | null) => void;
 }
 
 const NO_DATA_THRESHOLD_MS = 5000;
@@ -155,7 +152,6 @@ function getSendingMessage(
 
 interface UseJanusStreamingResult {
   videoRef: React.RefObject<HTMLVideoElement | null>;
-  audioRef: React.RefObject<HTMLAudioElement | null>;
   phase: Phase;
   error: string | null;
   janusStreams: JanusStreamInfo[];
@@ -164,10 +160,7 @@ interface UseJanusStreamingResult {
   retryInfo: { attempt: number; remainingMs: number } | null;
 }
 
-function useJanusStreaming(
-  streamId: number | undefined,
-  onAudioTrack?: (track: MediaStreamTrack | null) => void,
-): UseJanusStreamingResult {
+function useJanusStreaming(streamId: number | undefined): UseJanusStreamingResult {
   const { messages } = useI18n();
   const [phase, setPhase] = useState<Phase>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -181,7 +174,6 @@ function useJanusStreaming(
   const [retryInfo, setRetryInfo] = useState<{ attempt: number; remainingMs: number } | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
-  const audioRef = useRef<HTMLAudioElement>(null);
   const janusRef = useRef<Janus | null>(null);
   const pluginHandleRef = useRef<JanusPluginHandle | null>(null);
   const lastDataRef = useRef<number>(0);
@@ -200,9 +192,6 @@ function useJanusStreaming(
   const resetMedia = useCallback(() => {
     if (videoRef.current) {
       videoRef.current.srcObject = null;
-    }
-    if (audioRef.current) {
-      audioRef.current.srcObject = null;
     }
   }, []);
 
@@ -342,18 +331,6 @@ function useJanusStreaming(
             markDataReceived();
             setPhase('receiving');
             setError(null);
-          } else if (on && track.kind === 'audio') {
-            const audioStream = new MediaStream([track]);
-            if (audioRef.current) {
-              audioRef.current.srcObject = audioStream;
-            }
-            onAudioTrack?.(track);
-            markDataReceived();
-          } else if (!on && track.kind === 'audio') {
-            if (audioRef.current) {
-              audioRef.current.srcObject = null;
-            }
-            onAudioTrack?.(null);
           }
         };
 
@@ -371,7 +348,7 @@ function useJanusStreaming(
               setPhase('waiting-for-vehicle');
               setVehicleSending(false);
               // A stopped/destroyed mountpoint never comes back on this handle (the server recreates
-              // it on stream restart or audio changes), so watch it again via the normal retry.
+              // it on stream restart), so watch it again via the normal retry.
               if (status !== 'offline') scheduleRetry();
             } else if (['started', 'live'].includes(status)) {
               resetRetryState();
@@ -436,7 +413,6 @@ function useJanusStreaming(
     streamId,
     retryVersion,
     messages,
-    onAudioTrack,
     markDataReceived,
     resetMedia,
     cleanupJanus,
@@ -542,7 +518,6 @@ function useJanusStreaming(
 
   return {
     videoRef,
-    audioRef,
     phase,
     error,
     janusStreams,
@@ -587,18 +562,11 @@ function JanusStreamList({ streams, messages }: JanusStreamListProps) {
   );
 }
 
-export default function VideoStream({
-  streamId,
-  streamName,
-  audioEnabled = false,
-  onAudioTrack,
-}: VideoStreamProps) {
+export default function VideoStream({ streamId, streamName }: VideoStreamProps) {
   const { messages } = useI18n();
-  const { videoRef, audioRef, phase, error, janusStreams, stats, vehicleSending, retryInfo } =
-    useJanusStreaming(streamId, onAudioTrack);
+  const { videoRef, phase, error, janusStreams, stats, vehicleSending, retryInfo } =
+    useJanusStreaming(streamId);
   const [overlayVisible, setOverlayVisible] = useState(true);
-  // Half-duplex: mute the vehicle while the driver talks through its speaker.
-  const talking = usePushToTalkStore((state) => state.talking);
 
   const formattedBitrate = formatBitrate(stats.bitrate);
   const formattedFps =
@@ -678,10 +646,9 @@ export default function VideoStream({
         ref={videoRef}
         autoPlay
         playsInline
-        muted={!audioEnabled}
+        muted
         className="h-full max-w-full bg-black object-contain"
       />
-      <audio ref={audioRef} autoPlay playsInline muted={!audioEnabled || talking} className="hidden" />
     </div>
   );
 }

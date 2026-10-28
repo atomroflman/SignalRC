@@ -6,6 +6,7 @@ import LanguageSwitcher from "@/components/language-switcher";
 import ConfigGuard from "@/components/config-guard";
 import CarVideoPanel from "@/components/car-video-panel";
 import AudioChat from "@/components/audio-chat";
+import VehicleAudio from "@/components/vehicle-audio";
 import OnboardDiagnostics from "@/components/onboard-diagnostics";
 import { useControlFlowStore } from "@/components/control-flow-store";
 import { useI18n } from "@/i18n/provider";
@@ -334,7 +335,10 @@ export default function TestPage() {
         </CollapsibleSection>
 
         <CollapsibleSection title="Audio" defaultCollapsed={false}>
-          <AudioChat carId={carIdNum} />
+          <div className="space-y-2">
+            <VehicleAudio carId={carIdNum} />
+            <AudioChat carId={carIdNum} />
+          </div>
         </CollapsibleSection>
 
         <OnboardDiagnostics carId={carIdNum} />

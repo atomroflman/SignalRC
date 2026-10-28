@@ -1,6 +1,6 @@
 using System.Diagnostics;
 using SignalRC.Onboard.Control;
-using SignalRC.Shared.Channels;
+using SignalRC.Shared.Audio;
 using SignalRC.Shared.HubClients;
 using SignalRC.Shared.Video;
 using Microsoft.Extensions.Configuration;
@@ -11,10 +11,9 @@ namespace SignalRC.Onboard;
 /// <summary>
 /// Two-way audio for the vehicle, driven entirely through ffmpeg + ALSA:
 /// <list type="bullet">
-/// <item>Uplink (vehicle → browser): the microphone configured on a video stream
-/// (<see cref="VideoStreamMapItem.AudioDevice"/>) is captured, encoded to Opus and sent as RTP to the
-/// audio port of that stream's Janus mountpoint. It runs while the stream runs, in its own ffmpeg so a
-/// broken microphone can't take the video down. Outbound UDP like the video, so it works behind CGNAT.</item>
+/// <item>Uplink (vehicle → browser): the car's microphone (<see cref="AudioSettings.InputDevice"/>) is
+/// captured, encoded to Opus and sent as RTP to the car's audio-only Janus mountpoint while at least one
+/// browser listens. Outbound UDP like the video, so it works behind CGNAT.</item>
 /// <item>Downlink (browser → vehicle): push-to-talk chunks (WebM/Ogg with Opus) arrive over the
 /// SignalR connection and are piped into ffmpeg's stdin, which plays them on ALSA. Only the active
 /// control session may talk; playback stops when the session changes.</item>
@@ -25,17 +24,19 @@ public class AudioService : IAudioClient
     private static readonly TimeSpan UplinkRestartDelay = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan PlaybackIdleTimeout = TimeSpan.FromSeconds(5);
     private const int MaxChunkBytes = 64 * 1024;
-    private const int UplinkBitrate = 32000;
     // Cuts rumble/wind below 100 Hz, then FFT denoising against steady background noise (engine, motor whine).
     private const string DenoiseFilter = "highpass=f=100,afftdn=nf=-25";
 
     private readonly ILogger<AudioService> _logger;
     private readonly IConfiguration _configuration;
     private readonly ControlService _controlService;
-    private readonly ChannelMap _channelMap;
     private readonly object _lock = new();
 
-    private readonly Dictionary<string, Uplink> _uplinks = new();
+    // Pushed by the server on every (re)connect and change; no devices until then.
+    private AudioSettings _settings = new();
+    // Set while the server wants the microphone sent (someone listens).
+    private int? _uplinkPort;
+    private Uplink? _uplink;
 
     private Process? _playbackProcess;
     private Stream? _playbackInput;
@@ -45,12 +46,11 @@ public class AudioService : IAudioClient
     // the semaphore only guards against a concurrent Stop while a write is in flight.
     private readonly SemaphoreSlim _playbackWriteLock = new(1, 1);
 
-    public AudioService(ILogger<AudioService> logger, IConfiguration configuration, ControlService controlService, ChannelMap channelMap)
+    public AudioService(ILogger<AudioService> logger, IConfiguration configuration, ControlService controlService)
     {
         _logger = logger;
         _configuration = configuration;
         _controlService = controlService;
-        _channelMap = channelMap;
         _controlService.SessionChanged += () =>
         {
             _logger.LogInformation("Control session changed, stopping push-to-talk playback.");
@@ -60,52 +60,87 @@ public class AudioService : IAudioClient
 
     private bool AudioEnabled => _configuration.GetValue<bool?>("audio") ?? true;
 
-    // -- Uplink: video stream microphone → Janus ---------------------------------------
-
-    public Task StartAudioUplink(string streamId, int port)
+    public Task ApplyAudioSettings(AudioSettings settings)
     {
+        lock (_lock) _settings = settings.Normalized();
+        _logger.LogInformation("Audio settings: input '{Input}' ({Channel}, gain {Gain}, denoise {Denoise}, {Bitrate} kbit/s), output '{Output}' (volume {Volume}).",
+            _settings.InputDevice, _settings.InputChannel, _settings.InputGain, _settings.Denoise, _settings.BitrateKbps, _settings.OutputDevice, _settings.OutputVolume);
+        ReconcileUplink();
+        return Task.CompletedTask;
+    }
+
+    // -- Uplink: car microphone → Janus ----------------------------------------------
+
+    public Task StartAudioUplink(int port)
+    {
+        lock (_lock) _uplinkPort = port;
+        ReconcileUplink();
+        return Task.CompletedTask;
+    }
+
+    public Task StopAudioUplink()
+    {
+        lock (_lock) _uplinkPort = null;
+        StopUplink();
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Runs the uplink when the server wants it and a microphone is configured; restarts it when the
+    /// settings that go into the ffmpeg command changed.
+    /// </summary>
+    private void ReconcileUplink()
+    {
+        AudioSettings settings;
+        int? port;
+        lock (_lock) (settings, port) = (_settings, _uplinkPort);
+
+        if (port == null || string.IsNullOrWhiteSpace(settings.InputDevice))
+        {
+            StopUplink();
+            return;
+        }
         if (!AudioEnabled)
         {
-            _logger.LogInformation("Audio uplink for stream {StreamId} skipped: audio is disabled (feature flag 'audio').", streamId);
-            return Task.CompletedTask;
-        }
-        if (!_channelMap.VideoStreams.TryGetValue(streamId, out var stream) || string.IsNullOrWhiteSpace(stream.AudioDevice))
-        {
-            _logger.LogWarning("Audio uplink requested for stream {StreamId}, but it has no audio device configured.", streamId);
-            return Task.CompletedTask;
+            _logger.LogInformation("Audio uplink skipped: audio is disabled (feature flag 'audio').");
+            return;
         }
 
         var host = _configuration.GetValue<string>("ServerName");
         if (string.IsNullOrWhiteSpace(host)) host = "localhost";
-        var filter = stream.AudioDenoise ? $"-af {DenoiseFilter} " : "";
-        var args = $"-hide_banner -loglevel warning -nostdin -f alsa -i {stream.AudioDevice} {filter}-ac 1 -ar 48000 " +
-                   $"-c:a libopus -b:a {UplinkBitrate} -application voip -frame_duration 20 " +
+        var args = $"-hide_banner -loglevel warning -nostdin {CaptureInputArgs(settings)} -af {CaptureFilter(settings)} -ac 1 -ar 48000 " +
+                   $"-c:a libopus -b:a {settings.BitrateKbps}k -application voip -frame_duration 20 " +
                    $"-f rtp -payload_type 111 rtp://{host}:{port}?pkt_size=1200";
 
         lock (_lock)
         {
-            if (_uplinks.TryGetValue(streamId, out var running) && running.Args == args)
-            {
-                _logger.LogDebug("Audio uplink for stream {StreamId} already running.", streamId);
-                return Task.CompletedTask;
-            }
+            if (_uplink != null && _uplink.Args == args)
+                return;
         }
-        StopUplink(streamId);
+        StopUplink();
 
         var uplink = new Uplink(args);
-        lock (_lock) _uplinks[streamId] = uplink;
-        _logger.LogInformation("Starting audio uplink for stream {StreamId}: ffmpeg {Args}", streamId, args);
-        _ = Task.Run(() => RunUplinkLoopAsync(streamId, uplink));
-        return Task.CompletedTask;
+        lock (_lock) _uplink = uplink;
+        _logger.LogInformation("Starting audio uplink: ffmpeg {Args}", args);
+        _ = Task.Run(() => RunUplinkLoopAsync(uplink));
     }
 
-    public Task StopAudioUplink(string streamId)
+    private static string CaptureInputArgs(AudioSettings settings) =>
+        // Picking one side needs both channels; plughw converts if the card only has one.
+        (settings.InputChannel is AudioSettings.ChannelLeft or AudioSettings.ChannelRight ? "-channels 2 " : "") +
+        $"-f alsa -i {settings.InputDevice}";
+
+    private static string CaptureFilter(AudioSettings settings)
     {
-        StopUplink(streamId);
-        return Task.CompletedTask;
+        var filters = new List<string>();
+        if (settings.InputChannel == AudioSettings.ChannelLeft) filters.Add("pan=mono|c0=c0");
+        else if (settings.InputChannel == AudioSettings.ChannelRight) filters.Add("pan=mono|c0=c1");
+        if (settings.Denoise) filters.Add(DenoiseFilter);
+        filters.Add(FormattableString.Invariant($"volume={settings.InputGain:0.###}"));
+        return string.Join(',', filters);
     }
 
-    private async Task RunUplinkLoopAsync(string streamId, Uplink uplink)
+    private async Task RunUplinkLoopAsync(Uplink uplink)
     {
         var token = uplink.Cts.Token;
         while (!token.IsCancellationRequested)
@@ -113,17 +148,17 @@ public class AudioService : IAudioClient
             Process process;
             try
             {
-                process = StartFfmpeg(uplink.Args, redirectInput: false, $"uplink {streamId}");
+                process = StartFfmpeg(uplink.Args, redirectInput: false, "uplink");
             }
             catch (Exception ex)
             {
                 // Forget the uplink, otherwise the next StartAudioUplink with the same args is
                 // taken for "already running" and the microphone stays off until a restart.
-                _logger.LogError(ex, "Failed to start audio uplink ffmpeg for stream {StreamId}; the next stream start retries.", streamId);
+                _logger.LogError(ex, "Failed to start audio uplink ffmpeg; the next listener retries.");
                 lock (_lock)
                 {
-                    if (_uplinks.TryGetValue(streamId, out var current) && current == uplink)
-                        _uplinks.Remove(streamId);
+                    if (_uplink == uplink)
+                        _uplink = null;
                 }
                 return;
             }
@@ -132,8 +167,8 @@ public class AudioService : IAudioClient
             try
             {
                 await process.WaitForExitAsync(token);
-                _logger.LogWarning("Audio uplink ffmpeg for stream {StreamId} exited with code {ExitCode}; restarting in {Delay}s.",
-                    streamId, process.ExitCode, UplinkRestartDelay.TotalSeconds);
+                _logger.LogWarning("Audio uplink ffmpeg exited with code {ExitCode}; restarting in {Delay}s.",
+                    process.ExitCode, UplinkRestartDelay.TotalSeconds);
                 await Task.Delay(UplinkRestartDelay, token);
             }
             catch (OperationCanceledException)
@@ -143,16 +178,18 @@ public class AudioService : IAudioClient
         }
     }
 
-    private void StopUplink(string streamId)
+    private void StopUplink()
     {
         Uplink? uplink;
         lock (_lock)
         {
-            if (!_uplinks.Remove(streamId, out uplink)) return;
+            uplink = _uplink;
+            _uplink = null;
         }
+        if (uplink == null) return;
         uplink.Cts.Cancel();
-        KillProcess(uplink.Process, $"uplink {streamId}");
-        _logger.LogInformation("Audio uplink for stream {StreamId} stopped.", streamId);
+        KillProcess(uplink.Process, "uplink");
+        _logger.LogInformation("Audio uplink stopped.");
     }
 
     private sealed class Uplink(string args)
@@ -164,8 +201,11 @@ public class AudioService : IAudioClient
 
     // -- Downlink: browser push-to-talk → vehicle speaker ------------------------------
 
-    public async Task<bool> StartAudioPlayback(string sessionId, string format, string outputDevice)
+    public async Task<bool> StartAudioPlayback(string sessionId, string format)
     {
+        AudioSettings settings;
+        lock (_lock) settings = _settings;
+        var outputDevice = settings.OutputDevice;
         if (!AudioEnabled)
         {
             _logger.LogWarning("Push-to-talk rejected: audio is disabled (feature flag 'audio').");
@@ -197,7 +237,8 @@ public class AudioService : IAudioClient
         await StopPlaybackInternalAsync();
 
         var args = $"-hide_banner -loglevel warning -fflags nobuffer -flags low_delay " +
-                   $"-probesize 4096 -analyzeduration 0 -f {demuxer} -i pipe:0 -f alsa {outputDevice}";
+                   $"-probesize 4096 -analyzeduration 0 -f {demuxer} -i pipe:0 " +
+                   FormattableString.Invariant($"-af volume={settings.OutputVolume:0.###} -f alsa {outputDevice}");
         _logger.LogInformation("Starting audio playback: ffmpeg {Args}", args);
         try
         {
@@ -314,8 +355,11 @@ public class AudioService : IAudioClient
 
     // -- Diagnostics ------------------------------------------------------------------
 
-    public async Task<DiagnosticCheck[]> GetAudioDiagnostics(string? outputDevice)
+    public async Task<DiagnosticCheck[]> GetAudioDiagnostics()
     {
+        AudioSettings settings;
+        lock (_lock) settings = _settings;
+        var outputDevice = settings.OutputDevice;
         var checks = new List<DiagnosticCheck>();
         void Add(string step, string title, DiagnosticStatus status, string message) =>
             checks.Add(new DiagnosticCheck { Step = step, Title = title, Status = status, Message = message });
@@ -355,22 +399,25 @@ public class AudioService : IAudioClient
         }
 
         var step = 5;
-        var microphones = _channelMap.VideoStreams.Where(kv => !string.IsNullOrWhiteSpace(kv.Value.AudioDevice)).ToList();
-        if (microphones.Count == 0)
-            Add($"A{step++}", "Mikrofon", DiagnosticStatus.Info, "Kein Video-Stream hat ein Audio-Gerät konfiguriert.");
-        foreach (var (streamId, stream) in microphones)
+        if (string.IsNullOrWhiteSpace(settings.InputDevice))
+        {
+            Add($"A{step++}", "Mikrofon", DiagnosticStatus.Info, "Kein Mikrofon konfiguriert – Mithören ist ausgeblendet.");
+        }
+        else
         {
             bool running;
-            lock (_lock) running = _uplinks.ContainsKey(streamId);
-            var title = $"Mikrofon '{streamId}' ({stream.AudioDevice})";
+            lock (_lock) running = _uplink != null;
+            var title = $"Mikrofon ({settings.InputDevice})";
             if (running)
             {
                 Add($"A{step++}", title, DiagnosticStatus.Ok, "Uplink läuft gerade (Gerät ist belegt, kein Test nötig).");
-                continue;
             }
-            var test = await RunToolAsync("arecord", $"-q -D {stream.AudioDevice} -f S16_LE -r 48000 -c 1 -d 1 /dev/null", TimeSpan.FromSeconds(5));
-            Add($"A{step++}", title, test.ExitCode == 0 ? DiagnosticStatus.Ok : DiagnosticStatus.Error,
-                test.ExitCode == 0 ? "1 s Aufnahme erfolgreich." : $"Aufnahme fehlgeschlagen: {DescribeAlsaError(test.Error)}");
+            else
+            {
+                var test = await RunToolAsync("arecord", $"-q -D {settings.InputDevice} -f S16_LE -r 48000 -c 1 -d 1 /dev/null", TimeSpan.FromSeconds(5));
+                Add($"A{step++}", title, test.ExitCode == 0 ? DiagnosticStatus.Ok : DiagnosticStatus.Error,
+                    test.ExitCode == 0 ? "1 s Aufnahme erfolgreich." : $"Aufnahme fehlgeschlagen: {DescribeAlsaError(test.Error)}");
+            }
         }
 
         if (string.IsNullOrWhiteSpace(outputDevice))
@@ -405,7 +452,7 @@ public class AudioService : IAudioClient
         var line = lines.LastOrDefault(l => l.Contains("error", StringComparison.OrdinalIgnoreCase)) ?? lines.LastOrDefault();
         if (string.IsNullOrEmpty(line)) return "keine Fehlermeldung";
         if (line.Contains("busy", StringComparison.OrdinalIgnoreCase))
-            line += " – das Gerät ist von einem anderen Prozess belegt (z. B. PipeWire/PulseAudio oder ein zweiter Stream mit demselben Gerät).";
+            line += " – das Gerät ist von einem anderen Prozess belegt (z. B. PipeWire/PulseAudio).";
         return line;
     }
 

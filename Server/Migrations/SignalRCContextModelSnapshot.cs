@@ -32,8 +32,32 @@ namespace SignalRC.Server.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<int>("AudioBitrateKbps")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("AudioDenoise")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("AudioInputChannel")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<string>("AudioInputDevice")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<float>("AudioInputGain")
+                        .HasColumnType("real");
+
+                    b.Property<bool>("AudioMuteInputWhileTalking")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("AudioOutputDevice")
                         .HasColumnType("text");
+
+                    b.Property<float>("AudioOutputVolume")
+                        .HasColumnType("real");
 
                     b.Property<string>("CarIdentityKey")
                         .IsRequired()
@@ -221,13 +245,6 @@ namespace SignalRC.Server.Migrations
                         .HasColumnType("integer");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<bool>("AudioDenoise")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("AudioDevice")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
 
                     b.Property<int>("Bitrate")
                         .HasColumnType("integer");

@@ -3,6 +3,7 @@ using SignalRC.Server.Data;
 using SignalRC.Server.Hubs;
 using SignalRC.Server.Services;
 using SignalRC.Shared;
+using SignalRC.Shared.Audio;
 using SignalRC.Shared.Channels;
 using SignalRC.Shared.HubClients;
 using SignalRC.Shared.Video;
@@ -21,22 +22,19 @@ public class ChannelsController : ControllerBase
 {
     private readonly IHubContext<CarConnectionHub, IConnectionHubClient> _controlHub;
     private readonly AvailableTypesRegistry _availableTypes;
-    private readonly VideoStreamReceiverService _streamService;
-    private readonly ActiveVideoStreamViewerRegistry _viewerRegistry;
+    private readonly CarAudioService _carAudio;
     private readonly ILogger<ChannelsController> _logger;
 
     public ChannelsController(
         SignalRCContext context,
         IHubContext<CarConnectionHub, IConnectionHubClient> controlHub,
         AvailableTypesRegistry availableTypes,
-        VideoStreamReceiverService streamService,
-        ActiveVideoStreamViewerRegistry viewerRegistry,
+        CarAudioService carAudio,
         ILogger<ChannelsController> logger) : base(context)
     {
         _controlHub = controlHub;
         _availableTypes = availableTypes;
-        _streamService = streamService;
-        _viewerRegistry = viewerRegistry;
+        _carAudio = carAudio;
         _logger = logger;
     }
 
@@ -104,8 +102,6 @@ public class ChannelsController : ControllerBase
                     RpiCamId = s.RpiCamId,
                     Options = DeserializeOptions(s.OptionsJson),
                     ModifiedAt = s.ModifiedAt,
-                    AudioDevice = s.AudioDevice,
-                    AudioDenoise = s.AudioDenoise,
                 }),
         };
         return Ok(map);
@@ -318,8 +314,6 @@ public class ChannelsController : ControllerBase
                     _context.CarVideoStreams.Remove(old);
             }
         }
-        var previousAudioDevice = s.AudioDevice;
-        var previousAudioDenoise = s.AudioDenoise;
         s.Name = body.Name ?? s.Name;
         s.Type = body.Type ?? s.Type;
         s.Location = body.Location;
@@ -336,8 +330,6 @@ public class ChannelsController : ControllerBase
         if (body.Protocol.HasValue) s.Protocol = body.Protocol.Value;
         s.CameraDevice = body.CameraDevice;
         s.RpiCamId = body.RpiCamId;
-        s.AudioDevice = string.IsNullOrWhiteSpace(body.AudioDevice) ? null : body.AudioDevice.Trim();
-        s.AudioDenoise = body.AudioDenoise ?? false;
         s.OptionsJson = SerializeOptions(body.Options);
         s.ProcessArguments = body.ProcessArguments;
         s.StreamPurpose = body.StreamPurpose;
@@ -350,12 +342,6 @@ public class ChannelsController : ControllerBase
         var mapItem = ToMapItem(s);
         await _controlHub.Clients.Group($"Car-{carId}").UpsertVideoStream(s.StreamId, mapItem);
         _logger.LogInformation("Upsert video stream {Stream} for car {CarId} by {User}", s.StreamId, carId, user.LoginName);
-
-        if ((previousAudioDevice != s.AudioDevice || previousAudioDenoise != s.AudioDenoise)
-            && s.Enabled && _viewerRegistry.GetViewerCount(s.Id) > 0)
-        {
-            await ApplyAudioChangeToRunningStreamAsync(carId, s);
-        }
         return Ok(mapItem);
     }
 
@@ -370,7 +356,6 @@ public class ChannelsController : ControllerBase
         await _context.SaveChangesAsync();
         await UpdateCarChannelMapHashAsync(carId);
 
-        await _controlHub.Clients.Group($"Car-{carId}").StopAudioUplink(streamId);
         await _controlHub.Clients.Group($"Car-{carId}").DeleteVideoStream(streamId);
         _logger.LogInformation("Delete video stream {Stream} for car {CarId} by {User}", streamId, carId, user.LoginName);
         return NoContent();
@@ -418,31 +403,6 @@ public class ChannelsController : ControllerBase
         return Ok(_availableTypes.Get(carId)?.TelemetryTypes ?? Array.Empty<string>());
     }
 
-    /// <summary>
-    /// A running stream only picks up audio changes when its Janus mountpoint is recreated (Janus can't
-    /// add or remove media on an existing mountpoint). Recreate it now and (re)start or stop the uplink,
-    /// so the change is live without waiting for the next stream start. Watching browsers see the
-    /// mountpoint go away and reconnect through their normal retry.
-    /// </summary>
-    private async Task ApplyAudioChangeToRunningStreamAsync(int carId, CarVideoStream stream)
-    {
-        try
-        {
-            _logger.LogInformation("Audio config of running stream {Stream} (car {CarId}) changed, recreating its Janus mountpoint", stream.StreamId, carId);
-            await _streamService.StartStreamAsync(stream.Id);
-            var audioPort = _streamService.GetAudioPort(stream.Id);
-            // Same connection as the UpsertVideoStream above, so the Onboard already has the new device.
-            if (audioPort != null)
-                await _controlHub.Clients.Group($"Car-{carId}").StartAudioUplink(stream.StreamId, audioPort.Value);
-            else
-                await _controlHub.Clients.Group($"Car-{carId}").StopAudioUplink(stream.StreamId);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to apply audio change to running stream {Stream} of car {CarId}; it takes effect on the next stream start", stream.StreamId, carId);
-        }
-    }
-
     [HttpGet("available-audio-devices")]
     public async Task<IActionResult> GetAvailableAudioDevices(int carId)
     {
@@ -456,26 +416,28 @@ public class ChannelsController : ControllerBase
         });
     }
 
-    // Car-level audio: the speaker push-to-talk plays on. Microphones are configured per video stream.
+    // Car-level audio: one microphone (listening) and one speaker (push-to-talk, sound channels).
     [HttpGet("audio-settings")]
     public async Task<IActionResult> GetAudioSettings(int carId)
     {
         var car = await _context.Cars.AsNoTracking().FirstOrDefaultAsync(c => c.Id == carId);
         if (car == null) return NotFound("Car not found");
-        return Ok(new CarAudioSettingsDto { OutputDevice = car.AudioOutputDevice });
+        return Ok(CarAudioService.ToSettings(car));
     }
 
     [HttpPut("audio-settings")]
-    public async Task<IActionResult> UpdateAudioSettings(int carId, [FromBody] CarAudioSettingsDto body)
+    public async Task<IActionResult> UpdateAudioSettings(int carId, [FromBody] AudioSettings body)
     {
         var user = await GetCurrentUserAsync();
         if (user == null) return Unauthorized();
         var car = await _context.Cars.FirstOrDefaultAsync(c => c.Id == carId);
         if (car == null) return NotFound("Car not found");
-        car.AudioOutputDevice = string.IsNullOrWhiteSpace(body.OutputDevice) ? null : body.OutputDevice.Trim();
+        CarAudioService.ApplyToCar(car, body);
         await _context.SaveChangesAsync();
-        _logger.LogInformation("Audio output device for car {CarId} set to '{Device}' by {User}", carId, car.AudioOutputDevice, user.LoginName);
-        return Ok(new CarAudioSettingsDto { OutputDevice = car.AudioOutputDevice });
+        _logger.LogInformation("Audio settings for car {CarId} changed by {User}: input '{Input}', output '{Output}'",
+            carId, user.LoginName, car.AudioInputDevice, car.AudioOutputDevice);
+        await _carAudio.OnSettingsChangedAsync(carId);
+        return Ok(CarAudioService.ToSettings(car));
     }
 
     private async Task UpdateCarChannelMapHashAsync(int carId)
@@ -534,8 +496,6 @@ public class ChannelsController : ControllerBase
         RpiCamId = s.RpiCamId,
         Options = DeserializeOptions(s.OptionsJson),
         ModifiedAt = s.ModifiedAt,
-        AudioDevice = s.AudioDevice,
-        AudioDenoise = s.AudioDenoise,
     };
 
     private static Dictionary<string, object> DeserializeOptions(string? json)
@@ -608,11 +568,4 @@ public class VideoStreamDto
     public string? CameraDevice { get; set; }
     public int? RpiCamId { get; set; }
     public Dictionary<string, object>? Options { get; set; }
-    public string? AudioDevice { get; set; }
-    public bool? AudioDenoise { get; set; }
-}
-
-public class CarAudioSettingsDto
-{
-    public string? OutputDevice { get; set; }
 }

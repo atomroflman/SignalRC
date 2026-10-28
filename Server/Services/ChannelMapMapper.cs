@@ -81,8 +81,6 @@ public static class ChannelMapMapper
                     ServerId = s.Id,
                     ModifiedAt = s.ModifiedAt,
                     Port = s.Port,
-                    AudioDevice = s.AudioDevice,
-                    AudioDenoise = s.AudioDenoise,
                 })
         };
     }
@@ -175,8 +173,6 @@ public static class ChannelMapMapper
                 Exposure = kv.Value.Exposure,
                 CameraDevice = kv.Value.CameraDevice,
                 RpiCamId = kv.Value.RpiCamId,
-                AudioDevice = string.IsNullOrWhiteSpace(kv.Value.AudioDevice) ? null : kv.Value.AudioDevice,
-                AudioDenoise = kv.Value.AudioDenoise,
                 OptionsJson = SerializeOptions(kv.Value.Options),
                 ModifiedAt = kv.Value.ModifiedAt ?? now,
                 StartTime = now,

@@ -13,6 +13,7 @@ import VersionBanner from "@/components/version-banner";
 import GamepadViewer from "@/components/gamepad-viewer";
 import CarFunctionsView from "@/components/car-functions-view";
 import AudioChat from "@/components/audio-chat";
+import VehicleAudio from "@/components/vehicle-audio";
 import { useCarAudioSettings } from "@/components/audio-store";
 import SshKeyManager from "@/components/ssh-key-manager";
 import SortableSectionList from "@/components/sortable-section-list";
@@ -34,7 +35,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const selectedCarId = useControlFlowStore(state => state.carId);
   const carSession = useControlFlowStore(state => state.carSession);
-  const { outputDevice: carAudioOutputDevice } = useCarAudioSettings(selectedCarId);
+  const { inputDevice: carAudioInputDevice, outputDevice: carAudioOutputDevice } = useCarAudioSettings(selectedCarId);
 
   useEffect(() => {
     fetch("/api/user/me")
@@ -78,6 +79,13 @@ export default function Home() {
       title: messages.carFunctions.title,
       content: selectedCarId ? <CarFunctionsView carId={selectedCarId} hideFlowButtons={true} /> : null,
       visible: Boolean(selectedCarId),
+    },
+    {
+      id: "vehicleAudio",
+      title: messages.vehicleAudio.title,
+      content: selectedCarId ? <VehicleAudio carId={selectedCarId} /> : null,
+      // Listening only exists when the vehicle has a microphone configured.
+      visible: Boolean(selectedCarId && carAudioInputDevice),
     },
     {
       id: "audioChat",

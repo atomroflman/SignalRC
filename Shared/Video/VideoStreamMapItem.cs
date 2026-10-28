@@ -100,18 +100,6 @@ public class VideoStreamMapItem
     [JsonPropertyName("port")]
     public int Port {get;set;}
 
-    /// <summary>
-    /// ALSA capture device (e.g. "plughw:CARD=Device,DEV=0") whose sound is sent alongside this
-    /// video stream. Null/empty = video only.
-    /// </summary>
-    [Key(21)]
-    [JsonPropertyName("audioDevice")]
-    public string? AudioDevice { get; set; }
-
-    /// <summary>
-    /// Applies a highpass + FFT denoiser to the vehicle microphone before encoding.
-    /// </summary>
-    [Key(22)]
-    [JsonPropertyName("audioDenoise")]
-    public bool AudioDenoise { get; set; }
+    // Keys 21/22 were the per-stream microphone (AudioDevice/AudioDenoise); audio is configured per car
+    // now (SignalRC.Shared.Audio.AudioSettings). Don't reuse them.
 }

@@ -13,8 +13,8 @@ public class VideoStreamReceiverService
 {
     private readonly ConcurrentDictionary<long, Process> _activeStreamProxies = new();
     private readonly HashSet<int> _reservedPorts = new();
-    // Janus audio port per CarVideoStream id, only while the stream is active. Kept in memory:
-    // after a server restart the stream is restarted anyway and gets a fresh port.
+    // Janus audio port per car, only while its audio mountpoint exists. Kept in memory: after a server
+    // restart listeners re-register and the mountpoint is recreated with a fresh port.
     private readonly Dictionary<int, int> _audioPorts = new();
     private readonly IServiceProvider _serviceProvider;
 
@@ -162,9 +162,6 @@ public class VideoStreamReceiverService
         stream.JanusPort = janusPort;
         var description = $"{stream.Car?.Name ?? stream.CarId.ToString()}-{stream.Name ?? stream.StreamId}";
         stream.JanusId = description;
-        int? audioPort = string.IsNullOrWhiteSpace(stream.AudioDevice) ? null : GetOrReserveAudioPort(stream.Id);
-        if (audioPort == null)
-            ReleaseAudioPort(stream.Id);
         try
         {
             var body = new JanusCreateStreamRequestBody()
@@ -177,17 +174,8 @@ public class VideoStreamReceiverService
                 Video = true,
                 VideoPort = janusPort
             };
-            if (audioPort != null)
-            {
-                body.Audio = true;
-                body.AudioPort = audioPort;
-                body.AudioPt = 111;
-                body.Audiocodec = "opus";
-                body.AudioRtpMap = "opus/48000/2";
-            }
             await CreateJanusMountpointAsync(body, $"stream '{stream.StreamId}'");
-            Logger.LogInformation($"Created Janus RTP endpoint for stream '{stream.StreamId}' on UDP port {janusPort}" +
-                (audioPort != null ? $" (audio on {audioPort})" : ""));
+            Logger.LogInformation($"Created Janus RTP endpoint for stream '{stream.StreamId}' on UDP port {janusPort}");
         }
         catch (Exception ex)
         {
@@ -284,31 +272,80 @@ public class VideoStreamReceiverService
     }
 
     /// <summary>
-    /// Janus audio port of an active stream that carries audio, or null.
+    /// Creates (or recreates) the audio-only Janus mountpoint a car's microphone is sent to and returns
+    /// its RTP port. Kept apart from the video mountpoints so listening works without video and audio
+    /// changes never interrupt a running video stream.
     /// </summary>
-    public int? GetAudioPort(int streamId)
+    public async Task<int> OpenCarAudioMountpointAsync(int carId, int mountpointId, string description)
     {
-        lock (_reservedPorts) return _audioPorts.TryGetValue(streamId, out var port) ? port : null;
+        var port = GetOrReserveAudioPort(carId);
+        var body = new JanusCreateStreamRequestBody()
+        {
+            Request = "create",
+            Type = "rtp",
+            Id = (uint)mountpointId,
+            Description = description,
+            Audio = true,
+            Video = false,
+            VideoPt = null,
+            Videocodec = null,
+            AudioPort = port,
+            AudioPt = 111,
+            Audiocodec = "opus",
+            AudioRtpMap = "opus/48000/2",
+        };
+        try
+        {
+            await CreateJanusMountpointAsync(body, $"audio of car {carId}");
+        }
+        catch
+        {
+            ReleaseAudioPort(carId);
+            throw;
+        }
+        Logger.LogInformation("Created Janus audio mountpoint {MountpointId} for car {CarId} on UDP port {Port}", mountpointId, carId, port);
+        return port;
     }
 
-    private int GetOrReserveAudioPort(int streamId)
+    public async Task CloseCarAudioMountpointAsync(int carId, int mountpointId)
+    {
+        ReleaseAudioPort(carId);
+        try
+        {
+            await DestroyJanusMountpointAsync(mountpointId);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to destroy Janus audio mountpoint {MountpointId} of car {CarId}", mountpointId, carId);
+        }
+    }
+
+    /// <summary>
+    /// RTP port of the car's audio mountpoint, or null while it doesn't exist.
+    /// </summary>
+    public int? GetAudioPort(int carId)
+    {
+        lock (_reservedPorts) return _audioPorts.TryGetValue(carId, out var port) ? port : null;
+    }
+
+    private int GetOrReserveAudioPort(int carId)
     {
         lock (_reservedPorts)
         {
-            if (_audioPorts.TryGetValue(streamId, out var port))
+            if (_audioPorts.TryGetValue(carId, out var port))
                 return port;
             port = FindFreePort(StreamProtocol.UDP);
             _reservedPorts.Add(port);
-            _audioPorts[streamId] = port;
+            _audioPorts[carId] = port;
             return port;
         }
     }
 
-    private void ReleaseAudioPort(int streamId)
+    private void ReleaseAudioPort(int carId)
     {
         lock (_reservedPorts)
         {
-            if (_audioPorts.Remove(streamId, out var port))
+            if (_audioPorts.Remove(carId, out var port))
                 _reservedPorts.Remove(port);
         }
     }
@@ -482,7 +519,6 @@ public class VideoStreamReceiverService
             }
             stream.IsActive = false;
             await ctx.SaveChangesAsync();
-            ReleaseAudioPort(streamId);
 
             // Tear down the Janus mountpoint so the next ActivateStream can create it fresh.
             // We do this on a brand-new session/handle: the original one is gone after a

@@ -22,8 +22,6 @@ export class VideoStreamMapItem {
   ev?: number | null = null;
   exposure?: string | null = null;
   port: number = 0;
-  audioDevice?: string | null = null;
-  audioDenoise: boolean = false;
   isActive: boolean = false;
   viewerCount: number = 0;
 }
@@ -47,7 +45,6 @@ export type VideoStreamInfo = {
   enabled: boolean;
   isActive: boolean;
   viewerCount: number;
-  audioDevice?: string | null;
 };
 
 export type VideoSettingsPayload = {
