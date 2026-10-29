@@ -276,6 +276,42 @@ Still unverified, in rough order of risk:
 3. The firmware side of the protocol. It was written against the same spec and
    also compiled but never run.
 
+## Not built: keeping the tracks together
+
+The two tracks regulate independently. When one crosses an obstacle it dips
+about 9 percent and takes roughly a second to recover while the other does not,
+and over that second the vehicle yaws. Nothing corrects it: the driver sends a
+fixed pair of setpoints and never compares the two reported speeds.
+
+Deliberately left out until a drive test says it matters. On a tracked vehicle
+with a lot of ground friction a second of skew may simply not show, and a
+control loop nobody needs is still a control loop everybody has to maintain.
+
+If it does matter, two things in order:
+
+**Trim travelled distance, not speed.** Speed matching is already done by the
+node controllers to within 1.7 percent; there is nothing left there. The
+residual is the *integral* of the dip, so integrate the reported speeds and
+null the difference in travelled angle. The 1.7 percent is largely common mode
+and cancels in the difference.
+
+It has to be slow. The measurement arrives at 20 Hz and is already averaged
+over 50 ms on the node, and the inner velocity loop settles in about a second -
+so the outer loop belongs at 0.2 to 0.5 Hz, integral only. A proportional term
+would amplify the load step it is meant to absorb. Freeze it when not driving,
+clamp it, and reset it on every mode change and fault.
+
+**A heading sensor is the better answer.** Track speed is not vehicle heading;
+slip is large and asymmetric, especially while turning, so two tracks at
+identical speed can still yaw. What is needed is yaw rate over seconds, not an
+absolute bearing - which is fortunate, because a magnetometer is useless on
+this vehicle: two hub motors are large permanent magnets and the phase leads
+carry 10 to 15 A of switched current. Candidates and mounting notes are in the
+firmware repo's TODO.md.
+
+Both belong in `CanTrackDriveManager`, not in the firmware. Two nodes trimming
+against each other would be two coupled controllers chasing one another.
+
 ## Dependency
 
 `SocketCANSharp` 0.13.0, MIT, netstandard2.0. The alternative was shelling out
