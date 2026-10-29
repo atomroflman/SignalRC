@@ -69,6 +69,39 @@ for the vehicle to behave differently than it did a moment earlier.
 would rather mix in the gamepad mapping. Using either one makes the manager
 ignore throttle and steering, so do not configure both on one vehicle.
 
+### Turning on the spot
+
+Full steering with no throttle gives `+1` and `-1`: the tracks counter-rotate
+at full speed and the vehicle turns about its own centre. The sum never exceeds
+full scale, so nothing is scaled back. Lowering `steeringGain` keeps it a
+rotation on the spot, just a slower one - throttle is zero either way, so it
+cannot degenerate into a curve.
+
+Worth knowing before the first attempt: rotating on the spot is the **worst
+case** for this drive. It scrubs both tracks sideways, so it is the highest
+load the vehicle will ever see - which is where the peak current limit and the
+I2t model earn their keep. It also happens at low speed, and low speed is
+exactly where the hall error rate is highest: about 14 % at 8 rad/s against 4 %
+at 30. The firmware's `problem.md` calls manoeuvring the critical regime, and
+turning on the spot is manoeuvring.
+
+### Mirrored motors
+
+The two hub motors are mounted one per side, so they face opposite ways, and
+both run the same firmware calibration. The same commanded sign therefore turns
+them the same way in MOTOR coordinates - which drives the vehicle in a circle
+instead of straight, with steering and throttle effectively swapped.
+
+`invertLeft` / `invertRight` fix that. **Exactly one of them normally has to be
+set.** Which one is a question for the first drive test rather than for the
+schematic: a board whose phase leads happen to be swapped already turns the
+other way. Both default to false so nothing is assumed.
+
+Everything above the manager stays in VEHICLE coordinates - positive means that
+track pushes the vehicle forward. The flip is applied when the command is
+encoded and undone when telemetry is decoded, so a track driving the vehicle
+forward reports a positive speed on either side.
+
 ## Safety
 
 ### The drive is inhibited unless everything is in order
@@ -120,6 +153,8 @@ All on the `pinManagers` entry.
 | `interface` | `can0` | SocketCAN interface. `vcan0` exercises the protocol without hardware. |
 | `maxSpeedRadPerSecond` | `20` | Speed a full-scale input asks for. |
 | `steeringGain` | `1.0` | 1.0 lets the vehicle turn on the spot at full stick. |
+| `invertLeft` | `false` | Flips that track's direction. Normally exactly one side needs it, see [Mirrored motors](#mirrored-motors). |
+| `invertRight` | `false` | As above. |
 | `commandIntervalMs` | `20` | 50 Hz. The firmware's master timeout is 150 ms, i.e. three missed frames. |
 | `nodeTimeoutMs` | `250` | Status arrives at 20 Hz, so this is five missed frames. |
 | `expectedNodes` | `2` | Set to 1 for bench work with one board. |
@@ -172,6 +207,7 @@ says in words why the drive is held.
         "interface": "can0",
         "maxSpeedRadPerSecond": 20,
         "steeringGain": 1.0,
+        "invertRight": true,
         "expectedNodes": 2
       }
     }
@@ -228,6 +264,10 @@ it needs root to create the virtual interface.
 
 Still unverified, in rough order of risk:
 
+0. Which side needs inverting. Nothing but a drive test can answer it, and
+   getting it wrong turns the first throttle command into a pirouette. Jack the
+   vehicle up and watch which way each track runs before putting it on the
+   ground.
 1. Anything touching real hardware: bitrate, termination, the USB-CAN adapter.
 2. The 50 Hz send loop under load. Janus and ffmpeg share the Pi, and an encode
    burst could delay a command frame. Three missed frames stop the drive. That

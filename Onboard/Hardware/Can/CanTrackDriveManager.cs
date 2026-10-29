@@ -43,8 +43,31 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
     public float MaxSpeedRadPerSecond { get; set; } = 20f;
 
     /// <summary>How much of full scale steering may take. 1.0 lets the vehicle
-    /// turn on the spot at full stick.</summary>
+    /// turn on the spot at full stick: throttle 0 with full steering gives the
+    /// two tracks +1 and -1.</summary>
     public float SteeringGain { get; set; } = 1.0f;
+
+    /// <summary>
+    /// Flips a track's direction of rotation.
+    ///
+    /// The two hub motors are mounted mirrored, one per side, and both run the
+    /// same firmware calibration - so the same commanded sign turns both the
+    /// same way in MOTOR coordinates, which drives the vehicle in a circle
+    /// rather than straight. Exactly one of these two normally has to be set.
+    ///
+    /// Everything above this class stays in VEHICLE coordinates: positive
+    /// means that track pushes the vehicle forward. The flip is applied when
+    /// the command is encoded and undone when telemetry is decoded, so the
+    /// reported speed of a track running forward is positive on both sides.
+    ///
+    /// Which one to set is a question for the first drive test, not for the
+    /// schematic: a board whose phases happen to be swapped already turns the
+    /// other way. Both default to false so nothing is assumed.
+    /// </summary>
+    public bool InvertLeft { get; set; }
+
+    /// <inheritdoc cref="InvertLeft"/>
+    public bool InvertRight { get; set; }
 
     /// <summary>Command period. The firmware's master timeout is 150 ms, i.e.
     /// three missed frames at the default 20 ms.</summary>
@@ -367,9 +390,14 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
             sequence = unchecked(++_sequence);
         }
 
+        // _commandedLeft/_commandedRight stay in vehicle coordinates for the UI;
+        // only the wire carries motor coordinates.
+        var wireLeft = InvertLeft ? -_commandedLeft : _commandedLeft;
+        var wireRight = InvertRight ? -_commandedRight : _commandedRight;
+
         var data = new byte[8];
-        CanTrackProtocol.WriteInt16(data, 0, CanTrackProtocol.ToWire(_commandedLeft * 100.0));
-        CanTrackProtocol.WriteInt16(data, 2, CanTrackProtocol.ToWire(_commandedRight * 100.0));
+        CanTrackProtocol.WriteInt16(data, 0, CanTrackProtocol.ToWire(wireLeft * 100.0));
+        CanTrackProtocol.WriteInt16(data, 2, CanTrackProtocol.ToWire(wireRight * 100.0));
         data[4] = (byte)mode;
         data[5] = clearFault ? CanTrackProtocol.CommandFlagClearFault : (byte)0;
         CanTrackProtocol.WriteUInt16(data, 6, sequence);
@@ -491,16 +519,22 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
         Interlocked.Increment(ref _unknownFrames);
     }
 
+    private bool IsInverted(int node) =>
+        node == CanTrackProtocol.LeftNode ? InvertLeft : InvertRight;
+
     private void ApplyStatus(int node, byte[] d, int len)
     {
         if (len < 8) return;
+        // Back into vehicle coordinates, so a track driving the vehicle forward
+        // reports a positive speed whichever side it is on.
+        var sign = IsInverted(node) ? -1.0 : 1.0;
         lock (_stateLock)
         {
             var n = _nodes[node];
             n.Seen = true;
             n.LastSeenMs = _clock.ElapsedMilliseconds;
-            n.Speed = CanTrackProtocol.ReadInt16(d, 0) / 100.0;
-            n.Target = CanTrackProtocol.ReadInt16(d, 2) / 100.0;
+            n.Speed = sign * CanTrackProtocol.ReadInt16(d, 0) / 100.0;
+            n.Target = sign * CanTrackProtocol.ReadInt16(d, 2) / 100.0;
             n.State = (CanTrackProtocol.NodeState)d[4];
             n.Flags = (CanTrackProtocol.StatusFlags)d[5];
             n.CurrentQ = CanTrackProtocol.ReadInt16(d, 6) / 100.0;
