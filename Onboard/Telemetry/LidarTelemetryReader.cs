@@ -65,6 +65,9 @@ public class LidarTelemetryReader : TelemetryReaderBase
             ["lidarIndexErrors"] = health.IndexErrors.ToString(CultureInfo.InvariantCulture),
             ["lidarReconnects"] = health.Reconnects.ToString(CultureInfo.InvariantCulture),
             ["lidarProblem"] = health.Problem ?? string.Empty,
+            // Not a warning but a verdict: nothing on the vehicle can bring it
+            // back, so the operator should stop waiting for it.
+            ["lidarNeedsPowerCycle"] = health.NeedsPowerCycle ? "1" : "0",
             ["lidarAge"] = double.IsInfinity(health.ScanAgeSeconds)
                 ? string.Empty
                 : health.ScanAgeSeconds.ToString("0.##", CultureInfo.InvariantCulture),

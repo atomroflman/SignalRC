@@ -410,9 +410,26 @@ same machine.
 The reader reconnects on its own. `/dev/lidar` not existing yet is treated as
 a normal state rather than an error - udev settles after boot and the adapter
 can be plugged in later. A missing revolution, not a quiet port, is what
-counts as stalled: bytes can keep arriving while the motor is stopped. The
-response is to resend the wake command rather than reopen, because a spin-down
-is far more likely than a dead adapter.
+counts as stalled: bytes can keep arriving while the motor is stopped.
+
+### A stalled lidar cannot be recovered from software
+
+The unit starts on the wake command from cold, but once it has stopped it
+needs its 5 V removed and restored. Resending the command does not bring it
+back. Neither does reopening the port, nor unbinding and rebinding the USB
+device - those are logical disconnects and do not cut power. On a Pi 4 or 5
+there is no per-port power switching either; the VL805 and RP1 simply do not
+implement it.
+
+So the reader retries the wake command a few times, because "stalled" and
+"has not started yet" look identical from here and the second case does
+respond, and then says so plainly through `lidarNeedsPowerCycle` and stops.
+A retry loop that hides a dead sensor is worse than an honest verdict.
+
+For a vehicle that has driven off, that means **the lidar is gone for the rest
+of the run**. Worth knowing before anything is built that assumes it will be
+there. If remote recovery is ever wanted it needs hardware: a MOSFET or relay
+in the 5 V line on a GPIO, or a powered hub with switchable ports.
 
 ### Telemetry is heavily reduced
 

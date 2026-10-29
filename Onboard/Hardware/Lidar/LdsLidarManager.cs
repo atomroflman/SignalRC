@@ -16,6 +16,10 @@ public sealed record LidarHealth
 {
     public bool PortOpen { get; init; }
     public bool Spinning { get; init; }
+    /// <summary>Stopped and unrecoverable from here. Someone has to cut its
+    /// power - for a vehicle that has driven off, the lidar is gone for the
+    /// rest of the run.</summary>
+    public bool NeedsPowerCycle { get; init; }
     public double Rpm { get; init; }
     /// <summary>Seconds since the last completed revolution. Infinite if none.</summary>
     public double ScanAgeSeconds { get; init; } = double.PositiveInfinity;
@@ -68,10 +72,25 @@ public sealed class LdsLidarManager : IModuleManager, ILidarSource, IDisposable
 
     public int BaudRate { get; set; } = 115200;
 
-    /// <summary>No completed revolution for this long means the motor is not
-    /// turning. The wake command is then resent before giving up on the port -
-    /// a spin-down is far more likely than a dead adapter.</summary>
+    /// <summary>
+    /// No completed revolution for this long means the motor is not turning.
+    ///
+    /// There is no recovering from that in software. The unit starts on the
+    /// wake command from cold, but once it has stopped it needs its 5 V
+    /// removed and restored - a repeated command does not bring it back, and
+    /// neither does reopening the port or unbinding the USB device, because
+    /// none of those cut the power.
+    ///
+    /// The wake command is still retried a few times, because "stalled" and
+    /// "has not started yet" look identical from here and the second case does
+    /// respond. After that the reader says plainly that a power cycle is
+    /// needed and stops trying, rather than hiding a dead sensor behind a
+    /// retry loop.
+    /// </summary>
     public int StallTimeoutMs { get; set; } = 2000;
+
+    /// <summary>Wake attempts before declaring it stalled for good.</summary>
+    public int StartAttempts { get; set; } = 3;
 
     /// <summary>Raw bytes are copied here when set. For verifying the protocol
     /// against a real unit, which is the one thing a synthetic test cannot do.
@@ -103,6 +122,7 @@ public sealed class LdsLidarManager : IModuleManager, ILidarSource, IDisposable
                     IndexErrors = _framer.IndexErrors,
                     BytesDiscarded = _framer.BytesDiscarded,
                     Reconnects = _reconnects,
+                    NeedsPowerCycle = _needsPowerCycle,
                     Problem = _problem,
                 };
             }
@@ -237,22 +257,42 @@ public sealed class LdsLidarManager : IModuleManager, ILidarSource, IDisposable
     }
 
     private DateTime _lastStartUtc = DateTime.MinValue;
+    private int _startAttempts;
+    private bool _needsPowerCycle;
 
     private void CheckStall()
     {
         DateTime last;
         lock (_lock) last = _latestUtc;
-        if (last != DateTime.MinValue &&
-            (DateTime.UtcNow - last).TotalMilliseconds < StallTimeoutMs) return;
 
-        // Bytes may still be arriving while the motor is stopped, so a quiet
-        // port is not the test - a missing revolution is. Resend rather than
-        // reopen: a spin-down is far more likely than a dead adapter, and
-        // reopening would drop the stream for nothing.
+        // Bytes can keep arriving while the motor is stopped, so a quiet port
+        // is not the test - a missing revolution is.
+        var spinning = last != DateTime.MinValue &&
+                       (DateTime.UtcNow - last).TotalMilliseconds < StallTimeoutMs;
+        if (spinning)
+        {
+            _startAttempts = 0;
+            _needsPowerCycle = false;
+            return;
+        }
+
+        if (_needsPowerCycle) return; // said once, nothing more to try
+
         if ((DateTime.UtcNow - _lastStartUtc).TotalSeconds < 2) return;
         _lastStartUtc = DateTime.UtcNow;
-        SetProblemOnce("no complete revolution, motor may be stopped");
-        SendStart();
+
+        if (++_startAttempts <= StartAttempts)
+        {
+            SetProblemOnce("no complete revolution, retrying the wake command");
+            SendStart();
+            return;
+        }
+
+        _needsPowerCycle = true;
+        SetProblemOnce("stalled - needs a power cycle, software cannot restart it");
+        _logger.LogError(
+            "Lidar has stopped and will not restart on command. It needs its 5 V " +
+            "removed and restored. Nothing further will be attempted on {Port}.", Port);
     }
 
     private void OnScan(LdsScan scan)
