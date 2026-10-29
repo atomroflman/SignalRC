@@ -54,6 +54,11 @@ public class CanTrackDriveTelemetryReader : TelemetryReaderBase
         values["nodesPresent"] = snapshot.AllNodesPresent ? "1" : "0";
         values["driveEnabled"] = snapshot.DriveEnabled ? "1" : "0";
         values["inhibit"] = snapshot.InhibitReason ?? string.Empty;
+        // How stale the newest control input is. The single most useful number
+        // when the vehicle stutters: it separates a bad network link from a
+        // drive problem, and nothing else on the page shows it.
+        values["controlAge"] = double.IsInfinity(snapshot.ControlAgeSeconds)
+            ? string.Empty : Num(snapshot.ControlAgeSeconds);
         values["mode"] = snapshot.Mode.ToString();
         values["commandLeft"] = Num(snapshot.CommandedLeft);
         values["commandRight"] = Num(snapshot.CommandedRight);

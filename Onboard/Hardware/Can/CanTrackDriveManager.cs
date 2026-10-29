@@ -91,6 +91,30 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
     /// pressed, so the nodes see it across several command frames.</summary>
     public int FaultResetHoldMs { get; set; } = 250;
 
+    /// <summary>
+    /// Stop if no control input has arrived for this long.
+    ///
+    /// The control path runs over a network, so it can fail in two ways and
+    /// only one of them is obvious. A dropped connection eventually reaches
+    /// ControlService.OnClosed, which releases every channel - but SignalR's
+    /// ServerTimeout defaults to 30 seconds, and a vehicle holding its last
+    /// commanded speed for half a minute is not acceptable. A link that is
+    /// merely slow never triggers that path at all: the commands arrive, just
+    /// late, which is arguably worse because nothing anywhere reports a fault.
+    ///
+    /// Both look identical from here - input stops being fresh - so one age
+    /// check covers them. It is deliberately NOT built on the per-channel
+    /// ResendRequiredContolDecorator: that is opt-in per channel, and with
+    /// mixing a half-configured set is dangerous (throttle released while
+    /// steering is held makes the vehicle spin on the spot). This check is
+    /// always on and covers every drive input at once.
+    ///
+    /// Requires the client to resend, i.e. maxResendInterval set on the drive
+    /// channels; the browser then repeats the last value at half that period.
+    /// Keep this comfortably above that repeat period.
+    /// </summary>
+    public int ControlTimeoutMs { get; set; } = 500;
+
     // --- state --------------------------------------------------------------
 
     private readonly object _stateLock = new();
@@ -114,6 +138,7 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
     private float? _directLeft;
     private float? _directRight;
     private long _faultResetUntilTicks;
+    private long _lastControlMs = -1; //!< -1 means nothing has ever arrived
 
     private double _commandedLeft;
     private double _commandedRight;
@@ -243,6 +268,16 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
         switch (axis)
         {
             case TrackDriveAxis.Throttle:
+            case TrackDriveAxis.Steering:
+            case TrackDriveAxis.Left:
+            case TrackDriveAxis.Right:
+                lock (_stateLock) { _lastControlMs = _clock.ElapsedMilliseconds; }
+                break;
+        }
+
+        switch (axis)
+        {
+            case TrackDriveAxis.Throttle:
                 lock (_stateLock) { _throttle = Clamp(value); _directLeft = null; _directRight = null; }
                 break;
             case TrackDriveAxis.Steering:
@@ -263,19 +298,30 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
         }
     }
 
+    /// <summary>
+    /// Releasing ANY drive input zeroes them all.
+    ///
+    /// Mixing makes partial release dangerous: zero throttle with steering
+    /// still held is not "stopped", it is "turning on the spot". Channels are
+    /// released independently - by ControlService on disconnect, or by a
+    /// per-channel resend timeout - so a partial release is a normal event,
+    /// not an exotic one.
+    /// </summary>
     internal void ReleaseAxis(TrackDriveAxis axis)
     {
         switch (axis)
         {
             case TrackDriveAxis.Throttle:
             case TrackDriveAxis.Steering:
-                lock (_stateLock) { _throttle = 0f; _steering = 0f; }
-                break;
             case TrackDriveAxis.Left:
-                lock (_stateLock) { _directLeft = 0f; }
-                break;
             case TrackDriveAxis.Right:
-                lock (_stateLock) { _directRight = 0f; }
+                lock (_stateLock)
+                {
+                    _throttle = 0f;
+                    _steering = 0f;
+                    _directLeft = _directLeft.HasValue ? 0f : null;
+                    _directRight = _directRight.HasValue ? 0f : null;
+                }
                 break;
         }
     }
@@ -433,7 +479,28 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
             _inhibitReason = $"only {present} of {ExpectedNodes} nodes present";
             return;
         }
-        _inhibitReason = faulted;
+        if (faulted != null)
+        {
+            _inhibitReason = faulted;
+            return;
+        }
+
+        // The network link, checked by the age of the newest input rather than
+        // by any connection state: a slow link and a dead one look the same
+        // from here, and only one of them ever raises an event.
+        if (_lastControlMs < 0)
+        {
+            _inhibitReason = "no control input yet";
+            return;
+        }
+        var age = nowMs - _lastControlMs;
+        if (age > ControlTimeoutMs)
+        {
+            _inhibitReason = $"control input stale ({age} ms)";
+            return;
+        }
+
+        _inhibitReason = null;
     }
 
     private void Send(uint id, byte[] data)
@@ -599,6 +666,8 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
                 AllNodesPresent = present >= ExpectedNodes,
                 DriveEnabled = _inhibitReason == null,
                 InhibitReason = _inhibitReason,
+                ControlAgeSeconds = _lastControlMs < 0
+                    ? double.PositiveInfinity : (now - _lastControlMs) / 1000.0,
                 CommandedLeft = _commandedLeft,
                 CommandedRight = _commandedRight,
                 Mode = _mode,

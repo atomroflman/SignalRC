@@ -67,6 +67,8 @@ public sealed record TrackDriveSnapshot
     public bool DriveEnabled { get; init; }
     public string? InhibitReason { get; init; }
 
+    /// <summary>Age of the newest control input. Infinite before the first one.</summary>
+    public double ControlAgeSeconds { get; init; } = double.PositiveInfinity;
     public double CommandedLeft { get; init; }
     public double CommandedRight { get; init; }
     public CanTrackProtocol.DriveMode Mode { get; init; }

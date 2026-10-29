@@ -128,6 +128,43 @@ arrived.
 
 Set `ExpectedNodes` to 1 for single-board bench work.
 
+### The network link
+
+The control path runs over a network, and it can fail in two ways of which only
+one is obvious.
+
+**A dropped connection** eventually reaches `ControlService.OnClosed`, which
+releases every channel. But SignalR's `ServerTimeout` defaults to 30 seconds and
+nothing in this repository lowers it, so on a silently dropped link that is how
+long the vehicle would hold its last commanded speed.
+
+**A merely slow link** never raises anything at all. The commands arrive, just
+late. Arguably the worse case, because nothing anywhere reports a fault.
+
+From the manager both look identical - input stops being fresh - so one age
+check covers both. If nothing has arrived within `controlTimeoutMs`, the drive
+is inhibited and the frame goes out as mode `Stop` with a zero target. The
+`controlAge` telemetry field shows the age, which is the fastest way to tell a
+bad link from a drive problem.
+
+This is deliberately **not** built on `ResendRequiredContolDecorator`. That is
+opt-in per channel, and with mixing a half-configured set is actively
+dangerous: throttle released while steering is still held is not "stopped", it
+is "turning on the spot". The manager check is always on and covers every drive
+input at once. For the same reason, releasing **any** drive input zeroes them
+all.
+
+Two things still have to be configured for it to work:
+
+- **`maxResendInterval` on the drive channels.** Without it the browser only
+  sends on change, so holding the stick steady produces no traffic and the
+  watchdog would fire on a perfectly good link. With it the browser repeats the
+  last value at half that period. Keep `controlTimeoutMs` comfortably above it.
+- **Consider lowering SignalR's `ServerTimeout`** so a dead connection is
+  noticed in seconds rather than in half a minute. Not changed here because it
+  affects the whole application - on a flaky LTE link a short timeout buys more
+  spurious reconnects. The manager watchdog makes it non-critical either way.
+
 ### Emergency stop
 
 Any node broadcasts `0x010` when it latches a fault, and every node obeys it: a
@@ -159,6 +196,7 @@ All on the `pinManagers` entry.
 | `nodeTimeoutMs` | `250` | Status arrives at 20 Hz, so this is five missed frames. |
 | `expectedNodes` | `2` | Set to 1 for bench work with one board. |
 | `faultResetHoldMs` | `250` | How long the unlatch flag stays set. |
+| `controlTimeoutMs` | `500` | Stop if no control input arrived for this long. See [The network link](#the-network-link). |
 
 ## Control types
 
@@ -185,8 +223,9 @@ Per node, prefixed `left` or `right`: `Present`, `Speed`, `Target`, `State`,
 `Current`, `BusVolts`, `BusAmps`, `Power`, `Temperature`, `Thermal`, `Fault`,
 `FaultCode`, `Derating`, `CurrentLimited`, `UnderVoltageWarning`.
 
-Bus-wide: `busUp`, `nodesPresent`, `driveEnabled`, `inhibit`, `mode`,
-`commandLeft`, `commandRight`, `framesSent`, `framesReceived`, `sendFailures`.
+Bus-wide: `busUp`, `nodesPresent`, `driveEnabled`, `inhibit`, `controlAge`,
+`mode`, `commandLeft`, `commandRight`, `framesSent`, `framesReceived`,
+`sendFailures`.
 
 `Temperature` comes back **empty**, not as a number, when the node reports no
 valid reading. The board's thermistor node can read open or shorted and the
@@ -208,13 +247,14 @@ says in words why the drive is held.
         "maxSpeedRadPerSecond": 20,
         "steeringGain": 1.0,
         "invertRight": true,
-        "expectedNodes": 2
+        "expectedNodes": 2,
+        "controlTimeoutMs": 500
       }
     }
   },
   "controlChannels": {
-    "throttle":   { "pinManager": "trackDrive", "controlType": "TrackThrottle" },
-    "steer":      { "pinManager": "trackDrive", "controlType": "TrackSteering" },
+    "throttle":   { "pinManager": "trackDrive", "controlType": "TrackThrottle", "maxResendInterval": 300 },
+    "steer":      { "pinManager": "trackDrive", "controlType": "TrackSteering", "maxResendInterval": 300 },
     "faultReset": { "pinManager": "trackDrive", "controlType": "TrackFaultReset", "testDisabled": true },
     "estop":      { "pinManager": "trackDrive", "controlType": "TrackEmergencyStop", "testDisabled": true }
   },
