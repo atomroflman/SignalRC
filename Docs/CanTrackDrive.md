@@ -386,6 +386,80 @@ firmware repo's TODO.md.
 Both belong in `CanTrackDriveManager`, not in the firmware. Two nodes trimming
 against each other would be two coupled controllers chasing one another.
 
+## Lidar
+
+An FM1828 on a serial port - the LDS unit from Ecovacs Deebot vacuums. 360
+degrees, about 5 revolutions a second, 360 points a revolution, so one degree
+of resolution and a full picture every 200 ms. Format in
+`Onboard/Hardware/Lidar/LdsProtocol.cs`, decoder and framer beside it.
+
+Configured as a second pinManager so that the telemetry reader and, later, a
+collision loop share one port instead of fighting over it:
+
+```json
+"lidar": {
+  "type": "LdsLidarManager",
+  "options": { "port": "/dev/lidar", "baudRate": 115200 }
+}
+```
+
+A udev rule giving the adapter a stable name is worth the five minutes:
+`/dev/ttyUSB0` moves when anything else is plugged in, and the drive is on the
+same machine.
+
+The reader reconnects on its own. `/dev/lidar` not existing yet is treated as
+a normal state rather than an error - udev settles after boot and the adapter
+can be plugged in later. A missing revolution, not a quiet port, is what
+counts as stalled: bytes can keep arriving while the motor is stopped. The
+response is to resend the wake command rather than reopen, because a spin-down
+is far more likely than a dead adapter.
+
+### Telemetry is heavily reduced
+
+A full scan is 360 values five times a second. Sent raw through a key-value
+telemetry path that would be 1800 channel updates a second for something a
+person glances at, and it would crowd out the drive telemetry that matters.
+
+So one channel carries sector minima as a compact string - 36 sectors of ten
+degrees each, in centimetres, at whatever `readIntervalTicks` sets. The
+minimum per sector, not the mean: what matters about a direction is the
+nearest thing in it, and averaging a wall at 3 m with a post at 0.4 m reports
+1.7 m, where there is nothing. An empty sector travels as -1, because that is
+the absence of an obstacle and must never read as zero.
+
+Alongside it: `lidarNearest` and its angle, `lidarFront` for the forward
+sector, plus rpm, gaps, error counters and `lidarProblem` in plain words.
+
+**Nothing safety related may hang off this reader.** A collision loop runs
+locally at full rate and full resolution from the same manager. This path is
+for the operator.
+
+### Capturing from a real unit
+
+`Tools/lidar-capture.sh` and `Tools/lidar-check.py` need nothing but coreutils
+and a stock Python, so they run on any Linux box:
+
+```bash
+./Tools/lidar-capture.sh /dev/ttyUSB0 10 lidar.bin
+./Tools/lidar-check.py lidar.bin
+```
+
+The check prints the speed field divided by both 100 and 64 alongside the rate
+counted from index wraps. Whichever two agree settle the scaling - that is the
+one field where this family differs from the XV-11 in a way that is easy to
+get wrong and hard to notice.
+
+### Two things to find out before building on it
+
+**It is an indoor sensor**, built for 8 m and artificial light. Direct sun
+raises the noise floor of a time-of-flight unit in this class, so the range
+and the gap count have to be measured outdoors before anything depends on
+them.
+
+**It is two dimensional**, on one fixed height. A kerb, a step, a low branch -
+none of them exist as far as it is concerned. That belongs in the operator's
+view, not in a footnote.
+
 ## Dependency
 
 `SocketCANSharp` 0.13.0, MIT, netstandard2.0. The alternative was shelling out

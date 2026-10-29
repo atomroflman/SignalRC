@@ -24,6 +24,7 @@
       <PackageReference Include="SocketCANSharp" Version="0.13.0" />
       <PackageReference Include="Spectre.Console" Version="0.50.0" />
       <PackageReference Include="System.Device.Gpio" Version="4.0.1" />
+      <PackageReference Include="System.IO.Ports" Version="10.0.14" />
       <PackageReference Include="TypedSignalR.Client" Version="3.6.0">
         <PrivateAssets>all</PrivateAssets>
         <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>

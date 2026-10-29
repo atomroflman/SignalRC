@@ -24,6 +24,15 @@
           "recorderSeconds": 60,
           "recorderHz": 20
         }
+      },
+      "lidar": {
+        "type": "LdsLidarManager",
+        "options": {
+          "port": "/dev/lidar",
+          "baudRate": 115200,
+          "stallTimeoutMs": 2000,
+          "capturePath": ""
+        }
       }
     },
     "controlChannels": {
@@ -69,6 +78,17 @@
         "readIntervalTicks": 20,
         "unit": "°C",
         "decimals": 1
+      },
+      "lidar": {
+        "pinManager": "lidar",
+        "telemetryType": "SignalRC.Onboard.Telemetry.LidarTelemetryReader",
+        "readIntervalTicks": 5,
+        "options": {
+          "groupKey": "lidar",
+          "pinManager": "lidar",
+          "sectors": 36,
+          "frontHalfAngle": 30
+        }
       },
       "drive": {
         "pinManager": "trackDrive",
