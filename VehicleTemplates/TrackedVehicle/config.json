@@ -10,14 +10,16 @@
         "type": "CanTrackDriveManager",
         "options": {
           "interface": "can0",
-          "maxSpeedRadPerSecond": 20,
+          "maxSpeedRadPerSecond": 30,
           "steeringGain": 1.0,
           "commandIntervalMs": 20,
           "nodeTimeoutMs": 250,
           "expectedNodes": 2,
           "controlTimeoutMs": 500,
           "invertLeft": false,
-          "invertRight": false
+          "invertRight": false,
+          "wheelRadiusM": 0.09466,
+          "trackWidthM": 0
         }
       }
     },
