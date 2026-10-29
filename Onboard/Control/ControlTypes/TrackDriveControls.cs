@@ -116,6 +116,18 @@ public class TrackFaultResetControl : TrackDriveControlBase
     protected override TrackDriveAxis Axis => TrackDriveAxis.FaultReset;
 }
 
+/// <summary>Momentary button. Zeroes the odometry, which is what the
+/// calibration runs need between measurements.</summary>
+[ControlType("TrackOdometryReset")]
+public class TrackOdometryResetControl : TrackDriveControlBase
+{
+    public TrackOdometryResetControl(ILogger<TrackOdometryResetControl> logger) : base(logger)
+    {
+        TestDisabled = true;
+    }
+    protected override TrackDriveAxis Axis => TrackDriveAxis.OdometryReset;
+}
+
 /// <summary>Momentary button. Broadcasts an emergency stop to every node.
 /// Never part of the channel test.</summary>
 [ControlType("TrackEmergencyStop")]

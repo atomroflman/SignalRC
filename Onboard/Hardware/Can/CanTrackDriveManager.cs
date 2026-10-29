@@ -115,6 +115,28 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
     /// </summary>
     public int ControlTimeoutMs { get; set; } = 500;
 
+    /// <summary>
+    /// Effective rolling radius of a track in metres: metres of travel per
+    /// radian of motor rotation. Zero means not calibrated, and the odometry
+    /// then reports only the quantities that do not need it.
+    ///
+    /// Measure it, do not derive it from the sprocket: drive at a known
+    /// commanded speed towards a flat wall and divide the closing rate by the
+    /// commanded rate. That captures the real rolling radius and the
+    /// longitudinal slip in one number.
+    /// </summary>
+    public double WheelRadiusM { get; set; }
+
+    /// <summary>
+    /// Effective distance between the tracks in metres.
+    ///
+    /// Also measured, not taped: slip makes a tracked vehicle behave as though
+    /// its tracks were 10 to 50 percent further apart than they are. Rotate on
+    /// the spot at a known speed difference and divide by the observed yaw
+    /// rate. Zero means not calibrated.
+    /// </summary>
+    public double TrackWidthM { get; set; }
+
     // --- state --------------------------------------------------------------
 
     private readonly object _stateLock = new();
@@ -139,6 +161,11 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
     private float? _directRight;
     private long _faultResetUntilTicks;
     private long _lastControlMs = -1; //!< -1 means nothing has ever arrived
+
+    private long _odoLastMs = -1;
+    private double _odoLeftRad, _odoRightRad;
+    private double _odoX, _odoY, _odoHeading, _odoDistance;
+    private double _odoSpeed, _odoYawRate;
 
     private double _commandedLeft;
     private double _commandedRight;
@@ -295,6 +322,9 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
             case TrackDriveAxis.EmergencyStop:
                 if (MathF.Abs(value) >= 0.5f) BroadcastEmergencyStop();
                 break;
+            case TrackDriveAxis.OdometryReset:
+                if (MathF.Abs(value) >= 0.5f) ResetOdometry();
+                break;
         }
     }
 
@@ -324,6 +354,87 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
                 }
                 break;
         }
+    }
+
+    public void ResetOdometry()
+    {
+        lock (_stateLock)
+        {
+            _odoLeftRad = _odoRightRad = 0.0;
+            _odoX = _odoY = _odoHeading = _odoDistance = 0.0;
+        }
+        _logger.LogInformation("Odometry reset.");
+    }
+
+    /// <summary>
+    /// Differential drive kinematics. Separate and pure because this is where
+    /// the sign conventions live, and a sign error here is invisible until the
+    /// vehicle drives the wrong way.
+    ///
+    /// Positive yaw is a LEFT turn, the usual right-handed convention. Note
+    /// that positive STEERING speeds the left track up and therefore turns
+    /// right, so the two signs are opposite by design.
+    /// </summary>
+    public static (double speed, double yawRate) Kinematics(
+        double leftRadPerSec, double rightRadPerSec, double wheelRadiusM, double trackWidthM)
+    {
+        if (wheelRadiusM <= 0.0 || trackWidthM <= 0.0) return (0.0, 0.0);
+        var vl = leftRadPerSec * wheelRadiusM;
+        var vr = rightRadPerSec * wheelRadiusM;
+        return (0.5 * (vl + vr), (vr - vl) / trackWidthM);
+    }
+
+    /// <summary>
+    /// Integrates the two reported track speeds. Must be called under
+    /// _stateLock, from the command loop, so it shares the loop's cadence and
+    /// the node states it reads are from one instant.
+    /// </summary>
+    private void UpdateOdometry(long nowMs)
+    {
+        if (_odoLastMs < 0) { _odoLastMs = nowMs; return; }
+        var dt = (nowMs - _odoLastMs) / 1000.0;
+        _odoLastMs = nowMs;
+        if (dt <= 0.0 || dt > 1.0) return; // first pass, or a stall worth skipping
+
+        // Vehicle coordinates already: the per-track inversion was undone when
+        // the status frames were decoded, so positive is forward on both sides.
+        var wl = _nodes[CanTrackProtocol.LeftNode].Speed;
+        var wr = _nodes[CanTrackProtocol.RightNode].Speed;
+
+        _odoLeftRad += wl * dt;
+        _odoRightRad += wr * dt;
+
+        if (WheelRadiusM <= 0.0 || TrackWidthM <= 0.0) return;
+
+        var (v, omega) = Kinematics(wl, wr, WheelRadiusM, TrackWidthM);
+        _odoSpeed = v;
+        _odoYawRate = omega;
+
+        // Exact arc rather than a straight step. At 20 rad/s differential the
+        // vehicle can turn on the spot, and a Euler step would place the pose
+        // outside the arc by a visible margin every tick.
+        var h0 = _odoHeading;
+        var h1 = h0 + omega * dt;
+        if (Math.Abs(omega) < 1e-6)
+        {
+            _odoX += v * Math.Cos(h0) * dt;
+            _odoY += v * Math.Sin(h0) * dt;
+        }
+        else
+        {
+            var r = v / omega;
+            _odoX += r * (Math.Sin(h1) - Math.Sin(h0));
+            _odoY -= r * (Math.Cos(h1) - Math.Cos(h0));
+        }
+        _odoHeading = h1;
+
+        // Path length, so it keeps growing when the vehicle drives in circles.
+        _odoDistance += Math.Abs(v) * dt;
+
+        // Keep the heading in (-pi, pi] so it does not drift to a value that
+        // loses precision after a long run.
+        if (_odoHeading > Math.PI) _odoHeading -= 2.0 * Math.PI;
+        else if (_odoHeading <= -Math.PI) _odoHeading += 2.0 * Math.PI;
     }
 
     public void RequestFaultReset()
@@ -410,6 +521,7 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
         lock (_stateLock)
         {
             var now = _clock.ElapsedMilliseconds;
+            UpdateOdometry(now);
             RefreshPresence(now);
 
             if (_inhibitReason != null)
@@ -675,6 +787,19 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
                 FramesReceived = Interlocked.Read(ref _framesReceived),
                 SendFailures = Interlocked.Read(ref _sendFailures),
                 UnknownFrames = Interlocked.Read(ref _unknownFrames),
+                Odometry = new TrackOdometry
+                {
+                    Calibrated = WheelRadiusM > 0.0 && TrackWidthM > 0.0,
+                    LeftTravelRad = _odoLeftRad,
+                    RightTravelRad = _odoRightRad,
+                    TravelDifferenceRad = _odoRightRad - _odoLeftRad,
+                    SpeedMetersPerSecond = _odoSpeed,
+                    YawRateRadPerSecond = _odoYawRate,
+                    X = _odoX,
+                    Y = _odoY,
+                    HeadingRad = _odoHeading,
+                    DistanceMeters = _odoDistance,
+                },
             };
         }
     }

@@ -21,6 +21,8 @@ public enum TrackDriveAxis
     FaultReset = 4,
     /// <summary>Momentary: a nonzero value broadcasts an emergency stop.</summary>
     EmergencyStop = 5,
+    /// <summary>Momentary: a nonzero value zeroes the odometry.</summary>
+    OdometryReset = 6,
 }
 
 /// <summary>One input into the drive manager. Values run -1..1 like every other
@@ -55,6 +57,49 @@ public sealed record TrackNodeState
     public TimeSpan FaultUptime { get; init; }
 }
 
+/// <summary>
+/// Where the vehicle has been, worked out from the two track speeds.
+///
+/// Split in two deliberately. The travelled angles need no calibration at all
+/// and are available from the first metre: their DIFFERENCE is exactly the
+/// quantity that says whether one track fell behind, which is what a trim
+/// controller would act on and what nothing else measures.
+///
+/// Everything in metres needs the effective rolling radius and the effective
+/// track width, and until those are measured <see cref="Calibrated"/> is false
+/// and the metric fields stay at zero rather than carrying made-up numbers.
+///
+/// "Effective" is not a figure of speech: on a tracked vehicle slip makes the
+/// behaviour match a track width 10 to 50 percent wider than the one you can
+/// measure with a ruler. Both constants have to come from a driving
+/// measurement, see Docs/CanTrackDrive.md.
+/// </summary>
+public sealed record TrackOdometry
+{
+    public bool Calibrated { get; init; }
+
+    /// <summary>Angle each track has turned since the last reset, in radians.
+    /// Vehicle coordinates: positive means it drove the vehicle forward.</summary>
+    public double LeftTravelRad { get; init; }
+    public double RightTravelRad { get; init; }
+
+    /// <summary>Right minus left. Nonzero means the vehicle has turned, by
+    /// accident or on purpose.</summary>
+    public double TravelDifferenceRad { get; init; }
+
+    public double SpeedMetersPerSecond { get; init; }
+    /// <summary>Positive is a left turn, the usual right-handed convention.
+    /// Note that positive STEERING speeds the left track up and therefore
+    /// turns right, so the two signs are opposite by design.</summary>
+    public double YawRateRadPerSecond { get; init; }
+
+    public double X { get; init; }
+    public double Y { get; init; }
+    public double HeadingRad { get; init; }
+    /// <summary>Path length, always growing - not the distance from the start.</summary>
+    public double DistanceMeters { get; init; }
+}
+
 /// <summary>Everything the telemetry reader and the diagnostics need, taken
 /// under one lock so the two nodes are always from the same instant.</summary>
 public sealed record TrackDriveSnapshot
@@ -77,4 +122,6 @@ public sealed record TrackDriveSnapshot
     public long FramesReceived { get; init; }
     public long SendFailures { get; init; }
     public long UnknownFrames { get; init; }
+
+    public required TrackOdometry Odometry { get; init; }
 }

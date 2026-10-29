@@ -62,6 +62,22 @@ public class CanTrackDriveTelemetryReader : TelemetryReaderBase
         values["mode"] = snapshot.Mode.ToString();
         values["commandLeft"] = Num(snapshot.CommandedLeft);
         values["commandRight"] = Num(snapshot.CommandedRight);
+        var odo = snapshot.Odometry;
+        // Available from the first metre, no calibration needed. The difference
+        // is the one number that says whether a track fell behind.
+        values["odoLeftTravel"] = Num(odo.LeftTravelRad);
+        values["odoRightTravel"] = Num(odo.RightTravelRad);
+        values["odoTravelDiff"] = Num(odo.TravelDifferenceRad);
+        values["odoCalibrated"] = odo.Calibrated ? "1" : "0";
+        // Empty rather than zero while uncalibrated: a speed of "0.0 m/s" on a
+        // moving vehicle is worse than an empty field.
+        values["odoSpeed"] = odo.Calibrated ? Num(odo.SpeedMetersPerSecond) : string.Empty;
+        values["odoYawRate"] = odo.Calibrated ? Num(odo.YawRateRadPerSecond * 180.0 / Math.PI) : string.Empty;
+        values["odoHeading"] = odo.Calibrated ? Num(odo.HeadingRad * 180.0 / Math.PI) : string.Empty;
+        values["odoDistance"] = odo.Calibrated ? Num(odo.DistanceMeters) : string.Empty;
+        values["odoX"] = odo.Calibrated ? Num(odo.X) : string.Empty;
+        values["odoY"] = odo.Calibrated ? Num(odo.Y) : string.Empty;
+
         values["framesSent"] = snapshot.FramesSent.ToString(CultureInfo.InvariantCulture);
         values["framesReceived"] = snapshot.FramesReceived.ToString(CultureInfo.InvariantCulture);
         values["sendFailures"] = snapshot.SendFailures.ToString(CultureInfo.InvariantCulture);
