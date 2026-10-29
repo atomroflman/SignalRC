@@ -1,0 +1,85 @@
+{
+  "name": "TrackedVehicle",
+  "description": "Kettenfahrzeug mit zwei Hoverboard-Nabenmotoren an MKS XDrive Mini, gesteuert über CAN",
+  "version": "1.0",
+  "author": "SignalRC",
+  "created": "2026-10-29",
+  "channelMap": {
+    "pinManagers": {
+      "trackDrive": {
+        "type": "CanTrackDriveManager",
+        "options": {
+          "interface": "can0",
+          "maxSpeedRadPerSecond": 20,
+          "steeringGain": 1.0,
+          "commandIntervalMs": 20,
+          "nodeTimeoutMs": 250,
+          "expectedNodes": 2,
+          "controlTimeoutMs": 500,
+          "invertLeft": false,
+          "invertRight": false
+        }
+      }
+    },
+    "controlChannels": {
+      "throttle": {
+        "pinManager": "trackDrive",
+        "controlType": "TrackThrottle",
+        "maxResendInterval": 300,
+        "testDisabled": true
+      },
+      "steer": {
+        "pinManager": "trackDrive",
+        "controlType": "TrackSteering",
+        "maxResendInterval": 300,
+        "testDisabled": true
+      },
+      "faultReset": {
+        "pinManager": "trackDrive",
+        "controlType": "TrackFaultReset",
+        "testDisabled": true
+      },
+      "emergencyStop": {
+        "pinManager": "trackDrive",
+        "controlType": "TrackEmergencyStop",
+        "testDisabled": true
+      }
+    },
+    "telemetryChannels": {
+      "lifetime": {
+        "telemetryType": "SignalRC.Onboard.Telemetry.ApplicationLifetimeReader"
+      },
+      "cpuTemperature": {
+        "telemetryType": "SignalRC.Onboard.Telemetry.CpuTemperatureReader",
+        "readIntervalTicks": 20,
+        "unit": "°C",
+        "decimals": 1
+      },
+      "drive": {
+        "pinManager": "trackDrive",
+        "telemetryType": "SignalRC.Onboard.Telemetry.CanTrackDriveTelemetryReader",
+        "readIntervalTicks": 1,
+        "options": {
+          "groupKey": "drive",
+          "pinManager": "trackDrive"
+        }
+      }
+    },
+    "videoStreams": {
+      "mainCamera": {
+        "streamId": "mainCamera",
+        "name": "Main Camera",
+        "description": "Frontkamera",
+        "type": "rpiCamera",
+        "location": "front",
+        "enabled": true,
+        "priority": 1,
+        "rpiCamId": 0,
+        "width": 1024,
+        "height": 768,
+        "framerate": 22,
+        "bitrate": 1000000
+      }
+    }
+  }
+}

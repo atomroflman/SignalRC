@@ -32,6 +32,14 @@ VehicleTemplates/
 - **Hardware**: 4x Servo-Motoren, Pi Camera, GPS, IMU, Battery Monitor
 - **Features**: Lenkung, Throttle, Camera Pan/Tilt, Video-Stream
 
+### TrackedVehicle
+- **Beschreibung**: Kettenfahrzeug, zwei Antriebe über CAN statt PWM
+- **Hardware**: 2x Hoverboard-Nabenmotor an MKS XDrive Mini, Pi Camera
+- **Features**: Panzerlenkung mit Mischung auf dem Pi, Drehen auf der Stelle,
+  Antriebstelemetrie, Not-Aus-Broadcast, Watchdog auf der Steuerstrecke
+- **Vor der ersten Fahrt**: aufgebockt klären, welche Seite invertiert werden
+  muss — siehe das README der Vorlage
+
 ## 🔧 Template erstellen
 
 1. Erstelle einen neuen Ordner in `VehicleTemplates/`
