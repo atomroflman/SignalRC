@@ -23,6 +23,8 @@ public enum TrackDriveAxis
     EmergencyStop = 5,
     /// <summary>Momentary: a nonzero value zeroes the odometry.</summary>
     OdometryReset = 6,
+    /// <summary>Momentary: a nonzero value writes the flight recorder out.</summary>
+    RecordDump = 7,
 }
 
 /// <summary>One input into the drive manager. Values run -1..1 like every other
@@ -55,6 +57,21 @@ public sealed record TrackNodeState
 
     public CanTrackProtocol.FaultCode Fault { get; init; }
     public TimeSpan FaultUptime { get; init; }
+
+    /// <summary>d-axis current. The direct symptom of an angle error: with the
+    /// electrical zero 120 degrees out this ran to -1.89 A while Iq still
+    /// looked almost plausible.</summary>
+    public double CurrentDAmps { get; init; }
+    public double VoltageQVolts { get; init; }
+    /// <summary>Share of hall sector changes that were immediate returns, over
+    /// the last second. The project's main metric, and the one that decides
+    /// whether the encoder retrofit is needed - now available during a drive
+    /// instead of only on the bench.</summary>
+    public int HallErrorPercent { get; init; }
+    public int IsrMaxMicroseconds { get; init; }
+    /// <summary>What the node's thermal model currently allows.</summary>
+    public double CurrentLimitAmps { get; init; }
+    public int DebounceSamples { get; init; }
 }
 
 /// <summary>

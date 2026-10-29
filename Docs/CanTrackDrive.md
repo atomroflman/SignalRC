@@ -197,6 +197,11 @@ All on the `pinManagers` entry.
 | `expectedNodes` | `2` | Set to 1 for bench work with one board. |
 | `faultResetHoldMs` | `250` | How long the unlatch flag stays set. |
 | `controlTimeoutMs` | `500` | Stop if no control input arrived for this long. See [The network link](#the-network-link). |
+| `wheelRadiusM` | `0` | Metres of travel per radian. Zero means the odometry reports only travelled angles. |
+| `trackWidthM` | `0` | Effective track spacing. Zero as above. |
+| `recorderDirectory` | empty | Where flight recorder dumps go. Empty keeps the ring but writes nothing. |
+| `recorderSeconds` | `60` | How much history to keep. |
+| `recorderHz` | `20` | Sampling rate. The status frames arrive at 20 Hz, so nothing is gained above that. |
 
 ## Control types
 
@@ -315,6 +320,35 @@ Still unverified, in rough order of risk:
    be measured rather than assumed.
 3. The firmware side of the protocol. It was written against the same spec and
    also compiled but never run.
+
+## Flight recorder
+
+During a drive there is no serial console, no logic analyser and no
+oscilloscope. Without a recording every incident is "it stuttered, no idea
+why", and this project has already paid for that lesson twice: four rounds
+went into the stall detector before anyone printed its internals, and the
+velocity estimate was wrong for half the project because nobody compared the
+reported speed against the angle. Both were found the moment the data became
+visible, not the moment someone had a better theory.
+
+So the manager keeps the last `recorderSeconds` of drive state in a ring at
+`recorderHz` and writes it to `recorderDirectory` as CSV whenever a node
+latches a fault. The run-up is already in the buffer by then, which is the
+part that explains the fault.
+
+`TrackRecordDump` writes it out on demand - for the other half of the problem,
+where the vehicle did something odd and nothing tripped. That is the case that
+is impossible to reproduce later, so press it while the memory is fresh.
+
+Dumps closer together than `minDumpIntervalSeconds` are dropped, because one
+blocked track produces a burst of faults on both nodes and twenty files of the
+same second help nobody. The oldest are pruned beyond `keepFiles`, because the
+Pi's card is not large and nobody prunes a log directory by hand.
+
+The file is written from a worker, never from the command or receive loop: a
+vehicle must not stutter because a log is being flushed. A failed dump is
+logged and otherwise ignored - the vehicle is already in trouble if we got
+there.
 
 ## Not built: keeping the tracks together
 

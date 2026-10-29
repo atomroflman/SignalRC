@@ -137,6 +137,18 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
     /// </summary>
     public double TrackWidthM { get; set; }
 
+    /// <summary>Where the flight recorder writes its dumps. Empty keeps the
+    /// ring buffer but writes nothing.</summary>
+    public string RecorderDirectory { get; set; } = string.Empty;
+
+    /// <summary>How much history to keep. Long enough to cover the run-up to
+    /// an incident, not so long that the interesting part scrolls past.</summary>
+    public int RecorderSeconds { get; set; } = 60;
+
+    /// <summary>Sampling rate of the recorder. The status frames arrive at
+    /// 20 Hz, so there is nothing to gain above that.</summary>
+    public int RecorderHz { get; set; } = 20;
+
     // --- state --------------------------------------------------------------
 
     private readonly object _stateLock = new();
@@ -179,6 +191,9 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
     private long _unknownFrames;
 
     private readonly Stopwatch _clock = Stopwatch.StartNew();
+
+    private FlightRecorder? _recorder;
+    private long _recorderLastMs;
 
     public CanTrackDriveManager(ILogger<CanTrackDriveManager> logger)
     {
@@ -244,6 +259,12 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
             socket.CanFilters = new[] { new CanFilter(0x000, 0x600) };
             socket.ReceiveTimeout = 200;
             _socket = socket;
+
+            _recorder = new FlightRecorder(_logger,
+                Math.Max(1, RecorderSeconds) * Math.Max(1, RecorderHz))
+            {
+                Directory = RecorderDirectory,
+            };
 
             _running = true;
             _rxThread = new Thread(ReceiveLoop) { IsBackground = true, Name = "can-track-rx" };
@@ -324,6 +345,9 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
                 break;
             case TrackDriveAxis.OdometryReset:
                 if (MathF.Abs(value) >= 0.5f) ResetOdometry();
+                break;
+            case TrackDriveAxis.RecordDump:
+                if (MathF.Abs(value) >= 0.5f) DumpRecording("manual");
                 break;
         }
     }
@@ -548,6 +572,8 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
             sequence = unchecked(++_sequence);
         }
 
+        RecordSample();
+
         // _commandedLeft/_commandedRight stay in vehicle coordinates for the UI;
         // only the wire carries motor coordinates.
         var wireLeft = InvertLeft ? -_commandedLeft : _commandedLeft;
@@ -561,6 +587,55 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
         CanTrackProtocol.WriteUInt16(data, 6, sequence);
 
         Send(CanTrackProtocol.CommandId, data);
+    }
+
+    /// <summary>
+    /// Takes one sample for the flight recorder, decimated to RecorderHz. In
+    /// memory only - the file is written from a worker when something trips.
+    /// </summary>
+    private void RecordSample()
+    {
+        var recorder = _recorder;
+        if (recorder == null) return;
+        var period = 1000 / Math.Max(1, RecorderHz);
+        long now;
+        FlightRecorder.Sample sample;
+        lock (_stateLock)
+        {
+            now = _clock.ElapsedMilliseconds;
+            if (now - _recorderLastMs < period) return;
+            _recorderLastMs = now;
+
+            var l = _nodes[CanTrackProtocol.LeftNode];
+            var r = _nodes[CanTrackProtocol.RightNode];
+            sample = new FlightRecorder.Sample(
+                now / 1000.0,
+                (float)l.Speed, (float)l.Target, (float)l.CurrentQ,
+                (float)(l.Temperature ?? double.NaN), (float)l.ThermalUtilisation,
+                (byte)l.State, (byte)l.Flags, (byte)l.Fault,
+                (float)r.Speed, (float)r.Target, (float)r.CurrentQ,
+                (float)(r.Temperature ?? double.NaN), (float)r.ThermalUtilisation,
+                (byte)r.State, (byte)r.Flags, (byte)r.Fault,
+                (float)l.BusVolts, (float)l.BusAmps,
+                (float)l.CurrentD, (float)r.CurrentD,
+                (byte)l.HallErrorPercent, (byte)r.HallErrorPercent,
+                (float)_commandedLeft, (float)_commandedRight, (byte)_mode,
+                _lastControlMs < 0 ? float.PositiveInfinity : (now - _lastControlMs) / 1000f,
+                (byte)(_inhibitReason == null ? 1 : 0), _inhibitReason);
+        }
+        recorder.Add(sample);
+    }
+
+    /// <summary>
+    /// Writes the buffer out, off the command and receive loops because it
+    /// touches the file system. A vehicle must not stutter because a log is
+    /// being flushed.
+    /// </summary>
+    public void DumpRecording(string reason)
+    {
+        var recorder = _recorder;
+        if (recorder == null) return;
+        Task.Run(() => recorder.Dump(reason));
     }
 
     /// <summary>
@@ -682,6 +757,7 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
             if (id == CanTrackProtocol.StatusId(node)) { ApplyStatus(node, data, len); return; }
             if (id == CanTrackProtocol.PowerId(node)) { ApplyPower(node, data, len); return; }
             if (id == CanTrackProtocol.FaultId(node)) { ApplyFault(node, data, len); return; }
+            if (id == CanTrackProtocol.DiagId(node)) { ApplyDiag(node, data, len); return; }
         }
 
         if (id == CanTrackProtocol.EmergencyStopId)
@@ -735,6 +811,22 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
         }
     }
 
+    private void ApplyDiag(int node, byte[] d, int len)
+    {
+        if (len < 8) return;
+        var sign = IsInverted(node) ? -1.0 : 1.0;
+        lock (_stateLock)
+        {
+            var n = _nodes[node];
+            n.CurrentD = CanTrackProtocol.ReadInt16(d, 0) / 100.0;
+            n.VoltageQ = sign * CanTrackProtocol.ReadInt16(d, 2) / 100.0;
+            n.HallErrorPercent = d[4];
+            n.IsrMaxUs = d[5];
+            n.CurrentLimit = d[6] / 10.0;
+            n.DebounceSamples = d[7];
+        }
+    }
+
     private void ApplyFault(int node, byte[] d, int len)
     {
         if (len < 6) return;
@@ -752,11 +844,12 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
         if (current == CanTrackProtocol.FaultCode.None)
         {
             _logger.LogInformation("Node {Node} fault cleared.", node);
+            return;
         }
-        else
-        {
-            _logger.LogError("Node {Node} faulted: {Fault}.", node, CanTrackProtocol.Describe(current));
-        }
+
+        _logger.LogError("Node {Node} faulted: {Fault}.", node, CanTrackProtocol.Describe(current));
+        // The run-up is what explains the fault, and it is already in the ring.
+        DumpRecording($"node{node}-{CanTrackProtocol.Describe(current)}");
     }
 
     // --- snapshot ------------------------------------------------------------
@@ -821,6 +914,12 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
         public double ThermalUtilisation;
         public CanTrackProtocol.FaultCode Fault;
         public TimeSpan FaultUptime;
+        public double CurrentD;
+        public double VoltageQ;
+        public int HallErrorPercent;
+        public int IsrMaxUs;
+        public double CurrentLimit;
+        public int DebounceSamples;
 
         public TrackNodeState ToState(long nowMs) => new()
         {
@@ -839,6 +938,12 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
             ThermalUtilisation = ThermalUtilisation,
             Fault = Fault,
             FaultUptime = FaultUptime,
+            CurrentDAmps = CurrentD,
+            VoltageQVolts = VoltageQ,
+            HallErrorPercent = HallErrorPercent,
+            IsrMaxMicroseconds = IsrMaxUs,
+            CurrentLimitAmps = CurrentLimit,
+            DebounceSamples = DebounceSamples,
         };
     }
 

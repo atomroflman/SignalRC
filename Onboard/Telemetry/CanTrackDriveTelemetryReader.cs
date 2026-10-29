@@ -126,6 +126,12 @@ public class CanTrackDriveTelemetryReader : TelemetryReaderBase
         values[$"{prefix}Temperature"] = node.TemperatureCelsius.HasValue
             ? Num(node.TemperatureCelsius.Value) : string.Empty;
         values[$"{prefix}Thermal"] = Num(node.ThermalUtilisation * 100.0);
+        values[$"{prefix}CurrentD"] = Num(node.CurrentDAmps);
+        values[$"{prefix}VoltageQ"] = Num(node.VoltageQVolts);
+        values[$"{prefix}HallError"] = node.HallErrorPercent.ToString(CultureInfo.InvariantCulture);
+        values[$"{prefix}IsrMax"] = node.IsrMaxMicroseconds.ToString(CultureInfo.InvariantCulture);
+        values[$"{prefix}CurrentLimit"] = Num(node.CurrentLimitAmps);
+        values[$"{prefix}Debounce"] = node.DebounceSamples.ToString(CultureInfo.InvariantCulture);
         values[$"{prefix}Fault"] = CanTrackProtocol.Describe(node.Fault);
         values[$"{prefix}FaultCode"] = ((byte)node.Fault).ToString(CultureInfo.InvariantCulture);
         values[$"{prefix}Derating"] =

@@ -116,6 +116,21 @@ public class TrackFaultResetControl : TrackDriveControlBase
     protected override TrackDriveAxis Axis => TrackDriveAxis.FaultReset;
 }
 
+/// <summary>Momentary button. Writes the flight recorder out.
+///
+/// The faults dump themselves. This is for the other half: the vehicle did
+/// something odd and nothing tripped, which is exactly the case that is
+/// impossible to reproduce later. Press it while the memory is fresh.</summary>
+[ControlType("TrackRecordDump")]
+public class TrackRecordDumpControl : TrackDriveControlBase
+{
+    public TrackRecordDumpControl(ILogger<TrackRecordDumpControl> logger) : base(logger)
+    {
+        TestDisabled = true;
+    }
+    protected override TrackDriveAxis Axis => TrackDriveAxis.RecordDump;
+}
+
 /// <summary>Momentary button. Zeroes the odometry, which is what the
 /// calibration runs need between measurements.</summary>
 [ControlType("TrackOdometryReset")]

@@ -30,6 +30,9 @@ public static class CanTrackProtocol
     public static uint StatusId(int node) => NodeBase(node) + 1;
     public static uint PowerId(int node) => NodeBase(node) + 2;
     public static uint FaultId(int node) => NodeBase(node) + 3;
+    /// <summary>Diagnostics. Steers nothing; it is what makes an incident
+    /// explainable afterwards.</summary>
+    public static uint DiagId(int node) => NodeBase(node) + 4;
 
     public enum DriveMode : byte
     {

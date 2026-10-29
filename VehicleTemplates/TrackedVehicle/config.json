@@ -19,7 +19,10 @@
           "invertLeft": false,
           "invertRight": false,
           "wheelRadiusM": 0.09466,
-          "trackWidthM": 0
+          "trackWidthM": 0,
+          "recorderDirectory": "/var/log/signalrc/drive",
+          "recorderSeconds": 60,
+          "recorderHz": 20
         }
       }
     },
@@ -44,6 +47,16 @@
       "emergencyStop": {
         "pinManager": "trackDrive",
         "controlType": "TrackEmergencyStop",
+        "testDisabled": true
+      },
+      "recordDump": {
+        "pinManager": "trackDrive",
+        "controlType": "TrackRecordDump",
+        "testDisabled": true
+      },
+      "odometryReset": {
+        "pinManager": "trackDrive",
+        "controlType": "TrackOdometryReset",
         "testDisabled": true
       }
     },
