@@ -21,6 +21,7 @@
       <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="9.0.0" />
       <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.0" />
       <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.0" />
+      <PackageReference Include="SocketCANSharp" Version="0.13.0" />
       <PackageReference Include="Spectre.Console" Version="0.50.0" />
       <PackageReference Include="System.Device.Gpio" Version="4.0.1" />
       <PackageReference Include="TypedSignalR.Client" Version="3.6.0">
@@ -67,17 +68,11 @@
   <Target Name="GenerateOnboardBuildInfo" BeforeTargets="BeforeBuild">
     <MakeDir Directories="$(MSBuildProjectDirectory)/Generated" />
 
-    <Exec Condition="'$(BuildInfoBranch)' == ''"
-          Command="git -C &quot;$(MSBuildProjectDirectory)/..&quot; branch --show-current"
-          ConsoleToMSBuild="true"
-          IgnoreExitCode="true">
+    <Exec Condition="'$(BuildInfoBranch)' == ''" Command="git -C &quot;$(MSBuildProjectDirectory)/..&quot; branch --show-current" ConsoleToMSBuild="true" IgnoreExitCode="true">
       <Output TaskParameter="ConsoleOutput" ItemName="_BuildBranchOutput" />
     </Exec>
 
-    <Exec Condition="'$(BuildInfoCommit)' == ''"
-          Command="git -C &quot;$(MSBuildProjectDirectory)/..&quot; rev-parse HEAD"
-          ConsoleToMSBuild="true"
-          IgnoreExitCode="true">
+    <Exec Condition="'$(BuildInfoCommit)' == ''" Command="git -C &quot;$(MSBuildProjectDirectory)/..&quot; rev-parse HEAD" ConsoleToMSBuild="true" IgnoreExitCode="true">
       <Output TaskParameter="ConsoleOutput" ItemName="_BuildCommitOutput" />
     </Exec>
 
@@ -95,11 +90,7 @@
       <_BuildInfoLines Include="Commit=$(ResolvedBuildCommit)" />
     </ItemGroup>
 
-    <WriteLinesToFile
-      File="$(MSBuildProjectDirectory)/Generated/onboard-build-info.txt"
-      Lines="@(_BuildInfoLines)"
-      Overwrite="true"
-      Encoding="UTF-8" />
+    <WriteLinesToFile File="$(MSBuildProjectDirectory)/Generated/onboard-build-info.txt" Lines="@(_BuildInfoLines)" Overwrite="true" Encoding="UTF-8" />
   </Target>
 
 </Project>
