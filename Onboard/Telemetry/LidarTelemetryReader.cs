@@ -68,6 +68,9 @@ public class LidarTelemetryReader : TelemetryReaderBase
             // Not a warning but a verdict: nothing on the vehicle can bring it
             // back, so the operator should stop waiting for it.
             ["lidarNeedsPowerCycle"] = health.NeedsPowerCycle ? "1" : "0",
+            ["lidarDroppedWeak"] = health.DroppedWeak.ToString(CultureInfo.InvariantCulture),
+            ["lidarDroppedInconsistent"] =
+                health.DroppedInconsistent.ToString(CultureInfo.InvariantCulture),
             ["lidarAge"] = double.IsInfinity(health.ScanAgeSeconds)
                 ? string.Empty
                 : health.ScanAgeSeconds.ToString("0.##", CultureInfo.InvariantCulture),

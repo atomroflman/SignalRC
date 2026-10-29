@@ -31,7 +31,10 @@
           "port": "/dev/lidar",
           "baudRate": 115200,
           "stallTimeoutMs": 2000,
-          "capturePath": ""
+          "capturePath": "",
+          "minStrength": 0,
+          "windowScans": 3,
+          "minHits": 2
         }
       }
     },

@@ -451,6 +451,45 @@ sector, plus rpm, gaps, error counters and `lidarProblem` in plain words.
 locally at full rate and full resolution from the same manager. This path is
 for the operator.
 
+### Two filters for daylight
+
+This is an indoor sensor pressed into outdoor service. Sunlight is broadband
+and the laser is not, so ambient light raises the noise floor and produces
+returns that were never surfaces - weak, scattered, and somewhere else on
+every revolution. Two filters take most of that out and neither needs anything
+soldered.
+
+**`minStrength`** drops samples below a signal strength. Every sample has
+carried one all along and nothing used it. Off by default: the right value
+depends on the unit and on the light, and a gate set blind throws away real
+obstacles. Measure the strength distribution first, indoors and then in sun.
+
+**`windowScans` / `minHits`** keep a degree only when it returned something in
+several of the last few revolutions, and report the **median** of those
+distances rather than the latest. A real obstacle is in the same direction
+next time round; a sunlight artefact is not. The median rejects one wild value
+without needing a threshold for what counts as wild.
+
+`lidarDroppedWeak` and `lidarDroppedInconsistent` say how hard the filters are
+working. Watching the first climb as you carry the vehicle into the sun is the
+measurement that decides whether a bandpass filter or a sunshade is worth the
+trouble.
+
+Two limits, both deliberate:
+
+The window costs latency - three scans is 600 ms before a new obstacle is
+believed. Fine for parking and following, not for anything faster, and the
+reason collision work has to shorten or drop it as speed rises.
+
+The window also assumes the vehicle is roughly still. Turning on the spot
+sweeps the world past a fixed angle, so a degree holds a different object
+every revolution and the window rejects everything. The filter cannot tell on
+its own - it has no idea what the tracks are doing - so whoever drives has to
+widen or disable it when moving.
+
+The unfiltered scan stays available as `LatestRawScan`. A filter that destroys
+its own evidence cannot be judged.
+
 ### Capturing from a real unit
 
 `Tools/lidar-capture.sh` and `Tools/lidar-check.py` need nothing but coreutils

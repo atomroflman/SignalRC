@@ -6,9 +6,13 @@ namespace SignalRC.Onboard.Hardware.Lidar;
 /// <summary>The latest view of the world, for anything that needs it.</summary>
 public interface ILidarSource : IModule
 {
-    /// <summary>Most recent completed revolution, or null if none yet. The scan
-    /// is immutable once handed over.</summary>
+    /// <summary>Most recent completed revolution, cleaned. Null if none yet.
+    /// The scan is immutable once handed over.</summary>
     LdsScan? LatestScan { get; }
+    /// <summary>The same revolution before filtering. Kept so the filter can
+    /// be judged against what it was given - one that destroys its own
+    /// evidence cannot be tuned.</summary>
+    LdsScan? LatestRawScan { get; }
     LidarHealth Health { get; }
 }
 
@@ -29,6 +33,12 @@ public sealed record LidarHealth
     public long IndexErrors { get; init; }
     public long BytesDiscarded { get; init; }
     public long Reconnects { get; init; }
+    /// <summary>Points the strength gate rejected. Rising outdoors is the
+    /// signature of ambient light, and the reason to reach for a filter or a
+    /// sunshade rather than guess.</summary>
+    public long DroppedWeak { get; init; }
+    /// <summary>Points that returned something but not often enough.</summary>
+    public long DroppedInconsistent { get; init; }
     public string? Problem { get; init; }
 }
 
@@ -50,6 +60,7 @@ public sealed class LdsLidarManager : IModuleManager, ILidarSource, IDisposable
 {
     private readonly ILogger<LdsLidarManager> _logger;
     private readonly LdsFramer _framer = new();
+    private readonly LdsScanFilter _filter = new();
     private readonly object _lock = new();
 
     private SerialPort? _port;
@@ -59,6 +70,7 @@ public sealed class LdsLidarManager : IModuleManager, ILidarSource, IDisposable
     private bool _disposed;
 
     private LdsScan? _latest;
+    private LdsScan? _latestRaw;
     private DateTime _latestUtc = DateTime.MinValue;
     private long _reconnects;
     private bool _everOpened;
@@ -97,9 +109,25 @@ public sealed class LdsLidarManager : IModuleManager, ILidarSource, IDisposable
     /// Leave empty in normal operation; this writes about 11 KB a second.</summary>
     public string CapturePath { get; set; } = string.Empty;
 
+    /// <summary>Samples weaker than this are discarded. 0 disables the gate.
+    /// Left off by default: the right value depends on the unit and on the
+    /// light, and a gate set blind throws away real obstacles. Measure the
+    /// strength distribution first, indoors and then in sun.</summary>
+    public int MinStrength { get => _filter.MinStrength; set => _filter.MinStrength = value; }
+
+    /// <summary>How many recent revolutions a degree has to appear in. 1
+    /// disables the window. Three is 600 ms of latency, which is fine for the
+    /// parking and following this sensor is for and not for anything
+    /// faster.</summary>
+    public int WindowScans { get => _filter.WindowScans; set => _filter.WindowScans = value; }
+
+    /// <summary>How many of the window must carry a return.</summary>
+    public int MinHits { get => _filter.MinHits; set => _filter.MinHits = value; }
+
     public LdsLidarManager(ILogger<LdsLidarManager> logger) => _logger = logger;
 
     public LdsScan? LatestScan { get { lock (_lock) return _latest; } }
+    public LdsScan? LatestRawScan { get { lock (_lock) return _latestRaw; } }
 
     public LidarHealth Health
     {
@@ -123,6 +151,8 @@ public sealed class LdsLidarManager : IModuleManager, ILidarSource, IDisposable
                     BytesDiscarded = _framer.BytesDiscarded,
                     Reconnects = _reconnects,
                     NeedsPowerCycle = _needsPowerCycle,
+                    DroppedWeak = _filter.DroppedWeak,
+                    DroppedInconsistent = _filter.DroppedInconsistent,
                     Problem = _problem,
                 };
             }
@@ -219,6 +249,10 @@ public sealed class LdsLidarManager : IModuleManager, ILidarSource, IDisposable
             port.DiscardInBuffer();
             _port = port;
 
+            // The window describes a world the vehicle may have driven out of
+            // while the port was down.
+            _filter.Reset();
+
             if (!string.IsNullOrWhiteSpace(CapturePath))
             {
                 _capture ??= new FileStream(CapturePath, FileMode.Create, FileAccess.Write);
@@ -297,9 +331,13 @@ public sealed class LdsLidarManager : IModuleManager, ILidarSource, IDisposable
 
     private void OnScan(LdsScan scan)
     {
+        // Filtered outside the lock: the median across the window is real work
+        // and the read loop is the only caller, so nobody is waiting on it.
+        var filtered = _filter.Apply(scan);
         lock (_lock)
         {
-            _latest = scan;
+            _latestRaw = scan;
+            _latest = filtered;
             _latestUtc = DateTime.UtcNow;
             _problem = null;
         }
