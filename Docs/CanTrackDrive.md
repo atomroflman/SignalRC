@@ -280,24 +280,56 @@ with `Type.GetType`, unlike `controlType`, which goes through the attribute.
 ## Bringing the bus up
 
 ```bash
-sudo ip link set can0 up type can bitrate 500000 restart-ms 100 berr-reporting on
+sudo ip link set can0 up type can bitrate 500000
 candump -tz can0
 ```
 
-Both extra options earn their place, and neither is the default.
+Plain, because the adapter in use - a Geschwister Schneider / candleLight
+unit on `gs_usb` - rejects both options that would normally be worth adding:
 
-**`restart-ms 100`.** Without it Linux never brings the interface back after a
-bus-off - the controller takes itself off the wire and stays off until someone
-cycles the link by hand. That is the same trap the STM32 side has, one layer
-up: the firmware had to add its own recovery because the peripheral is
-configured with automatic bus-off recovery disabled. Here the kernel will do
-it, but only if asked.
+```
+Error: requested control mode BERR-REPORTING not supported.
+Error: Device doesn't support restart from Bus Off.
+```
 
-**`berr-reporting on`.** Without it the controller reports state changes but
-not individual bus errors, so an unacknowledged frame produces nothing the
-driver can see. It costs CPU on a noisy bus, which is why it is off by
-default; on a two-node vehicle bus it is cheap and it is the difference
-between "no telemetry" and "nobody is acknowledging".
+**`berr-reporting`** would report individual bus errors rather than only state
+changes, making a single unacknowledged frame visible. Losing it costs little:
+state-change frames come from the kernel's CAN core, not from that option, so
+error-active, error-warning, error-passive, bus-off and restart are still all
+reported. Only per-frame detail is gone, and the send-failure count covers
+what that detail would have explained.
+
+**`restart-ms`** is the one that matters. Without it nothing brings the
+interface back after a bus-off - not the kernel, not the device. The
+controller takes itself off the wire and stays there.
+
+That is the same trap the STM32 side has, one layer down: its peripheral is
+configured with automatic bus-off recovery disabled and the firmware had to
+add its own. Here there is nowhere inside to add it, because bringing a link
+up needs NET_ADMIN and this process should not have it.
+
+So the driver decides **when** and the operator decides **how**. Point
+`busOffRecoveryCommand` at something permitted without a password:
+
+```json
+"busOffRecoveryCommand": "sudo /usr/local/sbin/can-recover can0"
+```
+
+```sh
+#!/bin/sh
+# /usr/local/sbin/can-recover
+ip link set "$1" down
+ip link set "$1" up type can bitrate 500000
+```
+
+```
+# /etc/sudoers.d/can-recover
+signalrc ALL=(root) NOPASSWD: /usr/local/sbin/can-recover
+```
+
+One script, one sudoers line, nothing else granted. Left unset the driver
+still detects and reports bus-off; it simply cannot act on it, and somebody
+has to walk to the vehicle.
 
 Measured on the real adapter - a Geschwister Schneider / candleLight unit on
 `gs_usb`, which is the good case: native SocketCAN, no slcan, nothing to

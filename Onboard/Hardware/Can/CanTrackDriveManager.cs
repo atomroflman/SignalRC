@@ -92,6 +92,32 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
     public int FaultResetHoldMs { get; set; } = 250;
 
     /// <summary>
+    /// Shell command run when the controller goes bus-off. Empty disables it.
+    ///
+    /// Bus-off is not self-healing here. The kernel can recover an interface
+    /// brought up with restart-ms, but **this adapter does not support it** -
+    /// a Geschwister Schneider / candleLight unit refuses the option with
+    /// "Device doesn't support restart from Bus Off". So after a bus-off the
+    /// interface stays off the wire until someone cycles it, and on a vehicle
+    /// that has driven away there is nobody to do that.
+    ///
+    /// Bringing a link up needs NET_ADMIN, which this process should not
+    /// have. So the driver decides WHEN and the operator decides HOW: point
+    /// this at a command that is permitted without a password, for example
+    ///
+    ///     sudo /usr/local/sbin/can-recover can0
+    ///
+    /// with a sudoers line for exactly that script and nothing else. Left
+    /// empty the driver still detects and reports bus-off; it simply cannot
+    /// act on it.
+    /// </summary>
+    public string BusOffRecoveryCommand { get; set; } = string.Empty;
+
+    /// <summary>Shortest gap between recovery attempts. A bus that is
+    /// physically broken would otherwise be cycled forever.</summary>
+    public int BusOffRecoveryIntervalSeconds { get; set; } = 10;
+
+    /// <summary>
     /// Stop if no control input has arrived for this long.
     ///
     /// The control path runs over a network, so it can fail in two ways and
@@ -243,19 +269,35 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
             _started = true;
         }
 
+        _recorder = new FlightRecorder(_logger,
+            Math.Max(1, RecorderSeconds) * Math.Max(1, RecorderHz))
+        {
+            Directory = RecorderDirectory,
+        };
+
+        _running = true;
+        _rxThread = new Thread(ReceiveLoop) { IsBackground = true, Name = "can-track-rx" };
+        _txThread = new Thread(TransmitLoop) { IsBackground = true, Name = "can-track-tx" };
+        _rxThread.Start();
+        _txThread.Start();
+    }
+
+    /// <summary>
+    /// Opens the socket, or reopens it after a bus-off recovery. Returns
+    /// false quietly when the interface is simply not there yet - that is a
+    /// normal state at boot, not an error.
+    /// </summary>
+    private bool OpenSocket()
+    {
+        if (_socket != null) return true;
         try
         {
             var iface = CanNetworkInterface.GetAllInterfaces(true)
                 .FirstOrDefault(i => string.Equals(i.Name, Interface, StringComparison.Ordinal));
             if (iface == null)
             {
-                _logger.LogError(
-                    "CAN interface {Interface} not found. Bring it up first, e.g. " +
-                    "sudo ip link set {Interface} up type can bitrate 500000, or " +
-                    "sudo modprobe vcan && sudo ip link add dev vcan0 type vcan && sudo ip link set vcan0 up.",
-                    Interface, Interface);
-                SetInhibit("CAN interface not found");
-                return;
+                SetInhibitOnce($"CAN interface {Interface} not found");
+                return false;
             }
 
             var socket = new RawCanSocket();
@@ -280,27 +322,17 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
                                 | CanErrorClass.CAN_ERR_RESTARTED;
             socket.ReceiveTimeout = 200;
             _socket = socket;
-
-            _recorder = new FlightRecorder(_logger,
-                Math.Max(1, RecorderSeconds) * Math.Max(1, RecorderHz))
-            {
-                Directory = RecorderDirectory,
-            };
-
-            _running = true;
-            _rxThread = new Thread(ReceiveLoop) { IsBackground = true, Name = "can-track-rx" };
-            _txThread = new Thread(TransmitLoop) { IsBackground = true, Name = "can-track-tx" };
-            _rxThread.Start();
-            _txThread.Start();
+            lock (_stateLock) { _busOff = false; _busState = "unknown"; _openProblem = null; }
 
             _logger.LogInformation(
                 "CAN track drive up on {Interface}, command every {Interval} ms, expecting {Nodes} node(s).",
                 Interface, CommandIntervalMs, ExpectedNodes);
+            return true;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to open CAN interface {Interface}.", Interface);
-            SetInhibit("CAN open failed");
+            SetInhibitOnce($"CAN open failed: {ex.Message}");
+            return false;
         }
     }
 
@@ -747,10 +779,19 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
     {
         while (_running)
         {
+            if (!OpenSocket())
+            {
+                // The interface may not exist yet - udev settles after boot
+                // and the adapter can be plugged in later - or it may be
+                // between a bus-off and its recovery. Either way, keep trying.
+                Thread.Sleep(1000);
+                continue;
+            }
+
             try
             {
                 var socket = _socket;
-                if (socket == null) break;
+                if (socket == null) continue;
                 if (socket.Read(out CanFrame frame) <= 0) continue;
                 Dispatch(frame);
             }
@@ -764,6 +805,32 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
                 // else shows up as missing telemetry, which the UI already sees.
             }
         }
+        CloseSocket();
+    }
+
+    private void CloseSocket()
+    {
+        var socket = _socket;
+        _socket = null;
+        try { socket?.Close(); } catch { /* going away anyway */ }
+        socket?.Dispose();
+    }
+
+    private string? _openProblem;
+
+    /// <summary>Inhibits with a reason, logging it only when it changes - the
+    /// receive loop retries every second and would otherwise fill the
+    /// journal with the same line.</summary>
+    private void SetInhibitOnce(string reason)
+    {
+        bool changed;
+        lock (_stateLock)
+        {
+            changed = _openProblem != reason;
+            _openProblem = reason;
+            _inhibitReason = reason;
+        }
+        if (changed) _logger.LogWarning("{Reason}", reason);
     }
 
     private void Dispatch(CanFrame frame)
@@ -857,16 +924,65 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
             }
         }
 
-        // Bus-off is the one worth a line in the log: unlike the warning
-        // states it does not clear itself, and on Linux the interface stays
-        // down unless it was brought up with restart-ms.
+        // Bus-off is the one worth acting on: unlike the warning states it
+        // does not clear itself, and on this adapter neither the kernel nor
+        // the device will bring the interface back.
         if ((cls & CanErrorClass.CAN_ERR_BUSOFF) != 0)
         {
             _logger.LogError(
-                "CAN bus-off on {Interface}. The controller has left the bus and will " +
-                "not rejoin unless the interface was configured with restart-ms. " +
-                "Check termination and that something else is on the wire.", Interface);
+                "CAN bus-off on {Interface}. The controller has left the bus and nothing " +
+                "will put it back by itself - this adapter supports neither restart-ms nor " +
+                "berr-reporting. Check termination and that something else is on the wire.",
+                Interface);
+            TryBusOffRecovery();
         }
+    }
+
+    private DateTime _lastRecoveryUtc = DateTime.MinValue;
+
+    /// <summary>
+    /// Runs the operator's recovery command, if one was configured. Fired
+    /// from the receive thread, so the command must return promptly - it is
+    /// meant to be an "ip link down, up", not a diagnosis.
+    /// </summary>
+    private void TryBusOffRecovery()
+    {
+        var command = BusOffRecoveryCommand;
+        if (string.IsNullOrWhiteSpace(command)) return;
+        if ((DateTime.UtcNow - _lastRecoveryUtc).TotalSeconds < BusOffRecoveryIntervalSeconds) return;
+        _lastRecoveryUtc = DateTime.UtcNow;
+
+        _logger.LogWarning("Running CAN bus-off recovery: {Command}", command);
+        Task.Run(() =>
+        {
+            try
+            {
+                using var p = System.Diagnostics.Process.Start(
+                    new System.Diagnostics.ProcessStartInfo("/bin/sh", $"-c \"{command}\"")
+                    {
+                        RedirectStandardError = true,
+                        RedirectStandardOutput = true,
+                    });
+                if (p == null) return;
+                p.WaitForExit(10000);
+                var err = p.StandardError.ReadToEnd().Trim();
+                if (p.ExitCode != 0)
+                {
+                    _logger.LogError("CAN recovery command exited {Code}: {Error}", p.ExitCode, err);
+                    return;
+                }
+                _logger.LogWarning("CAN recovery command finished. Reopening {Interface}.", Interface);
+                lock (_stateLock) { _busOff = false; _busState = "recovering"; }
+                // The socket is bound to an interface that has just been
+                // cycled, so it has to be rebuilt. Dropping it makes the
+                // receive loop reopen on its next pass.
+                CloseSocket();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "CAN recovery command failed.");
+            }
+        });
     }
 
     private void ApplyStatus(int node, byte[] d, int len)

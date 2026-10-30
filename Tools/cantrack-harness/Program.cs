@@ -342,12 +342,13 @@ if (args.Length >= 2 && args[0] == "buserr")
     if (f.BusState == "unknown")
     {
         Console.WriteLine("  note: no error frames seen. They are emitted on state changes,");
-        Console.WriteLine("        so bring the interface up fresh to exercise this:");
+        Console.WriteLine("        so an interface already sitting in error-passive reports");
+        Console.WriteLine("        nothing new. Bring it up fresh to exercise this:");
         Console.WriteLine("          sudo ip link set can0 down");
-        Console.WriteLine("          sudo ip link set can0 up type can bitrate 500000 \\");
-        Console.WriteLine("               restart-ms 100 berr-reporting on");
-        Console.WriteLine("        restart-ms matters beyond the test: without it Linux never");
-        Console.WriteLine("        brings the interface back after a bus-off.");
+        Console.WriteLine("          sudo ip link set can0 up type can bitrate 500000");
+        Console.WriteLine("        The candleLight adapter supports neither berr-reporting nor");
+        Console.WriteLine("        restart-ms, so bus-off recovery has to come from outside -");
+        Console.WriteLine("        see busOffRecoveryCommand.");
     }
     else
     {
