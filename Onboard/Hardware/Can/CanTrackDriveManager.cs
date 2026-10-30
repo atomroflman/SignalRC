@@ -189,6 +189,13 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
     private long _framesReceived;
     private long _sendFailures;
     private long _unknownFrames;
+    private long _ackErrors;
+    private long _errorWarnings;
+    private long _errorPassive;
+    private long _busOffEvents;
+    private long _controllerRestarts;
+    private bool _busOff;
+    private string _busState = "unknown";
 
     private readonly Stopwatch _clock = Stopwatch.StartNew();
 
@@ -257,6 +264,20 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
             // command echo and both nodes' telemetry and drops the rest in the
             // kernel rather than on the Pi's CPU.
             socket.CanFilters = new[] { new CanFilter(0x000, 0x600) };
+            // Error frames as well. Without these the driver cannot tell an
+            // empty bus from a broken one: both simply produce no telemetry.
+            // Measured on real hardware with no second node - the interface
+            // walks from error-active to error-passive and the driver saw
+            // nothing at all.
+            socket.ErrorFilters = CanErrorClass.CAN_ERR_TX_TIMEOUT
+                                | CanErrorClass.CAN_ERR_LOSTARB
+                                | CanErrorClass.CAN_ERR_CRTL
+                                | CanErrorClass.CAN_ERR_PROT
+                                | CanErrorClass.CAN_ERR_TRX
+                                | CanErrorClass.CAN_ERR_ACK
+                                | CanErrorClass.CAN_ERR_BUSOFF
+                                | CanErrorClass.CAN_ERR_BUSERROR
+                                | CanErrorClass.CAN_ERR_RESTARTED;
             socket.ReceiveTimeout = 200;
             _socket = socket;
 
@@ -649,6 +670,12 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
             return;
         }
 
+        if (_busOff)
+        {
+            _inhibitReason = "CAN bus-off";
+            return;
+        }
+
         var present = 0;
         string? faulted = null;
         for (var i = 0; i < _nodes.Length && i < ExpectedNodes; i++)
@@ -745,7 +772,12 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
         const uint rtrFlag = 0x40000000u;
         const uint errFlag = 0x20000000u;
 
-        if ((frame.CanId & (effFlag | rtrFlag | errFlag)) != 0) return;
+        if ((frame.CanId & errFlag) != 0)
+        {
+            ApplyErrorFrame(frame);
+            return;
+        }
+        if ((frame.CanId & (effFlag | rtrFlag)) != 0) return;
         var id = frame.CanId & 0x7FFu;
         var data = frame.Data;
         var len = frame.Length;
@@ -776,6 +808,66 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
 
     private bool IsInverted(int node) =>
         node == CanTrackProtocol.LeftNode ? InvertLeft : InvertRight;
+
+    /// <summary>
+    /// Decodes a kernel error frame. The class lives in the identifier, the
+    /// controller's own state in data[1].
+    /// </summary>
+    private void ApplyErrorFrame(CanFrame frame)
+    {
+        var cls = (CanErrorClass)(frame.CanId & 0x1FFFFFFFu);
+        var ctrl = frame.Length > 1 ? (CanControllerErrorStatus)frame.Data[1]
+                                    : CanControllerErrorStatus.CAN_ERR_CRTL_UNSPEC;
+
+        lock (_stateLock)
+        {
+            if ((cls & CanErrorClass.CAN_ERR_ACK) != 0) _ackErrors++;
+
+            if ((cls & CanErrorClass.CAN_ERR_BUSOFF) != 0)
+            {
+                _busOffEvents++;
+                _busOff = true;
+                _busState = "bus-off";
+            }
+            else if ((cls & CanErrorClass.CAN_ERR_RESTARTED) != 0)
+            {
+                _controllerRestarts++;
+                _busOff = false;
+                _busState = "restarted";
+            }
+            else if ((cls & CanErrorClass.CAN_ERR_CRTL) != 0)
+            {
+                if ((ctrl & (CanControllerErrorStatus.CAN_ERR_CRTL_TX_PASSIVE
+                           | CanControllerErrorStatus.CAN_ERR_CRTL_RX_PASSIVE)) != 0)
+                {
+                    _errorPassive++;
+                    _busState = "error-passive";
+                }
+                else if ((ctrl & (CanControllerErrorStatus.CAN_ERR_CRTL_TX_WARNING
+                                | CanControllerErrorStatus.CAN_ERR_CRTL_RX_WARNING)) != 0)
+                {
+                    _errorWarnings++;
+                    _busState = "error-warning";
+                }
+                else if ((ctrl & CanControllerErrorStatus.CAN_ERR_CRTL_ACTIVE) != 0)
+                {
+                    _busOff = false;
+                    _busState = "error-active";
+                }
+            }
+        }
+
+        // Bus-off is the one worth a line in the log: unlike the warning
+        // states it does not clear itself, and on Linux the interface stays
+        // down unless it was brought up with restart-ms.
+        if ((cls & CanErrorClass.CAN_ERR_BUSOFF) != 0)
+        {
+            _logger.LogError(
+                "CAN bus-off on {Interface}. The controller has left the bus and will " +
+                "not rejoin unless the interface was configured with restart-ms. " +
+                "Check termination and that something else is on the wire.", Interface);
+        }
+    }
 
     private void ApplyStatus(int node, byte[] d, int len)
     {
@@ -880,6 +972,13 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
                 FramesReceived = Interlocked.Read(ref _framesReceived),
                 SendFailures = Interlocked.Read(ref _sendFailures),
                 UnknownFrames = Interlocked.Read(ref _unknownFrames),
+                BusState = _busState,
+                AckErrors = _ackErrors,
+                ErrorWarnings = _errorWarnings,
+                ErrorPassive = _errorPassive,
+                BusOffEvents = _busOffEvents,
+                ControllerRestarts = _controllerRestarts,
+                BusOff = _busOff,
                 Odometry = new TrackOdometry
                 {
                     Calibrated = WheelRadiusM > 0.0 && TrackWidthM > 0.0,

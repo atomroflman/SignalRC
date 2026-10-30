@@ -25,9 +25,13 @@ eingebauten Board nicht erreichbar.
 `/etc/network/interfaces`, sonst ist es nach jedem Neustart weg:
 
 ```bash
-sudo ip link set can0 up type can bitrate 500000
+sudo ip link set can0 up type can bitrate 500000 restart-ms 100 berr-reporting on
 candump -tz can0
 ```
+
+`restart-ms 100` ist nicht optional: ohne das holt Linux die Schnittstelle nach
+einem Bus-Off nie zurueck. `berr-reporting on` macht unquittierte Rahmen fuer
+den Treiber sichtbar - ohne das meldet der Controller nur Zustandswechsel.
 
 Erwartet: `0x181` alle 50 ms, `0x182` alle 200 ms, `0x183` jede Sekunde, und
 dasselbe auf `0x191`/`0x192`/`0x193` vom zweiten Knoten.

@@ -140,5 +140,25 @@ public sealed record TrackDriveSnapshot
     public long SendFailures { get; init; }
     public long UnknownFrames { get; init; }
 
+    /// <summary>
+    /// What the CAN controller thinks of the bus, from the error frames the
+    /// kernel sends up. Worth having as telemetry rather than only in a log:
+    /// "no nodes present" and "the wire is broken" look identical from the
+    /// protocol's point of view, and only this tells them apart.
+    /// </summary>
+    public string BusState { get; init; } = "unknown";
+    /// <summary>Nobody acknowledged a frame. With two nodes wired up this
+    /// means the other end is not listening; on a bench with one device it is
+    /// simply what an empty bus looks like.</summary>
+    public long AckErrors { get; init; }
+    public long ErrorWarnings { get; init; }
+    public long ErrorPassive { get; init; }
+    /// <summary>Bus-off. The controller has taken itself off the wire.
+    /// Linux does NOT bring it back unless the interface was configured with
+    /// restart-ms, and the default is 0 - see Docs/CanTrackDrive.md.</summary>
+    public long BusOffEvents { get; init; }
+    public long ControllerRestarts { get; init; }
+    public bool BusOff { get; init; }
+
     public required TrackOdometry Odometry { get; init; }
 }

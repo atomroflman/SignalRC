@@ -280,9 +280,38 @@ with `Type.GetType`, unlike `controlType`, which goes through the attribute.
 ## Bringing the bus up
 
 ```bash
-sudo ip link set can0 up type can bitrate 500000
+sudo ip link set can0 up type can bitrate 500000 restart-ms 100 berr-reporting on
 candump -tz can0
 ```
+
+Both extra options earn their place, and neither is the default.
+
+**`restart-ms 100`.** Without it Linux never brings the interface back after a
+bus-off - the controller takes itself off the wire and stays off until someone
+cycles the link by hand. That is the same trap the STM32 side has, one layer
+up: the firmware had to add its own recovery because the peripheral is
+configured with automatic bus-off recovery disabled. Here the kernel will do
+it, but only if asked.
+
+**`berr-reporting on`.** Without it the controller reports state changes but
+not individual bus errors, so an unacknowledged frame produces nothing the
+driver can see. It costs CPU on a noisy bus, which is why it is off by
+default; on a two-node vehicle bus it is cheap and it is the difference
+between "no telemetry" and "nobody is acknowledging".
+
+Measured on the real adapter - a Geschwister Schneider / candleLight unit on
+`gs_usb`, which is the good case: native SocketCAN, no slcan, nothing to
+reflash.
+
+With one device and nothing else on the wire, **every transmission fails**.
+Nothing acknowledges, the controller retries, the queue fills and `write`
+returns ENOBUFS; the interface walks from error-active to error-passive. That
+is correct CAN behaviour rather than a fault, and `sendFailures` climbing with
+`framesSent` at zero is exactly what an empty bus looks like.
+
+Error frames are emitted on state **changes**, so an interface already sitting
+in error-passive reports nothing new. Bring it down and up to see the
+transitions.
 
 Virtual bus, no hardware:
 

@@ -302,6 +302,65 @@ Console.WriteLine("Lidar framing against the real capture");
     }
 }
 
+// Bus health on a real interface with nothing else on the wire. The protocol
+// cannot be exercised without a second node, but the controller's view of the
+// bus can - and that is the part a virtual bus can never show, because vcan
+// has no error states at all.
+if (args.Length >= 2 && args[0] == "buserr")
+{
+    using var blf = LoggerFactory.Create(b => b.AddSimpleConsole().SetMinimumLevel(LogLevel.Error));
+    using var m = new CanTrackDriveManager(blf.CreateLogger<CanTrackDriveManager>())
+    {
+        Interface = args[1],
+        ExpectedNodes = 2,
+        ControlTimeoutMs = 60000,
+    };
+    var thr = m.GetModule<ITrackDriveInput>((int)TrackDriveAxis.Throttle);
+    thr.SetValue(0.5f);
+    Console.WriteLine($"Transmitting on {args[1]} with no peer for 15 s...");
+    for (var i = 0; i < 15; i++)
+    {
+        Thread.Sleep(1000);
+        var sn = m.GetSnapshot();
+        Console.WriteLine($"  {i + 1,2}s  state {sn.BusState,-14} tx ok {sn.FramesSent,5} fail {sn.SendFailures,5}" +
+                          $"  ack {sn.AckErrors,4} warn {sn.ErrorWarnings,3} passive {sn.ErrorPassive,3}" +
+                          $" busoff {sn.BusOffEvents}  inhibit: {sn.InhibitReason}");
+    }
+    var f = m.GetSnapshot();
+    // On a bus with no second node every transmission fails: nothing
+    // acknowledges, the controller retries, the queue fills and write returns
+    // ENOBUFS. That is correct CAN behaviour, and the failure count is the
+    // signal - not an absence of one.
+    Check("the empty bus is visible in the send failures", f.SendFailures > 100,
+          $"ok {f.FramesSent} fail {f.SendFailures}");
+    Check("drive stays inhibited without nodes", !f.DriveEnabled, f.InhibitReason ?? "(none)");
+
+    // Error frames only arrive on a state CHANGE, and ACK errors only with
+    // berr-reporting enabled on the interface. An interface already sitting
+    // in error-passive from a previous run reports nothing new, so this is
+    // informational rather than a failure.
+    if (f.BusState == "unknown")
+    {
+        Console.WriteLine("  note: no error frames seen. They are emitted on state changes,");
+        Console.WriteLine("        so bring the interface up fresh to exercise this:");
+        Console.WriteLine("          sudo ip link set can0 down");
+        Console.WriteLine("          sudo ip link set can0 up type can bitrate 500000 \\");
+        Console.WriteLine("               restart-ms 100 berr-reporting on");
+        Console.WriteLine("        restart-ms matters beyond the test: without it Linux never");
+        Console.WriteLine("        brings the interface back after a bus-off.");
+    }
+    else
+    {
+        Check("controller state reported", f.BusState != "unknown", f.BusState);
+        Console.WriteLine($"  controller: {f.BusState}, ack {f.AckErrors}, warn {f.ErrorWarnings}," +
+                          $" passive {f.ErrorPassive}, bus-off {f.BusOffEvents}," +
+                          $" restarts {f.ControllerRestarts}");
+    }
+    Console.WriteLine();
+    Console.WriteLine(failures == 0 ? "ALLE PRUEFUNGEN BESTANDEN" : $"{failures} FEHLGESCHLAGEN");
+    return failures == 0 ? 0 : 1;
+}
+
 // Live lidar, end to end: the manager on a real port. Everything above is
 // replay; this is the only check that the serial side actually works.
 if (args.Length > 0 && args[0].StartsWith("/dev/"))

@@ -81,6 +81,13 @@ public class CanTrackDriveTelemetryReader : TelemetryReaderBase
         values["framesSent"] = snapshot.FramesSent.ToString(CultureInfo.InvariantCulture);
         values["framesReceived"] = snapshot.FramesReceived.ToString(CultureInfo.InvariantCulture);
         values["sendFailures"] = snapshot.SendFailures.ToString(CultureInfo.InvariantCulture);
+        // The controller's own view of the wire. Without it an empty bus and a
+        // broken one are indistinguishable: both just produce no telemetry.
+        values["busState"] = snapshot.BusState;
+        values["busOff"] = snapshot.BusOff ? "1" : "0";
+        values["ackErrors"] = snapshot.AckErrors.ToString(CultureInfo.InvariantCulture);
+        values["busOffEvents"] = snapshot.BusOffEvents.ToString(CultureInfo.InvariantCulture);
+        values["busRestarts"] = snapshot.ControllerRestarts.ToString(CultureInfo.InvariantCulture);
 
         return Task.FromResult<IReadOnlyDictionary<string, string>?>(values);
     }
