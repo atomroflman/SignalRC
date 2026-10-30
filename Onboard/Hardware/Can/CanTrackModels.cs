@@ -159,6 +159,18 @@ public sealed record TrackDriveSnapshot
     public long BusOffEvents { get; init; }
     public long ControllerRestarts { get; init; }
     public bool BusOff { get; init; }
+    /// <summary>Frames the kernel threw away because the transmit queue was
+    /// full. On a bus with nothing to acknowledge, the controller retries the
+    /// first frame forever, the queue backs up and every write then fails with
+    /// ENOBUFS - so a climbing count here with <see cref="TxPackets"/> standing
+    /// still is the signature of being alone on the wire.</summary>
+    public long TxDropped { get; init; }
+    /// <summary>Frames that actually left the controller.</summary>
+    public long TxPackets { get; init; }
+    /// <summary>Where the bus figures came from: error frames, the netlink
+    /// poll, or nothing yet. Worth publishing because the two sources do not
+    /// work on the same hardware.</summary>
+    public string BusStateSource { get; init; } = "none";
 
     public required TrackOdometry Odometry { get; init; }
 }

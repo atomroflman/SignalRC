@@ -88,6 +88,11 @@ public class CanTrackDriveTelemetryReader : TelemetryReaderBase
         values["ackErrors"] = snapshot.AckErrors.ToString(CultureInfo.InvariantCulture);
         values["busOffEvents"] = snapshot.BusOffEvents.ToString(CultureInfo.InvariantCulture);
         values["busRestarts"] = snapshot.ControllerRestarts.ToString(CultureInfo.InvariantCulture);
+        values["busStateSource"] = snapshot.BusStateSource;
+        // Climbing txDropped with txPackets standing still is being alone on
+        // the bus - the one failure that looks exactly like a broken wire.
+        values["txDropped"] = snapshot.TxDropped.ToString(CultureInfo.InvariantCulture);
+        values["txPackets"] = snapshot.TxPackets.ToString(CultureInfo.InvariantCulture);
 
         return Task.FromResult<IReadOnlyDictionary<string, string>?>(values);
     }

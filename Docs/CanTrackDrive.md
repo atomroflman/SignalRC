@@ -293,11 +293,10 @@ Error: Device doesn't support restart from Bus Off.
 ```
 
 **`berr-reporting`** would report individual bus errors rather than only state
-changes, making a single unacknowledged frame visible. Losing it costs little:
-state-change frames come from the kernel's CAN core, not from that option, so
-error-active, error-warning, error-passive, bus-off and restart are still all
-reported. Only per-frame detail is gone, and the send-failure count covers
-what that detail would have explained.
+changes. Losing it turned out to cost more than expected, and the reason is in
+*Error frames* below: on this adapter **no** error frames arrive, not even the
+state-change ones that come from the kernel's CAN core rather than from this
+option. The driver reads the state over netlink instead.
 
 **`restart-ms`** is the one that matters. Without it nothing brings the
 interface back after a bus-off - not the kernel, not the device. The
@@ -341,9 +340,60 @@ returns ENOBUFS; the interface walks from error-active to error-passive. That
 is correct CAN behaviour rather than a fault, and `sendFailures` climbing with
 `framesSent` at zero is exactly what an empty bus looks like.
 
-Error frames are emitted on state **changes**, so an interface already sitting
-in error-passive reports nothing new. Bring it down and up to see the
-transitions.
+### Error frames: none, on this adapter
+
+The driver subscribes to every SocketCAN error class. On `gs_usb` it receives
+nothing from any of them. That is measured, not assumed, and it was measured
+twice because the first reading looked like a bug in this code:
+
+```
+# raw AF_CAN socket, CAN_RAW_ERR_FILTER = 0x1FFFFFFF, no C# involved
+sent ok=0 failed=46
+error frames received: 0
+```
+
+An independent implementation sees the same nothing, so the error-frame
+handling here is correct and simply has no input. It is kept for adapters that
+do emit them.
+
+### What the kernel does report
+
+The counters behind `ip -details -statistics link show can0` keep moving
+regardless, and they are readable over netlink without privileges:
+
+```
+can state ERROR-ACTIVE restart-ms 0
+re-started bus-errors arbit-lost error-warn error-pass bus-off
+0          0          0          5          1          0
+```
+
+So `CanTrackDriveManager.PollLinkState` asks netlink once a second and
+publishes `busState`, `busOffEvents`, `txPackets` and `txDropped`. Where error
+frames do work they remain the faster path and the poll only corrects the
+figures behind them; `busStateSource` says which one is actually feeding the
+display.
+
+### Reading the alone-on-the-bus case
+
+With one device on the wire the queue wedges completely, and the shape of it
+is worth recognising:
+
+```
+sent ok=0 failed=50          errno ENOBUFS(105) on every single write
+qdisc pfifo_fast  Sent 400 bytes 25 pkt (dropped 2823)  backlog 176b 11p
+can state ERROR-ACTIVE
+```
+
+The first frame is never acknowledged, the controller retransmits it forever,
+the ten-deep qdisc fills behind it and nothing ever leaves again. `txDropped`
+climbing while `txPackets` stands still is the signature, and it is the one
+thing that distinguishes "nobody is there" from "the wire is broken" now that
+error frames are unavailable.
+
+Note what this also means for the bench: a lone node cannot be made to
+transmit at all. The cure is a second node, or `one-shot` mode if the adapter
+supports it - untested here, since changing the link needs a password on this
+machine.
 
 Virtual bus, no hardware:
 
@@ -365,8 +415,10 @@ dotnet run -c Release          # protocol and mixing, no interface needed
 dotnet run -c Release vcan0    # also the manager, presence, faults, timeouts
 ```
 
-Everything the first form covers passes. The second form has **not** been run;
-it needs root to create the virtual interface.
+Both forms pass. The `vcan0` form proves the protocol, the presence and fault
+logic, mixing, rotation on the spot, per-track inversion, the control-input
+watchdog and odometry integration - but not the bitrate, the wiring or the
+termination, none of which a virtual bus has.
 
 Still unverified, in rough order of risk:
 

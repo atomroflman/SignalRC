@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using SocketCANSharp;
 using SocketCANSharp.Network;
+using SocketCANSharp.Network.Netlink;
 
 namespace SignalRC.Onboard.Hardware.Can;
 
@@ -222,6 +223,10 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
     private long _controllerRestarts;
     private bool _busOff;
     private string _busState = "unknown";
+    private string _busStateSource = "none";
+    private long _txDropped;
+    private long _txPackets;
+    private TimeSpan _nextLinkPoll;
 
     private readonly Stopwatch _clock = Stopwatch.StartNew();
 
@@ -323,6 +328,7 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
             socket.ReceiveTimeout = 200;
             _socket = socket;
             lock (_stateLock) { _busOff = false; _busState = "unknown"; _openProblem = null; }
+            _nextLinkPoll = TimeSpan.Zero;
 
             _logger.LogInformation(
                 "CAN track drive up on {Interface}, command every {Interval} ms, expecting {Nodes} node(s).",
@@ -333,6 +339,75 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
         {
             SetInhibitOnce($"CAN open failed: {ex.Message}");
             return false;
+        }
+    }
+
+    /// <summary>
+    /// Asks the kernel what the controller is doing, once a second.
+    /// <para>
+    /// This exists because error frames are not universally available.  On the
+    /// candleLight/gs_usb adapter used here they never arrive at all: a raw
+    /// socket with every error class enabled received none, and the same
+    /// adapter rejects both <c>berr-reporting</c> and restart-from-bus-off.
+    /// The netlink counters it does keep moved regardless, so this is the only
+    /// working view of the wire on that hardware.  Where error frames do work
+    /// they are still the faster path and keep running; this poll only
+    /// corrects the figures behind them.
+    /// </para>
+    /// </summary>
+    private void PollLinkState()
+    {
+        if (_clock.Elapsed < _nextLinkPoll) return;
+        _nextLinkPoll = _clock.Elapsed + TimeSpan.FromSeconds(1);
+
+        try
+        {
+            var iface = CanNetworkInterface.GetAllInterfaces(true)
+                .FirstOrDefault(i => string.Equals(i.Name, Interface, StringComparison.Ordinal));
+            if (iface == null) return;
+
+            var link = iface.LinkStatistics;
+            var dev = iface.IsVirtual ? null : iface.DeviceStatistics;
+            var state = iface.IsVirtual ? null : iface.CanControllerState;
+
+            lock (_stateLock)
+            {
+                _txDropped = (long)link.TxDropped;
+                _txPackets = (long)link.TxPackets;
+
+                if (dev != null)
+                {
+                    // Absolute counters since the interface came up, so assign
+                    // rather than add - unlike the error-frame path, which only
+                    // ever sees increments.
+                    _errorWarnings = (long)dev.ErrorWarning;
+                    _errorPassive = (long)dev.ErrorPassive;
+                    _busOffEvents = (long)dev.BusOff;
+                    _controllerRestarts = (long)dev.Restarts;
+                }
+
+                if (state != null)
+                {
+                    _busState = state switch
+                    {
+                        CanState.CAN_STATE_ERROR_ACTIVE => "error-active",
+                        CanState.CAN_STATE_ERROR_WARNING => "error-warning",
+                        CanState.CAN_STATE_ERROR_PASSIVE => "error-passive",
+                        CanState.CAN_STATE_BUS_OFF => "bus-off",
+                        CanState.CAN_STATE_STOPPED => "stopped",
+                        CanState.CAN_STATE_SLEEPING => "sleeping",
+                        _ => "unknown",
+                    };
+                    _busStateSource = "netlink";
+                    _busOff = state == CanState.CAN_STATE_BUS_OFF
+                           || state == CanState.CAN_STATE_STOPPED;
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // vcan has no controller, a removed adapter has no interface.
+            // Neither is worth a log line every second.
         }
     }
 
@@ -566,6 +641,7 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
         {
             try
             {
+                PollLinkState();
                 SendCommandFrame();
             }
             catch (Exception ex)
@@ -768,7 +844,12 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
             // and then stay quiet rather than filling the journal at 50 Hz.
             if (failures <= 5 || failures % 500 == 0)
             {
-                _logger.LogWarning(ex, "CAN write failed ({Count} total).", failures);
+                _logger.LogWarning(ex,
+                    "CAN write failed ({Count} total, bus {State}, {Sent} frames out, " +
+                    "{Dropped} dropped). ENOBUFS with nothing sent means no other node " +
+                    "is acknowledging on {Interface}: the controller retries the first " +
+                    "frame forever and the queue never drains.",
+                    failures, _busState, _txPackets, _txDropped, Interface);
             }
         }
     }
@@ -888,6 +969,7 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
 
         lock (_stateLock)
         {
+            _busStateSource = "error-frames";
             if ((cls & CanErrorClass.CAN_ERR_ACK) != 0) _ackErrors++;
 
             if ((cls & CanErrorClass.CAN_ERR_BUSOFF) != 0)
@@ -1095,6 +1177,9 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
                 BusOffEvents = _busOffEvents,
                 ControllerRestarts = _controllerRestarts,
                 BusOff = _busOff,
+                TxDropped = _txDropped,
+                TxPackets = _txPackets,
+                BusStateSource = _busStateSource,
                 Odometry = new TrackOdometry
                 {
                     Calibrated = WheelRadiusM > 0.0 && TrackWidthM > 0.0,
