@@ -293,10 +293,9 @@ Error: Device doesn't support restart from Bus Off.
 ```
 
 **`berr-reporting`** would report individual bus errors rather than only state
-changes. Losing it turned out to cost more than expected, and the reason is in
-*Error frames* below: on this adapter **no** error frames arrive, not even the
-state-change ones that come from the kernel's CAN core rather than from this
-option. The driver reads the state over netlink instead.
+changes. Losing it costs the per-frame detail; the state-change frames still
+arrive, as *Error frames* below records - though it took a real node on the
+wire to establish that.
 
 **`restart-ms`** is the one that matters. Without it nothing brings the
 interface back after a bus-off - not the kernel, not the device. The
@@ -330,6 +329,63 @@ One script, one sudoers line, nothing else granted. Left unset the driver
 still detects and reports bus-off; it simply cannot act on it, and somebody
 has to walk to the vehicle.
 
+The same hook now also fires when the interface is **missing or down**, which
+is a different failure with the same cure and no warning of its own.
+
+### The interface can vanish without anybody touching it
+
+A USB re-enumeration makes the kernel re-probe `gs_usb`, and that destroys the
+network device and builds a new one. The bitrate and the up state live on that
+device, not on the adapter, so both are lost - while `lsusb` still shows the
+same adapter at the same address, which makes it look like nothing happened.
+
+Seen on the bench, with nothing unplugged:
+
+```
+13:02:34  PM: suspend entry (s2idle)
+13:05:50  PM: suspend exit
+          gs_usb 1-9:1.0: Configuring for 1 interfaces
+...
+9: can0: <NOARP,ECHO> ... state DOWN
+    can state STOPPED
+```
+
+The laptop had gone to sleep. Three successive interface indices, 7 then 8
+then 9, one per resume. No error frame reports any of it - there is no
+controller left to emit one - so only the netlink poll and a failing open
+notice at all.
+
+### Configure it declaratively, then nothing needs privileges
+
+Far better than recovering after the fact is to have the interface configure
+itself whenever it appears. One udev rule does it, and it covers boot, replug,
+resume and re-probe alike:
+
+```
+# /etc/udev/rules.d/80-can.rules
+SUBSYSTEM=="net", ACTION=="add", KERNEL=="can*", \
+  RUN+="/usr/sbin/ip link set %k up type can bitrate 500000"
+```
+
+Under systemd-networkd the equivalent is:
+
+```
+# /etc/systemd/network/80-can.network
+[Match]
+Name=can0
+
+[CAN]
+BitRate=500K
+```
+
+Do **not** add `RestartSec=` there, nor `restart-ms` to the command: this
+adapter rejects it outright with *Device doesn't support restart from Bus
+Off*, and the unit then fails to apply at all.
+
+With either in place `busOffRecoveryCommand` becomes a fallback rather than
+the only line of defence, and the driver needs no privileges for the common
+case.
+
 Measured on the real adapter - a Geschwister Schneider / candleLight unit on
 `gs_usb`, which is the good case: native SocketCAN, no slcan, nothing to
 reflash.
@@ -340,11 +396,12 @@ returns ENOBUFS; the interface walks from error-active to error-passive. That
 is correct CAN behaviour rather than a fault, and `sendFailures` climbing with
 `framesSent` at zero is exactly what an empty bus looks like.
 
-### Error frames: none, on this adapter
+### Error frames: present, but only once something happens
 
-The driver subscribes to every SocketCAN error class. On `gs_usb` it receives
-nothing from any of them. That is measured, not assumed, and it was measured
-twice because the first reading looked like a bug in this code:
+This section said for a while that the adapter emits no error frames at all.
+That was wrong, and the way it was wrong is worth keeping.
+
+The reading behind it was real:
 
 ```
 # raw AF_CAN socket, CAN_RAW_ERR_FILTER = 0x1FFFFFFF, no C# involved
@@ -352,9 +409,21 @@ sent ok=0 failed=46
 error frames received: 0
 ```
 
-An independent implementation sees the same nothing, so the error-frame
-handling here is correct and simply has no input. It is kept for adapters that
-do emit them.
+An independent implementation saw the same nothing, which ruled out this
+code - and then the conclusion overreached. Nothing was arriving because
+**nothing was happening**: with one node on the wire the transmit queue
+wedges after a couple of frames (see below) and the controller then sits
+still. No transitions, no reports.
+
+With a real drive board on the bus the frames appear immediately - two dozen
+in an eight-second listen. So the error-frame path works here after all and
+remains the fast signal. The lesson is about the measurement, not the
+adapter: an absence observed on a bus where nothing moves is not evidence of
+an absence of reporting.
+
+The netlink poll stays. It costs one query a second, it survives the states
+where the controller has stopped generating events, and it is the only source
+of the cumulative counters.
 
 ### What the kernel does report
 

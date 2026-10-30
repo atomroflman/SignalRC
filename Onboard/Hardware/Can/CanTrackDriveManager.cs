@@ -301,7 +301,22 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
                 .FirstOrDefault(i => string.Equals(i.Name, Interface, StringComparison.Ordinal));
             if (iface == null)
             {
-                SetInhibitOnce($"CAN interface {Interface} not found");
+                // Not found covers two cases that look identical from here:
+                // the adapter is unplugged, or the interface exists but is
+                // down and unconfigured. The second one happens without
+                // anybody touching the hardware - a USB re-enumeration makes
+                // the kernel re-probe gs_usb, which destroys the netdev and
+                // builds a new one, and the bitrate and up state live on the
+                // netdev, not on the adapter. Observed on the bench after the
+                // laptop suspended: same USB device throughout, three
+                // successive interface indices, can0 STOPPED each time.
+                //
+                // No error frame is produced by any of that, because there is
+                // no controller left to produce one. Without this call the
+                // driver would retry opening forever and never ask anyone to
+                // bring the interface back.
+                SetInhibitOnce($"CAN interface {Interface} not found or down");
+                TryInterfaceRecovery("interface missing or down");
                 return false;
             }
 
@@ -359,6 +374,7 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
     {
         if (_clock.Elapsed < _nextLinkPoll) return;
         _nextLinkPoll = _clock.Elapsed + TimeSpan.FromSeconds(1);
+        var needRecovery = false;
 
         try
         {
@@ -401,6 +417,7 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
                     _busStateSource = "netlink";
                     _busOff = state == CanState.CAN_STATE_BUS_OFF
                            || state == CanState.CAN_STATE_STOPPED;
+                    needRecovery = _busOff;
                 }
             }
         }
@@ -409,6 +426,10 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
             // vcan has no controller, a removed adapter has no interface.
             // Neither is worth a log line every second.
         }
+
+        // Outside the lock: the recovery runs a process and is rate limited
+        // on its own.
+        if (needRecovery) TryInterfaceRecovery($"bus {_busState}");
     }
 
     private void SetInhibit(string? reason)
@@ -1016,7 +1037,7 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
                 "will put it back by itself - this adapter supports neither restart-ms nor " +
                 "berr-reporting. Check termination and that something else is on the wire.",
                 Interface);
-            TryBusOffRecovery();
+            TryInterfaceRecovery("bus-off");
         }
     }
 
@@ -1027,14 +1048,14 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
     /// from the receive thread, so the command must return promptly - it is
     /// meant to be an "ip link down, up", not a diagnosis.
     /// </summary>
-    private void TryBusOffRecovery()
+    private void TryInterfaceRecovery(string reason)
     {
         var command = BusOffRecoveryCommand;
         if (string.IsNullOrWhiteSpace(command)) return;
         if ((DateTime.UtcNow - _lastRecoveryUtc).TotalSeconds < BusOffRecoveryIntervalSeconds) return;
         _lastRecoveryUtc = DateTime.UtcNow;
 
-        _logger.LogWarning("Running CAN bus-off recovery: {Command}", command);
+        _logger.LogWarning("Running CAN recovery ({Reason}): {Command}", reason, command);
         Task.Run(() =>
         {
             try
