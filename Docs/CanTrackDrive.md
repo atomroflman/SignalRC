@@ -390,10 +390,40 @@ climbing while `txPackets` stands still is the signature, and it is the one
 thing that distinguishes "nobody is there" from "the wire is broken" now that
 error frames are unavailable.
 
-Note what this also means for the bench: a lone node cannot be made to
-transmit at all. The cure is a second node, or `one-shot` mode if the adapter
-supports it - untested here, since changing the link needs a password on this
-machine.
+### The bench without a second node: loopback
+
+A lone node cannot be made to transmit normally, and `one-shot` - which would
+drop a frame after one attempt instead of retrying - is the third mode this
+adapter refuses:
+
+```
+Error: requested control mode ONE-SHOT not supported.
+```
+
+Internal loopback is the one it does take, and it is enough:
+
+```bash
+sudo ip link set can0 down
+sudo ip link set can0 up type can bitrate 500000 loopback on
+```
+
+The controller then accepts its own frames without waiting for anyone, and
+everything above the wire becomes testable on real silicon: real bitrate, real
+USB latency, real netlink counters, real 50 Hz timing. Measured: twenty paced
+frames out, twenty counted in `tx_packets`, nothing dropped.
+
+Two things to know when reading a loopback capture:
+
+- **Every frame appears twice.** SocketCAN echoes locally to other sockets on
+  the interface, and the hardware echoes as well. Forty reads for twenty
+  sends. Harmless for this driver, which treats node telemetry idempotently,
+  but it will confuse a frame count.
+- **The state does not heal.** `error-passive` left over from an earlier
+  unacknowledged run stays, because the error counters come down on successful
+  *reception* from a peer, and in loopback there is no peer. Not a fault.
+
+What loopback still cannot show: wiring, termination, and whether the drive
+boards agree about the bitrate.
 
 Virtual bus, no hardware:
 
@@ -415,10 +445,30 @@ dotnet run -c Release          # protocol and mixing, no interface needed
 dotnet run -c Release vcan0    # also the manager, presence, faults, timeouts
 ```
 
-Both forms pass. The `vcan0` form proves the protocol, the presence and fault
-logic, mixing, rotation on the spot, per-track inversion, the control-input
-watchdog and odometry integration - but not the bitrate, the wiring or the
-termination, none of which a virtual bus has.
+Both forms pass, and so does a third:
+
+```bash
+dotnet run -c Release can0     # with the interface in loopback, see above
+```
+
+`vcan0` proves the protocol, the presence and fault logic, mixing, rotation on
+the spot, per-track inversion, the control-input watchdog and odometry
+integration. `can0` in loopback proves the same against the real controller
+and adds the bus-state checks, which only mean anything where there is a
+controller to ask. Last run:
+
+```
+bus error-passive, tx 2028, dropped 20, warn 5, passive 2, bus-off 0
+ok    the command rate does not overrun the queue
+```
+
+Two thousand command frames at 50 Hz through a ten-deep qdisc over USB with no
+send failures - so the command rate is not a problem for this adapter. The
+twenty dropped are from the earlier bursts that wedged the queue, before the
+interface was cycled.
+
+Still untested by any of this: the wiring, the termination, and whether the
+drive boards agree about the bitrate.
 
 Still unverified, in rough order of risk:
 

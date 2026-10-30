@@ -657,6 +657,29 @@ Check("odometry integrates travelled angle", snap.Odometry.LeftTravelRad > 1.0,
 Check("uncalibrated means no metres", !snap.Odometry.Calibrated);
 Check("reset zeroes it", manager.GetSnapshot().Odometry.LeftTravelRad > 0);
 
+// 9. The bus state itself. A virtual bus has no controller and no counters,
+// so these only mean anything on real hardware - and they exist because this
+// adapter sends no error frames at all, leaving netlink as the only view.
+var real = !iface.StartsWith("vcan", StringComparison.Ordinal);
+if (real)
+{
+    Thread.Sleep(1200);                 // the poll runs at 1 Hz
+    snap = manager.GetSnapshot();
+    Check("bus state comes from netlink", snap.BusStateSource == "netlink", snap.BusStateSource);
+    Check("bus state is a real controller state",
+          snap.BusState is "error-active" or "error-warning" or "error-passive",
+          snap.BusState);
+    Check("frames actually left the controller", snap.TxPackets > 0, $"{snap.TxPackets}");
+    // 50 Hz through a ten-deep qdisc over USB: if this backs up, the command
+    // rate is too high for the adapter, which is worth knowing before the
+    // boards are on the wire rather than after.
+    Check("the command rate does not overrun the queue",
+          snap.SendFailures == 0, $"{snap.SendFailures} failures, {snap.TxDropped} dropped");
+    Console.WriteLine($"        bus {snap.BusState}, tx {snap.TxPackets}, " +
+                      $"dropped {snap.TxDropped}, warn {snap.ErrorWarnings}, " +
+                      $"passive {snap.ErrorPassive}, bus-off {snap.BusOffEvents}");
+}
+
 stop = true;
 Thread.Sleep(250);
 
