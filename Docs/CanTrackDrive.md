@@ -388,133 +388,141 @@ against each other would be two coupled controllers chasing one another.
 
 ## Lidar
 
-An FM1828 on a serial port - the LDS unit from Ecovacs Deebot vacuums. 360
-degrees, about 5 revolutions a second, 360 points a revolution, so one degree
-of resolution and a full picture every 200 ms. Format in
-`Onboard/Hardware/Lidar/LdsProtocol.cs`, decoder and framer beside it.
+An **Ecovacs FM1828** - the laser distance unit from a Deebot vacuum - but it
+does not hang on the Pi directly. An **RP2040 running firmware/pico-usb** from
+the lidar-i2c repository sits between them: it drives the sensor UART, parses
+its 62-byte frames, assembles whole revolutions and sends those over USB CDC.
+The Pi never sees a sensor frame.
 
-Configured as a second pinManager so that the telemetry reader and, later, a
-collision loop share one port instead of fighting over it:
+That distinction cost a day. The first decoder written here targeted the raw
+Neato-style format the sensor speaks, which is correct for the sensor and
+wrong for this vehicle, because nothing on it produces that stream. Capturing
+from the real hardware is what settled it.
+
+```
+L D | type | uint16 length | payload | uint16 CRC-16/CCITT-FALSE
+```
+
+The CRC covers the type and the length as well as the payload, so a corrupted
+length cannot pass as a valid header. Type 1 is one complete revolution, 2896
+bytes: sequence, timestamp, speed, valid count, frames received, frames
+missing, flags, then dist[1440] as uint16 millimetres. **No angles travel on
+the wire** - slot k is angle k x 0.25 degrees, so a lost sensor frame leaves a
+hole at the right angle instead of shifting everything after it.
+
+Type 2 is the Pico own status once a second: byte and frame counters, how many
+revolutions it threw away because the host was not reading, UART overruns, and
+the sensor state. Type 3 is a log line.
+
+Configured as a second pinManager so the telemetry reader and a later
+collision loop share one port:
 
 ```json
 "lidar": {
-  "type": "LdsLidarManager",
-  "options": { "port": "/dev/lidar", "baudRate": 115200 }
+  "type": "LidarManager",
+  "options": { "port": "/dev/lidar", "windowScans": 3, "minHits": 2 }
 }
 ```
 
-A udev rule giving the adapter a stable name is worth the five minutes:
-`/dev/ttyUSB0` moves when anything else is plugged in, and the drive is on the
-same machine.
+A udev rule giving the Pico a stable name is worth the five minutes.
 
-The reader reconnects on its own. `/dev/lidar` not existing yet is treated as
-a normal state rather than an error - udev settles after boot and the adapter
-can be plugged in later. A missing revolution, not a quiet port, is what
-counts as stalled: bytes can keep arriving while the motor is stopped.
+### One reader, or none
 
-### A stalled lidar cannot be recovered from software
+The very first capture on this hardware was two thirds corrupt. Not the
+sensor, not the cable: a GUI still held the port, and two readers each got
+fragments. pyserial says it outright - *device reports readiness to read but
+returned no data (device disconnected or multiple access on port?)* - while a
+hand-rolled reader just sees nonsense.
 
-The unit starts on the wake command from cold, but once it has stopped it
-needs its 5 V removed and restored. Resending the command does not bring it
-back. Neither does reopening the port, nor unbinding and rebinding the USB
-device - those are logical disconnects and do not cut power. On a Pi 4 or 5
-there is no per-port power switching either; the VL805 and RP1 simply do not
-implement it.
+So `lidarSeqGaps` and `lidarDiscarded` are telemetry rather than internals.
+Revolutions are numbered; if numbers go missing while the Pico reports it
+dropped nothing, something else is reading the port.
 
-So the reader retries the wake command a few times, because "stalled" and
-"has not started yet" look identical from here and the second case does
-respond, and then says so plainly through `lidarNeedsPowerCycle` and stops.
-A retry loop that hides a dead sensor is worse than an honest verdict.
+### The sensor needs its power cut to restart
 
-For a vehicle that has driven off, that means **the lidar is gone for the rest
-of the run**. Worth knowing before anything is built that assumes it will be
-there. If remote recovery is ever wanted it needs hardware: a MOSFET or relay
-in the 5 V line on a GPIO, or a powered hub with switchable ports.
+It starts on command from cold, but once stopped it sits in a locked idle and
+no start command brings it back - measured here, including with the power off
+for twelve seconds. Worth knowing precisely because the Pico **owns the
+sensor 5 V rail**, which makes this the one subsystem on the vehicle that can
+be power cycled without anyone walking over to it.
+
+The manager escalates: a few STARTs, then RESTART (the Pico power cycle), and
+only then an honest `lidarNeedsPowerCycle`. An earlier version keyed the power
+cycle off the Pico reporting state "stopped" - but after a stop it reports
+plain "idle", so that branch would never have fired. The locked idle and the
+normal idle look identical from outside.
 
 ### Telemetry is heavily reduced
 
-A full scan is 360 values five times a second. Sent raw through a key-value
-telemetry path that would be 1800 channel updates a second for something a
-person glances at, and it would crowd out the drive telemetry that matters.
+A revolution is 1440 values five times a second. Raw, that would be 7200
+channel updates a second through a key-value path for something a person
+glances at, and it would crowd out the drive telemetry that matters.
 
-So one channel carries sector minima as a compact string - 36 sectors of ten
-degrees each, in centimetres, at whatever `readIntervalTicks` sets. The
-minimum per sector, not the mean: what matters about a direction is the
-nearest thing in it, and averaging a wall at 3 m with a post at 0.4 m reports
-1.7 m, where there is nothing. An empty sector travels as -1, because that is
-the absence of an obstacle and must never read as zero.
+One channel carries 36 sector minima in centimetres. The minimum per sector,
+not a mean: what matters about a direction is the nearest thing in it, and
+averaging a wall at 3 m with a post at 0.4 m reports 1.7 m, where there is
+nothing. An empty sector travels as -1, which is the absence of an obstacle
+and must never read as zero.
 
-Alongside it: `lidarNearest` and its angle, `lidarFront` for the forward
-sector, plus rpm, gaps, error counters and `lidarProblem` in plain words.
+Alongside: nearest obstacle and its angle, the forward sector, rpm, frames,
+missing frames, and the Pico own counters. **Nothing safety related may hang
+off this path** - a collision loop runs locally at full rate from the same
+manager.
 
-**Nothing safety related may hang off this reader.** A collision loop runs
-locally at full rate and full resolution from the same manager. This path is
-for the operator.
+### One filter, not two
 
-### Two filters for daylight
+A window keeps a slot only when it returned something in several of the last
+few revolutions, and reports the median of those distances rather than the
+latest. A real obstacle is in the same direction next time round; an artefact
+is not, and the median rejects one wild value without needing a threshold for
+what counts as wild.
 
-This is an indoor sensor pressed into outdoor service. Sunlight is broadband
-and the laser is not, so ambient light raises the noise floor and produces
-returns that were never surfaces - weak, scattered, and somewhere else on
-every revolution. Two filters take most of that out and neither needs anything
-soldered.
+There is **no strength gate**. An earlier version had one, and it was wrong:
+it assumed the per-sample signal strength of the Neato format, and this sensor
+reports no such thing - its frames carry distances and nothing else. What
+quality information exists is per revolution, and it is published rather than
+used to filter.
 
-**`minStrength`** drops samples below a signal strength. Every sample has
-carried one all along and nothing used it. Off by default: the right value
-depends on the unit and on the light, and a gate set blind throws away real
-obstacles. Measure the strength distribution first, indoors and then in sun.
+The window costs latency: three scans is 600 ms before a new obstacle is
+believed. Fine for parking and following, not for anything faster. It also
+assumes the vehicle is roughly still - turning on the spot sweeps the world
+past a fixed angle, so a slot holds a different object every revolution and
+the window rejects everything. The filter cannot tell on its own.
 
-**`windowScans` / `minHits`** keep a degree only when it returned something in
-several of the last few revolutions, and report the **median** of those
-distances rather than the latest. A real obstacle is in the same direction
-next time round; a sunlight artefact is not. The median rejects one wild value
-without needing a threshold for what counts as wild.
+The unfiltered scan stays available. A filter that destroys its own evidence
+cannot be judged.
 
-`lidarDroppedWeak` and `lidarDroppedInconsistent` say how hard the filters are
-working. Watching the first climb as you carry the vehicle into the sun is the
-measurement that decides whether a bandpass filter or a sunshade is worth the
-trouble.
-
-Two limits, both deliberate:
-
-The window costs latency - three scans is 600 ms before a new obstacle is
-believed. Fine for parking and following, not for anything faster, and the
-reason collision work has to shorten or drop it as speed rises.
-
-The window also assumes the vehicle is roughly still. Turning on the spot
-sweeps the world past a fixed angle, so a degree holds a different object
-every revolution and the window rejects everything. The filter cannot tell on
-its own - it has no idea what the tracks are doing - so whoever drives has to
-widen or disable it when moving.
-
-The unfiltered scan stays available as `LatestRawScan`. A filter that destroys
-its own evidence cannot be judged.
-
-### Capturing from a real unit
+### Capturing and checking
 
 `Tools/lidar-capture.sh` and `Tools/lidar-check.py` need nothing but coreutils
-and a stock Python, so they run on any Linux box:
+and a stock Python.
 
-```bash
-./Tools/lidar-capture.sh /dev/ttyUSB0 10 lidar.bin
-./Tools/lidar-check.py lidar.bin
-```
+The capture tool had a real bug, found the first time it met hardware: it ran
+stty and then opened the port. Opening resets termios on many drivers, so the
+defaults were back in force and icrnl and ixon quietly ate bytes out of the
+binary stream - enough to fail every CRC. It now opens first and configures
+the descriptor it holds.
 
-The check prints the speed field divided by both 100 and 64 alongside the rate
-counted from index wraps. Whichever two agree settle the scaling - that is the
-one field where this family differs from the XV-11 in a way that is easy to
-get wrong and hard to notice.
+The test fixture in `Onboard/Hardware/Lidar/testdata/` is ten real
+revolutions. Synthetic frames only ever prove the decoder agrees with the
+test; these prove it agrees with the hardware.
 
-### Two things to find out before building on it
+### Known limits
 
-**It is an indoor sensor**, built for 8 m and artificial light. Direct sun
-raises the noise floor of a time-of-flight unit in this class, so the range
-and the gap count have to be measured outdoors before anything depends on
-them.
+**Indoor sensor.** Built for 8 m and artificial light. Direct sun raises the
+noise floor of a unit in this class, and that has to be measured outdoors
+before anything depends on it.
 
-**It is two dimensional**, on one fixed height. A kerb, a step, a low branch -
-none of them exist as far as it is concerned. That belongs in the operator's
-view, not in a footnote.
+**Triangulation, not time of flight** - red light, two apertures side by side.
+Accuracy falls off with the square of distance: millimetres at 1 m, decimetres
+at 5. Right for parking and following, poor for obstacles at range. It also
+means a narrow bandpass filter on the receiver would be the strongest
+available defence against sunlight, and at around 650 nm such filters are
+cheap.
+
+**Two dimensional**, at one fixed height. A kerb, a step, a low branch: none
+of them exist as far as it is concerned. That belongs in the operator view,
+not in a footnote.
 
 ## Dependency
 

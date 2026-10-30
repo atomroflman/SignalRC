@@ -26,13 +26,14 @@
         }
       },
       "lidar": {
-        "type": "LdsLidarManager",
+        "type": "LidarManager",
         "options": {
           "port": "/dev/lidar",
           "baudRate": 115200,
           "stallTimeoutMs": 2000,
+          "startAttempts": 3,
+          "restartAttempts": 2,
           "capturePath": "",
-          "minStrength": 0,
           "windowScans": 3,
           "minHits": 2
         }
