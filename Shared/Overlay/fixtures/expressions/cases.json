@@ -1,0 +1,934 @@
+{
+ "description": "Gemeinsame Referenzfälle der Ausdruckssprache v1 (expression/README.md). analysis: statische Prüfung; dependencies in Quelltextreihenfolge inkl. Duplikaten. result: Auswertung im context; value bei text = kanonische Form. Zahlen exakt, außer trigonometrisch/pow: relative Toleranz 1e-9.",
+ "context": {
+  "telemetry": {
+   "speed": {
+    "dataType": "Number",
+    "raw": "12.5",
+    "state": "valid"
+   },
+   "heading": {
+    "dataType": "Number",
+    "raw": "350",
+    "state": "valid"
+   },
+   "volt": {
+    "dataType": "Number",
+    "raw": "11.24",
+    "state": "unchecked"
+   },
+   "empty": {
+    "dataType": "Number",
+    "raw": "",
+    "state": "valid"
+   },
+   "stale": {
+    "dataType": "Number",
+    "raw": "5",
+    "state": "invalid"
+   },
+   "mode": {
+    "dataType": "String",
+    "raw": "AUTO",
+    "state": "valid"
+   },
+   "flag": {
+    "dataType": "Boolean",
+    "raw": "1",
+    "state": "valid"
+   },
+   "count": {
+    "dataType": "Integer",
+    "raw": "3",
+    "state": "valid"
+   }
+  },
+  "outputs": {
+   "steering": {
+    "value": -0.5,
+    "state": "valid",
+    "paused": true
+   },
+   "throttle": {
+    "value": 0.2,
+    "state": "valid",
+    "paused": false
+   }
+  },
+  "signals": {
+   "steeringRaw": {
+    "value": 40,
+    "state": "valid",
+    "paused": false
+   },
+   "unmapped": {
+    "state": "invalid"
+   }
+  },
+  "driverActive": true
+ },
+ "defaultExpectedKind": "any",
+ "cases": [
+  {
+   "id": "arith-precedence",
+   "expr": "1 + 2 * 3",
+   "analysis": {
+    "type": "number",
+    "dependencies": [],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "valid",
+    "value": 7
+   }
+  },
+  {
+   "id": "unary-minus",
+   "expr": "-2 * 3",
+   "analysis": {
+    "type": "number",
+    "dependencies": [],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "valid",
+    "value": -6
+   }
+  },
+  {
+   "id": "parentheses",
+   "expr": "(1 + 2) * 3",
+   "analysis": {
+    "type": "number",
+    "dependencies": [],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "valid",
+    "value": 9
+   }
+  },
+  {
+   "id": "exponent-literal",
+   "expr": "1e3 + 0.5",
+   "analysis": {
+    "type": "number",
+    "dependencies": [],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "valid",
+    "value": 1000.5
+   }
+  },
+  {
+   "id": "tel-number",
+   "expr": "tel(\"speed\") * 3.6",
+   "analysis": {
+    "type": "number",
+    "dependencies": [
+     {
+      "kind": "tel",
+      "name": "speed"
+     }
+    ],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "valid",
+    "value": 45
+   }
+  },
+  {
+   "id": "trig-rad",
+   "expr": "sin(rad(30))",
+   "analysis": {
+    "type": "number",
+    "dependencies": [],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "valid",
+    "value": 0.5
+   }
+  },
+  {
+   "id": "wrap-angle",
+   "expr": "wrap(tel(\"heading\") + 20, -180, 180)",
+   "analysis": {
+    "type": "number",
+    "dependencies": [
+     {
+      "kind": "tel",
+      "name": "heading"
+     }
+    ],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "valid",
+    "value": 10
+   }
+  },
+  {
+   "id": "mod-floored",
+   "expr": "mod(-1, 360)",
+   "analysis": {
+    "type": "number",
+    "dependencies": [],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "valid",
+    "value": 359
+   }
+  },
+  {
+   "id": "map-extrapolates",
+   "expr": "map(15, 0, 10, 0, 100)",
+   "analysis": {
+    "type": "number",
+    "dependencies": [],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "valid",
+    "value": 150
+   }
+  },
+  {
+   "id": "mapClamped",
+   "expr": "mapClamped(15, 0, 10, 0, 100)",
+   "analysis": {
+    "type": "number",
+    "dependencies": [],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "valid",
+    "value": 100
+   }
+  },
+  {
+   "id": "mapClamped-reversed",
+   "expr": "mapClamped(-5, 0, 10, 100, 0)",
+   "analysis": {
+    "type": "number",
+    "dependencies": [],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "valid",
+    "value": 100
+   }
+  },
+  {
+   "id": "round-half-away",
+   "expr": "round(-2.5)",
+   "analysis": {
+    "type": "number",
+    "dependencies": [],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "valid",
+    "value": -3
+   }
+  },
+  {
+   "id": "format-decimal-rounding",
+   "expr": "format(1.005, 2)",
+   "analysis": {
+    "type": "text",
+    "dependencies": [],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "valid",
+    "value": "1.01"
+   }
+  },
+  {
+   "id": "format-negative-zero",
+   "expr": "format(-0.04, 1)",
+   "analysis": {
+    "type": "text",
+    "dependencies": [],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "valid",
+    "value": "0.0"
+   }
+  },
+  {
+   "id": "format-pads",
+   "expr": "format(3, 2)",
+   "analysis": {
+    "type": "text",
+    "dependencies": [],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "valid",
+    "value": "3.00"
+   }
+  },
+  {
+   "id": "concat-unchecked",
+   "expr": "concat(\"V: \", format(tel(\"volt\"), 1))",
+   "analysis": {
+    "type": "text",
+    "dependencies": [
+     {
+      "kind": "tel",
+      "name": "volt"
+     }
+    ],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "unchecked",
+    "value": "V: 11.2"
+   }
+  },
+  {
+   "id": "text-equality",
+   "expr": "tel(\"mode\") == \"AUTO\"",
+   "analysis": {
+    "type": "bool",
+    "dependencies": [
+     {
+      "kind": "tel",
+      "name": "mode"
+     }
+    ],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "valid",
+    "value": true
+   }
+  },
+  {
+   "id": "text-escape",
+   "expr": "\"a\\\"b\" == \"a\\\"b\"",
+   "analysis": {
+    "type": "bool",
+    "dependencies": [],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "valid",
+    "value": true
+   }
+  },
+  {
+   "id": "bool-channel",
+   "expr": "if(tel(\"flag\"), 1, 0)",
+   "analysis": {
+    "type": "number",
+    "dependencies": [
+     {
+      "kind": "tel",
+      "name": "flag"
+     }
+    ],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "valid",
+    "value": 1
+   }
+  },
+  {
+   "id": "integer-channel",
+   "expr": "tel(\"count\") + 1",
+   "analysis": {
+    "type": "number",
+    "dependencies": [
+     {
+      "kind": "tel",
+      "name": "count"
+     }
+    ],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "valid",
+    "value": 4
+   }
+  },
+  {
+   "id": "invalid-propagates",
+   "expr": "tel(\"stale\") + 1",
+   "analysis": {
+    "type": "number",
+    "dependencies": [
+     {
+      "kind": "tel",
+      "name": "stale"
+     }
+    ],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "invalid"
+   }
+  },
+  {
+   "id": "empty-text-parse",
+   "expr": "tel(\"empty\") * 2",
+   "analysis": {
+    "type": "number",
+    "dependencies": [
+     {
+      "kind": "tel",
+      "name": "empty"
+     }
+    ],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "invalid",
+    "runtimeDiagnostic": "OVL_EXPR_SOURCE_PARSE"
+   }
+  },
+  {
+   "id": "if-untaken-branch",
+   "expr": "if(true, 1, tel(\"stale\"))",
+   "analysis": {
+    "type": "number",
+    "dependencies": [
+     {
+      "kind": "tel",
+      "name": "stale"
+     }
+    ],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "valid",
+    "value": 1
+   }
+  },
+  {
+   "id": "if-invalid-condition",
+   "expr": "if(tel(\"stale\") > 0, 1, 2)",
+   "analysis": {
+    "type": "number",
+    "dependencies": [
+     {
+      "kind": "tel",
+      "name": "stale"
+     }
+    ],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "invalid"
+   }
+  },
+  {
+   "id": "and-short-circuit",
+   "expr": "valid(tel(\"stale\")) && tel(\"stale\") > 3",
+   "analysis": {
+    "type": "bool",
+    "dependencies": [
+     {
+      "kind": "tel",
+      "name": "stale"
+     },
+     {
+      "kind": "tel",
+      "name": "stale"
+     }
+    ],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "valid",
+    "value": false
+   }
+  },
+  {
+   "id": "or-short-circuit",
+   "expr": "true || tel(\"stale\") > 0",
+   "analysis": {
+    "type": "bool",
+    "dependencies": [
+     {
+      "kind": "tel",
+      "name": "stale"
+     }
+    ],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "valid",
+    "value": true
+   }
+  },
+  {
+   "id": "fallback-used",
+   "expr": "fallback(tel(\"stale\"), 0)",
+   "analysis": {
+    "type": "number",
+    "dependencies": [
+     {
+      "kind": "tel",
+      "name": "stale"
+     }
+    ],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "valid",
+    "value": 0
+   }
+  },
+  {
+   "id": "fallback-unchecked-kept",
+   "expr": "fallback(tel(\"volt\"), 0)",
+   "analysis": {
+    "type": "number",
+    "dependencies": [
+     {
+      "kind": "tel",
+      "name": "volt"
+     }
+    ],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "unchecked",
+    "value": 11.24
+   }
+  },
+  {
+   "id": "valid-of-unchecked",
+   "expr": "valid(tel(\"volt\"))",
+   "analysis": {
+    "type": "bool",
+    "dependencies": [
+     {
+      "kind": "tel",
+      "name": "volt"
+     }
+    ],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "valid",
+    "value": true
+   }
+  },
+  {
+   "id": "unchecked-propagates",
+   "expr": "tel(\"volt\") * 2",
+   "analysis": {
+    "type": "number",
+    "dependencies": [
+     {
+      "kind": "tel",
+      "name": "volt"
+     }
+    ],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "unchecked",
+    "value": 22.48
+   }
+  },
+  {
+   "id": "paused-propagates",
+   "expr": "out(\"steering\") * 45",
+   "analysis": {
+    "type": "number",
+    "dependencies": [
+     {
+      "kind": "out",
+      "name": "steering"
+     }
+    ],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "valid",
+    "value": -22.5,
+    "paused": true
+   }
+  },
+  {
+   "id": "valid-clears-paused",
+   "expr": "valid(out(\"steering\"))",
+   "analysis": {
+    "type": "bool",
+    "dependencies": [
+     {
+      "kind": "out",
+      "name": "steering"
+     }
+    ],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "valid",
+    "value": true
+   }
+  },
+  {
+   "id": "signal",
+   "expr": "sig(\"steeringRaw\") / 100",
+   "analysis": {
+    "type": "number",
+    "dependencies": [
+     {
+      "kind": "sig",
+      "name": "steeringRaw"
+     }
+    ],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "valid",
+    "value": 0.4
+   }
+  },
+  {
+   "id": "signal-unmapped",
+   "expr": "sig(\"unmapped\")",
+   "analysis": {
+    "type": "number",
+    "dependencies": [
+     {
+      "kind": "sig",
+      "name": "unmapped"
+     }
+    ],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "invalid"
+   }
+  },
+  {
+   "id": "driver-active",
+   "expr": "!driverActive()",
+   "analysis": {
+    "type": "bool",
+    "dependencies": [
+     {
+      "kind": "driver",
+      "name": ""
+     }
+    ],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "valid",
+    "value": false
+   }
+  },
+  {
+   "id": "color-via-if",
+   "expr": "if(tel(\"volt\") < 11.5, \"#ff0000\", \"#00ff00\")",
+   "expectedKind": "color",
+   "analysis": {
+    "type": "text",
+    "dependencies": [
+     {
+      "kind": "tel",
+      "name": "volt"
+     }
+    ],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "unchecked",
+    "value": "#ff0000"
+   }
+  },
+  {
+   "id": "div-zero",
+   "expr": "1 / (tel(\"count\") - 3)",
+   "analysis": {
+    "type": "number",
+    "dependencies": [
+     {
+      "kind": "tel",
+      "name": "count"
+     }
+    ],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "invalid",
+    "runtimeDiagnostic": "OVL_EXPR_DIV_ZERO"
+   }
+  },
+  {
+   "id": "domain-sqrt",
+   "expr": "sqrt(-1)",
+   "analysis": {
+    "type": "number",
+    "dependencies": [],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "invalid",
+    "runtimeDiagnostic": "OVL_EXPR_DOMAIN"
+   }
+  },
+  {
+   "id": "overflow",
+   "expr": "pow(10, 400)",
+   "analysis": {
+    "type": "number",
+    "dependencies": [],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "invalid",
+    "runtimeDiagnostic": "OVL_EXPR_NOT_FINITE"
+   }
+  },
+  {
+   "id": "clamp-domain",
+   "expr": "clamp(1, 5, 0)",
+   "analysis": {
+    "type": "number",
+    "dependencies": [],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "invalid",
+    "runtimeDiagnostic": "OVL_EXPR_DOMAIN"
+   }
+  },
+  {
+   "id": "depth-32-ok",
+   "expr": "-------------------------------1",
+   "analysis": {
+    "type": "number",
+    "dependencies": [],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "valid",
+    "value": -1
+   }
+  },
+  {
+   "id": "ternary-rejected",
+   "expr": "tel(\"speed\") > 5 ? 1 : 0",
+   "analysis": {
+    "diagnostics": [
+     {
+      "code": "OVL_EXPR_SYNTAX",
+      "category": "publish",
+      "offset": 17
+     }
+    ]
+   }
+  },
+  {
+   "id": "chained-comparison",
+   "expr": "1 < 2 < 3",
+   "analysis": {
+    "diagnostics": [
+     {
+      "code": "OVL_EXPR_SYNTAX",
+      "category": "publish",
+      "offset": 6
+     }
+    ]
+   }
+  },
+  {
+   "id": "unknown-function",
+   "expr": "foo(1)",
+   "analysis": {
+    "diagnostics": [
+     {
+      "code": "OVL_EXPR_UNKNOWN_FUNCTION",
+      "category": "publish",
+      "offset": 0
+     }
+    ]
+   }
+  },
+  {
+   "id": "arity",
+   "expr": "clamp(1, 2)",
+   "analysis": {
+    "diagnostics": [
+     {
+      "code": "OVL_EXPR_ARITY",
+      "category": "publish",
+      "offset": 0
+     }
+    ]
+   }
+  },
+  {
+   "id": "source-literal-required",
+   "expr": "tel(concat(\"sp\", \"eed\"))",
+   "analysis": {
+    "diagnostics": [
+     {
+      "code": "OVL_EXPR_LITERAL_REQUIRED",
+      "category": "publish",
+      "offset": 4
+     }
+    ]
+   }
+  },
+  {
+   "id": "format-literal-required",
+   "expr": "format(1, tel(\"count\"))",
+   "analysis": {
+    "diagnostics": [
+     {
+      "code": "OVL_EXPR_LITERAL_REQUIRED",
+      "category": "publish",
+      "offset": 10
+     }
+    ]
+   }
+  },
+  {
+   "id": "format-range",
+   "expr": "format(1, 7)",
+   "analysis": {
+    "diagnostics": [
+     {
+      "code": "OVL_EXPR_ARGUMENT_RANGE",
+      "category": "publish",
+      "offset": 10
+     }
+    ]
+   }
+  },
+  {
+   "id": "text-plus-number",
+   "expr": "\"a\" + 1",
+   "analysis": {
+    "diagnostics": [
+     {
+      "code": "OVL_EXPR_TYPE",
+      "category": "publish",
+      "offset": 0
+     }
+    ]
+   }
+  },
+  {
+   "id": "concat-number",
+   "expr": "concat(\"x\", 1)",
+   "analysis": {
+    "diagnostics": [
+     {
+      "code": "OVL_EXPR_TYPE",
+      "category": "publish",
+      "offset": 12
+     }
+    ]
+   }
+  },
+  {
+   "id": "unknown-source",
+   "expr": "tel(\"nope\") * 2",
+   "analysis": {
+    "diagnostics": [
+     {
+      "code": "OVL_REF_UNKNOWN_SOURCE",
+      "category": "publish",
+      "offset": 0
+     }
+    ],
+    "type": "number",
+    "dependencies": [
+     {
+      "kind": "tel",
+      "name": "nope"
+     }
+    ]
+   }
+  },
+  {
+   "id": "unknown-source-no-cascade",
+   "expr": "tel(\"nope\") + 1 > 2",
+   "analysis": {
+    "diagnostics": [
+     {
+      "code": "OVL_REF_UNKNOWN_SOURCE",
+      "category": "publish",
+      "offset": 0
+     }
+    ],
+    "type": "bool",
+    "dependencies": [
+     {
+      "kind": "tel",
+      "name": "nope"
+     }
+    ]
+   }
+  },
+  {
+   "id": "result-type",
+   "expr": "tel(\"speed\")",
+   "expectedKind": "bool",
+   "analysis": {
+    "diagnostics": [
+     {
+      "code": "OVL_EXPR_RESULT_TYPE",
+      "category": "publish",
+      "offset": 0
+     }
+    ]
+   }
+  },
+  {
+   "id": "empty",
+   "expr": "   ",
+   "analysis": {
+    "diagnostics": [
+     {
+      "code": "OVL_EXPR_EMPTY",
+      "category": "publish",
+      "offset": 0
+     }
+    ]
+   }
+  },
+  {
+   "id": "depth-33",
+   "expr": "--------------------------------1",
+   "analysis": {
+    "diagnostics": [
+     {
+      "code": "OVL_LIMIT_EXCEEDED",
+      "category": "structure",
+      "offset": 0
+     }
+    ]
+   }
+  },
+  {
+   "id": "too-long",
+   "expr": "1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1",
+   "analysis": {
+    "diagnostics": [
+     {
+      "code": "OVL_LIMIT_EXCEEDED",
+      "category": "structure",
+      "offset": 0
+     }
+    ]
+   }
+  }
+ ]
+}

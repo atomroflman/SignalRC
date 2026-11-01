@@ -10,6 +10,8 @@ Dieses Verzeichnis ist nach D43 die gemeinsame Vertragsquelle für Client und Se
 | `catalog/property-catalog.json` | Element-/Property-Katalog: Typen, Defaults, Grenzen, erlaubte Steuerungsmodi. |
 | `fixtures/documents/` | Gültige und ungültige Referenzdokumente. |
 | `fixtures/documents/cases.json` | Erwartetes Ergebnis je Fixture: Schema-Gültigkeit und Resolver-Diagnosen. |
+| `expression/README.md` | Ausdruckssprache v1: Grammatik, Typen, Funktionen, Fehlerregeln. |
+| `fixtures/expressions/cases.json` | Gemeinsame Referenzfälle der Ausdruckssprache. |
 
 Gültig ist ein Dokument erst, wenn **Schema und Katalog-/Strukturprüfung** des
 Resolvers (AP01) bestehen. Das Schema prüft nur die Form. Eigenschaftsnamen je
@@ -49,7 +51,7 @@ die beiden letzten gehören zum Persistenzvertrag, nicht ins Dokument.
   Steuerkanal `CarChannel.ChannelName`, Stream `StreamId`. Umbenennen bricht
   Referenzen; dafür gibt es die Warnungen der Kanalverwaltung.
 - Quellreferenzen in Formeln (D46): `tel("…")`, `out("…")`, `sig("…")`,
-  `driverActive()`. Die vollständige Grammatik folgt in einem eigenen Vertrag.
+  `driverActive()`. Grammatik und Funktionen: [expression/README.md](expression/README.md).
 
 ## 3. Elementtypen
 

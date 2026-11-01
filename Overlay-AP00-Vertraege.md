@@ -435,6 +435,30 @@ Arbeitspakete: [Overlay-Arbeitspakete.md](Overlay-Arbeitspakete.md).
 - Sie haben keine Wirkung auf das veröffentlichte HUD und sind von
   `disabled` (D-Regeln zur Deaktivierung) und `visible` getrennt.
 
+### D48 – Zahlenformat nach Sprache des Betrachters
+
+- HUD-Zahlen (`valueText`, `format()`) verwenden das Dezimaltrennzeichen der
+  Client-Sprache des Betrachters (de → `,`, en → `.`), ohne Tausendertrennung.
+- Formeln und Textvergleiche bleiben sprachunabhängig; lokalisiert wird erst
+  bei der Anzeige.
+
+### D49 – `map()` ohne Begrenzung
+
+- `map()` rechnet linear und extrapoliert. Begrenzung erfolgt ausdrücklich mit
+  `clamp()` oder `mapClamped()`.
+
+### D50 – Keine Quell-Metadaten in Formeln
+
+- Formeln sehen nur Werte sowie `valid()`/`fallback()`. Messalter,
+  Qualitätsstatus und Pausenstatus sind keine Formelquellen. Sie werden
+  automatisch angezeigt (Warndreieck, „—“, Pausenmarkierung).
+
+### D51 – Keine Zeitfunktion in Formeln
+
+- Formeln sind reine Funktionen ihrer Quellwerte. Zeitverhalten entsteht
+  ausschließlich über Raten und Clips; dafür gelten D14 und die
+  Unterbrechungsregeln einheitlich.
+
 ## Spezifikationsstand
 
 ### S01 – Dokumentmodell und Property-Katalog v1 (Entwurf)
@@ -450,6 +474,20 @@ Darin technisch festgelegt, ohne neue Produktentscheidung: ID-Format, Winkel
 0° = oben im Uhrzeigersinn, lokale Ursprünge je Elementtyp, statischer Pivot,
 `lockAspect` ohne `scaleY`, Diagnosekategorien `structure`/`publish`/`warning`
 und die Reihenfolgeregel bei Varianten-Umgruppierung.
+
+### S02 – Ausdruckssprache v1 (Entwurf)
+
+Liegt unter [Shared/Overlay/expression/](Shared/Overlay/expression/README.md):
+Lexik, EBNF-Grammatik, statische Typen, Zustands-/Pausenfortpflanzung mit
+Bedarfsauswertung, 34 Funktionen, Textsegmente für lokalisierte Zahlen,
+Analyse-/Laufzeitdiagnosen mit Offsets und Grenzen. 56 gemeinsame
+Referenzfälle stehen in `fixtures/expressions/cases.json`.
+
+Darin technisch festgelegt, ohne neue Produktentscheidung: `&&`/`||` mit
+Kurzschluss; nicht assoziative Vergleiche; kein `%`-Operator (`mod()` floored);
+`format()` rundet dezimal auf Basis der kürzesten Round-Trip-Darstellung;
+Quellnamen nur als Literale; genau eine statische Diagnose je Ausdruck (die
+erste); Toleranz 1e-9 nur für trigonometrische und Potenzfunktionen.
 
 ## Technisch geprüfte Grundlagen
 
