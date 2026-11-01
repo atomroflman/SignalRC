@@ -323,7 +323,8 @@ und Bedingungen verwenden ein Formelfeld mit Syntaxhilfe, Kanalauswahlhilfe und
 Live-Validierung.
 
 Das Ausdruckssystem ist begrenzt, typisiert und sicher. Es unterstützt
-Kanalreferenzen, Grundrechenarten, Vergleiche, Bedingungen und freigegebene
+Telemetrie- und Steuerungssignalreferenzen, Grundrechenarten, Vergleiche,
+Bedingungen und freigegebene
 Funktionen wie `sin`, `cos`, `clamp` und `map`. Es gibt kein `eval`, keinen
 dynamisch erzeugten JavaScript-Code, keine Skripte und keine beliebigen Zugriffe
 auf Browser, Netzwerk oder Betriebssystem.
@@ -427,6 +428,31 @@ Sensor vortäuschen.
 
 Die bisherige manuelle Telemetrieanzeige bleibt zu älteren Onboard-Versionen
 kompatibel. Fehlende Qualitätsunterstützung ist im Editor diagnostizierbar.
+
+### Eingabe- und Flow-Werte als zusätzliche HUD-Quellen
+
+Neben Telemetrie und Konstanten dürfen Bindungen/Formeln Eingabedaten und
+berechnete Flow-Werte verwenden. Fertig berechnete Fahrzeug-Steuerkanalausgänge
+sind direkt auswählbar. Rohe Eingaben und Zwischenwerte werden zusätzlich über
+ausdrücklich benannte gemeinsame Signale angeboten, deren Zuordnung zum
+persönlichen Flow je Fahrer erfolgt. HUD-Bindungen hängen nicht an internen
+Knoten-IDs eines bestimmten Fahrers; fehlende Zuordnungen bleiben nicht verfügbar.
+
+Alle HUD-Clients verwenden dabei die Daten des aktiven Fahrers, nicht die eigenen
+unbenutzten Zuschauereingaben. Der reine Anzeigeweg prüft die sendende Fahrsitzung,
+entwertet alte Daten bei Kontrollwechsel und darf keine Fahrzeugbefehle auslösen.
+Ein berechneter Lenkbefehl ist ein Sollwert, kein gemessener Ist-Lenkwinkel.
+
+Bei pausierter Steuerungsübertragung dürfen aktuelle berechnete Werte weiterhin
+angezeigt und animiert werden. Betroffene Anzeigen müssen den Pausen-/Nicht-
+gesendet-Status eindeutig zeigen, auch bei Zuschauern. Das Lesen der Werte darf
+weder Steuerungsnebenwirkungen noch eine Wiederaufnahme des Sendens auslösen.
+Lokale Vorschau-Simulationen bleiben weiterhin vom echten Flow getrennt.
+
+Signaldefinitionen, Einheiten/Typen, persönliche Zuordnung, Transport und
+Aktualitätsregeln werden im AP00-Vertrag konkretisiert. Referenzen auf andere
+HUD-Eigenschaften oder gemeinsam definierte HUD-Formelvariablen sind damit
+nicht zusätzlich beschlossen.
 
 ## LiDAR-Raster und Abstandsanzeige
 
@@ -557,6 +583,10 @@ und verfügbare benötigte Assets sinnvoll erhalten.
 ## Umsetzung und Parallelisierung
 
 ### Phase 1: AP00 als verbindliches Vertragsfundament
+
+Die schrittweise bestätigten technischen Festlegungen werden in
+[Overlay-AP00-Vertraege.md](Overlay-AP00-Vertraege.md) gesammelt. Der dortige
+Zwischenstand ist noch keine vollständige AP00-Freigabe.
 
 Vor unabhängiger Implementierung müssen folgende technischen Punkte anhand
 gemeinsamer Beispiele festgeschrieben werden:

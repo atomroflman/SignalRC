@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1, "workspace": { "width": 1280, "height": 720 },
+  "elements": {
+    "e_g1": { "type": "group", "children": ["e_g2"] },
+    "e_g2": { "type": "group", "children": ["e_g1"] }
+  },
+  "children": []
+}

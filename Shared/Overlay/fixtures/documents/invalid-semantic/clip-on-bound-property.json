@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1, "workspace": { "width": 1280, "height": 720 },
+  "elements": { "e_a": { "type": "rect", "props": { "rotation": { "base": 0, "binding": { "expr": "tel(\"odoHeading\")" } } } } },
+  "children": ["e_a"],
+  "clips": {
+    "c_1": { "durationS": 1, "trigger": { "mode": "auto" }, "tracks": [ { "element": "e_a", "property": "rotation", "keyframes": [ { "t": 0, "value": 0 }, { "t": 1, "value": 90 } ] } ] }
+  }
+}

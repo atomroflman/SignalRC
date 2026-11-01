@@ -1,0 +1,5 @@
+{
+  "schemaVersion": 1, "workspace": { "width": 1280, "height": 720 },
+  "elements": { "e_a": { "type": "valueText", "props": { "value": { "base": null, "binding": { "expr": "sig(\"undefinedSignal\")" } } } } },
+  "children": ["e_a"]
+}

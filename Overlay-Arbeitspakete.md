@@ -62,6 +62,10 @@ nicht ein zusätzliches Verbot, vorher gegen deren vereinbarte Ports zu arbeiten
 
 ## AP00 – Vertragsfundament und Freigabe-Gate
 
+Die laufende Klärung und bereits bestätigte technische Entscheidungen stehen in
+[Overlay-AP00-Vertraege.md](Overlay-AP00-Vertraege.md). AP00 bleibt bis zur
+vollständigen Vertragsfreigabe offen.
+
 **Ziel:** Alle Bearbeiter arbeiten gegen dieselben versionierten Modelle und
 Verhaltensregeln. Noch offene technische Details werden hier entschieden, nicht
 parallel in mehreren Implementierungen.
@@ -172,6 +176,9 @@ ohne die bisherige manuelle Telemetrie oder ältere Clients zu brechen.
 - Kompatibilität der bestehenden textbasierten Telemetrie und persönlichen
   Abonnementpräferenzen; keine automatische HUD-Abonnementpersistenz.
 - Anbindungspunkt für den spezialisierten LiDAR-Produzenten aus AP04.
+- Serverseitiger Anzeigetransport der Eingabe-/Flow-Signale des aktiven Fahrers
+  einschließlich Herkunft, Kontrollwechsel und Pausenstatus. Diese Signale
+  sind keine Sensormessungen und werden nicht als Fahrzeugbefehle behandelt.
 
 **Schnittstellen:** Telemetrievertrag aus AP00. Keine HUD-Darstellung, kein
 LiDAR-Widget und keine neue fahrzeugseitige Sicherheitslogik.
@@ -223,6 +230,9 @@ bereitstellen, ohne persönliche Auswahl zu verändern.
   ein Quellfehler lässt sich nicht durch längere Frist heilen.
 - Altwerte/Alt-Onboard, Reihenfolge und Reconnect entsprechend AP00 behandeln.
 - Strukturierte kompakte LiDAR-Daten als definierten Typ zugänglich machen.
+- Eingabe-/Flow-Anzeigesignale des aktiven Fahrers über einen getrennten
+  Quelladapter mit Typen, Aktualität und Übertragungsstatus bereitstellen;
+  keine fremden persönlichen Knoten-IDs als HUD-Referenzen verwenden.
 
 **Schnittstellen:** Lesender Telemetrieanbieter und Verbraucheranforderungen;
 keine Renderer-DOM-Zugriffe und keine Simulation im gemeinsamen Livebestand.
@@ -418,6 +428,10 @@ bestehende Anwendung einbinden; kein einmaliger Integrationsversuch erst am Ende
 - Kanalverwaltungswarnungen aus AP02 und neue Quellkonfigurationshilfe einbinden.
 - Zentrale Anwendungsverdrahtung, Registrierungen und gemeinsame Übersetzungen;
   Modulregistrierungen/-texte kommen von den zuständigen Paketen.
+- Berechnete Fahrzeugausgänge und ausdrücklich benannte Eingabe-/Flow-Signale
+  lesend anbinden, persönliche Signalzuordnung in die Flow-Oberfläche integrieren
+  und den Pausenstatus auch Zuschauern eindeutig anzeigen. Keine automatische
+  Reaktivierung oder Neuberechnung durch HUD-Lesen.
 
 **Frühester Integrationsnachweis:** Ein Zahlenwert plus Drehung wird bearbeitet,
 gespeichert und veröffentlicht. Ein zweiter offener Client übernimmt den Stand

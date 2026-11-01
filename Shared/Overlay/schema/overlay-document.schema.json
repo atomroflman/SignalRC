@@ -1,0 +1,366 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://signalrc.local/overlay/overlay-document.v1.schema.json",
+  "title": "SignalRC Overlay-Dokument v1",
+  "description": "Strukturelle Prüfung. Eigenschaftsnamen, -typen und -grenzen prüft zusätzlich der Resolver gegen catalog/property-catalog.json (siehe README.md).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "workspace", "elements", "children"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "workspace": { "$ref": "#/$defs/workspace" },
+    "rootTransform": { "$ref": "#/$defs/rootTransform" },
+    "disabled": { "type": "boolean", "default": false },
+    "signals": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/signalName" },
+      "additionalProperties": { "$ref": "#/$defs/signalDefinition" }
+    },
+    "sources": { "$ref": "#/$defs/sourceSettings" },
+    "elements": { "$ref": "#/$defs/elementMap" },
+    "children": { "$ref": "#/$defs/idList" },
+    "clips": { "$ref": "#/$defs/clipMap" },
+    "variants": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/streamId" },
+      "additionalProperties": { "$ref": "#/$defs/variant" }
+    }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$" },
+    "idList": { "type": "array", "items": { "$ref": "#/$defs/id" }, "uniqueItems": true },
+    "streamId": { "type": "string", "minLength": 1, "maxLength": 50 },
+    "channelName": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "signalName": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$" },
+    "displayName": { "type": "string", "maxLength": 100 },
+    "expression": { "type": "string", "minLength": 0, "maxLength": 1000 },
+    "assetId": { "type": "string", "pattern": "^sha256-[0-9a-f]{64}$" },
+    "finite": { "type": "number" },
+
+    "workspace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["width", "height"],
+      "properties": {
+        "width": { "type": "number", "exclusiveMinimum": 0, "maximum": 16384 },
+        "height": { "type": "number", "exclusiveMinimum": 0, "maximum": 16384 }
+      }
+    },
+    "rootTransform": {
+      "description": "D39: proportionales Einpassen ohne Änderung der Elementwerte. Abbildung: p' = p * scale + offset.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scale", "offsetX", "offsetY"],
+      "properties": {
+        "scale": { "type": "number", "exclusiveMinimum": 0, "maximum": 1000 },
+        "offsetX": { "$ref": "#/$defs/finite" },
+        "offsetY": { "$ref": "#/$defs/finite" }
+      }
+    },
+    "signalDefinition": {
+      "description": "D36: benanntes Flow-Signal, immer vom Typ Zahl.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label"],
+      "properties": {
+        "label": { "$ref": "#/$defs/displayName" },
+        "unit": { "type": "string", "maxLength": 32 },
+        "decimals": { "type": "integer", "minimum": 0, "maximum": 6 }
+      }
+    },
+    "sourceSettings": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "telemetry": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/channelName" },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "staleAfterMs": { "type": "integer", "minimum": 100, "maximum": 600000 }
+            }
+          }
+        }
+      }
+    },
+
+    "literal": {
+      "oneOf": [
+        { "type": "number" },
+        { "type": "string", "maxLength": 1000 },
+        { "type": "boolean" },
+        { "type": "null" }
+      ]
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expr"],
+      "properties": {
+        "expr": { "$ref": "#/$defs/expression" },
+        "smoothing": {
+          "description": "D28: exponentielle Glättung.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["timeConstantS"],
+          "properties": {
+            "timeConstantS": { "type": "number", "exclusiveMinimum": 0, "maximum": 60 }
+          }
+        }
+      }
+    },
+    "rate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expr"],
+      "properties": {
+        "expr": { "$ref": "#/$defs/expression", "description": "Änderung pro Sekunde in der Einheit der Eigenschaft." },
+        "wrap": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["min", "max"],
+          "properties": {
+            "min": { "$ref": "#/$defs/finite" },
+            "max": { "$ref": "#/$defs/finite" }
+          }
+        }
+      }
+    },
+    "dynamicProperty": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["base"],
+      "properties": {
+        "base": { "$ref": "#/$defs/literal" },
+        "binding": { "$ref": "#/$defs/binding" },
+        "rate": { "$ref": "#/$defs/rate" }
+      },
+      "oneOf": [
+        { "required": ["binding"], "not": { "required": ["rate"] } },
+        { "required": ["rate"], "not": { "required": ["binding"] } }
+      ]
+    },
+    "propertyValue": {
+      "anyOf": [
+        { "$ref": "#/$defs/literal" },
+        { "$ref": "#/$defs/dynamicProperty" }
+      ]
+    },
+    "propMap": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[A-Za-z][A-Za-z0-9]{0,39}$" },
+      "additionalProperties": { "$ref": "#/$defs/propertyValue" }
+    },
+    "partMap": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/id" },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "props": { "$ref": "#/$defs/propMap" },
+          "lockAspect": { "type": "boolean" }
+        }
+      }
+    },
+
+    "elementBase": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "type": "string" },
+        "name": { "$ref": "#/$defs/displayName" },
+        "disabled": { "type": "boolean" },
+        "locked": { "type": "boolean" },
+        "editorHidden": { "type": "boolean" },
+        "lockAspect": { "type": "boolean" },
+        "onInvalid": { "enum": ["hold", "hide"] },
+        "props": { "$ref": "#/$defs/propMap" }
+      }
+    },
+    "element": {
+      "allOf": [{ "$ref": "#/$defs/elementBase" }],
+      "oneOf": [
+        {
+          "properties": {
+            "type": { "const": "group" },
+            "children": { "$ref": "#/$defs/idList" },
+            "name": true, "disabled": true, "locked": true, "editorHidden": true, "lockAspect": true, "onInvalid": true, "props": true
+          },
+          "required": ["children"],
+          "additionalProperties": false
+        },
+        {
+          "properties": {
+            "type": { "enum": ["rect", "ellipse", "line", "arc", "text", "valueText", "linearGauge", "radialGauge"] },
+            "name": true, "disabled": true, "locked": true, "editorHidden": true, "lockAspect": true, "onInvalid": true, "props": true
+          },
+          "additionalProperties": false
+        },
+        {
+          "properties": {
+            "type": { "const": "svgAsset" },
+            "assetId": { "$ref": "#/$defs/assetId" },
+            "parts": { "$ref": "#/$defs/partMap" },
+            "name": true, "disabled": true, "locked": true, "editorHidden": true, "lockAspect": true, "onInvalid": true, "props": true
+          },
+          "required": ["assetId"],
+          "additionalProperties": false
+        },
+        {
+          "properties": {
+            "type": { "const": "lidarWidget" },
+            "source": { "$ref": "#/$defs/channelName" },
+            "name": true, "disabled": true, "locked": true, "editorHidden": true, "lockAspect": true, "onInvalid": true, "props": true
+          },
+          "required": ["source"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "elementMap": {
+      "type": "object",
+      "propertyNames": { "allOf": [{ "$ref": "#/$defs/id" }, { "not": { "const": "root" } }] },
+      "additionalProperties": { "$ref": "#/$defs/element" }
+    },
+
+    "keyframe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["t", "value"],
+      "properties": {
+        "t": { "type": "number", "minimum": 0 },
+        "value": { "$ref": "#/$defs/literal" },
+        "easing": { "enum": ["linear", "easeIn", "easeOut", "easeInOut", "step"], "default": "linear" }
+      }
+    },
+    "track": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["element", "property", "keyframes"],
+      "properties": {
+        "element": { "$ref": "#/$defs/id" },
+        "part": { "$ref": "#/$defs/id" },
+        "property": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9]{0,39}$" },
+        "keyframes": { "type": "array", "minItems": 1, "maxItems": 500, "items": { "$ref": "#/$defs/keyframe" } }
+      }
+    },
+    "trigger": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode"],
+          "properties": { "mode": { "const": "auto" } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "condition"],
+          "properties": {
+            "mode": { "const": "whileTrue" },
+            "condition": { "$ref": "#/$defs/expression" },
+            "onDeactivate": { "enum": ["stop", "finish"], "default": "stop" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "condition"],
+          "properties": {
+            "mode": { "const": "pulse" },
+            "condition": { "$ref": "#/$defs/expression" },
+            "retrigger": { "enum": ["restart", "ignore"], "default": "restart" }
+          }
+        }
+      ]
+    },
+    "repeat": {
+      "oneOf": [
+        { "type": "integer", "minimum": 1, "maximum": 10000 },
+        { "const": "infinite" }
+      ]
+    },
+    "clipSettings": {
+      "type": "object",
+      "properties": {
+        "name": { "$ref": "#/$defs/displayName" },
+        "disabled": { "type": "boolean" },
+        "durationS": { "type": "number", "exclusiveMinimum": 0, "maximum": 3600 },
+        "repeat": { "$ref": "#/$defs/repeat" },
+        "trigger": { "$ref": "#/$defs/trigger" },
+        "endState": { "enum": ["base", "hold"], "default": "base" },
+        "tracks": { "type": "array", "maxItems": 200, "items": { "$ref": "#/$defs/track" } }
+      }
+    },
+    "clip": {
+      "allOf": [{ "$ref": "#/$defs/clipSettings" }],
+      "required": ["durationS", "trigger", "tracks"],
+      "unevaluatedProperties": false
+    },
+    "clipOverride": {
+      "allOf": [{ "$ref": "#/$defs/clipSettings" }],
+      "unevaluatedProperties": false
+    },
+    "clipMap": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/id" },
+      "additionalProperties": { "$ref": "#/$defs/clip" }
+    },
+
+    "elementOverride": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "disabled": { "type": "boolean" },
+        "locked": { "type": "boolean" },
+        "editorHidden": { "type": "boolean" },
+        "lockAspect": { "type": "boolean" },
+        "onInvalid": { "enum": ["hold", "hide"] },
+        "props": { "$ref": "#/$defs/propMap" },
+        "parts": { "$ref": "#/$defs/partMap" }
+      }
+    },
+    "variant": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "disabled": { "type": "boolean", "description": "true = kein HUD für diesen Stream, kein Rückfall auf den Standard." },
+        "workspace": { "$ref": "#/$defs/workspace" },
+        "rootTransform": { "$ref": "#/$defs/rootTransform" },
+        "elements": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/id" },
+          "additionalProperties": { "$ref": "#/$defs/elementOverride" }
+        },
+        "addedElements": { "$ref": "#/$defs/elementMap" },
+        "structure": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "parents": {
+              "description": "Elementid -> Gruppenid oder \"root\".",
+              "type": "object",
+              "propertyNames": { "$ref": "#/$defs/id" },
+              "additionalProperties": { "$ref": "#/$defs/id" }
+            },
+            "order": {
+              "description": "Gruppenid oder \"root\" -> Reihenfolge von unten nach oben.",
+              "type": "object",
+              "propertyNames": { "$ref": "#/$defs/id" },
+              "additionalProperties": { "$ref": "#/$defs/idList" }
+            }
+          }
+        },
+        "clips": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/id" },
+          "additionalProperties": { "$ref": "#/$defs/clipOverride" }
+        },
+        "addedClips": { "$ref": "#/$defs/clipMap" }
+      }
+    }
+  }
+}
