@@ -163,7 +163,15 @@ Zusätzlich geprüft:
 
 - Bei verborgenem Tab und ausgeblendetem HUD laufen 0 HUD-Frames.
 - Das JS-Heap-Wachstum über 10 min bleibt unter 10 MB.
-- Die LiDAR-Kanalbandbreite liegt bei höchstens 8 kB/s (gemessen am Websocket).
+- Datenmengen je Zuschauer, gemessen am Websocket (D59–D62), Mittel über
+  60 s mit R2 und synthetischer Fahrt (Werte ändern sich laufend, etwa 60
+  belegte LiDAR-Felder):
+  - gesamt ≤ 6 kB/s,
+  - davon LiDAR ≤ 3 kB/s,
+  - im Stillstand gesamt ≤ 1,5 kB/s.
+
+  Ohne HUD-Bedarf und ohne Telemetrieleiste werden 0 Telemetrie- und
+  Steuerungsnachrichten übertragen, auch auf dem Fahrzeug-Uplink.
 
 Vor der Abnahme kommt ein manueller Lauf von R2 auf einem echten
 Mittelklasse-Android-Gerät hinzu (D42), mit dokumentierter Gerätebezeichnung.

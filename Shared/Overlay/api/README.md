@@ -1,6 +1,6 @@
 # Overlay-Persistenz und API v1
 
-Status: **freigegeben** (AP00, 2026-11-01), Vertrag v1. Grundlage:
+Status: **freigegeben** (AP00, 2026-11-01), Vertrag v1.1 (Autosave als Differenz und Kompression, D63). Grundlage:
 Produktplan (Berechtigungen, Entwurf, Veröffentlichung), D19, D25, D33–D35,
 D47, D53–D55. Zuständig: AP02 (Server), AP09 (Client-Adapter), AP13 (Verdrahtung).
 
@@ -48,6 +48,7 @@ gehaltenen Revisionen oder einer Veröffentlichung, werden gelöscht.
 | GET | `assets/{assetId}` | Betrachter* | `200 image/svg+xml` |
 | GET | `draft` | Verwalter | `200 { revision, document, updatedAt, updatedBy }`; ohne Entwurf `revision: 0` und Startdokument (D22) |
 | PUT | `draft` | Verwalter | Header `If-Match: "<revision>"`, Body Dokument → `200 { revision }` |
+| PATCH | `draft` | Verwalter | Header `If-Match: "<revision>"`, Body `application/json-patch+json` (RFC 6902) → `200 { revision }` |
 | GET | `publications` | Verwalter | `200 [{ id, number, publishedAt, publishedBy, note }]`, neueste zuerst |
 | GET | `publications/{id}` | Verwalter | `200 { …, document }` |
 | POST | `publications` | Verwalter | `{ baseRevision, note? }` → `201 { publicationId, number }` |
@@ -63,6 +64,12 @@ Fahrzeugs es referenziert; Verwalter lesen jedes Asset des Fahrzeugs. Asset-Antw
 - `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'`,
 - `X-Content-Type-Options: nosniff`.
 
+**Kompression (D63):** Der Server komprimiert Antworten dieser Endpunkte mit
+Brotli oder gzip (`application/json`, `application/problem+json`, `image/svg+xml`).
+Anfragen mit `Content-Encoding: gzip` werden für `PUT`/`PATCH draft` und den
+Asset-Upload angenommen. Websocket-Nachrichten bleiben unkomprimiert; dort sorgt
+das kompakte Format des Telemetrievertrags für kleine Mengen.
+
 **Speichern (PUT draft):**
 
 1. Prüfung der Verwalterrolle.
@@ -73,6 +80,21 @@ Fahrzeugs es referenziert; Verwalter lesen jedes Asset des Fahrzeugs. Asset-Antw
 5. Speichern mit `Revision + 1`, Revisionshistorie fortschreiben, Ereignis senden.
 
 Ein fehlendes `If-Match` ist `428`.
+
+**Speichern als Differenz (PATCH draft, D63):**
+
+- Der Client sendet nur die JSON-Patch-Operationen zwischen dem zuletzt
+  bestätigten Stand und dem aktuellen Entwurf. Erlaubt sind `add`, `remove`
+  und `replace`; Arrays werden als Ganzes ersetzt.
+- Der Server wendet sie auf das Dokument der Revision `If-Match` an und prüft
+  das Ergebnis wie bei `PUT`. Danach speichert er das vollständige Dokument;
+  Historie und Veröffentlichungen enthalten immer ganze Dokumente.
+- Lässt sich ein Patch nicht anwenden, antwortet der Server mit `422`
+  `OVL_API_PATCH_FAILED`. Der Client sendet dann einmal per `PUT` das ganze
+  Dokument.
+- Der Client verwendet `PUT` statt `PATCH`, wenn der Patch größer als die
+  Hälfte des Dokuments ist, sowie beim ersten Speichern nach Laden,
+  Wiederherstellung oder Import.
 
 **Veröffentlichen:**
 
@@ -105,6 +127,7 @@ Veröffentlichung (neue Revision). Das aktuell angezeigte HUD bleibt unveränder
 | `OVL_API_TOO_LARGE` | 413 |
 | `OVL_API_ASSET_REJECTED` | 422, mit SVG-Bericht |
 | `OVL_API_NOT_FOUND` | 404 |
+| `OVL_API_PATCH_FAILED` | 422 |
 
 ## 4. Ereignisse (CarConnectionHub)
 
@@ -130,6 +153,8 @@ Veröffentlichung (neue Revision). Das aktuell angezeigte HUD bleibt unveränder
 
 - **Autosave (D25):** 2 s nach der letzten Änderung, spätestens 30 s bei
   andauernder Bearbeitung. Es läuft höchstens eine Anfrage gleichzeitig.
+  Übertragen wird per `PATCH` nur die Differenz (D63); ohne Änderung seit dem
+  letzten bestätigten Stand wird nichts gesendet.
   Statusanzeige: `ungespeichert`, `speichert`, `gespeichert`, `fehler`,
   `konflikt`, `nur lokal` (ohne Kontrolle).
 - **Lokale Sicherung:**

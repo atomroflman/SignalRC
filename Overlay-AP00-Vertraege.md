@@ -392,6 +392,9 @@ Arbeitspakete: [Overlay-Arbeitspakete.md](Overlay-Arbeitspakete.md).
 - Begleitende JSON-Metadaten: Snapshot-Identität, Messalter, Vollständigkeit/
   Qualität, Zonengrenzen und Formatversion. Feldnamen folgen im Schema.
 
+- **Geändert durch D62:** Übertragen wird in Zentimetern, dünn oder dicht
+  kodiert, als reiner Text.
+
 ### D41 – Montageversatz als reiner Drehwinkel
 
 - Die LiDAR-Quellkonfiguration erhält ausschließlich einen Winkelversatz in Grad.
@@ -509,6 +512,51 @@ Arbeitspakete: [Overlay-Arbeitspakete.md](Overlay-Arbeitspakete.md).
   dahin ist die Ausrichtung nicht abgenommen. Die Testaufnahme ist ein
   gesondert zu vereinbarender Hardwaretest.
 
+### D59 – Übertragung nur bei Bedarf
+
+- Telemetrie wird nur für Kanäle übertragen, die ein verbundener Client gerade
+  braucht (manuelle Leiste, aktives HUD, Vorschau; Altclients gelten als „alle“).
+- Der Server meldet dem Onboard die Vereinigung als Bedarf. Ohne Bedarf
+  sendet das Onboard keine Telemetrie, auch nicht über den Fahrzeug-Uplink.
+- Der Server filtert je Client-Verbindung.
+- Der Fahrerclient sendet die Steuerungsanzeige nur, wenn ein anderer Client sie
+  braucht.
+
+### D60 – Nur Änderungen, sonst nur Bestätigung des Alters
+
+- Wert und Zustand werden nur bei Änderung oder als Erstwert vollständig
+  gesendet. Unveränderte Werte werden nur per ID bestätigt; das aktualisiert ihr
+  Messalter.
+- Bestätigungen höchstens alle 250 ms je Kanal. Die kürzeste HUD-Frist steigt
+  dafür auf 500 ms.
+
+### D61 – Kompakte Kodierung
+
+- Numerische Kanal-IDs statt Namen, positionsbasierte Arrays, kurze
+  Methodennamen, eine Nachricht je Onboard-Tick.
+- Kanalmetadaten kommen einmalig per REST, nicht im Datenstrom.
+- Der Webclient bleibt beim JSON-Protokoll von SignalR. Eine Umstellung auf
+  MessagePack würde bestehende Hub-Aufrufe brechen; Onboard ↔ Server nutzt
+  MessagePack bereits.
+
+### D62 – LiDAR-Raster in Zentimetern, adaptiv kodiert, mit Totband
+
+- Ersetzt das Drahtformat aus D40 (Millimeter, immer dicht, JSON):
+  - Zentimeter als uint16,
+  - dünn (nur belegte Felder) bis 239 Felder, sonst dicht,
+  - als reiner Text ohne JSON-Hülle.
+- Zonengrenzen stehen in den Kanalmetadaten.
+- Ein neues Raster wird nur gesendet, wenn sich Belegung oder Vollständigkeit
+  ändern oder ein Wert um mehr als 2 cm abweicht. Sonst wird nur bestätigt.
+
+### D63 – Autosave als Differenz, HTTP-Kompression
+
+- Autosave überträgt per `PATCH` (JSON Patch) nur die Änderungen seit dem
+  zuletzt bestätigten Stand. Ganze Dokumente nur beim ersten Speichern, nach
+  Fehlern oder wenn die Differenz größer ist als das halbe Dokument.
+- Overlay-REST-Antworten werden mit Brotli/gzip komprimiert. Assets werden
+  dauerhaft im Browser gecacht.
+
 ## Spezifikationsstand
 
 ### S01 – Dokumentmodell und Property-Katalog v1 (Entwurf)
@@ -624,6 +672,12 @@ Gerätelauf ([modules §4](Shared/Overlay/modules/README.md)).
   `5000` insgesamt 2401 Bytes pro Snapshot.
 - Dies ist ein rechnerischer Geometrie-/Größennachweis, keine gemessene
   Bandbreiten-/Leistungsabnahme und noch keine vollständige Drahtformatfreigabe.
+
+## Änderungsprotokoll nach Freigabe
+
+| Datum | Änderung | Betroffen |
+| --- | --- | --- |
+| 2026-11-01 | D59–D63: sparsame Übertragung. Telemetrievertrag v1.1, LiDAR-Drahtformat, API v1.1 (PATCH, Kompression), Schema-Mindestfrist 500 ms, Leistungsgrenzen für Datenmengen; neue Referenzfälle `fixtures/telemetry/`, LiDAR `wire`/`deadband` | AP02, AP03, AP04, AP05, AP08, AP09, AP14 |
 
 ## Prüfpunkte nach Freigabe
 

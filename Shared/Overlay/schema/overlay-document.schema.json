@@ -79,7 +79,7 @@
             "type": "object",
             "additionalProperties": false,
             "properties": {
-              "staleAfterMs": { "type": "integer", "minimum": 100, "maximum": 600000 }
+              "staleAfterMs": { "type": "integer", "minimum": 500, "maximum": 600000 }
             }
           }
         }

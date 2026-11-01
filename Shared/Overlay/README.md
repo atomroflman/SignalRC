@@ -13,7 +13,7 @@ Dieses Verzeichnis ist nach D43 die gemeinsame Vertragsquelle für Client und Se
 | `expression/README.md` | Ausdruckssprache v1: Grammatik, Typen, Funktionen, Fehlerregeln. |
 | `fixtures/expressions/cases.json` | Gemeinsame Referenzfälle der Ausdruckssprache. |
 | `runtime/README.md` | Zeit, Clips, Raten, Glättung, Markierungen; Fälle in `fixtures/runtime/`. |
-| `telemetry/README.md` | Telemetriequalität, Transport, Steuerungsanzeige. |
+| `telemetry/README.md` | Telemetriequalität, bedarfs- und änderungsbasierter Transport, Steuerungsanzeige; Fälle in `fixtures/telemetry/`. |
 | `lidar/README.md` | LiDAR-Gruppen, Grundraster, Drahtformat; Fälle in `fixtures/lidar/`. |
 | `svg/README.md` | SVG-Bereinigung, Positivliste, Parts, Austauschpaket. |
 | `api/README.md` | Persistenz, REST, Ereignisse, Autosave/Konflikte. |

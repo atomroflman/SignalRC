@@ -1,204 +1,266 @@
-# Overlay-Quellen v1: Telemetriequalität und Steuerungsanzeige
+# Overlay-Quellen v1.1: Telemetriequalität und Steuerungsanzeige
 
-Status: **freigegeben** (AP00, 2026-11-01), Vertrag v1. Grundlage: D06–D09,
-D24, D30, D31, D36, D37, D56, D57 und die Qualitätsregeln des Produktplans.
+Status: **freigegeben** (AP00, 2026-11-01), Vertrag v1.1. Gegenüber v1
+sparsamere Übertragung nach D59–D61. Grundlage: D06–D09, D24, D30, D31, D36,
+D37, D56, D57, D59–D61 und die Qualitätsregeln des Produktplans.
 Zuständig: AP03 (Onboard/Server), AP05 (Client), AP13 (Verdrahtung).
+Referenzfälle: [`../fixtures/telemetry/cases.json`](../fixtures/telemetry/cases.json).
 
 ## 1. Ausgangslage (geprüft im Code)
 
-- **Senden:** Onboard sendet `UpdateTelemetry(carId, name, value)` mit reinen Strings an
-  `CarConnectionHub`. Der Server leitet an die Gruppe `car:{carId}` weiter,
-  prüft die Herkunft nicht und speichert nichts zwischen.
+- **Senden:** Onboard sendet `UpdateTelemetry(carId, name, value)` mit reinen
+  Strings. Der Server leitet an die Gruppe `car:{carId}` weiter, prüft die
+  Herkunft nicht und speichert nichts zwischen.
 - **Empfangen:** Der Client stempelt `updatedAt` beim Empfang.
-- **Reader:** `TelemetryReaderBase` kennt keine Qualität und kein Alter. CAN
-  (`TrackNodeState.AgeSeconds`, `ControlAgeSeconds`), LiDAR
-  (`LidarHealth.ScanAgeSeconds`, `Spinning`) und JBD-BMS (Cache `FetchedAtUtc`)
-  führen solche Informationen intern.
-- **Steuerung:** Steuerwerte gehen per `UpdateChannel(carId, sessionId, channelId,
-  value)` an den Server. Den Fahrer prüft nur das Onboard anhand der `sessionId`.
+- **Protokolle:** Onboard ↔ Server verwendet MessagePack, der Webclient JSON.
+  Telemetriekanäle haben eine numerische Server-ID (`CarTelemetry.Id`, im
+  Channel-Map als `ServerId`), Steuerkanäle ebenso (`CarChannel.Id`).
+- **Bedarf:** Onboard sendet heute alle konfigurierten Kanäle unabhängig vom
+  Bedarf.
+- **Reader:** `TelemetryReaderBase` kennt keine Qualität und kein Alter. CAN,
+  LiDAR und BMS führen solche Informationen intern.
+- **Steuerung:** Steuerwerte gehen per `UpdateChannel` an den Server. Den Fahrer
+  prüft nur das Onboard anhand der `sessionId`.
 
-## 2. Qualitätsmodell je Wert
+## 2. Grundsätze der Übertragung (D59–D61)
 
-```
-TelemetrySample {
-  channel: string            // CarTelemetry.ChannelName
-  value: string              // invariant formatiert wie bisher; "" bei fehlendem Wert erlaubt
-  state: Valid | Unchecked | Stale | Error | NoData
-  ageMs: int                 // Messalter beim Absenden durch den jeweiligen Sender
-  expectedIntervalMs: int    // erwartetes Leseintervall der Quelle
-}
-```
+1. **Nur bei Bedarf (D59):** Übertragen wird nur, was ein verbundener Client
+   gerade braucht. Bedarf entsteht durch
+   - die manuelle Telemetrieleiste,
+   - ein aktives HUD,
+   - die Editor-Vorschau,
+   - einen Altclient (dieser gilt als „alle Kanäle“).
 
-- `Valid`: Der Reader garantiert den Wert und kennt sein Messalter.
-- `Unchecked`: Der Reader liefert keine Qualitätsinformation, etwa ein
-  Alt-Onboard, ein Altpfad oder ein Reader ohne Unterstützung.
-- `Stale`: Der Reader meldet selbst, dass der Wert zu alt ist, z. B. bei
-  LiDAR-Stillstand. Eine HUD-Frist kann das nicht heilen.
-- `Error`: Quellfehler, z. B. ein geschlossener Port oder ein Bus-off.
-- `NoData`: Es gab noch nie einen Wert.
+   Ohne Bedarf sendet das Onboard keine Telemetrie und der Fahrerclient keine
+   Steuerungsanzeige.
+2. **Nur Änderungen (D60):** Ein Wert wird vollständig nur gesendet, wenn sich
+   Wert oder Zustand geändert hat, oder als Erstwert. Unveränderte Werte werden
+   nur mit ihrer ID **bestätigt**; das aktualisiert ihr Messalter.
+   - Bestätigungen höchstens alle 250 ms je Kanal.
+   - Geänderte Werte gehen sofort mit dem nächsten Tick hinaus.
+   - Die kürzeste zulässige HUD-Frist beträgt deshalb 500 ms (Schema).
+3. **Kompakt (D61):**
+   - numerische Kanal-IDs statt Namen,
+   - positionsbasierte Arrays statt Objekten, kurze Methodennamen,
+   - je Onboard-Tick genau eine Nachricht für alle Reader,
+   - Kanalmetadaten (Name, Typ, Einheit, Intervall, LiDAR-Zonen) kommen einmalig
+     per REST und nie im Datenstrom.
 
-**Zeitbasis:** `ageMs` misst jeder Sender mit seiner monotonen Uhr. Es werden keine
-Uhrzeiten zwischen Geräten verglichen. Das Messalter beim Client ist:
+## 3. Qualitätsmodell je Wert
 
-```
-age = ageMs(Server-Weitergabe) + (clientNow − clientEmpfang)
-```
+| Code | Zustand | Bedeutung |
+| --- | --- | --- |
+| 0 | `Valid` | Reader garantiert den Wert und kennt sein Messalter |
+| 1 | `Unchecked` | ohne Qualitätsinformation (Alt-Onboard, Altpfad, Reader ohne Unterstützung) |
+| 2 | `Stale` | Reader meldet selbst „zu alt“ (z. B. LiDAR-Stillstand); keine HUD-Frist heilt das |
+| 3 | `Error` | Quellfehler |
+| 4 | `NoData` | noch nie ein Wert |
 
-Dabei gilt `ageMs(Server-Weitergabe) = ageMs(Onboard) + Verweildauer im Server-Cache`.
-Die Netzlaufzeit selbst ist nicht messbar und wird nicht addiert. Das ist eine
-bewusste Grenze; im ersten Umfang gibt es keine Videosynchronisierung.
+- **Zeitbasis:** `ageMs` misst jeder Sender mit seiner monotonen Uhr; Uhrzeiten
+  verschiedener Geräte werden nie verglichen. Beim Client gilt
+  `age = ageMs(letzte Nachricht) + (clientNow − clientEmpfang)`. Die Netzlaufzeit
+  ist nicht messbar und wird nicht addiert.
+- **Erwartetes Intervall:** `100 ms · ReadIntervalTicks` des Kanals (Basistakt
+  in `Onboard/Program.cs`). Es ist aus den Kanalmetadaten bekannt und wird nicht
+  übertragen.
+- **Frist:** `sources.telemetry[k].staleAfterMs` (≥ 500) oder
+  `max(3 · erwartetes Intervall, 1000)` (D24).
 
-**Bewertung im Client** (Abbildung auf den Ausdruckszustand):
+**Bewertung im Client:**
 
-| Bedingung | Zustand |
+| Bedingung | Ergebnis |
 | --- | --- |
 | `Valid` und `age ≤ frist` | `valid` |
 | `Unchecked` und `age ≤ frist` | `unchecked` |
-| `Stale`, `Error`, `NoData` | `invalid` |
+| `Stale`, `Error` oder `NoData` | `invalid` |
 | `age > frist` | `invalid` |
 | keine Hub-Verbindung | `invalid` |
-| Fahrzeug offline (`CarStateUpdated.IsConnected == false`) | `invalid` |
-| leerer Wert oder nicht parsbar | `invalid` |
+| Fahrzeug offline | `invalid` |
+| leerer oder nicht parsbarer Wert | `invalid` |
 
-Die Frist ist die HUD-Überschreibung (`sources.telemetry[k].staleAfterMs`) oder
-sonst `max(3 · expectedIntervalMs, 1000)` (D24).
+Gründe: `source-error`, `stale`, `no-data`, `transport`, `vehicle-offline`,
+`parse`, `waiting` (angefordert, noch kein Wert).
 
-Für ungültige Werte wird ein Grund geführt (`source-error`, `stale`, `no-data`,
-`transport`, `vehicle-offline`, `parse`). Er erscheint in Editor-Diagnosen und
-in der Werte-Inspektion, nicht im Fahrer-HUD.
+## 4. Onboard (AP03)
 
-## 3. Onboard (AP03)
-
-- `TelemetryReaderBase` erhält eine virtuelle Methode
-  `ReadAllSamplesAsync(channelKey) → IReadOnlyDictionary<string, TelemetrySample>?`.
-  Ihre Standardimplementierung verpackt `ReadAllTelemetryAsync` mit
-  `state = Unchecked`, `ageMs = 0`.
-- Reader mit Qualitätsunterstützung überschreiben sie:
-  - CAN: Knotenwerte aus `AgeSeconds`/`Seen`, Steuerwerte aus `ControlAgeSeconds`,
-    Odometrie unkalibriert = `NoData`, Bus-off = `Error`.
-  - LiDAR: `ScanAgeSeconds`; `Spinning == false` = `Stale`; Port zu = `Error`.
-  - JBD-BMS: Alter aus `FetchedAtUtc`, Lesefehler = `Error`.
-  - Direkt lesende Reader wie CPU-Temperatur: `Valid`, Alter ab Lesezeitpunkt.
-- `expectedIntervalMs = 100 · ReadIntervalTicks` (Basistakt in `Onboard/Program.cs`),
-  sofern der Reader keinen eigenen Wert angibt.
-- Neuer Hub-Aufruf `UpdateTelemetrySamples(TelemetryBatch)`:
-
-  ```
-  TelemetryBatch { epoch: string, seq: long, samples: TelemetrySample[] }
-  ```
-
-  Ein Batch entspricht einem Reader-Tick. `epoch` wird je Onboard-Prozessstart
-  zufällig erzeugt; `seq` steigt innerhalb einer Epoche streng.
-- Ein neues Onboard ruft nur noch `UpdateTelemetrySamples` auf. `UpdateTelemetry`
-  bleibt am Server für Alt-Onboards erhalten.
-
-## 4. Server (AP03)
-
-- **Herkunft (D56):** Die `carId` ergibt sich bei `UpdateTelemetrySamples` aus
-  `CarConnectionStore` über die aufrufende Verbindung; einen Parameter `carId`
-  gibt es nicht. Beim Altpfad muss die übergebene `carId` zur registrierten
-  Onboard-Verbindung passen. Sonst wird der Aufruf verworfen und
-  ratenbegrenzt protokolliert.
-- **Altpfad-Werte** werden zu `state = Unchecked`, `ageMs = 0`, mit
-  `expectedIntervalMs` aus `CarTelemetry.ReadIntervalTicks · 100`.
-- **Cache:** Je Fahrzeug und Kanal hält der Server im Speicher das letzte
-  Sample, Epoche/Seq und seine Server-Empfangszeit (monoton). Er verwirft
-  Batches mit `seq ≤ letzter seq` derselben Epoche; eine neue Epoche ersetzt die
-  alte. Beim Onboard-Disconnect wird der Cache des Fahrzeugs geleert.
-- **Gruppen:**
-  - `telemetry:{carId}` erhält neue Batches. Clients treten über
-    `SubscribeToCarTelemetrySamples(carId)` bei; das liefert sofort einen
-    Snapshot aus dem Cache mit fortgeschriebenem `ageMs`.
-  - `telemetry-legacy:{carId}` erhält wie bisher `UpdateTelemetry(name, value)`.
-    Der bestehende `SubscribeToCarTelemetry` tritt dieser Gruppe zusätzlich zu
-    `car:{carId}` bei. Der Server sendet `UpdateTelemetry` nicht mehr an
-    `car:{carId}`.
-  - Für Altclients übersetzt der Server neue Samples: Wert unverändert; `NoData`
-    wird nicht gesendet.
-- **Leseberechtigung:** Die Abonnements verwenden dieselbe Prüfung wie das Ansehen
-  des Fahrzeugstreams. Heute prüfen weder `GetVideoStreamsForCar` noch
-  `SubscribeToCarTelemetry` etwas, jeder Client darf sehen. Alle Overlay-
-  Lesezugriffe (Telemetrie-Samples, Steuerungsanzeige, Veröffentlichung, Assets)
-  laufen über einen gemeinsamen Helfer `CanViewCarAsync(carId)`, der diese
-  Regel zentral abbildet (siehe API-Vertrag). Eine spätere Verschärfung wirkt
-  dann überall gleich.
-- **Client-Nachricht:**
+- Neue virtuelle Methode `TelemetryReaderBase.ReadAllSamplesAsync(channelKey)`.
+  Sie liefert je Wert `(value, state, ageMs)`. Die Standardimplementierung
+  verpackt `ReadAllTelemetryAsync` mit `Unchecked`/0. Die Abbildung der
+  Qualitätsquellen je Reader ist dieselbe wie in v1:
+  - CAN-Knoten- und Steueralter,
+  - LiDAR `ScanAgeSeconds`/`Spinning`,
+  - BMS `FetchedAtUtc`,
+  - direkt lesende Reader `Valid`.
+- Readers ohne Bedarf werden weiterhin gelesen, wenn andere Onboard-Funktionen
+  sie brauchen. Ihre Werte werden nur nicht gesendet.
+- Das Onboard merkt sich je Kanal den zuletzt **gesendeten** `(value, state)`
+  und den Zeitpunkt der letzten Bestätigung.
+- **Bedarf:** Der Server sendet `SetTelemetryDemand(int[] channelIds)` (leere
+  Liste = nichts). Das Onboard sendet nur diese Kanäle. Neu angeforderte
+  Kanäle gehen beim nächsten Lesen vollständig hinaus. Bis zum ersten
+  `SetTelemetryDemand` nach einer (Wieder-)Verbindung sendet das Onboard nichts.
+- **Je Tick eine Nachricht** `TelemetryDelta` (MessagePack, `[Key]`-indiziert,
+  Wire-DTO in `Shared/Telemetry/`):
 
   ```
-  UpdateTelemetrySamples(ClientTelemetryBatch { carId, epoch, seq, samples })
+  TelemetryDelta {
+    [0] epoch: string        // je Prozessstart zufällig
+    [1] seq: long            // streng steigend je Epoche
+    [2] ageMs: int           // Standardalter: häufigstes Alter des Ticks, bei Gleichstand das kleinste
+    [3] changed: [id, value, state, ageMs?][]   // ageMs nur wenn ≠ [2]
+    [4] touched: int[]                           // unverändert, Alter = [2]
+    [5] touchedAged: int[]                       // flache Paare id, ageMs
+  }
   ```
 
-  Die `ageMs` darin sind bereits fortgeschrieben.
+  Ohne Inhalt (alles leer) wird nichts gesendet.
+- Vollständig gesendet wird ein Wert
+  - beim ersten Lesen nach Prozessstart oder Wiederverbindung,
+  - wenn er neu angefordert ist,
+  - wenn sich Wert oder Zustand geändert haben.
 
-## 5. Client (AP05)
+  Sonst wird er bestätigt, sofern die letzte Bestätigung oder Sendung
+  ≥ 250 ms zurückliegt. Liefert ein Reader in einem Tick keinen Wert, wird
+  nichts gesendet; das Alter wächst weiter.
+- Nach einer Wiederverbindung gilt eine neue Basis: Alle angeforderten Werte
+  werden erneut vollständig gesendet.
+
+## 5. Server (AP03)
+
+- **Herkunft (D56):** Bei `TelemetryDelta` ergibt sich die `carId` aus der
+  aufrufenden, per `OpenCarConnection` registrierten Verbindung. Beim Altpfad
+  `UpdateTelemetry(carId, …)` muss die `carId` zu dieser Verbindung passen.
+  Sonst wird verworfen und ratenbegrenzt protokolliert.
+- **Altpfad-Werte:** `Unchecked`, Alter 0. Der Server wendet darauf dieselbe
+  Änderungs- und Bestätigungslogik an wie das Onboard.
+- **Cache je Fahrzeug:** letzter `(value, state)` je Kanal-ID, Alter und
+  Server-Empfangszeit (monoton). Er wird bei neuer Epoche und beim
+  Onboard-Disconnect geleert. Batches mit `seq ≤` letzter `seq` derselben
+  Epoche werden verworfen.
+- **Bedarf:** Je Client-Verbindung hält der Server eine Interessenmenge. Der
+  Bedarf an das Onboard ist die Vereinigung aller Interessen dieses Fahrzeugs;
+  Altclients zählen als „alle Kanäle“. Der Server sendet
+  `SetTelemetryDemand` nach `OpenCarConnection` und bei jeder Änderung der
+  Vereinigung, höchstens alle 200 ms (zusammengefasst).
+- **An Clients**, je Verbindung gefiltert auf ihr Interesse. Pro empfangenem
+  `TelemetryDelta` geht höchstens eine Nachricht:
+
+  ```
+  Tlm(carId, seq, ageMs, changed, touched, touchedAged)
+  ```
+
+  - `changed`-Einträge: `[id, value]` (`Valid`, Standardalter),
+    `[id, value, state]` oder `[id, value, state, ageMs]`.
+  - `seq` vergibt der Server streng steigend je Fahrzeug.
+  - `ageMs` wird um die Verweildauer fortgeschrieben (praktisch 0).
+  - Leere Nachrichten werden nicht gesendet.
+- **Interesse setzen:** `SetTelemetryInterest(carId, int[] channelIds)` ersetzt
+  die Menge dieser Verbindung. Der Server antwortet sofort mit einem `Tlm`, das
+  alle neu hinzugekommenen IDs aus dem Cache enthält, als `changed` mit eigenem
+  Alter. Fehlt ein Wert im Cache, wird er nicht gesendet; er kommt mit dem
+  nächsten Onboard-Tick.
+- **Altclients:** Gruppe `telemetry-legacy:{carId}`. Beitritt über den
+  bestehenden `SubscribeToCarTelemetry`, der zusätzlich `car:{carId}` beitritt.
+  Sie erhalten wie bisher `UpdateTelemetry(name, value)`, aber nur bei
+  geänderten Werten; `NoData` wird nicht gesendet. Der Server sendet
+  `UpdateTelemetry` nicht mehr an `car:{carId}`.
+- **Leseberechtigung:** über `CanViewCarAsync(carId)` (API-Vertrag). Heute prüft
+  das Ansehen eines Streams nichts; jeder Client darf sehen.
+
+## 6. Client (AP05)
 
 - Ein gemeinsamer, typisierter Bestand je Fahrzeug, unabhängig vom Mounten der
-  Telemetrieleiste. Verbraucher melden Kanalbedarf mit Referenzzählung an; die
-  manuelle Leiste zeigt weiterhin nur die persönlich gewählten Kanäle.
-- Nach Reconnect: erneut abonnieren und den Snapshot übernehmen. Bis dahin sind
-  alle Werte `invalid` (`transport`).
-- Batches mit kleinerer `seq` derselben Epoche werden verworfen.
-- Kanalmetadaten (`dataType`, `unit`, `decimals`, `readIntervalTicks`) kommen aus
-  `/api/car/{id}/telemetry`. Das TS-Interface wird um diese Felder erweitert.
+  Telemetrieleiste. Verbraucher melden Bedarf mit Referenzzählung an; die
+  Vereinigung geht als `SetTelemetryInterest` an den Server, zusammengefasst
+  höchstens alle 200 ms.
+- Die manuelle Leiste zeigt weiterhin nur die persönlich gewählten Kanäle; deren
+  Speicherung (`SubscribeToChannel`) bleibt unverändert.
+- Kanalmetadaten kommen aus `/api/car/{id}/telemetry`, erweitert um `id`,
+  `dataType`, `unit`, `decimals`, `readIntervalTicks` und bei LiDAR um die
+  Zonengrenzen. Bei unbekannter Kanal-ID werden die Metadaten einmal neu
+  geladen.
+- Eine Bestätigung setzt nur Alter und Empfangszeit; Wert und Zustand bleiben.
+- Nach Reconnect: Interesse erneut setzen; der Snapshot ersetzt den Bestand.
+  Bis dahin ist alles `invalid` (`transport`). Nachrichten mit kleinerer `seq`
+  werden verworfen.
 
-## 6. Steuerungsanzeige: Ausgänge und Flow-Signale (D07–D09, D30, D31, D37)
+## 7. Steuerungsanzeige: Ausgänge und Flow-Signale (D07–D09, D30, D31, D37, D57)
+
+**Bedarf:**
+
+- Clients, deren HUD `out()`/`sig()` verwendet, setzen
+  `SetControlDisplayInterest(carId, bool)`.
+- Der Server meldet dem Fahrerclient `CtlDemand(carId, bool)`: wahr, sobald
+  irgendeine andere Verbindung Interesse hat. Nur dann sendet der Fahrerclient.
 
 **Fahrerclient → Server:**
 
 ```
-PublishControlDisplay(carId: int, ControlDisplayBatch {
-  sessionId: string,           // Steuerungssitzung aus AquireCarControl
-  seq: long,
-  paused: bool,                // !updatesEnabled || isInConfigMode
-  outputs: { [channelName]: number },   // berechnete Werte der Output-Knoten (CarChannel.ChannelName)
-  signals: { [signalName]: number }     // Werte der HUD-Signal-Knoten (D37)
-})
+Ctl(carId, seq, paused, outputs, signals, removedOutputs, removedSignals)
 ```
 
-- Gesendet wird bei Änderung, höchstens alle 100 ms, sonst als Keepalive
-  spätestens nach 1 s. Das gilt auch während der Pause. Werte im Batch sind der
-  jeweils vollständige aktuelle Stand, keine Deltas.
-- Das Lesen löst keine Flow-Neuberechnung, kein `sendOutput` und kein
-  Aufheben der Pause aus (D09). Der Client liest den vorhandenen Store-Zustand.
+- `outputs`: `[[CarChannel.Id, value]]`; `signals`: `[[name, value]]`.
+- Werte sind auf 6 signifikante Stellen gerundet.
+- `removed…`: nicht mehr verfügbare Ausgänge/Signale, z. B. ein entfernter
+  HUD-Signal-Knoten.
+- Vollständig nach `CtlDemand(true)` und nach Reconnect, danach nur
+  Änderungen. Höchstens alle 100 ms.
+- Ohne Änderung genügt spätestens nach 1 s eine leere Nachricht (Keepalive mit
+  aktuellem `paused`). Eine Änderung von `paused` wird sofort gesendet.
+- `paused = !updatesEnabled || isInConfigMode`.
+- Das Lesen löst keine Flow-Neuberechnung, kein `sendOutput` und keine
+  Reaktivierung aus (D09).
 
 **Server-Prüfung (D57):**
 
 - `AquireCarControl` merkt sich bei Erfolg in `CarConnectionInfo` die
-  `DriverConnectionId`, die erteilte `SessionId` und eine neue `DriverEpoch`.
-- `PublishControlDisplay` wird nur angenommen, wenn alle drei Bedingungen gelten:
-  - die Verbindung ist `DriverConnectionId`,
-  - `sessionId` stimmt mit der erteilten Sitzung überein,
-  - `seq` steigt.
-
-  Sonst wird verworfen und ratenbegrenzt protokolliert. Die Nachricht ist kein
-  Steuerbefehl und erreicht das Onboard nicht.
-- `ReleaseCarControl`, Disconnect der Fahrerverbindung oder ein neuer Erwerb
-  lösen Folgendes aus:
+  `DriverConnectionId` und eine neue `DriverEpoch`.
+- `Ctl` wird nur von dieser Verbindung und mit steigender `seq` angenommen.
+  Sonst wird verworfen und ratenbegrenzt protokolliert. Die Nachricht erreicht
+  nie das Onboard.
+- `ReleaseCarControl`, ein Disconnect der Fahrerverbindung oder ein neuer
+  Erwerb lösen Folgendes aus:
   - den Cache leeren,
-  - `ControlDisplayCleared(carId, driverEpoch)` an die Gruppe senden.
+  - `CtlCleared(carId, driverEpoch)` an Interessenten senden.
 
-**Server → Clients:**
+**Server → Clients mit Interesse:**
 
-- Gruppe `control-display:{carId}`, Beitritt mit `SubscribeToControlDisplay(carId)`;
-  Leseberechtigung wie in §4. Beim Beitritt kommt ein Snapshot.
-- Nachricht:
+```
+Ctl(carId, driverEpoch, seq, paused, ageMs, outputs, signals, removedOutputs, removedSignals)
+```
 
-  ```
-  UpdateControlDisplay({ carId, driverEpoch, seq, paused, ageMs, outputs, signals })
-  ```
+- Die Nachricht wird 1:1 weitergereicht, Keepalives eingeschlossen.
+- Beim Setzen des Interesses folgt sofort ein vollständiger Snapshot aus dem
+  Cache.
 
 **Bewertung im Client:**
 
-| Quelle | Zustand |
+| Fall | Ergebnis |
 | --- | --- |
-| `out(k)` / `sig(k)` vorhanden, Alter ≤ 1000 ms | `valid`, `paused` laut Nachricht |
-| Schlüssel fehlt (Ausgang/Signal beim Fahrer nicht zugeordnet) | `invalid` |
-| Alter > 1000 ms, `ControlDisplayCleared`, andere `driverEpoch`, keine Verbindung | `invalid` |
+| Wert vorhanden, letzte Nachricht ≤ 1000 ms alt | `valid`, `paused` laut letzter Nachricht |
+| nie gesendet oder entfernt | `invalid` |
+| Nachricht älter als 1000 ms | `invalid` |
+| `CtlCleared` | `invalid` |
+| andere `driverEpoch` | `invalid` |
+| keine Verbindung | `invalid` |
 | `driverActive()` | `valid`; wahr, wenn `CarStateModel.DriverId` gesetzt ist |
 
-Der Fahrerclient selbst verwendet seine lokalen Werte direkt, mit demselben
-`paused`-Kennzeichen. Er wartet nicht auf den Rundweg über den Server.
+Der Fahrerclient verwendet seine lokalen Werte direkt, mit demselben
+`paused`-Kennzeichen. Die automatische Reaktivierung in `setConfigMode(false)`
+ändert AP13 für den Overlay-Editor (Produktplan, API-Vertrag §6).
 
-Der Fahrerclient ermittelt `paused` aus `updatesEnabled`/`isInConfigMode`
-(`control-flow-store.ts`). Die heutige automatische Reaktivierung in
-`setConfigMode(false)` ändert AP13 für den Overlay-Editor (Produktplan).
+## 8. Erwartete Datenmengen (gemessen mit Beispielnachrichten, JSON zum Client)
+
+| Strom | Szenario | Rate |
+| --- | --- | --- |
+| Telemetrie, 12 Antriebswerte bei 10 Hz | 4 ändern sich je Tick | ≈ 1,5 kB/s |
+| | alle ändern sich | ≈ 2,3 kB/s |
+| | nichts ändert sich (Bestätigung alle 250 ms) | ≈ 0,4 kB/s |
+| LiDAR (Vertrag LiDAR §5) | Fahrt, ca. 60 belegte Felder | ≈ 2 kB/s |
+| | Stillstand (nur Bestätigung) | ≈ 0,3 kB/s |
+| Steuerungsanzeige | Lenken, 3 Werte ändern sich | ≈ 1,1 kB/s |
+| | Keepalive | ≈ 0,07 kB/s |
+| Ohne Bedarf | – | 0 |
+
+Typischer Zuschauer mit vollem Referenz-HUD bei Fahrt: etwa 4–5 kB/s, vorher
+rund 23 kB/s. Der Uplink des Fahrzeugs (MessagePack) liegt darunter.

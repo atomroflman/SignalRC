@@ -1,5 +1,5 @@
 {
- "description": "Referenzfälle des LiDAR-Vertrags (lidar/README.md). points: Rohindex → DistanceMm, alle anderen Indizes Missing; Scanner-Zählrichtung im Uhrzeigersinn angenommen (D58). expect.cells: alle Zellen/Zonen ≠ 0xFFFF; alle übrigen sind 0xFFFF. sectorCells: für jede Sektorenzahl je Sektor (0 = vorne, im Uhrzeigersinn) die Grundraster-Zellen.",
+ "description": "Referenzfälle des LiDAR-Vertrags (lidar/README.md). points: Rohindex → DistanceMm, alle anderen Indizes Missing; Scanner-Zählrichtung im Uhrzeigersinn angenommen (D58). expect.cells: alle Zellen/Zonen ≠ 0xFFFF; alle übrigen sind 0xFFFF. sectorCells: für jede Sektorenzahl je Sektor (0 = vorne, im Uhrzeigersinn) die Grundraster-Zellen. wire: Kodierung des Sample-Werts (cm = floor((mm+5)/10)). deadband: Vergleich mit dem zuletzt gesendeten Raster, Ergebnis touch (nur bestätigen) oder send.",
  "defaultOptions": {
   "mountYawDeg": 0,
   "zoneLimitsMm": [
@@ -967,5 +967,2533 @@
     93
    ]
   ]
- }
+ },
+ "wire": [
+  {
+   "id": "wire-single",
+   "fields": [
+    {
+     "cell": 0,
+     "zone": 1,
+     "mm": 1000
+    }
+   ],
+   "complete": true,
+   "value": "11s:AQBkAA=="
+  },
+  {
+   "id": "wire-empty",
+   "fields": [],
+   "complete": true,
+   "value": "11s:"
+  },
+  {
+   "id": "wire-incomplete-rounding",
+   "fields": [
+    {
+     "cell": 95,
+     "zone": 1,
+     "mm": 805
+    },
+    {
+     "cell": 0,
+     "zone": 1,
+     "mm": 804
+    }
+   ],
+   "complete": false,
+   "value": "10s:AQBQANwBUQA="
+  },
+  {
+   "id": "wire-dense-threshold",
+   "description": "240 belegte Felder → dicht",
+   "fields": [
+    {
+     "cell": 0,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 0,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 0,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 0,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 0,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 1,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 1,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 1,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 1,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 1,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 2,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 2,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 2,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 2,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 2,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 3,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 3,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 3,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 3,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 3,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 4,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 4,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 4,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 4,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 4,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 5,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 5,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 5,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 5,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 5,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 6,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 6,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 6,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 6,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 6,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 7,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 7,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 7,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 7,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 7,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 8,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 8,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 8,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 8,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 8,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 9,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 9,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 9,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 9,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 9,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 10,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 10,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 10,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 10,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 10,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 11,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 11,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 11,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 11,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 11,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 12,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 12,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 12,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 12,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 12,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 13,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 13,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 13,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 13,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 13,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 14,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 14,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 14,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 14,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 14,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 15,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 15,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 15,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 15,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 15,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 16,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 16,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 16,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 16,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 16,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 17,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 17,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 17,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 17,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 17,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 18,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 18,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 18,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 18,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 18,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 19,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 19,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 19,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 19,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 19,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 20,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 20,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 20,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 20,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 20,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 21,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 21,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 21,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 21,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 21,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 22,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 22,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 22,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 22,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 22,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 23,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 23,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 23,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 23,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 23,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 24,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 24,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 24,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 24,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 24,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 25,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 25,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 25,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 25,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 25,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 26,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 26,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 26,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 26,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 26,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 27,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 27,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 27,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 27,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 27,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 28,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 28,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 28,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 28,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 28,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 29,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 29,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 29,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 29,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 29,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 30,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 30,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 30,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 30,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 30,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 31,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 31,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 31,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 31,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 31,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 32,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 32,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 32,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 32,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 32,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 33,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 33,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 33,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 33,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 33,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 34,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 34,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 34,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 34,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 34,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 35,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 35,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 35,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 35,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 35,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 36,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 36,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 36,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 36,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 36,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 37,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 37,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 37,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 37,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 37,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 38,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 38,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 38,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 38,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 38,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 39,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 39,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 39,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 39,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 39,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 40,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 40,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 40,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 40,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 40,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 41,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 41,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 41,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 41,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 41,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 42,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 42,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 42,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 42,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 42,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 43,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 43,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 43,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 43,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 43,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 44,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 44,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 44,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 44,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 44,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 45,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 45,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 45,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 45,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 45,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 46,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 46,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 46,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 46,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 46,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 47,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 47,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 47,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 47,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 47,
+     "zone": 4,
+     "mm": 3000
+    }
+   ],
+   "complete": true,
+   "value": "11d:LAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwB////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////"
+  },
+  {
+   "id": "wire-sparse-limit",
+   "description": "239 belegte Felder → dünn",
+   "fields": [
+    {
+     "cell": 0,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 0,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 0,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 0,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 0,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 1,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 1,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 1,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 1,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 1,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 2,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 2,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 2,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 2,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 2,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 3,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 3,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 3,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 3,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 3,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 4,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 4,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 4,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 4,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 4,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 5,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 5,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 5,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 5,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 5,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 6,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 6,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 6,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 6,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 6,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 7,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 7,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 7,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 7,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 7,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 8,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 8,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 8,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 8,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 8,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 9,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 9,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 9,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 9,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 9,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 10,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 10,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 10,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 10,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 10,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 11,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 11,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 11,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 11,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 11,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 12,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 12,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 12,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 12,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 12,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 13,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 13,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 13,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 13,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 13,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 14,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 14,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 14,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 14,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 14,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 15,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 15,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 15,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 15,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 15,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 16,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 16,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 16,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 16,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 16,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 17,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 17,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 17,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 17,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 17,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 18,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 18,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 18,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 18,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 18,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 19,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 19,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 19,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 19,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 19,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 20,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 20,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 20,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 20,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 20,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 21,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 21,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 21,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 21,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 21,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 22,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 22,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 22,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 22,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 22,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 23,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 23,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 23,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 23,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 23,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 24,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 24,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 24,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 24,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 24,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 25,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 25,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 25,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 25,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 25,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 26,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 26,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 26,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 26,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 26,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 27,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 27,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 27,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 27,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 27,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 28,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 28,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 28,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 28,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 28,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 29,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 29,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 29,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 29,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 29,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 30,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 30,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 30,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 30,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 30,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 31,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 31,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 31,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 31,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 31,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 32,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 32,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 32,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 32,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 32,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 33,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 33,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 33,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 33,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 33,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 34,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 34,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 34,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 34,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 34,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 35,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 35,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 35,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 35,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 35,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 36,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 36,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 36,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 36,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 36,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 37,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 37,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 37,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 37,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 37,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 38,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 38,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 38,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 38,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 38,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 39,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 39,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 39,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 39,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 39,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 40,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 40,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 40,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 40,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 40,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 41,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 41,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 41,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 41,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 41,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 42,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 42,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 42,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 42,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 42,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 43,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 43,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 43,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 43,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 43,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 44,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 44,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 44,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 44,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 44,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 45,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 45,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 45,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 45,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 45,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 46,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 46,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 46,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 46,
+     "zone": 3,
+     "mm": 3000
+    },
+    {
+     "cell": 46,
+     "zone": 4,
+     "mm": 3000
+    },
+    {
+     "cell": 47,
+     "zone": 0,
+     "mm": 3000
+    },
+    {
+     "cell": 47,
+     "zone": 1,
+     "mm": 3000
+    },
+    {
+     "cell": 47,
+     "zone": 2,
+     "mm": 3000
+    },
+    {
+     "cell": 47,
+     "zone": 3,
+     "mm": 3000
+    }
+   ],
+   "complete": true,
+   "value": "11s:AAAsAQEALAECACwBAwAsAQQALAEFACwBBgAsAQcALAEIACwBCQAsAQoALAELACwBDAAsAQ0ALAEOACwBDwAsARAALAERACwBEgAsARMALAEUACwBFQAsARYALAEXACwBGAAsARkALAEaACwBGwAsARwALAEdACwBHgAsAR8ALAEgACwBIQAsASIALAEjACwBJAAsASUALAEmACwBJwAsASgALAEpACwBKgAsASsALAEsACwBLQAsAS4ALAEvACwBMAAsATEALAEyACwBMwAsATQALAE1ACwBNgAsATcALAE4ACwBOQAsAToALAE7ACwBPAAsAT0ALAE+ACwBPwAsAUAALAFBACwBQgAsAUMALAFEACwBRQAsAUYALAFHACwBSAAsAUkALAFKACwBSwAsAUwALAFNACwBTgAsAU8ALAFQACwBUQAsAVIALAFTACwBVAAsAVUALAFWACwBVwAsAVgALAFZACwBWgAsAVsALAFcACwBXQAsAV4ALAFfACwBYAAsAWEALAFiACwBYwAsAWQALAFlACwBZgAsAWcALAFoACwBaQAsAWoALAFrACwBbAAsAW0ALAFuACwBbwAsAXAALAFxACwBcgAsAXMALAF0ACwBdQAsAXYALAF3ACwBeAAsAXkALAF6ACwBewAsAXwALAF9ACwBfgAsAX8ALAGAACwBgQAsAYIALAGDACwBhAAsAYUALAGGACwBhwAsAYgALAGJACwBigAsAYsALAGMACwBjQAsAY4ALAGPACwBkAAsAZEALAGSACwBkwAsAZQALAGVACwBlgAsAZcALAGYACwBmQAsAZoALAGbACwBnAAsAZ0ALAGeACwBnwAsAaAALAGhACwBogAsAaMALAGkACwBpQAsAaYALAGnACwBqAAsAakALAGqACwBqwAsAawALAGtACwBrgAsAa8ALAGwACwBsQAsAbIALAGzACwBtAAsAbUALAG2ACwBtwAsAbgALAG5ACwBugAsAbsALAG8ACwBvQAsAb4ALAG/ACwBwAAsAcEALAHCACwBwwAsAcQALAHFACwBxgAsAccALAHIACwByQAsAcoALAHLACwBzAAsAc0ALAHOACwBzwAsAdAALAHRACwB0gAsAdMALAHUACwB1QAsAdYALAHXACwB2AAsAdkALAHaACwB2wAsAdwALAHdACwB3gAsAd8ALAHgACwB4QAsAeIALAHjACwB5AAsAeUALAHmACwB5wAsAegALAHpACwB6gAsAesALAHsACwB7QAsAe4ALAE="
+  }
+ ],
+ "deadband": [
+  {
+   "id": "deadband-unchanged",
+   "previousSent": [
+    {
+     "cell": 3,
+     "zone": 2,
+     "mm": 1500
+    }
+   ],
+   "next": [
+    {
+     "cell": 3,
+     "zone": 2,
+     "mm": 1520
+    }
+   ],
+   "expect": "touch"
+  },
+  {
+   "id": "deadband-exceeded",
+   "previousSent": [
+    {
+     "cell": 3,
+     "zone": 2,
+     "mm": 1500
+    }
+   ],
+   "next": [
+    {
+     "cell": 3,
+     "zone": 2,
+     "mm": 1530
+    }
+   ],
+   "expect": "send"
+  },
+  {
+   "id": "deadband-occupancy-change",
+   "previousSent": [
+    {
+     "cell": 3,
+     "zone": 2,
+     "mm": 1500
+    }
+   ],
+   "next": [
+    {
+     "cell": 3,
+     "zone": 2,
+     "mm": 1500
+    },
+    {
+     "cell": 4,
+     "zone": 2,
+     "mm": 1500
+    }
+   ],
+   "expect": "send"
+  },
+  {
+   "id": "deadband-rounding",
+   "description": "1525 mm rundet auf 153 cm; Abweichung 3 cm zum gesendeten Wert",
+   "previousSent": [
+    {
+     "cell": 3,
+     "zone": 2,
+     "mm": 1500
+    }
+   ],
+   "next": [
+    {
+     "cell": 3,
+     "zone": 2,
+     "mm": 1525
+    }
+   ],
+   "expect": "send"
+  }
+ ]
 }

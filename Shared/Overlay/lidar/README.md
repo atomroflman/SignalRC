@@ -1,7 +1,7 @@
 # Overlay-LiDAR v1: Gruppen, Grundraster, Widget-Sektoren
 
 Status: **freigegeben** (AP00, 2026-11-01), Vertrag v1. Grundlage: T01,
-D15–D17, D40, D41, D58 und die LiDAR-Regeln des Produktplans.
+D15–D17, D40, D41, D58, D62 und die LiDAR-Regeln des Produktplans.
 Zuständig: AP04 (Onboard), AP03 (Transport), AP08 (Widget).
 Referenzfälle: [`../fixtures/lidar/cases.json`](../fixtures/lidar/cases.json).
 
@@ -59,25 +59,52 @@ Kanaloptionen (Quellkonfiguration, je LiDAR-Quelle):
 - Werte ≥ `0xFFFF` können wegen `L4 ≤ 65534` nicht auftreten. Die Prüfung der
   Optionen verlangt `L4 ≤ 65534`.
 
-## 5. Drahtformat (D40)
+## 5. Drahtformat (D40, geändert durch D62)
 
-Der Sample-`value` ist ein kompakter JSON-Text:
+Der Sample-`value` ist ein **reiner Text** ohne JSON (kein Escaping im
+umgebenden JSON). Aufbau: `<Version><Vollständig><Kodierung>:<Base64>`:
 
-```json
-{"v":1,"seq":123456,"complete":true,"zonesMm":[500,1000,2000,3000,5000],"cells":"<base64>"}
-```
+- `Version` = `1`,
+- `Vollständig` = `1`/`0` (`LidarScan.Complete`),
+- `Kodierung` = `d` (dicht) oder `s` (dünn),
+- Base64 im Standard-Alphabet mit Padding.
 
-- `cells`: 480 × uint16 Little Endian, Index `(k · 5 + z)`, Base64 (Standard-
-  Alphabet, mit Padding) = 1280 Zeichen.
-- `seq` = `LidarScan.Sequence`; `complete` = `LidarScan.Complete`.
+Beispiel: `11s:AQBkAA==`.
+
+- **Einheit:** Zentimeter als uint16 Little Endian, `cm = floor((mm + 5) / 10)`.
+  Gruppenerkennung und Zonenzuordnung rechnen weiter in mm (§3, §4). Der
+  Zonenindex steckt im Feldindex, nicht im Wert.
+- **Dicht (`d`):** 480 Werte in der Reihenfolge `(k · 5 + z)`, `0xFFFF` =
+  unbelegt; 960 Bytes.
+- **Dünn (`s`):** nur belegte Felder als Paare `(index: uint16, cm: uint16)`,
+  aufsteigend nach `index = k · 5 + z`; 4 Bytes je Feld. Ein leeres Raster
+  ergibt `11s:`.
+- **Wahl:** dünn, solange höchstens 239 Felder belegt sind (dann kleiner als
+  dicht), sonst dicht.
+- **Zonengrenzen** stehen in den Kanalmetadaten (REST, Optionen
+  `zoneLimitsMm`) und werden nicht im Datenstrom übertragen.
+- **Totband gegen Messrauschen:** Das Onboard vergleicht jedes neue Raster mit
+  dem zuletzt **gesendeten**. Unverändert ist es, wenn alle drei Bedingungen
+  gelten:
+  - dieselben Felder sind belegt,
+  - jeder Wert weicht um höchstens 2 cm ab,
+  - `Vollständig` ist gleich.
+
+  Dann wird der Kanal nur bestätigt (Telemetrievertrag §4) und die Anzeige darf
+  bis zu 2 cm hinterherhinken. Sonst wird das ganze Raster neu gesendet.
 - `state`/`ageMs` laut Telemetrievertrag:
-  - `ageMs` = jetzt − `ReceivedUtc`,
+  - `ageMs` = jetzt − `ReceivedUtc` des zuletzt verarbeiteten Scans,
   - `Stale` bei `Spinning == false`,
   - `Error` bei geschlossenem Port oder `Problem`,
   - `NoData` vor dem ersten Scan.
-- Budget ohne Transport-Overhead: etwa 1,4 kB je Snapshot, etwa 7 kB/s bei
-  5 Hz. Der Nachweis der gemessenen Bandbreite erfolgt in AP14 (Ziel ≤ 8 kB/s
-  für diesen Kanal einschließlich Batch-Hülle).
+
+  Bestätigt wird nur nach einem **neuen** Scan (neue `Sequence`).
+- **Datenmenge zum Client:**
+  - Stillstand: etwa 0,3 kB/s (Bestätigungen),
+  - Fahrt mit etwa 60 belegten Feldern: etwa 2 kB/s,
+  - Obergrenze dicht: etwa 7 kB/s.
+
+  Den Nachweis führt AP14.
 
 ## 6. Widget-Sektoren (AP08)
 
