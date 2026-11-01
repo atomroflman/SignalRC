@@ -1,53 +1,288 @@
 {
   "description": "Erwartete Ergebnisse für alle Dokument-Fixtures. schemaValid: Ergebnis gegen overlay-document.schema.json. diagnostics: Mindestmenge erwarteter Resolver-Diagnosen (Code + Ort); zusätzliche Diagnosen sind nur erlaubt, wenn sie hier unter allowExtra stehen.",
   "cases": [
-    { "file": "valid/m2-value-and-rotation.json", "schemaValid": true, "diagnostics": [] },
-    { "file": "valid/variants-clips-lidar.json", "schemaValid": true, "diagnostics": [] },
-
-    { "file": "invalid-schema/unknown-schema-version.json", "schemaValid": false },
-    { "file": "invalid-schema/binding-and-rate.json", "schemaValid": false },
-    { "file": "invalid-schema/root-as-element-id.json", "schemaValid": false },
-    { "file": "invalid-schema/group-without-children.json", "schemaValid": false },
-    { "file": "invalid-schema/pulse-without-condition.json", "schemaValid": false },
-    { "file": "invalid-schema/unknown-element-type.json", "schemaValid": false },
-    { "file": "invalid-schema/dynamic-without-driver.json", "schemaValid": false },
-
-    { "file": "invalid-semantic/multiple-parents.json", "schemaValid": true,
-      "diagnostics": [ { "code": "OVL_STRUCT_MULTIPLE_PARENTS", "category": "structure", "location": { "element": "e_a" } } ] },
-    { "file": "invalid-semantic/orphan-element.json", "schemaValid": true,
-      "diagnostics": [ { "code": "OVL_STRUCT_ORPHAN", "category": "structure", "location": { "element": "e_b" } } ] },
-    { "file": "invalid-semantic/unknown-child.json", "schemaValid": true,
-      "diagnostics": [ { "code": "OVL_REF_UNKNOWN_ELEMENT", "category": "structure", "location": { "container": "root", "ref": "e_missing" } } ] },
-    { "file": "invalid-semantic/group-cycle.json", "schemaValid": true,
-      "diagnostics": [ { "code": "OVL_STRUCT_CYCLE", "category": "structure", "location": { "element": "e_g1" } } ],
-      "allowExtra": ["OVL_STRUCT_ORPHAN", "OVL_STRUCT_CYCLE"] },
-    { "file": "invalid-semantic/variant-structure-cycle.json", "schemaValid": true,
-      "diagnostics": [ { "code": "OVL_STRUCT_CYCLE", "category": "publish", "location": { "variant": "cam1", "element": "e_g1" } } ],
-      "allowExtra": ["OVL_STRUCT_CYCLE"] },
-    { "file": "invalid-semantic/duplicate-id-in-variant.json", "schemaValid": true,
-      "diagnostics": [ { "code": "OVL_ID_DUPLICATE", "category": "structure", "location": { "variant": "cam1", "element": "e_a" } } ] },
-    { "file": "invalid-semantic/override-unknown-element.json", "schemaValid": true,
-      "diagnostics": [ { "code": "OVL_REF_UNKNOWN_ELEMENT", "category": "structure", "location": { "variant": "cam1", "element": "e_gone" } } ] },
-    { "file": "invalid-semantic/unknown-property.json", "schemaValid": true,
-      "diagnostics": [ { "code": "OVL_PROP_UNKNOWN", "category": "structure", "location": { "element": "e_a", "property": "fontSize" } } ] },
-    { "file": "invalid-semantic/mode-not-allowed.json", "schemaValid": true,
-      "diagnostics": [ { "code": "OVL_PROP_MODE_NOT_ALLOWED", "category": "structure", "location": { "element": "e_a", "property": "visible" } } ] },
-    { "file": "invalid-semantic/scale-y-with-lock-aspect.json", "schemaValid": true,
-      "diagnostics": [ { "code": "OVL_PROP_LOCKED_ASPECT", "category": "structure", "location": { "element": "e_g", "property": "scaleY" } } ] },
-    { "file": "invalid-semantic/clip-property-conflict.json", "schemaValid": true,
-      "diagnostics": [ { "code": "OVL_CLIP_PROPERTY_CONFLICT", "category": "structure", "location": { "element": "e_a", "property": "opacity", "clip": "c_2" } } ] },
-    { "file": "invalid-semantic/clip-on-bound-property.json", "schemaValid": true,
-      "diagnostics": [ { "code": "OVL_CLIP_PROPERTY_CONFLICT", "category": "structure", "location": { "element": "e_a", "property": "rotation", "clip": "c_1" } } ] },
-    { "file": "invalid-semantic/keyframe-order-and-range.json", "schemaValid": true,
+    {
+      "file": "valid/m2-value-and-rotation.json",
+      "schemaValid": true,
+      "diagnostics": []
+    },
+    {
+      "file": "valid/variants-clips-lidar.json",
+      "schemaValid": true,
+      "diagnostics": []
+    },
+    {
+      "file": "valid/reference-r2-typical.json",
+      "schemaValid": true,
+      "diagnostics": []
+    },
+    {
+      "file": "invalid-schema/unknown-schema-version.json",
+      "schemaValid": false
+    },
+    {
+      "file": "invalid-schema/binding-and-rate.json",
+      "schemaValid": false
+    },
+    {
+      "file": "invalid-schema/root-as-element-id.json",
+      "schemaValid": false
+    },
+    {
+      "file": "invalid-schema/group-without-children.json",
+      "schemaValid": false
+    },
+    {
+      "file": "invalid-schema/pulse-without-condition.json",
+      "schemaValid": false
+    },
+    {
+      "file": "invalid-schema/unknown-element-type.json",
+      "schemaValid": false
+    },
+    {
+      "file": "invalid-schema/dynamic-without-driver.json",
+      "schemaValid": false
+    },
+    {
+      "file": "invalid-semantic/multiple-parents.json",
+      "schemaValid": true,
       "diagnostics": [
-        { "code": "OVL_CLIP_KEYFRAME_ORDER", "category": "structure", "location": { "clip": "c_1", "track": 0, "keyframe": 1 } },
-        { "code": "OVL_CLIP_KEYFRAME_RANGE", "category": "structure", "location": { "clip": "c_1", "track": 0, "keyframe": 2 } }
-      ] },
-    { "file": "invalid-semantic/invalid-wrap.json", "schemaValid": true,
-      "diagnostics": [ { "code": "OVL_PROP_INVALID_WRAP", "category": "structure", "location": { "element": "e_a", "property": "x" } } ] },
-    { "file": "invalid-semantic/lidar-sectors-not-allowed.json", "schemaValid": true,
-      "diagnostics": [ { "code": "OVL_PROP_OUT_OF_RANGE", "category": "structure", "location": { "element": "e_l", "property": "sectors" } } ] },
-    { "file": "invalid-semantic/unknown-signal-reference.json", "schemaValid": true,
-      "diagnostics": [ { "code": "OVL_REF_UNKNOWN_SOURCE", "category": "publish", "location": { "element": "e_a", "property": "value" } } ] }
+        {
+          "code": "OVL_STRUCT_MULTIPLE_PARENTS",
+          "category": "structure",
+          "location": {
+            "element": "e_a"
+          }
+        }
+      ]
+    },
+    {
+      "file": "invalid-semantic/orphan-element.json",
+      "schemaValid": true,
+      "diagnostics": [
+        {
+          "code": "OVL_STRUCT_ORPHAN",
+          "category": "structure",
+          "location": {
+            "element": "e_b"
+          }
+        }
+      ]
+    },
+    {
+      "file": "invalid-semantic/unknown-child.json",
+      "schemaValid": true,
+      "diagnostics": [
+        {
+          "code": "OVL_REF_UNKNOWN_ELEMENT",
+          "category": "structure",
+          "location": {
+            "container": "root",
+            "ref": "e_missing"
+          }
+        }
+      ]
+    },
+    {
+      "file": "invalid-semantic/group-cycle.json",
+      "schemaValid": true,
+      "diagnostics": [
+        {
+          "code": "OVL_STRUCT_CYCLE",
+          "category": "structure",
+          "location": {
+            "element": "e_g1"
+          }
+        }
+      ],
+      "allowExtra": [
+        "OVL_STRUCT_ORPHAN",
+        "OVL_STRUCT_CYCLE"
+      ]
+    },
+    {
+      "file": "invalid-semantic/variant-structure-cycle.json",
+      "schemaValid": true,
+      "diagnostics": [
+        {
+          "code": "OVL_STRUCT_CYCLE",
+          "category": "publish",
+          "location": {
+            "variant": "cam1",
+            "element": "e_g1"
+          }
+        }
+      ],
+      "allowExtra": [
+        "OVL_STRUCT_CYCLE"
+      ]
+    },
+    {
+      "file": "invalid-semantic/duplicate-id-in-variant.json",
+      "schemaValid": true,
+      "diagnostics": [
+        {
+          "code": "OVL_ID_DUPLICATE",
+          "category": "structure",
+          "location": {
+            "variant": "cam1",
+            "element": "e_a"
+          }
+        }
+      ]
+    },
+    {
+      "file": "invalid-semantic/override-unknown-element.json",
+      "schemaValid": true,
+      "diagnostics": [
+        {
+          "code": "OVL_REF_UNKNOWN_ELEMENT",
+          "category": "structure",
+          "location": {
+            "variant": "cam1",
+            "element": "e_gone"
+          }
+        }
+      ]
+    },
+    {
+      "file": "invalid-semantic/unknown-property.json",
+      "schemaValid": true,
+      "diagnostics": [
+        {
+          "code": "OVL_PROP_UNKNOWN",
+          "category": "structure",
+          "location": {
+            "element": "e_a",
+            "property": "fontSize"
+          }
+        }
+      ]
+    },
+    {
+      "file": "invalid-semantic/mode-not-allowed.json",
+      "schemaValid": true,
+      "diagnostics": [
+        {
+          "code": "OVL_PROP_MODE_NOT_ALLOWED",
+          "category": "structure",
+          "location": {
+            "element": "e_a",
+            "property": "visible"
+          }
+        }
+      ]
+    },
+    {
+      "file": "invalid-semantic/scale-y-with-lock-aspect.json",
+      "schemaValid": true,
+      "diagnostics": [
+        {
+          "code": "OVL_PROP_LOCKED_ASPECT",
+          "category": "structure",
+          "location": {
+            "element": "e_g",
+            "property": "scaleY"
+          }
+        }
+      ]
+    },
+    {
+      "file": "invalid-semantic/clip-property-conflict.json",
+      "schemaValid": true,
+      "diagnostics": [
+        {
+          "code": "OVL_CLIP_PROPERTY_CONFLICT",
+          "category": "structure",
+          "location": {
+            "element": "e_a",
+            "property": "opacity",
+            "clip": "c_2"
+          }
+        }
+      ]
+    },
+    {
+      "file": "invalid-semantic/clip-on-bound-property.json",
+      "schemaValid": true,
+      "diagnostics": [
+        {
+          "code": "OVL_CLIP_PROPERTY_CONFLICT",
+          "category": "structure",
+          "location": {
+            "element": "e_a",
+            "property": "rotation",
+            "clip": "c_1"
+          }
+        }
+      ]
+    },
+    {
+      "file": "invalid-semantic/keyframe-order-and-range.json",
+      "schemaValid": true,
+      "diagnostics": [
+        {
+          "code": "OVL_CLIP_KEYFRAME_ORDER",
+          "category": "structure",
+          "location": {
+            "clip": "c_1",
+            "track": 0,
+            "keyframe": 1
+          }
+        },
+        {
+          "code": "OVL_CLIP_KEYFRAME_RANGE",
+          "category": "structure",
+          "location": {
+            "clip": "c_1",
+            "track": 0,
+            "keyframe": 2
+          }
+        }
+      ]
+    },
+    {
+      "file": "invalid-semantic/invalid-wrap.json",
+      "schemaValid": true,
+      "diagnostics": [
+        {
+          "code": "OVL_PROP_INVALID_WRAP",
+          "category": "structure",
+          "location": {
+            "element": "e_a",
+            "property": "x"
+          }
+        }
+      ]
+    },
+    {
+      "file": "invalid-semantic/lidar-sectors-not-allowed.json",
+      "schemaValid": true,
+      "diagnostics": [
+        {
+          "code": "OVL_PROP_OUT_OF_RANGE",
+          "category": "structure",
+          "location": {
+            "element": "e_l",
+            "property": "sectors"
+          }
+        }
+      ]
+    },
+    {
+      "file": "invalid-semantic/unknown-signal-reference.json",
+      "schemaValid": true,
+      "diagnostics": [
+        {
+          "code": "OVL_REF_UNKNOWN_SOURCE",
+          "category": "publish",
+          "location": {
+            "element": "e_a",
+            "property": "value"
+          }
+        }
+      ]
+    }
   ]
 }

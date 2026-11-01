@@ -1,7 +1,7 @@
 # Overlay-Verträge (AP00) – Dokumentmodell v1
 
 Status: **Entwurf**, Teil von AP00, noch nicht freigegeben. Entscheidungen
-D01–D47 stehen in [Overlay-AP00-Vertraege.md](../../Overlay-AP00-Vertraege.md).
+D01–D58 stehen in [Overlay-AP00-Vertraege.md](../../Overlay-AP00-Vertraege.md).
 Dieses Verzeichnis ist nach D43 die gemeinsame Vertragsquelle für Client und Server.
 
 | Datei | Inhalt |
@@ -12,6 +12,12 @@ Dieses Verzeichnis ist nach D43 die gemeinsame Vertragsquelle für Client und Se
 | `fixtures/documents/cases.json` | Erwartetes Ergebnis je Fixture: Schema-Gültigkeit und Resolver-Diagnosen. |
 | `expression/README.md` | Ausdruckssprache v1: Grammatik, Typen, Funktionen, Fehlerregeln. |
 | `fixtures/expressions/cases.json` | Gemeinsame Referenzfälle der Ausdruckssprache. |
+| `runtime/README.md` | Zeit, Clips, Raten, Glättung, Markierungen; Fälle in `fixtures/runtime/`. |
+| `telemetry/README.md` | Telemetriequalität, Transport, Steuerungsanzeige. |
+| `lidar/README.md` | LiDAR-Gruppen, Grundraster, Drahtformat; Fälle in `fixtures/lidar/`. |
+| `svg/README.md` | SVG-Bereinigung, Positivliste, Parts, Austauschpaket. |
+| `api/README.md` | Persistenz, REST, Ereignisse, Autosave/Konflikte. |
+| `modules/README.md` | Modulschnittstellen, Dateiverantwortung, Tests, Leistungsprofil. |
 
 Gültig ist ein Dokument erst, wenn **Schema und Katalog-/Strukturprüfung** des
 Resolvers (AP01) bestehen. Das Schema prüft nur die Form. Eigenschaftsnamen je

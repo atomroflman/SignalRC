@@ -1,7 +1,9 @@
 # Fahrzeug-Overlay: AP00-Verträge
 
-Status: in Klärung. AP00 ist noch nicht freigegeben; dieses Dokument enthält
-nur bereits bestätigte Entscheidungen und den verbleibenden Klärungsbedarf.
+Status: **vollständig ausgearbeitet, Freigabe durch den Auftraggeber ausstehend.**
+Alle AP00-Verträge liegen als Entwurf v1 vor (S01–S09). Offene Produktfragen
+gibt es nicht mehr; die verbleibenden Prüfpunkte stehen am Ende und gehören
+ausdrücklich zu nachgelagerten Paketen.
 
 Produktregeln: [Overlay-Feature.md](Overlay-Feature.md).
 Arbeitspakete: [Overlay-Arbeitspakete.md](Overlay-Arbeitspakete.md).
@@ -459,13 +461,61 @@ Arbeitspakete: [Overlay-Arbeitspakete.md](Overlay-Arbeitspakete.md).
   ausschließlich über Raten und Clips; dafür gelten D14 und die
   Unterbrechungsregeln einheitlich.
 
+### D52 – SVG-`<style>`-Blöcke mit einfachen Selektoren
+
+- Beim Import werden `<style>`-Regeln mit Typ-, Klassen- und ID-Selektoren (auch
+  als Liste) und erlaubten Eigenschaften in Präsentationsattribute umgerechnet.
+- Komplexe Selektoren, Kombinatoren, Pseudoklassen und @-Regeln werden entfernt
+  und im Bereinigungsbericht gemeldet. Gespeichert wird nur attributbasiertes SVG.
+
+### D53 – Verwaiste Stream-Varianten bleiben erhalten
+
+- Eine Variante, deren `StreamId` es nicht mehr gibt, bleibt im Entwurf als
+  „verwaist“ erhalten. Sie erzeugt nur eine Warnung und blockiert die
+  Veröffentlichung nicht.
+- Sie kann im Editor einem anderen Stream ohne eigene Variante zugeordnet oder
+  gelöscht werden.
+
+### D54 – Optionale Veröffentlichungsnotiz
+
+- Beim Veröffentlichen kann eine Notiz mit bis zu 500 Zeichen angegeben werden.
+  Der Verlauf zeigt sie mit Zeitpunkt und veröffentlichendem Fahrer.
+
+### D55 – Undo-Historie 200 Schritte, sitzungslokal
+
+- Undo/Redo liegt im Speicher des Tabs, höchstens 200 Schritte, und überlebt
+  kein Neuladen. Die Wiederherstellung nach Neuladen läuft über die lokalen
+  Sicherungen (D25).
+
+### D56 – Herkunftsprüfung auch für den bestehenden Telemetriepfad
+
+- Auch der bestehende Hub-Aufruf `UpdateTelemetry(carId, …)` nimmt nur noch
+  Werte von der Verbindung an, die per `OpenCarConnection` als Onboard dieses
+  Fahrzeugs registriert ist. Andere Aufrufe werden verworfen und
+  ratenbegrenzt protokolliert.
+- Alt-Onboards bleiben kompatibel, weil sie `OpenCarConnection` bereits aufrufen.
+
+### D57 – Steuerungsquellen jedes aktiven Fahrers
+
+- Steuerausgänge und Flow-Signale werden für jeden aktiven Fahrer angezeigt,
+  auch für Gast-Fahrer. Maßgeblich ist die Verbindung, die die Steuerung
+  erworben hat. Die HUD-Verwaltung bleibt regulärem Login vorbehalten.
+
+### D58 – Drehrichtung der LiDAR-Indizes als AP04-Prüfpunkt
+
+- Das Grundraster ist im Uhrzeigersinn (von oben) definiert, 0° = vorne.
+- Die tatsächliche Zählrichtung des Scanners wird in AP04 mit einer
+  Testaufnahme bestimmt und als Konstante im Rasterproduzenten festgelegt. Bis
+  dahin ist die Ausrichtung nicht abgenommen. Die Testaufnahme ist ein
+  gesondert zu vereinbarender Hardwaretest.
+
 ## Spezifikationsstand
 
 ### S01 – Dokumentmodell und Property-Katalog v1 (Entwurf)
 
 Liegt unter [Shared/Overlay/](Shared/Overlay/README.md):
 Schema, Katalog, Transformationsreihenfolge, Eigenschafts-/Modusmodell,
-Variantenauflösung, Diagnoseformat sowie 2 gültige, 7 schema-ungültige und
+Variantenauflösung, Diagnoseformat sowie 3 gültige, 7 schema-ungültige und
 16 semantisch ungültige Referenzdokumente mit erwarteten Diagnosen.
 Das Schema und die Schema-Erwartungen aller Fixtures sind maschinell geprüft;
 die Resolver-Erwartungen werden erst mit AP01 ausführbar.
@@ -489,6 +539,71 @@ Kurzschluss; nicht assoziative Vergleiche; kein `%`-Operator (`mod()` floored);
 Quellnamen nur als Literale; genau eine statische Diagnose je Ausdruck (die
 erste); Toleranz 1e-9 nur für trigonometrische und Potenzfunktionen.
 
+### S03 – Laufzeit: Zeit, Clips, Raten, Glättung (Entwurf)
+
+[Shared/Overlay/runtime/](Shared/Overlay/runtime/README.md):
+- Uhr und Frame-Reihenfolge, Anzeigesitzungen, Qualität von Treibern,
+  Markierungen.
+- Glättung, Raten-Integration mit `dt`-Begrenzung auf 0,25 s, die
+  vollständige Clip-Zustandsmaschine, Pulse-Historie, Easing-Kurven,
+  Gestaltungsmodus und Scrubbing.
+- 25 Referenzfälle.
+
+Technisch festgelegt: Eine ungeprüfte Clip-Bedingung hält an wie eine ungültige
+(abhängige Bewegung, Produktplan). Eine nie gültige Bindung zeigt ihren
+Grundwert mit Ungültig-Markierung, Zahlen zeigen „—“. Dynamisches `visible`
+beendet keine Sitzung.
+
+### S04 – Telemetriequalität und Steuerungsanzeige (Entwurf)
+
+[Shared/Overlay/telemetry/](Shared/Overlay/telemetry/README.md):
+- Sample-Modell (`Valid`/`Unchecked`/`Stale`/`Error`/`NoData`) und
+  Zeitbasis ohne Uhrenvergleich.
+- Neue Hub-Aufrufe und Gruppen, Server-Cache mit Snapshot bei Reconnect,
+  Kompatibilität mit Alt-Onboard und Alt-Client.
+- Herkunftsprüfung (D56).
+- Steuerungsanzeige mit Prüfung der Fahrerverbindung (D57).
+
+Befund: Das Ansehen von Streams prüft heute nichts. Alle Lesezugriffe gehen
+deshalb über einen zentralen Helfer.
+
+### S05 – LiDAR-Raster (Entwurf)
+
+[Shared/Overlay/lidar/](Shared/Overlay/lidar/README.md):
+- neuer Reader auf dem Rohscan, Kanaloptionen,
+- Gruppenerkennung, Zell- und Zonenzuordnung,
+- JSON-/Base64-Drahtformat, Sektorableitung,
+- Einrichtungsaktion.
+
+13 Gruppen-/Rasterfälle und die Zellzuordnung aller sechs Sektorenzahlen.
+
+### S06 – SVG-Assets und Austauschformat (Entwurf)
+
+[Shared/Overlay/svg/](Shared/Overlay/svg/README.md): Verarbeitungsschritte,
+Positivliste, Grenzen, Part-IDs, Instanz-Präfixe, Importablauf,
+Berichtscodes und Paketformat.
+
+### S07 – Persistenz und API (Entwurf)
+
+[Shared/Overlay/api/](Shared/Overlay/api/README.md):
+- Berechtigungsdienst und Entitäten.
+- REST-Endpunkte mit Revisionsprüfung (`If-Match`), Fehlercodes, Ereignisse.
+- Autosave, lokale Sicherung in IndexedDB, Konflikt- und Kontrollverlustablauf,
+  Steuerungspause im Editor.
+
+### S08 – Modulschnittstellen, Dateiverantwortung, Tests (Entwurf)
+
+[Shared/Overlay/modules/](Shared/Overlay/modules/README.md):
+- Rollen-Signaturen aller Ports und Testdoubles.
+- Bestätigte Pfade je Paket; Hub-Erweiterungen als partielle Klassen.
+- Testwerkzeuge xUnit, Vitest und Playwright (nur Entwicklungswerkzeuge) mit
+  Teilpaket T0 in AP14.
+
+### S09 – Leistungsprofil (Entwurf)
+
+Referenz-HUDs R1–R3 mit Zielwerten, Messaufbau, Zusatzprüfungen und manuellem
+Gerätelauf ([modules §4](Shared/Overlay/modules/README.md)).
+
 ## Technisch geprüfte Grundlagen
 
 ### T01 – LiDAR-Geometrie und Größenrechnung
@@ -510,21 +625,23 @@ erste); Toleranz 1e-9 nur für trigonometrische und Potenzfunktionen.
 - Dies ist ein rechnerischer Geometrie-/Größennachweis, keine gemessene
   Bandbreiten-/Leistungsabnahme und noch keine vollständige Drahtformatfreigabe.
 
-## Noch zu konkretisieren
+## Prüfpunkte nach Freigabe
 
-Die vollständige Liste und Abnahme stehen unter AP00 in der Paketübersicht.
-Insbesondere fehlen noch:
+Diese Punkte sind keine Vertragslücken. Sie gehören ausdrücklich zu den
+genannten Paketen:
 
-- Element-/Property-Katalog und konkrete Transformationsreihenfolge (D03).
-- Konkretes Dokumentschema mit Feldnamen, Identitäten und Variantenstruktur.
-- Persistenz-/API-Vertrag: Endpunkte, Fehlerantworten, Ereignisse.
-- Grammatik und vollständiger Funktionskatalog (Basis D20, D26–D29).
-- Clip-Zustandsmaschine als Spezifikation (Basis D10–D14, D23).
-- Telemetrie-Drahtformat, Zeitbasis und Altversionsverhalten (Basis D24).
-- Transport-/Herkunftsprüfung der Flow-Signale (Basis D30, D31, D36, D37).
-- LiDAR-Metadatenfelder und gemessene Bandbreite (Basis D40, D41).
-- SVG-Tag-/Attribut-/CSS-Positivliste und Teilgrenzen (Basis D18, D32).
-- Modulports, Dateipfade, Referenzfälle und Referenz-HUDs (Basis D42, D43).
+- **AP04:** Zählrichtung der LiDAR-Indizes per Testaufnahme bestimmen (D58,
+  gesondert vereinbarter Hardwaretest).
+- **AP14 / T0:** Testgerüste für xUnit, Vitest und Playwright anlegen, bevor
+  M1 startet.
+- **AP14:** Bandbreite, Bildzeiten und Speicher gemessen nachweisen (S09);
+  Referenzgerät für den manuellen Lauf dokumentieren.
+- **AP01, AP06:** Die Resolver- und Ausdrucks-Erwartungen der Fixtures werden
+  erst mit diesen Implementierungen ausführbar. Weichen sie ab, wird der
+  Vertrag koordiniert geändert, nicht still die Implementierung.
 
-Eine einzelne bestätigte Entscheidung gibt weder AP00 insgesamt noch eine
-nachgelagerte Featureimplementierung frei.
+## Freigabe
+
+AP00 ist freigegeben, sobald der Auftraggeber S01–S09 und D01–D58 bestätigt.
+Danach können AP01–AP12 parallel starten (M0). Spätere Vertragsänderungen
+folgen der Änderungsregel in [Shared/Overlay/README.md](Shared/Overlay/README.md).
