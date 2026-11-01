@@ -1,6 +1,6 @@
 # Overlay-Ausdruckssprache v1
 
-Status: **Entwurf**, Teil von AP00, noch nicht freigegeben. Grundlage: D06–D09,
+Status: **freigegeben** (AP00, 2026-11-01), Vertrag v1. Grundlage: D06–D09,
 D20, D26–D31, D33, D36, D46, D48–D51 in
 [Overlay-AP00-Vertraege.md](../../../Overlay-AP00-Vertraege.md).
 Referenzfälle: [`../fixtures/expressions/cases.json`](../fixtures/expressions/cases.json).

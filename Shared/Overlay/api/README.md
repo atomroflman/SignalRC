@@ -1,6 +1,6 @@
 # Overlay-Persistenz und API v1
 
-Status: **Entwurf**, Teil von AP00, noch nicht freigegeben. Grundlage:
+Status: **freigegeben** (AP00, 2026-11-01), Vertrag v1. Grundlage:
 Produktplan (Berechtigungen, Entwurf, Veröffentlichung), D19, D25, D33–D35,
 D47, D53–D55. Zuständig: AP02 (Server), AP09 (Client-Adapter), AP13 (Verdrahtung).
 

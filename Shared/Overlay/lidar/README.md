@@ -1,6 +1,6 @@
 # Overlay-LiDAR v1: Gruppen, Grundraster, Widget-Sektoren
 
-Status: **Entwurf**, Teil von AP00, noch nicht freigegeben. Grundlage: T01,
+Status: **freigegeben** (AP00, 2026-11-01), Vertrag v1. Grundlage: T01,
 D15–D17, D40, D41, D58 und die LiDAR-Regeln des Produktplans.
 Zuständig: AP04 (Onboard), AP03 (Transport), AP08 (Widget).
 Referenzfälle: [`../fixtures/lidar/cases.json`](../fixtures/lidar/cases.json).

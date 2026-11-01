@@ -1,6 +1,6 @@
 # Overlay-Module v1: Schnittstellen, Dateiverantwortung, Tests, Leistung
 
-Status: **Entwurf**, Teil von AP00, noch nicht freigegeben. Ergänzt
+Status: **freigegeben** (AP00, 2026-11-01), Vertrag v1. Ergänzt
 [Overlay-Arbeitspakete.md](../../../Overlay-Arbeitspakete.md). Die Signaturen sind
 verbindliche Rollen. Konkrete Hilfstypen darf das zuständige Paket ergänzen,
 ohne die Rolle zu ändern.

@@ -1,6 +1,6 @@
 # Overlay-SVG-Assets v1 und Austauschformat
 
-Status: **Entwurf**, Teil von AP00, noch nicht freigegeben. Grundlage: D18, D19,
+Status: **freigegeben** (AP00, 2026-11-01), Vertrag v1. Grundlage: D18, D19,
 D32, D34, D45, D52 und die Sicherheitsregeln des Produktplans.
 Zuständig: AP07 (Bereinigung), AP02 (Speicherung/HTTP), AP08 (Darstellung),
 AP12 (Austausch).

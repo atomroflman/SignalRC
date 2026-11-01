@@ -1,6 +1,6 @@
 # Overlay-Verträge (AP00) – Dokumentmodell v1
 
-Status: **Entwurf**, Teil von AP00, noch nicht freigegeben. Entscheidungen
+Status: **freigegeben** (AP00, 2026-11-01), Vertrag v1. Entscheidungen
 D01–D58 stehen in [Overlay-AP00-Vertraege.md](../../Overlay-AP00-Vertraege.md).
 Dieses Verzeichnis ist nach D43 die gemeinsame Vertragsquelle für Client und Server.
 

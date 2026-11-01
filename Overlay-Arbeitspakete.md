@@ -1,8 +1,8 @@
 # Fahrzeug-Overlay: Arbeitspakete und Parallelisierung
 
 Stand: 2026-11-01. Status: Planung; kein Arbeitspaket ist damit implementiert
-oder abgenommen. AP00 ist vollständig ausgearbeitet (S01–S09), die Freigabe
-durch den Auftraggeber steht aus.
+oder abgenommen. AP00 ist am 2026-11-01 freigegeben (S01–S09, D01–D58);
+M0 folgt mit T0 (Testgerüste).
 
 ## Zweck und maßgeblicher Gesamtplan
 
@@ -65,8 +65,8 @@ nicht ein zusätzliches Verbot, vorher gegen deren vereinbarte Ports zu arbeiten
 
 Entscheidungen D01–D58 und Spezifikationsstand S01–S09 stehen in
 [Overlay-AP00-Vertraege.md](Overlay-AP00-Vertraege.md); die Verträge selbst
-liegen unter [Shared/Overlay/](Shared/Overlay/README.md). AP00 ist bis zur
-ausdrücklichen Freigabe durch den Auftraggeber nicht abgeschlossen.
+liegen unter [Shared/Overlay/](Shared/Overlay/README.md). AP00 ist seit
+2026-11-01 freigegeben.
 
 **Ziel:** Alle Bearbeiter arbeiten gegen dieselben versionierten Modelle und
 Verhaltensregeln. Noch offene technische Details werden hier entschieden, nicht

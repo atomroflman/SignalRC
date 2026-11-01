@@ -1,6 +1,6 @@
 # Overlay-Laufzeit v1: Zeit, Clips, Raten, Glättung
 
-Status: **Entwurf**, Teil von AP00, noch nicht freigegeben. Grundlage: D10–D14,
+Status: **freigegeben** (AP00, 2026-11-01), Vertrag v1. Grundlage: D10–D14,
 D23, D27, D28, D51 sowie die Animations- und Qualitätsregeln des Produktplans.
 Referenzfälle: [`../fixtures/runtime/cases.json`](../fixtures/runtime/cases.json).
 

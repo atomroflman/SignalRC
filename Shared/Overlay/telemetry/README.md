@@ -1,6 +1,6 @@
 # Overlay-Quellen v1: Telemetriequalität und Steuerungsanzeige
 
-Status: **Entwurf**, Teil von AP00, noch nicht freigegeben. Grundlage: D06–D09,
+Status: **freigegeben** (AP00, 2026-11-01), Vertrag v1. Grundlage: D06–D09,
 D24, D30, D31, D36, D37, D56, D57 und die Qualitätsregeln des Produktplans.
 Zuständig: AP03 (Onboard/Server), AP05 (Client), AP13 (Verdrahtung).
 

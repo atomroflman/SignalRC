@@ -1,9 +1,9 @@
 # Fahrzeug-Overlay: AP00-Verträge
 
-Status: **vollständig ausgearbeitet, Freigabe durch den Auftraggeber ausstehend.**
-Alle AP00-Verträge liegen als Entwurf v1 vor (S01–S09). Offene Produktfragen
-gibt es nicht mehr; die verbleibenden Prüfpunkte stehen am Ende und gehören
-ausdrücklich zu nachgelagerten Paketen.
+Status: **freigegeben am 2026-11-01** (D01–D58, S01–S09 als Verträge v1).
+Die verbleibenden Prüfpunkte am Ende gehören zu nachgelagerten Paketen.
+Änderungen folgen ab jetzt der Änderungsregel in
+[Shared/Overlay/README.md](Shared/Overlay/README.md).
 
 Produktregeln: [Overlay-Feature.md](Overlay-Feature.md).
 Arbeitspakete: [Overlay-Arbeitspakete.md](Overlay-Arbeitspakete.md).
@@ -642,6 +642,7 @@ genannten Paketen:
 
 ## Freigabe
 
-AP00 ist freigegeben, sobald der Auftraggeber S01–S09 und D01–D58 bestätigt.
-Danach können AP01–AP12 parallel starten (M0). Spätere Vertragsänderungen
+Der Auftraggeber hat S01–S09 und D01–D58 am 2026-11-01 freigegeben. M0 ist
+erreicht, sobald T0 (Testgerüste, AP14) vorliegt; danach starten AP01–AP12
+parallel. Spätere Vertragsänderungen
 folgen der Änderungsregel in [Shared/Overlay/README.md](Shared/Overlay/README.md).
