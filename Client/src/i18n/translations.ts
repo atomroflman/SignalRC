@@ -329,6 +329,7 @@ const deMessages = {
   },
   controlFlowPage: {
     loadingFlow: 'Control Flow wird geladen...',
+    back: 'Zurück zur Fahransicht',
   },
   configGuard: {
     checkingAccess: 'Zugriffsrechte werden gepruft...',
@@ -730,6 +731,7 @@ const enMessages: Messages = {
   },
   controlFlowPage: {
     loadingFlow: 'Loading control flow...',
+    back: 'Back to driving view',
   },
   configGuard: {
     checkingAccess: 'Checking access permissions...',

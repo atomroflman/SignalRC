@@ -103,7 +103,8 @@ export default function CarControlFlowPage() {
     <ConfigGuard carId={carIdNum}>
       <div className="flex flex-col md:flex-row gap-4 p-4 bg-zinc-950 min-h-screen">
         <div className="w-full md:w-1/4 space-y-4">
-          <div className="flex justify-end">
+          <div className="flex items-center justify-between">
+            <Link href="/" className="text-xs text-sky-400 hover:underline">← {messages.controlFlowPage.back}</Link>
             <LanguageSwitcher />
           </div>
           <UpdateControl />
