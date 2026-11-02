@@ -85,12 +85,52 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
     /// watchdog after it has seen the peer at least once, otherwise a single
     /// board on the bench would latch a fault 200 ms after boot. A node that
     /// never appears is therefore invisible to the other node, and only the
-    /// master knows how many there are supposed to be.</summary>
+    /// master knows how many there are supposed to be.
+    ///
+    /// It is a count, not a list of addresses: with 1, either board alone
+    /// releases the drive.</summary>
     public int ExpectedNodes { get; set; } = 2;
 
     /// <summary>How long the fault-reset flag stays set after the button is
     /// pressed, so the nodes see it across several command frames.</summary>
     public int FaultResetHoldMs { get; set; } = 250;
+
+    /// <summary>
+    /// Switch the nodes to Coast, driver off, once the tracks stand still and
+    /// nothing asks them to move. Disable only to test the firmware's Stop.
+    ///
+    /// The firmware's Stop keeps the driver on and regulates to zero speed,
+    /// and at standstill that is unstable: the gate edges put roughly 85
+    /// spurious Hall edges per second on the sensor lines, the velocity loop
+    /// reads them as motion and answers with current, and the wheel ends up
+    /// swinging back and forth at ±20 rad/s against the current limit until
+    /// the DRV8301 latches. Recorded on the bench on 2026-11-02 with nothing
+    /// on the bus but Stop frames.
+    ///
+    /// Nothing is lost by coasting there. Stop gives no holding torque at
+    /// standstill anyway - the firmware empties the velocity integrator below
+    /// 1 rad/s - so the only difference is whether the driver is running.
+    /// Stop is still sent while the tracks are moving, because that is where
+    /// it brakes.
+    /// </summary>
+    public bool CoastAtStandstill { get; set; } = true;
+
+    /// <summary>Below this reported speed a track counts as standing. Matches
+    /// the firmware's own coast threshold; the Hall velocity is blind below
+    /// it anyway.</summary>
+    public float StandstillSpeedRadPerSecond { get; set; } = 1.0f;
+
+    /// <summary>How long both tracks have to stand before the driver goes
+    /// off. Four status frames, so one stale reading does not decide it.</summary>
+    public int StandstillCoastMs { get; set; } = 200;
+
+    /// <summary>
+    /// Coast after this long at zero command even if the tracks still report
+    /// motion. A real stop takes well under a second; a node still "moving"
+    /// after two is the Stop oscillation itself, and the speed check alone
+    /// would then hold the driver on forever.
+    /// </summary>
+    public int MaxStopMs { get; set; } = 2000;
 
     /// <summary>
     /// Shell command run when the controller goes bus-off. Empty disables it.
@@ -210,6 +250,12 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
     private double _commandedRight;
     private CanTrackProtocol.DriveMode _mode = CanTrackProtocol.DriveMode.Stop;
     private string? _inhibitReason = "not started";
+
+    // Starts coasting: at boot nothing is moving, and a node that comes up
+    // should never see the driver-on Stop first.
+    private bool _coasting = true;
+    private long _idleSinceMs = -1;
+    private long _standingSinceMs = -1;
 
     private ushort _sequence;
     private long _framesSent;
@@ -717,6 +763,7 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
 
             _commandedLeft = left * MaxSpeedRadPerSecond;
             _commandedRight = right * MaxSpeedRadPerSecond;
+            mode = ApplyStandstillCoast(mode, now);
             _mode = mode;
             clearFault = now < _faultResetUntilTicks;
             sequence = unchecked(++_sequence);
@@ -805,12 +852,11 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
             return;
         }
 
-        var present = 0;
+        var present = CountPresent(nowMs);
         string? faulted = null;
-        for (var i = 0; i < _nodes.Length && i < ExpectedNodes; i++)
+        for (var i = 0; i < _nodes.Length; i++)
         {
             var n = _nodes[i];
-            if (n.Seen && nowMs - n.LastSeenMs <= NodeTimeoutMs) present++;
             if (n.Fault != CanTrackProtocol.FaultCode.None)
             {
                 faulted ??= $"node {i} faulted: {CanTrackProtocol.Describe(n.Fault)}";
@@ -845,6 +891,48 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
 
         _inhibitReason = null;
     }
+
+    /// <summary>
+    /// Replaces the mode with Coast once nothing is commanded and the tracks
+    /// stand, see <see cref="CoastAtStandstill"/>. Latches until a nonzero
+    /// command arrives, so a track nudged by hand does not switch the driver
+    /// back on. Must be called under _stateLock, after the commanded speeds
+    /// are set.
+    /// </summary>
+    private CanTrackProtocol.DriveMode ApplyStandstillCoast(CanTrackProtocol.DriveMode mode, long nowMs)
+    {
+        const double idleEps = 0.05; // rad/s, the firmware's COAST_TARGET_EPS
+        if (Math.Abs(_commandedLeft) > idleEps || Math.Abs(_commandedRight) > idleEps)
+        {
+            _coasting = false;
+            _idleSinceMs = _standingSinceMs = -1;
+            return mode;
+        }
+        if (!CoastAtStandstill) return mode;
+        if (_coasting) return CanTrackProtocol.DriveMode.Coast;
+
+        if (_idleSinceMs < 0) _idleSinceMs = nowMs;
+
+        // Only nodes that are reporting have a speed worth looking at; one
+        // that is gone has nothing to brake either.
+        var standing = _nodes.All(n => !(n.Seen && nowMs - n.LastSeenMs <= NodeTimeoutMs)
+                                       || Math.Abs(n.Speed) < StandstillSpeedRadPerSecond);
+        if (!standing) _standingSinceMs = -1;
+        else if (_standingSinceMs < 0) _standingSinceMs = nowMs;
+
+        _coasting = (_standingSinceMs >= 0 && nowMs - _standingSinceMs >= StandstillCoastMs)
+                    || nowMs - _idleSinceMs >= MaxStopMs;
+        return _coasting ? CanTrackProtocol.DriveMode.Coast : mode;
+    }
+
+    /// <summary>
+    /// Counts every node that has reported recently, whichever address it has.
+    /// A single bench board may be either side - taking only the first
+    /// ExpectedNodes slots would leave a lone right node uncounted and the
+    /// drive inhibited forever. Must be called under _stateLock.
+    /// </summary>
+    private int CountPresent(long nowMs)
+        => _nodes.Count(n => n.Seen && nowMs - n.LastSeenMs <= NodeTimeoutMs);
 
     private void Send(uint id, byte[] data)
     {
@@ -1172,8 +1260,7 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
         {
             var now = _clock.ElapsedMilliseconds;
             RefreshPresence(now);
-            var present = _nodes.Take(Math.Max(1, ExpectedNodes))
-                                .Count(n => n.Seen && now - n.LastSeenMs <= NodeTimeoutMs);
+            var present = CountPresent(now);
             return new TrackDriveSnapshot
             {
                 Left = _nodes[CanTrackProtocol.LeftNode].ToState(now),

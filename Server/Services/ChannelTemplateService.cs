@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using SignalRC.Server.Data;
 using SignalRC.Shared.Channels;
 using Microsoft.EntityFrameworkCore;
@@ -171,5 +172,8 @@ public class ChannelTemplateService
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         WriteIndented = false,
+        // Templates spell enums out ("dataType": "Boolean"), like the onboard
+        // ChannelMap loader accepts. Numbers still read, so stored maps do too.
+        Converters = { new JsonStringEnumConverter() },
     };
 }

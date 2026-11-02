@@ -82,8 +82,11 @@ Drehzahl geht dann Modus `Stop` mit Sollwert null hinaus:
 - kein Knoten im verriegelten Fehler
 - Fahreingabe nicht älter als 500 ms
 
-Der Grund steht im Klartext im Telemetriefeld `inhibit`. Bei „fährt nicht" ist
-das die erste Stelle zum Nachsehen, `controlAge` die zweite.
+Der Grund steht im Klartext im Telemetriekanal `drive.inhibit`. Bei „fährt
+nicht" ist das die erste Stelle zum Nachsehen. Ob ein Motortreiber an ist,
+zeigen `drive.leftState`/`drive.rightState` (`Off` = Treiber aus, `Ready`,
+`Driving`, `Faulted`), den verriegelten Fehler `drive.leftFault`/`drive.rightFault`.
+Jeder Wert ist ein eigener Kanal und wird im WebUI einzeln eingeblendet.
 
 Ein verriegelter Fehler auf **einem** Knoten schaltet über den Not-Aus-Broadcast
 `0x010` **beide** ab. Ein Antrieb, der bei blockierter Kette weiterläuft,
