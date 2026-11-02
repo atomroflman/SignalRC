@@ -50,6 +50,11 @@ describe("preview UI", () => {
       <OverlayPreview session={session} config={config} locale="de" m={previewMessages.de} videoLayer={(hud) => <div data-video="">{hud}</div>} />,
     );
     expect(withVideo).toMatch(/data-video="">.*data-ovl-mode="preview"/);
+    // The workspace outline travels with the HUD into the video layer, in workspace units.
+    expect(withVideo).toMatch(/data-video="">.*data-ovl-workspace-outline=""/);
+    const { width, height } = config.workspace;
+    expect(withVideo).toContain(`viewBox="0 0 ${width} ${height}"`);
+    expect(withVideo).toContain(previewMessages.de.workspaceOutline);
     session.pause();
     expect(renderToStaticMarkup(<SimulationPanel session={session} m={previewMessages.de} dependencies={[]} />)).toContain("Abspielen");
     session.dispose();

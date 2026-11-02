@@ -16,6 +16,7 @@ import { templateMessages } from "../templates/messages";
 import { integrationMessages } from "./messages";
 import { PublishPanel } from "./publish-panel";
 import { SvgImportDialog } from "./svg-import-dialog";
+import { VideoFrameMark } from "./editor-page";
 
 function keysDeep(o: unknown, prefix = ""): string[] {
   if (!o || typeof o !== "object") return [prefix];
@@ -73,6 +74,22 @@ describe("editor page parts", () => {
       expect(html).toContain(integrationMessages.de.publish.noControlHint[reason]);
     }
     save.dispose();
+  });
+
+  it("marks the displayed video frame with its received size and the workspace size", () => {
+    const workspace = { width: 1920, height: 1080 };
+    const frame = { left: 0, top: 40, width: 800, height: 450 };
+    const playing = renderToStaticMarkup(
+      <VideoFrameMark geometry={{ box: { width: 800, height: 530 }, media: { width: 1280, height: 720 }, frame }} workspace={workspace} m={integrationMessages.de.editorPage} />,
+    );
+    expect(playing).toContain("data-ovl-video-frame");
+    expect(playing).toContain('data-ovl-video-size="1280x720"');
+    expect(playing).toContain("Video 1280×720 · Arbeitsfläche 1920×1080");
+    const none = renderToStaticMarkup(
+      <VideoFrameMark geometry={{ box: { width: 800, height: 530 }, media: { width: 0, height: 0 }, frame: null }} workspace={workspace} m={integrationMessages.en.editorPage} />,
+    );
+    expect(none).not.toContain("data-ovl-video-frame");
+    expect(none).toContain("No video picture · Workspace 1920×1080");
   });
 
   it("disables the SVG import without control", () => {
