@@ -132,6 +132,14 @@ describe.skipIf(!enabled)("live server: editor → publish → second client →
     expect(draft.document.elements.e_speed.props!.decimals).toBe(2);
     expect((draft.document.elements.e_compass.props!.rotation as { base: number }).base).toBe(15);
 
+    // An SVG through the real sanitizer: GET draft carries its stored metadata for the editor.
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><g id="needle"><rect width="2" height="10" fill="red"/></g></svg>';
+    const upload = await persistence.uploadAsset(carId, new Blob([svg], { type: "image/svg+xml" }));
+    store.dispatch({ type: "addElements", elements: { e_svg: { type: "svgAsset", assetId: upload.assetId, props: { x: 10, y: 10 } } }, roots: ["e_svg"] });
+    expect(await until(() => save!.getState().status === "saved" && !save!.getState().dirty)).toBe(true);
+    const withAsset = await persistence.getDraft(carId);
+    expect(withAsset.assets?.[upload.assetId]).toEqual(upload.metadata);
+
     // Publish with a note.
     const published = await publishDraft({ carId, save, persistence }, "M2 live");
     expect(published, JSON.stringify(published)).toMatchObject({ kind: "published", number: 1 });

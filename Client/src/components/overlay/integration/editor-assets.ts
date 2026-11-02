@@ -1,14 +1,12 @@
-// AP13 – asset map and resolve context of the editor page. Assets come from
-// uploads (with metadata), from the current publication (GET published, with
-// metadata) or from GET assets/{id} (text only). For text-only assets the
-// server metadata is obtained by sending the normalized text through the
-// upload once more: sanitizing is idempotent and duplicates return the stored
-// asset (api/README.md §2, AP07). Without control the viewBox is used.
+// AP13 – asset map and resolve context of the editor page. Texts come from
+// GET assets/{id}; the stored metadata from GET draft (`assets`, api/README.md
+// §3) or from the upload response of assets added in the editor. Without
+// metadata (e.g. local-only work) the viewBox is used.
 // Also: the stream behind the running preview.
 import { dict } from "../document/dict";
 import type { AssetMetadata, ResolveContext, TelemetryDataType } from "../document/types";
 import { referencedAssets } from "../editor/persistence/backup";
-import type { AssetUploadResult } from "../editor/persistence/types";
+import type { OverlayPersistence } from "../editor/persistence/types";
 import { expressionAnalyzer } from "../expression";
 import type { VehicleSources } from "../exchange/package";
 import { parseAsset } from "../runtime/svg-asset";
@@ -70,8 +68,26 @@ export function editorResolveContext(vehicle: VehicleSources | null, assets: Rec
 
 export interface AssetLoaderPort {
   getAsset(assetId: string): Promise<string>;
-  /** Normalized text through the sanitizer again (only with control). */
-  upload?(svg: string): Promise<AssetUploadResult>;
+}
+
+/**
+ * The persistence port with every loaded draft's `assets` metadata handed to
+ * `onMetadata` (open, server state after conflict/restore, reconnect checks).
+ */
+export function withDraftAssetMetadata(persistence: OverlayPersistence, onMetadata: (m: Record<string, AssetMetadata> | undefined) => void): OverlayPersistence {
+  return new Proxy(persistence, {
+    get(target, prop, receiver) {
+      if (prop === "getDraft") {
+        return async (carId: number) => {
+          const draft = await target.getDraft(carId);
+          onMetadata(draft.assets);
+          return draft;
+        };
+      }
+      const value = Reflect.get(target, prop, receiver);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
 }
 
 /**
@@ -83,6 +99,7 @@ export class EditorAssetLoader {
   private assets: Record<string, RuntimeAsset> = {};
   private readonly pending = new Set<string>();
   private readonly failed = new Set<string>();
+  private readonly metadata = new Map<string, AssetMetadata>();
   private readonly listeners = new Set<() => void>();
   private disposed = false;
 
@@ -131,17 +148,32 @@ export class EditorAssetLoader {
     this.listeners.clear();
   }
 
+  /**
+   * Stored metadata from GET draft. Attached to loaded text-only assets and
+   * used for the ones still to load; never replaces metadata already known.
+   */
+  addMetadata(metadata: Record<string, AssetMetadata> | undefined) {
+    if (!metadata) return;
+    let changed = false;
+    const next = { ...this.assets };
+    for (const [id, m] of Object.entries(metadata)) {
+      if (!m || typeof m !== "object") continue;
+      if (!this.metadata.has(id)) this.metadata.set(id, m);
+      const known = next[id];
+      if (known && !known.metadata) {
+        next[id] = { svg: known.svg, metadata: m };
+        changed = true;
+      }
+    }
+    if (changed) this.set(next);
+  }
+
   private async load(id: string) {
     this.pending.add(id);
     try {
       const svg = await this.port.getAsset(id);
-      let asset: RuntimeAsset = { svg };
-      if (this.port.upload) {
-        try {
-          const r = await this.port.upload(svg);
-          if (r.assetId === id) asset = { svg, metadata: r.metadata };
-        } catch { /* keep the text; viewBox fallback */ }
-      }
+      const metadata = this.metadata.get(id);
+      const asset: RuntimeAsset = metadata ? { svg, metadata } : { svg };
       if (!this.disposed && !this.assets[id]) this.set({ ...this.assets, [id]: asset });
     } catch {
       this.failed.add(id);

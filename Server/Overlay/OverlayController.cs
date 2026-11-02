@@ -48,7 +48,7 @@ public class OverlayController(SignalRCContext context, OverlayService overlay) 
         if (result.Error != null) return Problem(result.Error);
         var draft = result.Value!;
         Response.Headers.ETag = $"\"{draft.Revision}\"";
-        return Ok(new { draft.Revision, document = draft.Document, draft.UpdatedAt, draft.UpdatedBy });
+        return Ok(new { draft.Revision, document = draft.Document, draft.UpdatedAt, draft.UpdatedBy, assets = draft.Assets });
     }
 
     [HttpPut("draft")]

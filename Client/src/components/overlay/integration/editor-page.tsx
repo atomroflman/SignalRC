@@ -23,7 +23,7 @@ import type { RuntimeAsset } from "../runtime/types";
 import type { CarSourceProvider, HubLike } from "../sources";
 import { sharedSourceHub } from "../sources";
 import { TemplateInserter } from "../templates/template-inserter";
-import { EditorAssetLoader, editorResolveContext, previewStream } from "./editor-assets";
+import { EditorAssetLoader, editorResolveContext, previewStream, withDraftAssetMetadata } from "./editor-assets";
 import {
   deriveHasControl, endLiveTest, installEditorKeyboardGuard, pauseOnEditorOpen, releaseForLiveTest, sendState,
   type MeLike, type PauseStoreLike,
@@ -102,8 +102,6 @@ export function OverlayEditorPage({ carId }: { carId: number }) {
   const connectCarUi = useCarUiStore((s) => s.connect);
   const carState = useCarUiStore((s) => s.states[carId]);
   const hasControl = deriveHasControl(me, carState);
-  const hasControlRef = useRef(hasControl);
-  hasControlRef.current = hasControl;
 
   // Opening pauses sending; leaving never reactivates (api/README.md §6).
   useEffect(() => { pauseOnEditorOpen(flowStore); }, [carId]);
@@ -142,7 +140,13 @@ export function OverlayEditorPage({ carId }: { carId: number }) {
       void conn?.stop().catch(() => {});
     };
   }, []);
-  const persistence = useMemo(() => (hub ? new HttpOverlayPersistence({ hub }) : undefined), [hub]);
+  // Assets: texts by GET assets/{id}, stored metadata with every loaded draft (GET draft `assets`).
+  const { persistence, loader } = useMemo(() => {
+    if (!hub) return { persistence: undefined, loader: undefined };
+    const http = new HttpOverlayPersistence({ hub });
+    const assetLoader = new EditorAssetLoader({ getAsset: (id) => http.getAsset(carId, id) });
+    return { persistence: withDraftAssetMetadata(http, (m) => assetLoader.addMetadata(m)), loader: assetLoader };
+  }, [hub, carId]);
 
   const [videoStreams, setVideoStreams] = useState<VideoStreamInfo[]>([]);
   useEffect(() => {
@@ -179,15 +183,6 @@ export function OverlayEditorPage({ carId }: { carId: number }) {
     };
   }, [carId]);
 
-  const loader = useMemo(() => {
-    if (!persistence) return undefined;
-    return new EditorAssetLoader({
-      getAsset: (id) => persistence.getAsset(carId, id),
-      upload: (svg) => (hasControlRef.current
-        ? persistence.uploadAsset(carId, new Blob([svg], { type: "image/svg+xml" }))
-        : Promise.reject(new Error("no control"))),
-    });
-  }, [persistence, carId]);
   useEffect(() => () => loader?.dispose(), [loader]);
   const noAssets = useMemo<Record<string, RuntimeAsset>>(() => ({}), []);
   const assets = useSyncExternalStore(

@@ -26,7 +26,8 @@ public sealed class OverlayResult<T>
     public static implicit operator OverlayResult<T>(OverlayError error) => new() { Error = error };
 }
 
-public sealed record DraftInfo(long Revision, JsonNode Document, DateTime? UpdatedAt, string? UpdatedBy);
+/// <param name="Assets">Stored metadata of the vehicle's assets the draft references, by asset id.</param>
+public sealed record DraftInfo(long Revision, JsonNode Document, DateTime? UpdatedAt, string? UpdatedBy, JsonObject Assets);
 public sealed record SavedDraft(long Revision);
 /// <param name="Assets">Normalized metadata (size, parts with bbox) of the publication's asset set, by asset id.</param>
 public sealed record PublishedInfo(int PublicationId, int Number, DateTime PublishedAt, JsonNode Document, JsonObject Assets);
@@ -95,10 +96,13 @@ public sealed class OverlayService(
     {
         if (await RequireAdminAsync(user, carId) is { } error) return error;
         var draft = await db.OverlayDrafts.AsNoTracking().FirstOrDefaultAsync(d => d.CarId == carId);
-        if (draft == null) return new DraftInfo(0, await StartDocumentAsync(carId), null, null);
+        if (draft == null) return new DraftInfo(0, await StartDocumentAsync(carId), null, null, new JsonObject());
         var by = draft.UpdatedByUserId == null ? null
             : await db.Users.Where(u => u.Id == draft.UpdatedByUserId).Select(u => u.LoginName ?? u.Name).FirstOrDefaultAsync();
-        return new DraftInfo(draft.Revision, JsonNode.Parse(draft.DocumentJson)!, draft.UpdatedAt, by);
+        var document = JsonNode.Parse(draft.DocumentJson)!;
+        var ids = AssetIds(document).ToList();
+        return new DraftInfo(draft.Revision, document, draft.UpdatedAt, by,
+            await AssetMetadataAsync(carId, db.OverlayAssets.Where(a => ids.Contains(a.AssetId)).Select(a => a.AssetId)));
     }
 
     /// <summary>Empty document whose workspace follows the first stream (D22).</summary>
@@ -138,9 +142,12 @@ public sealed class OverlayService(
     /// Metadata of the assets a publication references (api §3): viewers need the
     /// part bboxes for "center" pivots, but read only the SVG text from GET assets.
     /// </summary>
-    private async Task<JsonObject> PublicationAssetMetadataAsync(int carId, int publicationId)
+    private Task<JsonObject> PublicationAssetMetadataAsync(int carId, int publicationId) =>
+        AssetMetadataAsync(carId, db.OverlayPublicationAssets.Where(pa => pa.PublicationId == publicationId).Select(pa => pa.AssetId));
+
+    /// <summary>Stored metadata of the vehicle's assets among <paramref name="ids"/>; missing or unreadable metadata is left out.</summary>
+    private async Task<JsonObject> AssetMetadataAsync(int carId, IQueryable<string> ids)
     {
-        var ids = db.OverlayPublicationAssets.Where(pa => pa.PublicationId == publicationId).Select(pa => pa.AssetId);
         var rows = await db.OverlayAssets.AsNoTracking().Where(a => a.CarId == carId && ids.Contains(a.AssetId))
             .OrderBy(a => a.AssetId).Select(a => new { a.AssetId, a.MetadataJson }).ToListAsync();
         var result = new JsonObject();

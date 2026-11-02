@@ -50,7 +50,7 @@ gehaltenen Revisionen oder einer Veröffentlichung, werden gelöscht.
 | --- | --- | --- | --- |
 | GET | `published` | Betrachter | `200 { publicationId, number, publishedAt, document, assets }` oder `204`; `assets`: `{ [assetId]: metadata }` der Asset-Menge der Veröffentlichung (siehe unten) |
 | GET | `assets/{assetId}` | Betrachter* | `200 image/svg+xml` |
-| GET | `draft` | Verwalter | `200 { revision, document, updatedAt, updatedBy }`; ohne Entwurf `revision: 0` und Startdokument (D22) |
+| GET | `draft` | Verwalter | `200 { revision, document, updatedAt, updatedBy, assets }`; ohne Entwurf `revision: 0`, Startdokument (D22) und leeres `assets`. `assets`: `{ [assetId]: metadata }` der im Entwurf referenzierten Assets dieses Fahrzeugs (wie bei `published`) |
 | PUT | `draft` | Verwalter | Header `If-Match: "<revision>"`, Body Dokument → `200 { revision }` |
 | PATCH | `draft` | Verwalter | Header `If-Match: "<revision>"`, Body `application/json-patch+json` (RFC 6902) → `200 { revision }` |
 | GET | `publications` | Verwalter | `200 [{ id, number, publishedAt, publishedBy, note }]`, neueste zuerst |
@@ -68,6 +68,12 @@ SVG-Vertrag §4: `width`, `height`, `parts` mit `bbox`). `GET assets/{assetId}` 
 nur das SVG; ohne die Metadaten könnten Betrachter den Pivot `"center"` von Teilen
 nicht bestimmen. Fehlende oder unlesbare Metadaten werden ausgelassen; der Client
 verwendet dann die `viewBox` des SVG.
+
+**Asset-Metadaten im Entwurf:** `GET draft` liefert `assets` in derselben Form für
+die im Entwurf (Standard und Varianten) referenzierten Assets dieses Fahrzeugs;
+fehlende, fremde oder unlesbare Einträge werden ausgelassen. Der Editor lädt damit
+nur noch die SVG-Texte über `GET assets/{assetId}`; neu hochgeladene Assets bringen
+ihre Metadaten mit der Upload-Antwort mit.
 
 \* Ein Asset ist für Betrachter nur lesbar, wenn eine Veröffentlichung des
 Fahrzeugs es referenziert; Verwalter lesen jedes Asset des Fahrzeugs. Asset-Antworten:

@@ -15,6 +15,8 @@ export interface Draft {
   document: OverlayDocument;
   updatedAt?: string | null;
   updatedBy?: string | null;
+  /** Stored metadata of the vehicle's assets the draft references (api/README.md §3); missing ones are left out. */
+  assets?: Record<string, AssetMetadata>;
 }
 
 export interface PublicationInfo {
