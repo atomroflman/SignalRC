@@ -317,6 +317,7 @@ public class ControlService : IControlClient, IHubConnectionObserver
     public async Task UpsertControlChannel(string dictKey, ControlChannelMapItem item)
     {
         if (string.IsNullOrEmpty(dictKey) || item == null) return;
+        item.Options = ChannelOptions.Normalize(item.Options);
         ChannelMap.ControlChannels[dictKey] = item;
         await ChannelStore.UpsertControlChannelAsync(dictKey, item);
         Logger.LogInformation("UpsertControlChannel {Key}", dictKey);
@@ -335,6 +336,7 @@ public class ControlService : IControlClient, IHubConnectionObserver
     public async Task UpsertTelemetryChannel(string dictKey, TelemetryChannelMapItem item)
     {
         if (string.IsNullOrEmpty(dictKey) || item == null) return;
+        item.Options = ChannelOptions.Normalize(item.Options);
         ChannelMap.TelemetryChannels[dictKey] = item;
         await ChannelStore.UpsertTelemetryChannelAsync(dictKey, item);
         Logger.LogInformation("UpsertTelemetryChannel {Key}", dictKey);
@@ -353,6 +355,7 @@ public class ControlService : IControlClient, IHubConnectionObserver
     public async Task UpsertVideoStream(string dictKey, VideoStreamMapItem item)
     {
         if (string.IsNullOrEmpty(dictKey) || item == null) return;
+        item.Options = ChannelOptions.Normalize(item.Options);
         ChannelMap.VideoStreams[dictKey] = item;
         await ChannelStore.UpsertVideoStreamAsync(dictKey, item);
         Logger.LogInformation("UpsertVideoStream {Key}", dictKey);
@@ -374,6 +377,7 @@ public class ControlService : IControlClient, IHubConnectionObserver
     public async Task ApplyChannelMap(ChannelMap channelMap, string channelMapHash)
     {
         if (channelMap == null) return;
+        ChannelOptions.Normalize(channelMap);
 
         ChannelMap.PinManagers.Clear();
         foreach (var kv in channelMap?.PinManagers ?? new Dictionary<string, PinManagerMapItem>())

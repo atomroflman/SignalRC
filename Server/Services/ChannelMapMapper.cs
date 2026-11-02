@@ -189,12 +189,8 @@ public static class ChannelMapMapper
         await db.SaveChangesAsync(cancellationToken);
     }
 
-    private static Dictionary<string, object> DeserializeOptions(string? json)
-    {
-        if (string.IsNullOrEmpty(json)) return new();
-        try { return JsonSerializer.Deserialize<Dictionary<string, object>>(json) ?? new(); }
-        catch { return new(); }
-    }
+    // Plain values, not JsonElement: the map goes to the onboard over MessagePack.
+    private static Dictionary<string, object> DeserializeOptions(string? json) => ChannelOptions.FromJson(json);
 
     private static string? SerializeOptions(Dictionary<string, object>? options)
     {

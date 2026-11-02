@@ -104,9 +104,7 @@ public sealed class LidarGridSourceService(SignalRCContext db, OverlayAccess acc
         DataType = t.DataType,
         Unit = t.Unit,
         Decimals = t.Decimals,
-        Options = string.IsNullOrEmpty(t.OptionsJson)
-            ? new()
-            : JsonSerializer.Deserialize<Dictionary<string, object>>(t.OptionsJson) ?? new(),
+        Options = ChannelOptions.FromJson(t.OptionsJson),
         ServerId = t.Id,
         ModifiedAt = t.ModifiedAt,
     };

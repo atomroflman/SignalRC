@@ -503,7 +503,7 @@ public class ChannelsController : ControllerBase
         ControlType = ch.ControlType ?? string.Empty,
         MaxResendInterval = ch.MaxResendInterval,
         TestDisabled = ch.TestDisabled,
-        Options = DeserializeOptions(ch.OptionsJson),
+        Options = ChannelOptions.FromJson(ch.OptionsJson),
         // Without it the onboard stores the channel without id and UpdateChannel(id) no longer finds it.
         ServerId = ch.Id,
         ModifiedAt = ch.ModifiedAt,
@@ -518,7 +518,7 @@ public class ChannelsController : ControllerBase
         DataType = t.DataType,
         Unit = t.Unit,
         Decimals = t.Decimals,
-        Options = DeserializeOptions(t.OptionsJson),
+        Options = ChannelOptions.FromJson(t.OptionsJson),
         // Without it the onboard replaces its item and can no longer send the channel (TelemetryDelta uses ids).
         ServerId = t.Id,
         ModifiedAt = t.ModifiedAt,
@@ -537,12 +537,13 @@ public class ChannelsController : ControllerBase
         Bitrate = s.Bitrate,
         CameraDevice = s.CameraDevice,
         RpiCamId = s.RpiCamId,
-        Options = DeserializeOptions(s.OptionsJson),
+        Options = ChannelOptions.FromJson(s.OptionsJson),
         ModifiedAt = s.ModifiedAt,
         AudioDevice = s.AudioDevice,
         AudioDenoise = s.AudioDenoise,
     };
 
+    // Browser DTOs keep JsonElement values; map items for the onboard use ChannelOptions.FromJson.
     private static Dictionary<string, object> DeserializeOptions(string? json)
     {
         if (string.IsNullOrEmpty(json)) return new();
