@@ -2,7 +2,7 @@
 
 Stand: 2026-11-02.
 - AP00 ist freigegeben.
-- AP01 bis AP08 sind umgesetzt.
+- AP01 bis AP08 sind umgesetzt; AP13 ist zur Hälfte umgesetzt (Anzeigeseite).
 - M0 ist erreicht (T0 mit AP01).
 
 „Umgesetzt“ heißt: implementiert, getestet und lokal committet. Die gemeinsame
@@ -62,7 +62,7 @@ nicht ein zusätzliches Verbot, vorher gegen deren vereinbarte Ports zu arbeiten
 | AP10 | offen | Eigenschaften, Bindungen und Keyframe-Zeitachse | AP06, AP08, AP09. |
 | AP11 | offen | Lokale Simulation und dynamische Vorschau | AP05, AP08, AP09. |
 | AP12 | offen | Startvorlagen, Paket-Import/-Export und Zuordnung | AP01, AP02, AP07, AP09. |
-| AP13 | offen | Video-, UI-, Steuerungs- und Anwendungsintegration | Verbindet AP01 bis AP12 schrittweise. |
+| AP13 | ◐ Teil 1 (Anzeigeseite) umgesetzt | Video-, UI-, Steuerungs- und Anwendungsintegration | Verbindet AP01 bis AP12 schrittweise. |
 | AP14 | offen (T0 mit AP01 erledigt) | Browser-, Sicherheits-, Reconnect- und Leistungsabnahme | Gemeinsame Referenzfälle und integrierbare Funktionspfade. |
 
 ## AP00 – Vertragsfundament und Freigabe-Gate ✅
@@ -531,7 +531,29 @@ auslöst. Keine simulierten Werte gelangen in den gemeinsamen Livebestand.
 Fremde Fahrzeugreferenzen lassen sich zuordnen; ungelöste aktive Referenzen
 blockieren Veröffentlichung. Es wird kein bestimmtes Archivformat vorausgesetzt.
 
-## AP13 – Video-, Steuerungs- und Anwendungsintegration
+## AP13 – Video-, Steuerungs- und Anwendungsintegration ◐
+
+**Status (2026-11-02):** Teil 1 (Anzeigeseite) umgesetzt. Teil 2 ist offen
+bis AP09–AP12: Editorroute, Veröffentlichungs- und Verlaufsoberfläche,
+Steuerwert-Pause beim Öffnen des Editors, Editor-Tastatur.
+- **HUD im Video** (`Client/src/components/overlay/integration/`): Die Ebene
+  liegt exakt auf dem dargestellten `object-contain`-Frame (Resize,
+  Vollbild), die Letterbox bleibt frei. Effektive Variante je `StreamId`;
+  persönliches Ein-/Ausblenden browserlokal je Fahrzeug; Container-Vollbild.
+- **Veröffentlichung:** `GET published` inklusive Asset-Metadaten,
+  `OverlayPublished` mit Abgleich nach Reconnect; Assets vor dem Umschalten
+  laden, Fehler lassen den bisherigen Stand weiterlaufen. Video unberührt.
+- **Steuerungsanzeige:** `ControlDisplayPublisher` an der Fahrerverbindung,
+  gespeist aus dem Flow-Store; neuer Flow-Knoten „HUD-Signal“; Pausenhinweis
+  für alle Betrachter. Nach einem Hub-Reconnect bindet `ResumeCarControl` die
+  neue Verbindung per Session-Hash neu (Steuerbefehle unverändert).
+- **Kanalverwaltung:** `LidarSourceSetup`, Datentyp LidarGrid, Löschwarnungen
+  über `GET dependencies`; Testseite ohne Telemetrie-Altpfad.
+- **Übersetzungen:** Overlay-Texte zentral unter `messages.overlay`.
+- **Nebenbei behoben:** `ServerId` beim Steuerkanal-Push.
+- **Grenzen:** Trennt sich das Onboard, kann die Steuerungsanzeige erst nach
+  erneutem Erwerben weiterlaufen. Browser-/Layoutprüfung (u. a. iOS-Vollbild)
+  in AP14.
 
 **Ziel:** Die unabhängig entwickelten Module früh und schrittweise in die
 bestehende Anwendung einbinden; kein einmaliger Integrationsversuch erst am Ende.

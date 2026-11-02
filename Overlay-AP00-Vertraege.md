@@ -748,6 +748,7 @@ Gerätelauf ([modules §4](Shared/Overlay/modules/README.md)).
 | 2026-11-02 | AP05: D69, D70; Endpunkt `overlay/sources`, Metadaten um `readIntervalTicks`/`zoneLimitsMm` ergänzt (Telemetrievertrag §6/§7, API §3/§4) | AP03, AP05, AP08, AP13 |
 | 2026-11-02 | AP07: SVG-Vertrag präzisiert (zusammengesetzte Selektoren ohne Kombinatoren, `switch`, Wurzel-`x`/`y`, Größenrückfall, Zählweise der Grenzen und zusätzliche Arbeitsgrenzen, `data-part` beim Re-Import); Fixtures `fixtures/svg/`; D67 entfällt mit registrierter Bereinigung | AP02, AP07, AP08, AP12 |
 | 2026-11-02 | AP08: D71; Laufzeit-Diagnosecodes `OVL_RUNTIME_*`; Frame-Zeiten der Laufzeit-Fixtures relativ zu t = 0 | AP08, AP10, AP11, AP14 |
+| 2026-11-02 | AP13 Teil 1: `GET published`/`publications/{id}` liefern `assets` (Metadaten je Asset, API §3); `ResumeCarControl` bindet die Fahrerverbindung nach Reconnect neu (Telemetrievertrag §7) | AP02, AP03, AP08, AP13 |
 | 2026-11-02 | AP06 auf dem Server registriert: Veröffentlichen prüft Formeln, D66 greift nur noch ohne registrierte Prüfung; `LidarGrid`-Kanäle sind kein Formelwert; Abhängigkeitsauskunft (`dependencies`) umgesetzt | AP02, AP06, AP13 |
 
 ## Prüfpunkte nach Freigabe
