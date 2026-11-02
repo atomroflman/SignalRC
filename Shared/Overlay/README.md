@@ -16,6 +16,7 @@ Dieses Verzeichnis ist nach D43 die gemeinsame Vertragsquelle für Client und Se
 | `telemetry/README.md` | Telemetriequalität, bedarfs- und änderungsbasierter Transport, Steuerungsanzeige; Fälle in `fixtures/telemetry/`. |
 | `lidar/README.md` | LiDAR-Gruppen, Grundraster, Drahtformat; Fälle in `fixtures/lidar/`. |
 | `svg/README.md` | SVG-Bereinigung, Positivliste, Parts, Austauschpaket. |
+| `fixtures/svg/` | SVG-Referenzfälle: Rohdateien (`input/`), normalisierte Ausgaben (`expected/`), Erwartungen (`cases.json`). |
 | `api/README.md` | Persistenz, REST, Ereignisse, Autosave/Konflikte. |
 | `modules/README.md` | Modulschnittstellen, Dateiverantwortung, Tests, Leistungsprofil. |
 
