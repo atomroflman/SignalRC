@@ -178,13 +178,21 @@ Veröffentlichung (neue Revision). Das aktuell angezeigte HUD bleibt unveränder
   - Eintrag im Format des Austauschpakets mit `kind: "backup"`, `baseRevision`
     und den Texten der referenzierten Assets.
   - Geschrieben bei jeder Änderung, gedrosselt auf höchstens eine Schreibung je
-    Sekunde. Je Fahrzeug bleiben die letzten 5 erhalten.
+    Sekunde.
+  - Rotation (D72): Je Editor-Sitzung (Feld `sessionId`) wird nur die neueste
+    Sicherung überschrieben, auch über gespeicherte Revisionen hinweg. Die
+    Sicherung beim Konflikt (`conflict: true`) bildet je Sitzung und
+    `baseRevision` einen eigenen Eintrag und überlebt weiteres Bearbeiten.
+    Je Fahrzeug bleiben die Einträge der letzten 5 Sitzungen erhalten.
+    Einträge ohne `sessionId` (vor D72) zählen je als eigene Sitzung;
+    unlesbare Einträge werden nicht angeboten und nur durch die Rotation entfernt.
 - **Wiederherstellung nach Neuladen:**
   - Weiterarbeiten wird nur angeboten, wenn `baseRevision` gleich der aktuellen
     Serverrevision ist.
   - Sonst ist die Sicherung nur als Download verfügbar.
-  - Sicherungen werden nie stillschweigend gelöscht; nur die Rotation auf 5
-    verwirft die älteste.
+  - Sicherungen werden nie stillschweigend gelöscht; verworfen werden nur der
+    überschriebene Vorgänger derselben Sitzung und Sitzungen jenseits der
+    letzten 5 (D72).
 - **Konflikt (`409` oder `OverlayDraftChanged` mit fremder Revision):**
   1. Autosave pausiert; der Serverstand hat Vorrang.
   2. Angeboten werden der Download des lokalen Stands und das Laden des

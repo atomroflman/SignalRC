@@ -63,6 +63,8 @@ export interface SaveControllerOptions {
   assetTexts?: () => Record<string, string>;
   source?: () => PackageSource;
   hasControl?: boolean;
+  /** Backup session id (D72); random per controller by default. */
+  sessionId?: string;
   debounceMs?: number;
   maxDelayMs?: number;
   backupThrottleMs?: number;
@@ -82,6 +84,8 @@ export class SaveController {
   private readonly wall: () => number;
   private readonly o: Required<Pick<SaveControllerOptions, "debounceMs" | "maxDelayMs" | "backupThrottleMs" | "keepBackups" | "retryMs">>;
   private readonly carId: number;
+  /** Backup rotation group of this editor session (D72). */
+  readonly sessionId: string;
 
   private confirmed: OverlayDocument | undefined;
   private lastSeen: OverlayDocument;
@@ -113,6 +117,7 @@ export class SaveController {
     this.clock = options.clock ?? systemClock;
     this.wall = options.wallClock ?? (() => Date.now());
     this.carId = options.store.getState().carId;
+    this.sessionId = options.sessionId ?? `s-${Math.random().toString(36).slice(2, 12)}-${Date.now().toString(36)}`;
     this.o = {
       debounceMs: options.debounceMs ?? 2000,
       maxDelayMs: options.maxDelayMs ?? 30000,
@@ -267,7 +272,7 @@ export class SaveController {
   /** Conflict: replaces the local draft by the server state (server wins); the local one goes to a backup first. */
   async loadServerState(): Promise<void> {
     if (!this.state.hasControl) return;
-    await this.writeBackup(true);
+    await this.writeBackup(true, true);
     try {
       const draft = await this.persistence.getDraft(this.carId);
       if (this.disposed) return;
@@ -397,7 +402,7 @@ export class SaveController {
     this.clearTimer();
     this.clock.clearTimer(this.retryTimer);
     this.set({ status: "conflict", conflictRevision: revision });
-    void this.writeBackup(true);
+    void this.writeBackup(true, true);
   }
 
   private onEvent(e: OverlayEvent) {
@@ -475,11 +480,12 @@ export class SaveController {
   }
 
   /** Writes the local state; `force` also when unchanged since the last backup (conflict). */
-  private writeBackup(force: boolean): Promise<void> {
+  private writeBackup(force: boolean, conflict = false): Promise<void> {
     if (!this.backups) return Promise.resolve();
     const doc = this.store.document;
     if (!force && doc === this.lastBackupDoc) return this.backupChain;
-    if (force && doc === this.confirmed && doc === this.lastBackupDoc) return this.backupChain;
+    // Nothing local to protect when the state equals the confirmed server state.
+    if (force && doc === this.confirmed) return this.backupChain;
     this.lastBackupDoc = doc;
     this.lastBackupAt = this.clock.now();
     const savedAt = Math.max(this.wall(), this.lastBackupKey + 1);
@@ -487,6 +493,8 @@ export class SaveController {
     const entry: BackupEntry = {
       carId: this.carId,
       savedAt,
+      sessionId: this.sessionId,
+      ...(conflict ? { conflict: true } : {}),
       package: backupPackage(doc, this.state.baseRevision, this.assetTexts(), this.source?.(), new Date(savedAt)),
     };
     const store = this.backups;

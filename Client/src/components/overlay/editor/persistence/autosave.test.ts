@@ -300,8 +300,10 @@ describe("reconnect", () => {
   });
 });
 
-describe("local backups and restart (D25)", () => {
-  it("writes at most once per second and keeps the last five per vehicle", async () => {
+describe("local backups and restart (D25, D72)", () => {
+  const x = (e: { package: { document: OverlayDocument } }) => e.package.document.elements.e_a.props!.x;
+
+  it("writes at most once per second; a session overwrites its own backup, also across saved revisions", async () => {
     const server = newServer();
     const backups = new MemoryBackupStore();
     const tab = await openTab(server, backups);
@@ -310,18 +312,82 @@ describe("local backups and restart (D25)", () => {
     tab.setX(2);
     tab.setX(3);
     await settle();
-    expect(backups.entries).toHaveLength(1);
+    expect(backups.entries.map(x)).toEqual([1]);
     tab.clock.advance(1000);
     await settle();
-    expect(backups.entries).toHaveLength(2);
-    expect(backups.entries[1].package.document.elements.e_a.props!.x).toBe(3);
+    expect(backups.entries.map(x)).toEqual([3]);
     for (let i = 0; i < 10; i++) {
       tab.setX(100 + i);
-      tab.clock.advance(1000);
+      tab.clock.advance(3000);
       await settle();
     }
+    expect(server.revision).toBeGreaterThan(5);
+    expect(backups.entries).toHaveLength(1);
+    expect(backups.entries[0]).toMatchObject({ carId: 7, sessionId: tab.save.sessionId, package: { kind: "backup" } });
+    expect(x(backups.entries[0])).toBe(109);
+  });
+
+  it("keeps the newest five sessions per vehicle", async () => {
+    const server = newServer();
+    const backups = new MemoryBackupStore();
+    for (let s = 0; s < 7; s++) {
+      const tab = await openTab(server, backups, new ManualClock(), { t: 1_000_000 + s * 10_000 });
+      tab.save.setControl(false);
+      tab.setX(s);
+      await settle();
+      tab.save.dispose();
+    }
+    expect(backups.entries.map(x).sort()).toEqual([2, 3, 4, 5, 6]);
+    await backups.put({ carId: 8, savedAt: 1, sessionId: "other", package: backups.entries[0].package }, 5);
+    expect(backups.entries.filter((e) => e.carId === 7)).toHaveLength(5);
+  });
+
+  it("a conflict backup survives further editing and loading the server state", async () => {
+    const server = newServer();
+    const backups = new MemoryBackupStore();
+    const tab = await openTab(server, backups);
+    tab.setX(50);
+    tab.clock.advance(1000);
+    await settle();
+    server.externalSave(serverDoc());
+    await settle();
+    expect(tab.save.getState().status).toBe("conflict");
+    tab.setX(51);
+    tab.clock.advance(1000);
+    await settle();
+    await tab.save.loadServerState();
+    for (let i = 0; i < 5; i++) {
+      tab.setX(200 + i);
+      tab.clock.advance(3000);
+      await settle();
+    }
+    const conflict = backups.entries.filter((e) => e.conflict);
+    expect(conflict).toHaveLength(1);
+    expect(conflict[0]).toMatchObject({ sessionId: tab.save.sessionId, package: { baseRevision: 3 } });
+    expect(x(conflict[0])).toBe(51);
+    expect(backups.entries.filter((e) => !e.conflict).map(x)).toEqual([204]);
+    tab.save.dispose();
+    const reloaded = await openTab(server, backups, new ManualClock(), { t: 9_000_000 });
+    expect(reloaded.save.getState().backups.find((b) => b.entry.conflict)).toMatchObject({ canContinue: false });
+  });
+
+  it("entries from before D72 and unreadable entries are handled robustly", async () => {
+    const server = newServer();
+    const backups = new MemoryBackupStore();
+    const pkg = (v: number) => ({ format: "signalrc-overlay-package" as const, formatVersion: 1 as const, kind: "backup" as const, exportedAt: "", baseRevision: 3, source: { streams: [], telemetry: [], outputs: [] }, document: { ...serverDoc(), elements: { e_a: { type: "rect" as const, props: { x: v } } } }, assets: {} });
+    // Legacy entries: no sessionId; each counts as its own session.
+    for (let i = 0; i < 4; i++) backups.entries.push({ carId: 7, savedAt: 100 + i, package: pkg(1000 + i) });
+    backups.entries.push({ carId: 7, savedAt: 50, package: null } as never);
+    const tab = await openTab(server, backups);
+    expect(tab.save.getState().backups.map((b) => x(b.entry))).toEqual([1003, 1002, 1001, 1000]);
+    tab.setX(1);
+    await settle();
+    // Own session + 4 newest legacy entries; the broken (oldest) one is rotated out.
+    expect(backups.entries.map((e) => e.savedAt).sort((a, b) => a - b)).toEqual([100, 101, 102, 103, backups.entries.find((e) => e.sessionId)!.savedAt]);
+    tab.setX(2);
+    tab.clock.advance(1000);
+    await settle();
     expect(backups.entries).toHaveLength(5);
-    expect(backups.entries.every((e) => e.carId === 7 && e.package.kind === "backup")).toBe(true);
   });
 
   it("after a reload the backup is offered to continue only with an unchanged base revision", async () => {
