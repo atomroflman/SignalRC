@@ -2,7 +2,7 @@
 
 Stand: 2026-11-02.
 - AP00 ist freigegeben.
-- AP01 bis AP08 sind umgesetzt; AP13 ist zur Hälfte umgesetzt (Anzeigeseite).
+- AP01 bis AP09 sind umgesetzt; AP13 ist zur Hälfte umgesetzt (Anzeigeseite).
 - M0 ist erreicht (T0 mit AP01).
 
 „Umgesetzt“ heißt: implementiert, getestet und lokal committet. Die gemeinsame
@@ -58,7 +58,7 @@ nicht ein zusätzliches Verbot, vorher gegen deren vereinbarte Ports zu arbeiten
 | AP06 | ✅ umgesetzt | Sicheres Ausdruckssystem in Client und Server | AP00-Verträge. |
 | AP07 | ✅ umgesetzt | SVG-Bereinigung, normalisierte Assets und Importvorschau | AP00-Verträge; Speicherung/HTTP-Anbindung über AP02/AP13. |
 | AP08 | ✅ umgesetzt | SVG-/Animationslaufzeit und LiDAR-Widget | AP01, AP05, AP06, AP07. |
-| AP09 | offen | Editorzustand, Gestaltungsfläche, Undo/Redo und Autosave | AP01, AP02, AP08. |
+| AP09 | ✅ umgesetzt | Editorzustand, Gestaltungsfläche, Undo/Redo und Autosave | AP01, AP02, AP08. |
 | AP10 | offen | Eigenschaften, Bindungen und Keyframe-Zeitachse | AP06, AP08, AP09. |
 | AP11 | offen | Lokale Simulation und dynamische Vorschau | AP05, AP08, AP09. |
 | AP12 | offen | Startvorlagen, Paket-Import/-Export und Zuordnung | AP01, AP02, AP07, AP09. |
@@ -442,7 +442,28 @@ hinein; SVG/Diagnosen heraus. Keine eigenen HTTP-, SignalR- oder Steuerungsaufru
 LiDAR-Aufteilungen; Fehler bleiben eingegrenzt. Gestalten, Scrubbing, Vorschau
 und Fahreransicht verwenden dieselbe vereinbarte Semantik.
 
-## AP09 – Editor-Grundlage, Zustand und Speicherung
+## AP09 – Editor-Grundlage, Zustand und Speicherung ✅
+
+**Status (2026-11-02):** umgesetzt in `Client/src/components/overlay/editor/`
+(`core/`, `persistence/`, `canvas/`, `testing/`, `overlay-editor.tsx`, README).
+- **Kern:** `EditorStore`, Befehle als einziger Änderungsweg, auch für
+  Varianten. Undo/Redo mit 200 Schritten, Transaktionen (ein Drag ist ein
+  Schritt), Subscription-API. Befehle mit neuen Strukturfehlern werden
+  abgelehnt.
+- **Gestaltungsfläche** (`OverlayEditor`) über AP08 im Gestaltungsmodus:
+  Auswahl/Mehrfach-/Rahmenauswahl, Griffe und numerische Felder, Gruppen,
+  Ebenen, Sperren, Ausblenden, Duplizieren, Ausrichten/Verteilen, Zoom/Pan,
+  Raster mit Einrasten.
+- **Varianten:** Vererbungsindikatoren, Rücksetzen, Anlegen/Deaktivieren/
+  Löschen, Zuordnen verwaister Varianten; Löschfolgen über AP01 bestätigt.
+- **Speichern:** Autosave per PATCH (PUT als Rückfall, gzip), sechs
+  Statuszustände, Sicherungen in IndexedDB (D72), Konflikt mit Download und
+  Serverstand, Kontrollverlust ohne Serverzugriffe.
+- **Tests:** Vitest gegen Testdoubles und live gegen lokalen Server mit
+  Test-DB (zwei Tabs, Reconnect, Kontrollwechsel, Neustart). Die
+  Zeigerbedienung im Browser prüft AP14.
+- **Für AP13 Teil 2:** Route, Steuerungspause, Assets, Kontrollstatus und
+  Texte einbinden.
 
 **Ziel:** Ein gemeinsamer, klar kontrollierter Dokumentzustand mit vollständigen
 Gestaltungswerkzeugen und sicherer Speicherung.

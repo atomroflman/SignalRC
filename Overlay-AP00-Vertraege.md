@@ -619,6 +619,13 @@ Arbeitspakete: [Overlay-Arbeitspakete.md](Overlay-Arbeitspakete.md).
 - Integrierende Raten und Clips halten bei ungeprüfter Quelle an (Laufzeit-
   vertrag §3). Overlay-Feature.md ist entsprechend präzisiert.
 
+### D72 – Lokale Sicherungen je Sitzung rotieren
+
+- Je Sitzung bzw. Basisrevision wird nur die neueste lokale Sicherung
+  überschrieben.
+- Aufbewahrt werden die letzten 5 Sitzungen je Fahrzeug; eine angebotene
+  Konfliktsicherung überlebt so weiteres Bearbeiten.
+
 ## Spezifikationsstand
 
 ### S01 – Dokumentmodell und Property-Katalog v1 (Entwurf)
