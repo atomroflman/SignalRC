@@ -3,64 +3,57 @@
 // the `object-contain` video (received size, element box, resize, fullscreen)
 // and places the AP08 renderer exactly there; the letterbox bars stay free.
 // Never intercepts pointer input; video and audio are not touched.
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 import type { EffectiveConfig } from "../document";
 import { OverlayRenderer } from "../runtime/overlay-renderer";
 import type { FrameResult, Locale, RuntimeAsset } from "../runtime/types";
 import { sharedSourceHub, type CarSourceProvider } from "../sources";
 import { showsPausedControl } from "./hud-config";
-import { frameInContainer, sameFrame, type Rect } from "./video-frame";
+import { layerRect, NO_GEOMETRY, observeVideoFrame, sameGeometry, type Rect, type Size, type VideoGeometry } from "./video-frame";
 
-const useIsoLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
-
-/** The displayed video frame relative to the container, tracked on every size change. */
-export function useVideoFrame(containerRef: RefObject<HTMLElement | null>, videoRef: RefObject<HTMLVideoElement | null>): Rect | null {
-  const [frame, setFrame] = useState<Rect | null>(null);
-  useIsoLayoutEffect(() => {
+/**
+ * The player geometry (container, received size, displayed frame), tracked on
+ * every size change. A passive effect on purpose: the container is a parent
+ * host element whose ref is attached only after the children's layout effects,
+ * so a layer mounted together with the player never saw it and stayed 0 × 0
+ * (reload, tab switch, editor preview).
+ */
+export function useVideoGeometry(containerRef: RefObject<HTMLElement | null>, videoRef: RefObject<HTMLVideoElement | null>): VideoGeometry {
+  const [geometry, setGeometry] = useState<VideoGeometry>(NO_GEOMETRY);
+  useEffect(() => {
     const container = containerRef.current;
     const video = videoRef.current;
     if (!container || !video) return;
-    const measure = () => {
-      const next = frameInContainer(container.getBoundingClientRect(), video.getBoundingClientRect(), {
-        width: video.videoWidth,
-        height: video.videoHeight,
-      });
-      setFrame((prev) => (sameFrame(prev, next) ? prev : next));
-    };
-    measure();
-    let observer: ResizeObserver | undefined;
-    if (typeof ResizeObserver === "function") {
-      observer = new ResizeObserver(measure);
-      observer.observe(container);
-      observer.observe(video);
-    }
-    // "resize" fires when the received frame size changes (new stream, camera switch).
-    const events = ["loadedmetadata", "resize", "emptied"] as const;
-    for (const e of events) video.addEventListener(e, measure);
-    window.addEventListener("resize", measure);
-    document.addEventListener("fullscreenchange", measure);
-    return () => {
-      observer?.disconnect();
-      for (const e of events) video.removeEventListener(e, measure);
-      window.removeEventListener("resize", measure);
-      document.removeEventListener("fullscreenchange", measure);
-    };
+    return observeVideoFrame(container, video, (g) => setGeometry((prev) => (sameGeometry(prev, g) ? prev : g)));
   }, [containerRef, videoRef]);
-  return frame;
+  return geometry;
+}
+
+/** The displayed video frame relative to the container (null while nothing is displayed). */
+export function useVideoFrame(containerRef: RefObject<HTMLElement | null>, videoRef: RefObject<HTMLVideoElement | null>): Rect | null {
+  return useVideoGeometry(containerRef, videoRef).frame;
+}
+
+function layerStyle(rect: Rect | null): CSSProperties {
+  return rect
+    ? { left: rect.left, top: rect.top, width: rect.width, height: rect.height }
+    : { left: 0, top: 0, width: 0, height: 0, visibility: "hidden" };
+}
+
+export interface VideoFrameLayerProps {
+  containerRef: RefObject<HTMLElement | null>;
+  videoRef: RefObject<HTMLVideoElement | null>;
+  /** Without a displayed frame the layer covers this size fitted into the container (editor preview); otherwise it is hidden. */
+  fallback?: Size;
+  children: ReactNode | ((geometry: VideoGeometry) => ReactNode);
 }
 
 /** Content placed exactly on the displayed video frame (editor preview, AP11 `videoLayer`); no pointer input. */
-export function VideoFrameLayer({ containerRef, videoRef, children }: { containerRef: RefObject<HTMLElement | null>; videoRef: RefObject<HTMLVideoElement | null>; children: ReactNode }) {
-  const frame = useVideoFrame(containerRef, videoRef);
+export function VideoFrameLayer({ containerRef, videoRef, fallback, children }: VideoFrameLayerProps) {
+  const geometry = useVideoGeometry(containerRef, videoRef);
   return (
-    <div
-      className="pointer-events-none absolute"
-      style={frame
-        ? { left: frame.left, top: frame.top, width: frame.width, height: frame.height }
-        : { left: 0, top: 0, width: 0, height: 0, visibility: "hidden" }}
-      data-ovl-frame-layer=""
-    >
-      {children}
+    <div className="pointer-events-none absolute" style={layerStyle(layerRect(geometry, fallback))} data-ovl-frame-layer={geometry.frame ? "frame" : fallback ? "fallback" : "none"}>
+      {typeof children === "function" ? children(geometry) : children}
     </div>
   );
 }
@@ -116,9 +109,7 @@ export default function VideoHud({ carId, config, assets, locale, visible, conta
   return (
     <div
       className="pointer-events-none absolute"
-      style={frame
-        ? { left: frame.left, top: frame.top, width: frame.width, height: frame.height }
-        : { left: 0, top: 0, width: 0, height: 0, visibility: "hidden" }}
+      style={layerStyle(frame)}
       data-ovl-hud=""
       hidden={!visible}
     >

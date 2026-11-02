@@ -28,8 +28,12 @@ import {
   controlReason, endLiveTest, installEditorKeyboardGuard, pauseOnEditorOpen, releaseForLiveTest, sendState,
   type MeLike, type PauseStoreLike,
 } from "./editor-control";
+import type { IntegrationMessages } from "./messages";
 import { PublishPanel } from "./publish-panel";
 import { SvgImportDialog } from "./svg-import-dialog";
+import type { Size, VideoGeometry } from "./video-frame";
+
+type EditorPageMessages = IntegrationMessages["editorPage"];
 
 const flowStore = useControlFlowStore as unknown as PauseStoreLike;
 
@@ -77,20 +81,42 @@ function storedStreamId(carId: number): number | undefined {
   }
 }
 
-function PreviewVideo({ carId, store, streams, hud, noVideo }: { carId: number; store: EditorStore; streams: VideoStreamInfo[]; hud: ReactNode; noVideo: string }) {
+/** Outline of the displayed video frame with its received size, so the workspace (dashed, preview) can be compared with it. */
+export function VideoFrameMark({ geometry, workspace, m }: { geometry: VideoGeometry; workspace: Size; m: EditorPageMessages }) {
+  const { frame, media } = geometry;
+  const label = `${frame ? m.videoFrame(media.width, media.height) : m.noVideoFrame} · ${m.workspaceSize(workspace.width, workspace.height)}`;
+  return (
+    <>
+      {frame && <div className="absolute inset-0 border border-sky-400/80" data-ovl-video-frame="" />}
+      <div className="absolute bottom-1 left-1 rounded bg-black/70 px-1.5 py-0.5 text-[11px] text-sky-200" data-ovl-video-size={frame ? `${media.width}x${media.height}` : ""}>
+        {label}
+      </div>
+    </>
+  );
+}
+
+function PreviewVideo({ carId, store, streams, hud, m }: { carId: number; store: EditorStore; streams: VideoStreamInfo[]; hud: ReactNode; m: EditorPageMessages }) {
   const state = useEditorState(store);
   const stream = previewStream(streams, state.activeVariant, storedStreamId(carId));
   if (!stream) {
     return (
       <>
         {hud}
-        <div className="pointer-events-none absolute bottom-1 left-1 text-[11px] text-zinc-500">{noVideo}</div>
+        <div className="pointer-events-none absolute bottom-1 left-1 text-[11px] text-zinc-500">{m.noVideo}</div>
       </>
     );
   }
+  // Without a received frame (vehicle not sending, Janus down) the HUD stays on the fitted workspace.
+  const workspace = store.effective().workspace;
+  const layer = (geometry: VideoGeometry) => (
+    <>
+      {hud}
+      <VideoFrameMark geometry={geometry} workspace={workspace} m={m} />
+    </>
+  );
   return (
     <div className="absolute inset-0 flex bg-black">
-      <VideoStream key={stream.serverId} streamId={stream.serverId} streamName={stream.name} frameLayer={hud} />
+      <VideoStream key={stream.serverId} streamId={stream.serverId} streamName={stream.name} frameLayer={layer} frameLayerFallback={workspace} />
     </div>
   );
 }
@@ -218,8 +244,8 @@ export function OverlayEditorPage({ carId }: { carId: number }) {
   const getAsset = useCallback((id: string) => persistence!.getAsset(carId, id), [persistence, carId]);
   const upload = useMemo(() => httpAssetUploader(carId), [carId]);
   const videoLayer = useCallback(
-    (hud: ReactNode) => (api ? <PreviewVideo carId={carId} store={api.store} streams={videoStreams} hud={hud} noVideo={m.editorPage.noVideo} /> : hud),
-    [api, carId, videoStreams, m.editorPage.noVideo],
+    (hud: ReactNode) => (api ? <PreviewVideo carId={carId} store={api.store} streams={videoStreams} hud={hud} m={m.editorPage} /> : hud),
+    [api, carId, videoStreams, m.editorPage],
   );
   const onReady = useCallback((a: { store: EditorStore; save: SaveController }) => setApi(a), []);
 

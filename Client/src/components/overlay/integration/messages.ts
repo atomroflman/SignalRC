@@ -50,6 +50,10 @@ const de = {
     endLiveTest: "Live-Test beenden (pausieren)",
     keyboardHint: "Tastatureingaben im Editor lösen keine Fahrbefehle aus.",
     noVideo: "Kein Video-Stream verfügbar – Vorschau ohne Video.",
+    /** Preview: received size of the displayed frame (videoWidth × videoHeight). */
+    videoFrame: (w: number, h: number) => `Video ${w}×${h}`,
+    noVideoFrame: "Kein Videobild",
+    workspaceSize: (w: number, h: number) => `Arbeitsfläche ${w}×${h}`,
     exchange: "Import/Export",
   },
   publish: {
@@ -160,6 +164,9 @@ const en: typeof de = {
     endLiveTest: "End live test (pause)",
     keyboardHint: "Keyboard input in the editor does not trigger driving commands.",
     noVideo: "No video stream available – preview without video.",
+    videoFrame: (w: number, h: number) => `Video ${w}×${h}`,
+    noVideoFrame: "No video picture",
+    workspaceSize: (w: number, h: number) => `Workspace ${w}×${h}`,
     exchange: "Import/export",
   },
   publish: {

@@ -49,6 +49,8 @@ export type PreviewMessages = {
   distance: string;
   swing: string;
   localOnly: string;
+  /** Dashed outline of the workspace over the video frame. */
+  workspaceOutline: string;
 };
 
 const de: PreviewMessages = {
@@ -99,6 +101,7 @@ const de: PreviewMessages = {
   distance: "Abstand (mm)",
   swing: "Schwankung (mm)",
   localOnly: "Testwerte gelten nur in dieser Vorschau. Sie werden nicht gesendet, nicht gespeichert und lösen keine Fahrzeugbefehle aus.",
+  workspaceOutline: "Arbeitsfläche (gestrichelt)",
 };
 
 const en: PreviewMessages = {
@@ -149,6 +152,7 @@ const en: PreviewMessages = {
   distance: "Distance (mm)",
   swing: "Swing (mm)",
   localOnly: "Test values apply to this preview only. They are not sent, not saved and trigger no vehicle commands.",
+  workspaceOutline: "Workspace (dashed)",
 };
 
 export const previewMessages: Record<"de" | "en", PreviewMessages> = { de, en };
