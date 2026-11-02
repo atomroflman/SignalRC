@@ -44,5 +44,7 @@ public class TelemetryDelta
     /// <summary>Unchanged channels with their own age, as flat pairs id, ageMs.</summary>
     [Key(5)] public int[] TouchedAged { get; set; } = [];
 
-    public bool IsEmpty => Changed.Count == 0 && Touched.Length == 0 && TouchedAged.Length == 0;
+    // Not on the wire; without the attribute MessagePack refuses the whole type.
+    [IgnoreMember]
+    public bool IsEmpty =>Changed.Count == 0 && Touched.Length == 0 && TouchedAged.Length == 0;
 }

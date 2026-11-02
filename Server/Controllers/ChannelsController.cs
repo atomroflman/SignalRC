@@ -516,6 +516,8 @@ public class ChannelsController : ControllerBase
         Unit = t.Unit,
         Decimals = t.Decimals,
         Options = DeserializeOptions(t.OptionsJson),
+        // Without it the onboard replaces its item and can no longer send the channel (TelemetryDelta uses ids).
+        ServerId = t.Id,
         ModifiedAt = t.ModifiedAt,
     };
 

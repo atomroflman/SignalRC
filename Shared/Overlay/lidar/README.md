@@ -27,13 +27,25 @@ Kanaloptionen (Quellkonfiguration, je LiDAR-Quelle):
 | `zoneLimitsMm` | `[500, 1000, 2000, 3000, 5000]` | fünf Zonen-Obergrenzen, streng steigend |
 | `neighborMaxMm` | 50 | räumlicher Nachbarabstand (inklusive) |
 | `minGroupPoints` | 3 | Mindestgröße einer Gruppe |
+| `scannerClockwise` | `true` | Zählrichtung der Rohindizes, vorläufig (§2, D58) |
+
+Präzisierungen aus der Umsetzung (AP04):
+
+- Prüfung der Optionen: genau fünf ganzzahlige Zonengrenzen, `L0 > 0`,
+  streng steigend, `L4 ≤ 65534`; `neighborMaxMm > 0`;
+  `1 ≤ minGroupPoints ≤ 1440`; `mountYawDeg` endlich, beliebig groß (wird
+  umgebrochen). Ungültige Optionen ergeben einmal ein Sample mit leerem Wert
+  und Zustand `Error`, danach nichts.
+- `scannerClockwise` ist die Quellkonfiguration für die Konstante aus §2. Die
+  Einrichtungsaktion schreibt sie nicht; es gilt der Standard des Readers.
 
 ## 2. Winkel
 
 - Rohindex `i ∈ [0, 1440)`; `a_raw = i · 0,25°`, Index 0 = vorne.
 - Zählrichtung: Der Produzent bildet auf **im Uhrzeigersinn von oben** ab.
   Die Richtung des Scanners wird in AP04 bestimmt (D58); bis dahin gilt die
-  Konstante `ScannerClockwise = true` als vorläufig.
+  Konstante `ScannerClockwise = true` als vorläufig. Umgesetzt ist sie als
+  Kanaloption `scannerClockwise` (§1); `false` bedeutet `a = −a_raw + mountYawDeg`.
 - Korrigierter Winkel: `a = wrap(±a_raw + mountYawDeg, 0, 360)`.
 
 ## 3. Gruppenerkennung (auf dem ganzen Rundscan)
@@ -99,6 +111,16 @@ Beispiel: `11s:AQBkAA==`.
   - `NoData` vor dem ersten Scan.
 
   Bestätigt wird nur nach einem **neuen** Scan (neue `Sequence`).
+- Präzisierungen aus der Umsetzung (AP04):
+  - Ein Scan gilt als neu, wenn sich `Sequence` oder `ReceivedUtc` ändert
+    (der Pico zählt nach einem Neustart von vorn).
+  - Ändert sich der Zustand ohne neuen Scan (Port zu, Stillstand), geht einmal
+    der zuletzt erzeugte Wert mit dem neuen Zustand hinaus; sonst wären
+    `Stale` und `Error` nie sichtbar. Vor dem ersten Scan geht einmal ein
+    leerer Wert mit `NoData` hinaus.
+  - Das Totband vergleicht mit dem zuletzt vom Reader erzeugten Wert. Liegt
+    das neue Raster im Totband, liefert der Reader denselben Text noch einmal;
+    der Delta-Tracker (Telemetrievertrag §4) macht daraus eine Bestätigung.
 - **Datenmenge zum Client:**
   - Stillstand: etwa 0,3 kB/s (Bestätigungen),
   - Fahrt mit etwa 60 belegten Feldern: etwa 2 kB/s,
@@ -134,4 +156,11 @@ Telemetrievertrag:
   - `DataType = LidarGrid`,
   - die Optionen aus §1.
 - Gibt es den Kanal schon, ändert die Aktion nichts und meldet das.
+- Präzisierungen aus der Umsetzung (AP04):
+  - `pinManager` ist `lidar`, wenn es diesen Pin-Manager gibt oder keinen
+    bzw. mehrere vom Typ `LidarManager`; gibt es genau einen anderen, dessen
+    Name.
+  - Der neue Kanal geht wie bei der Kanalverwaltung sofort ans Onboard, mit
+    `ServerId`. Die Optionen lassen sich danach über die bestehende
+    Kanalverwaltung (`PUT …/channels/telemetry/lidarGrid`) ändern.
 - Anzeigen oder Veröffentlichen eines HUDs legt nie Kanäle an.
