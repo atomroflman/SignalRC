@@ -188,6 +188,32 @@ describe("driver binding (D57: the connection that acquired control)", () => {
     expect(next.calls("Ctl").length).toBe(1);
   });
 
+  it("after a reconnect resumes the driver role with the session and publishes again on CtlDemand", async () => {
+    const t = setup();
+    t.store.set({ carSession: "sess-1" });
+    t.control.push("CtlDemand", 7, true);
+    await flush();
+    expect(t.sent().length).toBe(1);
+    t.control.results.ResumeCarControl = true;
+    t.control.reconnecting();
+    t.control.reconnected();
+    await flush();
+    expect(t.control.calls("ResumeCarControl")).toEqual([[7, "sess-1"]]);
+    // The server's ControlAcquired sends CtlDemand(true) to the new connection: a complete message follows.
+    t.control.push("CtlDemand", 7, true);
+    await flush();
+    expect(t.sent()[1]).toEqual([2, false, [[11, 0.25]], [["throttleRaw", 0.25]], [], []]);
+  });
+
+  it("does not resume after release", async () => {
+    const t = setup();
+    t.store.set({ carSession: "sess-1" });
+    t.store.set({ carSession: undefined });
+    t.control.reconnected();
+    await flush();
+    expect(t.control.calls("ResumeCarControl")).toEqual([]);
+  });
+
   it("a vehicle change ends the publisher of the old vehicle", () => {
     const t = setup();
     t.store.set({ carSession: "sess-1" });

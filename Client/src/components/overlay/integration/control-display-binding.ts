@@ -155,6 +155,18 @@ export function bindControlDisplay(store: FlowStoreLike, deps: BindingDeps): () 
       const publisher = deps.createPublisher(connection!, carId!);
       const car = deps.acquireProvider(carId!);
       car.provider.setLocalControlSource(publisher);
+      // After a reconnect the new connection proves the session and is the
+      // driver connection again (ResumeCarControl); CtlDemand then restarts the publisher.
+      const hub = connection!;
+      const session = carSession!;
+      const resumeCarId = carId!;
+      hub.onreconnected?.(() => {
+        if (active?.publisher !== publisher) return;
+        hub.invoke("ResumeCarControl", resumeCarId, session).then(
+          (ok) => { if (ok !== true) console.warn("ResumeCarControl refused; control display stays off until control is acquired again"); },
+          (e) => console.warn("ResumeCarControl failed", e),
+        );
+      });
       active = {
         connection: connection!, carId: carId!, carSession: carSession!, publisher, feed: new ControlDisplayFeed(publisher),
         release: () => {

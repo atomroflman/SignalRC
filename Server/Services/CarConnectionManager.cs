@@ -1,4 +1,6 @@
 using System.Collections.Concurrent;
+using System.Security.Cryptography;
+using System.Text;
 using SignalRC.Shared;
 
 namespace SignalRC.Server;
@@ -47,6 +49,25 @@ public class CarConnectionStore : ConcurrentDictionary<string, CarConnectionInfo
             && int.TryParse(mapped, out carId);
     }
 
+    /// <summary>
+    /// The control session the onboard issued through AquireCarControl (D57). Kept
+    /// as hash with the onboard connection's info, so it ends with that connection.
+    /// </summary>
+    public void RememberControlSession(string carId, string sessionId)
+    {
+        if (TryGetValue(carId, out var info)) info.ControlSessionHash = CarConnectionInfo.Hash(sessionId);
+    }
+
+    /// <summary>Forgets the session if it is the given one (ReleaseCarControl with a foreign id changes nothing).</summary>
+    public void ForgetControlSession(string carId, string sessionId)
+    {
+        if (TryGetValue(carId, out var info) && info.IsControlSession(sessionId)) info.ControlSessionHash = null;
+    }
+
+    /// <summary>True when <paramref name="sessionId"/> is the vehicle's current control session.</summary>
+    public bool IsControlSession(string carId, string? sessionId) =>
+        TryGetValue(carId, out var info) && info.IsControlSession(sessionId);
+
     public bool TrySetOnboardVersion(string carId, string branch, string? commit)
     {
         if (!TryGetValue(carId, out var info))
@@ -67,4 +88,14 @@ public class CarConnectionInfo
     public string? DriverName { get; set; }
     public string? OnboardBranch { get; set; }
     public string? OnboardCommit { get; set; }
+    /// <summary>SHA-256 of the current control session, null without one.</summary>
+    public byte[]? ControlSessionHash { get; set; }
+
+    public bool IsControlSession(string? sessionId)
+    {
+        var current = ControlSessionHash;
+        return current != null && !string.IsNullOrEmpty(sessionId) && CryptographicOperations.FixedTimeEquals(current, Hash(sessionId));
+    }
+
+    internal static byte[] Hash(string sessionId) => SHA256.HashData(Encoding.UTF8.GetBytes(sessionId));
 }

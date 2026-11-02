@@ -249,6 +249,15 @@ Ctl(carId, seq, paused, outputs, signals, removedOutputs, removedSignals)
 - `Ctl` wird nur von dieser Verbindung und mit steigender `seq` angenommen.
   Sonst wird verworfen und ratenbegrenzt protokolliert. Die Nachricht erreicht
   nie das Onboard.
+- Nach einem SignalR-Reconnect ruft der Fahrerclient
+  `ResumeCarControl(carId, sessionId) → bool` auf. Ist `sessionId` die aktuelle
+  Steuerungssitzung, die der Server beim erfolgreichen `AquireCarControl` vom
+  Onboard erhalten hat (verworfen bei `ReleaseCarControl` mit dieser Sitzung,
+  neuem Erwerb oder Trennung des Onboards), wird die neue Verbindung zur
+  Fahrerverbindung wie bei einem Erwerb (neue `DriverEpoch`, `CtlCleared` an
+  Interessenten, `CtlDemand` an die neue Verbindung); die alte verliert die
+  Rolle. Sonst `false` ohne Änderung. Steuerbefehle sind davon unberührt; ihre
+  Sitzungsprüfung bleibt im Onboard.
 - `ReleaseCarControl`, ein Disconnect der Fahrerverbindung oder ein neuer
   Erwerb lösen Folgendes aus:
   - den Cache leeren,
