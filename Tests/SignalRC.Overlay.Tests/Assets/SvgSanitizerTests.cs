@@ -315,6 +315,140 @@ public class SvgSanitizerTests
         Assert.Equal(SvgReportCodes.RejectedLimit, Rejection(Run("""<svg xmlns="http://www.w3.org/2000/svg" width="1000000" viewBox="0 0 1 1000000"><rect width="1" height="1"/></svg>""")));
     }
 
+    // --- Robustness (found in review: crash, memory and CPU amplification) ---
+
+    private static SvgSanitizeResult Timed(string svg)
+    {
+        Assert.True(Encoding.UTF8.GetByteCount(svg) <= SvgLimits.MaxRawBytes, "input over limit");
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var result = Run(svg);
+        Assert.True(watch.ElapsedMilliseconds < 2000, $"took {watch.ElapsedMilliseconds} ms");
+        return result;
+    }
+
+    [Fact]
+    public void LongGradientChainIsRejectedWithoutRecursion()
+    {
+        var chain = string.Concat(Enumerable.Range(0, 6000).Select(i => $"<linearGradient id='g{i}' href='#g{i + 1}'/>"));
+        var result = Timed(Svg(chain + "<linearGradient id='g6000'><stop/></linearGradient><rect width='1' height='1' fill='url(#g0)'/>"));
+        Assert.Equal(SvgReportCodes.RejectedLimit, Rejection(result));
+    }
+
+    [Fact]
+    public void GradientStopFanOutIsBounded()
+    {
+        var input = Svg("<linearGradient id='t'>" + Repeat("<stop/>", 5000) + "</linearGradient>"
+            + string.Concat(Enumerable.Range(0, 1000).Select(i => $"<linearGradient id='g{i}' href='#t'/>")) + "<rect width='1' height='1' fill='url(#g1)'/>");
+        Assert.Equal(SvgReportCodes.RejectedLimit, Rejection(Timed(input)));
+        // Fan-out within the stop limit is still bounded by the element budget.
+        var many = Svg("<linearGradient id='t'>" + Repeat("<stop/>", 32) + "</linearGradient>"
+            + string.Concat(Enumerable.Range(0, 3000).Select(i => $"<linearGradient id='g{i}' href='#t'/>")) + "<rect width='1' height='1' fill='url(#g1)'/>");
+        Assert.Equal(SvgReportCodes.RejectedLimit, Rejection(Timed(many)));
+    }
+
+    [Theory]
+    [InlineData("@a{}", 60000)]
+    [InlineData("@a;", 60000)]
+    [InlineData("@media x{", 20000)]
+    public void ManyAtRulesAreLinear(string rule, int count)
+    {
+        Assert.False(Rejection(Timed(Svg($"<style>{Repeat(rule, count)}</style><rect width='1' height='1'/>"))) is SvgReportCodes.RejectedParse);
+    }
+
+    [Fact]
+    public void ManyCssRulesAreBounded()
+    {
+        Assert.Equal(SvgReportCodes.RejectedLimit, Rejection(Timed(Svg("<style>" + Repeat("x,", 60000) + "x{fill:red}</style>" + Repeat("<g/>", 1000) + "<rect width='1' height='1'/>"))));
+        Assert.Equal(SvgReportCodes.RejectedLimit, Rejection(Timed(Svg("<style>rect{" + Repeat("fill:red;", 20000) + "}</style>" + Repeat("<rect width='1' height='1'/>", 1000)))));
+        // Within the bounds, class rules over many elements stay cheap.
+        var rules = string.Concat(Enumerable.Range(0, 1000).Select(i => $".c{i}{{fill:#{i % 10}{i % 10}{i % 10}}}"));
+        var shapes = string.Concat(Enumerable.Range(0, 1999).Select(i => $"<rect class='c{i % 1000}' width='1' height='1'/>"));
+        Assert.True(Timed(Svg($"<style>{rules}</style>{shapes}")).Accepted);
+    }
+
+    [Fact]
+    public void ManyAttributesAreRejected()
+    {
+        var attributes = string.Concat(Enumerable.Range(0, 20000).Select(i => $" a{i}='1'"));
+        Assert.Equal(SvgReportCodes.RejectedLimit, Rejection(Timed(Svg($"<rect width='1' height='1'{attributes}/>"))));
+    }
+
+    [Fact]
+    public void ManyTextChunksAreJoinedLinearly()
+    {
+        Assert.Equal(SvgReportCodes.RejectedLimit, Rejection(Timed(Svg("<text>" + Repeat("a<![CDATA[b]]>", 15000) + "</text>"))));
+    }
+
+    [Theory]
+    [InlineData("<svg xmlns='http://www.w3.org/2000/svg' viewBox='-1000000 0 1 1' width='1000000' height='1000000'><rect x='-1000000' width='1' height='1'/></svg>")]
+    [InlineData("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 0.001 0.001' width='1000' height='1000' transform='scale(1000000)'><rect width='1' height='1'/></svg>")]
+    [InlineData("<svg xmlns='http://www.w3.org/2000/svg'><rect x='-1000000' width='1000000' height='1'/><rect x='999999' width='1' height='1'/></svg>")]
+    public void OutOfRangeTransformsAreRejectedAsLimit(string svg)
+    {
+        Assert.Equal(SvgReportCodes.RejectedLimit, Rejection(Run(svg)));
+    }
+
+    [Theory]
+    [InlineData("M0 0C1e12 1e12 1 1 2 2")]
+    [InlineData("M0 0C0 0 999999 999999 -999999 -999999S1 1 2 2")]
+    public void OutOfRangeControlPointsTruncateThePath(string d)
+    {
+        var result = Run(Svg($"<path d='{d}' stroke='black'/><rect width='1' height='1'/>"));
+        Assert.True(result.Accepted);
+        Assert.DoesNotContain("1000000000000", result.Svg);
+        Assert.DoesNotContain("-2999997", result.Svg);
+        Assert.Null(SvgSafetyCheck.Verify(result.Svg!));
+    }
+
+    [Theory]
+    [InlineData("<path d='M10 10 a1e-7 1e-7 0 1 1 5 5' stroke='black'/>")]
+    [InlineData("<text x='1' y='5'> <tspan> b</tspan></text>")]
+    [InlineData("<text><tspan>a </tspan> </text>")]
+    [InlineData("<text>a<tspan> </tspan> b</text>")]
+    public void EdgeCasesAreIdempotent(string body)
+    {
+        var first = Run(Svg(body));
+        Assert.True(first.Accepted);
+        var second = Run(first.Svg!);
+        Assert.Equal(first.Svg, second.Svg);
+        Assert.Equal(first.Metadata!.ToJsonString(), second.Metadata!.ToJsonString());
+    }
+
+    [Fact]
+    public void DuplicateIdsResolveToTheFirstInDocumentOrder()
+    {
+        var result = Run(Svg("<linearGradient id='g'><stop stop-color='red'/></linearGradient><symbol><linearGradient id='g'><stop stop-color='blue'/></linearGradient></symbol><rect width='1' height='1' fill='url(#g)'/>"));
+        Assert.Contains("#ff0000", result.Svg);
+        Assert.DoesNotContain("#0000ff", result.Svg);
+    }
+
+    [Fact]
+    public void UseInsideClipPathInNestedDefsIsExpanded()
+    {
+        var result = Run(Svg("<defs><rect id='b' width='4' height='4'/><g><clipPath id='c'><use href='#b'/></clipPath></g></defs><rect width='10' height='10' clip-path='url(#c)'/>"));
+        Assert.Contains("<clipPath id=\"r1\"><rect width=\"4\" height=\"4\"/></clipPath>", result.Svg);
+    }
+
+    [Fact]
+    public void HiddenRootIsEmpty()
+    {
+        Assert.Equal(SvgReportCodes.RejectedEmpty, Rejection(Run("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1' style='display:none'><rect width='1' height='1'/></svg>")));
+    }
+
+    [Fact]
+    public void NonFiniteHueIsInvalid()
+    {
+        var result = Run(Svg("<rect width='1' height='1' fill='hsl(NaN, 50%, 50%)'/><rect width='1' height='1' fill='hsl(Infinity, 50%, 50%)'/>"));
+        Assert.DoesNotContain("fill=", result.Svg);
+    }
+
+    [Fact]
+    public void TextPositionListsCountAsCoordinates()
+    {
+        var x = string.Join(' ', Enumerable.Repeat("1", 2 * SvgLimits.MaxCoordinates + 2));
+        Assert.Equal(SvgReportCodes.RejectedLimit, Rejection(Run(Svg($"<text x='{x}'>a</text>"))));
+    }
+
     [Fact]
     public void RejectsNonSvgRootAndSvgInForeignNamespace()
     {

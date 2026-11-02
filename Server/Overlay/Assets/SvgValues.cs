@@ -189,7 +189,7 @@ internal static class SvgValues
             }
             if (name is "hsl" or "hsla")
             {
-                if (!double.TryParse(args[0].Replace("deg", ""), NumberStyles.Float, CultureInfo.InvariantCulture, out var h)) return null;
+                if (!double.TryParse(args[0].Replace("deg", ""), NumberStyles.Float, CultureInfo.InvariantCulture, out var h) || !double.IsFinite(h)) return null;
                 if (!Channel(args[1], 1, out var sat) || !Channel(args[2], 1, out var light)) return null;
                 if (!args[1].EndsWith('%') || !args[2].EndsWith('%')) return null;
                 var (r, g, b) = HslToRgb(h, sat, light);
@@ -426,6 +426,7 @@ internal static class SvgValues
                     s.SkipSeparator();
                     if (!(ok = Pair(ref s, out var x, out var y))) break;
                     x2 += ox; y2 += oy; x += ox; y += oy;
+                    if (!(ok = SvgNumber.InRange(x1) && SvgNumber.InRange(y1))) break;
                     segment.Append('C').Append(Fmt(x1, y1)).Append(' ').Append(Fmt(x2, y2)).Append(' ').Append(Fmt(x, y));
                     box.Add(x1, y1); box.Add(x2, y2); box.Add(x, y);
                     points += 3;
@@ -470,7 +471,8 @@ internal static class SvgValues
                     s.SkipSeparator();
                     if (!(ok = Pair(ref s, out var x, out var y))) break;
                     x += ox; y += oy;
-                    rx = Math.Abs(rx); ry = Math.Abs(ry);
+                    // Rounded first: radii that print as 0 must become a line here, not on re-import.
+                    rx = Round(Math.Abs(rx)); ry = Round(Math.Abs(ry));
                     if (!(ok = SvgNumber.InRange(rx) && SvgNumber.InRange(ry) && SvgNumber.InRange(rotation))) break;
                     if (rx == 0 || ry == 0)
                     {

@@ -39,7 +39,40 @@ internal static partial class SvgCss
             }
         }
         RemoveStyleElements(root);
-        Apply(root, rules, report);
+        if (rules.Count > MaxRules || rules.Sum(r => r.Declarations.Count) > MaxDeclarations)
+        {
+            throw new SvgRejectedException(SvgReportCodes.RejectedLimit, $"css > {MaxRules} rules or {MaxDeclarations} declarations");
+        }
+        Apply(root, new RuleIndex(rules), report);
+    }
+
+    // Bound the cascade work (rules × elements); real files stay far below.
+    private const int MaxRules = 1024;
+    private const int MaxDeclarations = 4096;
+
+    /// <summary>Rules by their most selective key, so each element only looks at candidates.</summary>
+    private sealed class RuleIndex
+    {
+        private readonly Dictionary<string, List<Rule>> _byId = [], _byClass = [], _byType = [];
+
+        public RuleIndex(List<Rule> rules)
+        {
+            foreach (var r in rules)
+            {
+                var (map, key) = r.Id != null ? (_byId, r.Id) : r.Classes.Length > 0 ? (_byClass, r.Classes[0]) : (_byType, r.Type!);
+                if (!map.TryGetValue(key, out var list)) map[key] = list = [];
+                list.Add(r);
+            }
+        }
+
+        public List<Rule> Candidates(string type, string? id, string[] classes)
+        {
+            var result = new List<Rule>();
+            if (id != null && _byId.TryGetValue(id, out var byId)) result.AddRange(byId);
+            foreach (var c in classes.Distinct()) if (_byClass.TryGetValue(c, out var byClass)) result.AddRange(byClass);
+            if (_byType.TryGetValue(type, out var byType)) result.AddRange(byType);
+            return result;
+        }
     }
 
     private static void RemoveStyleElements(SvgElement parent)
@@ -48,11 +81,11 @@ internal static partial class SvgCss
         foreach (var child in parent.Elements) RemoveStyleElements(child);
     }
 
-    private static void Apply(SvgElement element, List<Rule> rules, SvgReport report)
+    private static void Apply(SvgElement element, RuleIndex rules, SvgReport report)
     {
         var id = element.Get("id");
         var classes = (element.Get("class") ?? "").Split((char[])[' ', '\t', '\n', '\r', '\f'], StringSplitOptions.RemoveEmptyEntries);
-        var matched = rules
+        var matched = rules.Candidates(element.Name, id, classes)
             .Where(r => (r.Type == null || r.Type == element.Name) && (r.Id == null || r.Id == id) && r.Classes.All(classes.Contains))
             .OrderBy(r => r.Specificity).ThenBy(r => r.Order);
         // Cascade: style attribute over rules over presentation attributes.
@@ -83,7 +116,9 @@ internal static partial class SvgCss
             }
             if (text[i] == '@')
             {
-                var name = new string(text[(i + 1)..].TakeWhile(c => char.IsLetterOrDigit(c) || c == '-').ToArray());
+                var end = i + 1;
+                while (end < text.Length && end - i < 40 && (char.IsLetterOrDigit(text[end]) || text[end] == '-')) end++;
+                var name = text[(i + 1)..end];
                 report.Add(SvgReportCodes.UnsupportedCss, "@" + name);
                 i = SkipAtRule(text, i);
                 continue;
@@ -189,16 +224,23 @@ internal static partial class SvgCss
         return sb.ToString();
     }
 
+    /// <summary>Skips an @-rule up to its ';' or the end of its block, whichever comes first, in one scan.</summary>
     private static int SkipAtRule(string text, int start)
     {
-        var semicolon = IndexOutsideStrings(text, start, ';');
-        var open = IndexOutsideStrings(text, start, '{');
-        if (open >= 0 && (semicolon < 0 || open < semicolon))
+        char quote = '\0';
+        for (var i = start; i < text.Length; i++)
         {
-            var close = MatchingBrace(text, open);
-            return close < 0 ? text.Length : close + 1;
+            var c = text[i];
+            if (quote != '\0') { if (c == quote) quote = '\0'; continue; }
+            if (c is '"' or '\'') { quote = c; continue; }
+            if (c == ';') return i + 1;
+            if (c == '{')
+            {
+                var close = MatchingBrace(text, i);
+                return close < 0 ? text.Length : close + 1;
+            }
         }
-        return semicolon < 0 ? text.Length : semicolon + 1;
+        return text.Length;
     }
 
     private static int IndexOutsideStrings(string text, int start, char target)

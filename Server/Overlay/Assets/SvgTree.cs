@@ -32,6 +32,8 @@ internal sealed class SvgElement(string name) : SvgNode
     public SvgMatrix Matrix { get; set; } = SvgMatrix.Identity;
     /// <summary>Path and point coordinates counted for the limit.</summary>
     public int Points { get; set; }
+    /// <summary>Position in the source document; decides between duplicate ids.</summary>
+    public int Order { get; set; }
 
     public IEnumerable<SvgElement> Elements => Children.OfType<SvgElement>();
 
@@ -52,7 +54,7 @@ internal sealed class SvgElement(string name) : SvgNode
 
     public override SvgNode Clone()
     {
-        var copy = new SvgElement(Name) { SourceId = SourceId, IsClone = IsClone };
+        var copy = new SvgElement(Name) { SourceId = SourceId, IsClone = IsClone, Order = Order };
         copy.Attributes.AddRange(Attributes);
         foreach (var child in Children) copy.Children.Add(child.Clone());
         return copy;
@@ -130,6 +132,13 @@ internal static class SvgParser
         string? svgNamespace = null;
         var stack = new Stack<SvgElement>();
         var count = 0;
+        // Adjacent text and CDATA nodes are joined once, not by repeated concatenation.
+        var text = new StringBuilder();
+        void Flush()
+        {
+            if (text.Length > 0 && stack.Count > 0) stack.Peek().Children.Add(new SvgTextNode(text.ToString()));
+            text.Clear();
+        }
         // After Skip() the reader already stands on the next node.
         var advance = true;
         while (advance ? reader.Read() : !reader.EOF)
@@ -139,6 +148,7 @@ internal static class SvgParser
             {
                 case XmlNodeType.Element:
                 {
+                    Flush();
                     if (root == null)
                     {
                         // A root without namespace is accepted as SVG; its descendants then share it.
@@ -169,24 +179,22 @@ internal static class SvgParser
                     break;
                 }
                 case XmlNodeType.EndElement:
+                    Flush();
                     stack.Pop();
                     break;
                 case XmlNodeType.Text or XmlNodeType.CDATA or XmlNodeType.Whitespace or XmlNodeType.SignificantWhitespace:
-                    if (stack.Count > 0) AppendText(stack.Peek(), reader.Value);
+                    if (stack.Count > 0) text.Append(reader.Value);
                     break;
             }
         }
         return root ?? throw new SvgRejectedException(SvgReportCodes.RejectedParse, "no root");
     }
 
-    private static void AppendText(SvgElement parent, string text)
-    {
-        if (parent.Children.Count > 0 && parent.Children[^1] is SvgTextNode last) last.Text += text;
-        else parent.Children.Add(new SvgTextNode(text));
-    }
+    private const int MaxAttributes = 256;
 
     private static void ReadAttributes(XmlReader reader, SvgElement element, SvgReport report)
     {
+        if (reader.AttributeCount > MaxAttributes) throw new SvgRejectedException(SvgReportCodes.RejectedLimit, $"attributes > {MaxAttributes}");
         if (!reader.MoveToFirstAttribute()) return;
         do
         {
@@ -194,7 +202,9 @@ internal static class SvgParser
             if (ns == XmlnsNamespace) continue;
             if (ns == "")
             {
-                element.Set(reader.LocalName, reader.Value);
+                // XML forbids duplicate attributes; only href may already exist (from xlink:href).
+                if (reader.LocalName == "href") element.Set("href", reader.Value);
+                else element.Attributes.Add(new(reader.LocalName, reader.Value));
             }
             else if (ns == XlinkNamespace && reader.LocalName == "href")
             {

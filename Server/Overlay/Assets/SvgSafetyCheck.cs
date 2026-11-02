@@ -184,11 +184,11 @@ public static partial class SvgSafetyCheck
             {
                 "id" => RefPattern().IsMatch(value) && ids.TryAdd(value, element),
                 "data-part" => PartPattern().IsMatch(value) && parts.Add(value),
-                "transform" or "gradientTransform" => TransformPattern().IsMatch(value),
-                "d" => PathPattern().IsMatch(value),
-                "points" => NumberListPattern().IsMatch(value) && value.Split(' ').Length % 2 == 0,
-                "x" or "y" or "dx" or "dy" when element is "text" or "tspan" => NumberListPattern().IsMatch(value),
-                "stroke-dasharray" => value == "none" || NumberListPattern().IsMatch(value),
+                "transform" or "gradientTransform" => TransformPattern().IsMatch(value) && AllInRange(value),
+                "d" => PathPattern().IsMatch(value) && AllInRange(value),
+                "points" => NumberListPattern().IsMatch(value) && value.Split(' ').Length % 2 == 0 && AllInRange(value),
+                "x" or "y" or "dx" or "dy" when element is "text" or "tspan" => NumberListPattern().IsMatch(value) && AllInRange(value),
+                "stroke-dasharray" => value == "none" || (NumberListPattern().IsMatch(value) && AllInRange(value)),
                 "fill" or "stroke" => PaintPattern().IsMatch(value) && Track(value, false, urls),
                 "clip-path" => UrlPattern().IsMatch(value) && Track(value, true, urls),
                 "stop-color" => ColorPattern().IsMatch(value),
@@ -222,6 +222,12 @@ public static partial class SvgSafetyCheck
         if (match.Success) urls.Add((match.Groups[1].Value, clip));
         return true;
     }
+
+    [GeneratedRegex(Num)]
+    private static partial Regex NumberToken();
+
+    private static bool AllInRange(string value) =>
+        NumberToken().Matches(value).All(m => IsNumber(m.Value, out _));
 
     private static bool IsNumber(string value, out double number)
     {

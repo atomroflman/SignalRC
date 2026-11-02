@@ -80,8 +80,12 @@ internal sealed class SvgReport
 
     private static string Shorten(string value)
     {
-        var flat = new string(value.Select(c => char.IsControl(c) ? ' ' : c).ToArray()).Trim();
-        return flat.Length <= MaxExampleLength ? flat : flat[..(MaxExampleLength - 1)] + "…";
+        var head = value.Length > 4 * MaxExampleLength ? value[..(4 * MaxExampleLength)] : value;
+        var flat = new string(head.Select(c => char.IsControl(c) ? ' ' : c).ToArray()).Trim();
+        if (flat.Length <= MaxExampleLength) return flat;
+        var cut = MaxExampleLength - 1;
+        if (char.IsHighSurrogate(flat[cut - 1])) cut--;
+        return flat[..cut] + "…";
     }
 }
 

@@ -78,8 +78,14 @@ internal sealed partial class SvgNormalizer
     public Output Run()
     {
         // data-part keeps part ids stable when a normalized asset is imported again (exchange, D34).
-        foreach (var e in _source.Descendants()) e.SourceId = NonEmpty(e.Get("id")) ?? NonEmpty(e.Get("data-part"));
+        var order = 0;
+        foreach (var e in _source.Descendants())
+        {
+            e.SourceId = NonEmpty(e.Get("id")) ?? NonEmpty(e.Get("data-part"));
+            e.Order = ++order;
+        }
         SvgCss.Resolve(_source, _report);
+        if (IsHidden(_source)) throw new SvgRejectedException(SvgReportCodes.RejectedEmpty, "svg (display:none)");
         Viewport();
         // The root's presentation attributes and the viewport mapping move to a wrapper group.
         foreach (var (key, value) in _source.Attributes)
@@ -123,6 +129,7 @@ internal sealed partial class SvgNormalizer
             _width = Math.Max(1, SvgValues.Round(contentBox.MaxX - contentBox.MinX));
             _height = Math.Max(1, SvgValues.Round(contentBox.MaxY - contentBox.MinY));
             _rootMatrix = SvgMatrix.Translate(-contentBox.MinX, -contentBox.MinY);
+            if (!SvgNumber.InRange(_width) || !SvgNumber.InRange(_height)) throw new SvgRejectedException(SvgReportCodes.RejectedLimit, "size");
         }
         SetTransform(_content, SvgValues.Rounded(_rootMatrix.Multiply(_content.Matrix)));
 
@@ -298,9 +305,22 @@ internal sealed partial class SvgNormalizer
                 continue;
             }
             // Symbols and plain definitions only render through a use; their uses expand with the clone.
-            if (e.Name == "symbol") continue;
-            if (parent.Name == "defs" && e.Name != "clipPath") continue;
+            if (e.Name == "symbol" || (parent.Name == "defs" && e.Name != "clipPath"))
+            {
+                // Clip paths in there are hoisted later and need their uses expanded.
+                ExpandClipPaths(e, active, depth + 1);
+                continue;
+            }
             Expand(e, active, inClip || e.Name == "clipPath", depth + 1);
+        }
+    }
+
+    private void ExpandClipPaths(SvgElement container, HashSet<string> active, int depth)
+    {
+        foreach (var child in container.Elements)
+        {
+            if (child.Name == "clipPath") Expand(child, active, true, depth + 1);
+            else ExpandClipPaths(child, active, depth + 1);
         }
     }
 
@@ -409,8 +429,13 @@ internal sealed partial class SvgNormalizer
         return SvgMatrix.Identity;
     }
 
+    /// <summary>Composed transforms (use, viewport) must stay within the number range; otherwise the file is rejected.</summary>
     private static void SetTransform(SvgElement element, SvgMatrix matrix)
     {
+        if (!new[] { matrix.A, matrix.B, matrix.C, matrix.D, matrix.E, matrix.F }.All(SvgNumber.InRange))
+        {
+            throw new SvgRejectedException(SvgReportCodes.RejectedLimit, "transform out of range");
+        }
         element.Remove("transform");
         if (!matrix.IsIdentity) element.Attributes.Insert(0, new("transform", SvgValues.FormatTransform(matrix)));
     }
@@ -455,51 +480,62 @@ internal sealed partial class SvgNormalizer
         }
     }
 
+    private const int MaxGradientChain = 64;
+
+    /// <summary>Resolves gradient href chains iteratively (bounded) and copies inherited attributes and stops.</summary>
     private void FlattenGradients()
     {
-        var gradients = _content.Descendants().Where(e => Gradients.Contains(e.Name) && !e.IsClone).ToList();
         var done = new HashSet<SvgElement>();
-        foreach (var g in gradients) Flatten(g, []);
-
-        void Flatten(SvgElement g, HashSet<SvgElement> visiting)
+        foreach (var g in _content.Descendants().Where(e => Gradients.Contains(e.Name) && !e.IsClone).ToList())
         {
-            if (done.Contains(g)) return;
-            var href = g.Get("href")?.Trim();
-            g.Remove("href");
-            if (href != null)
+            if (done.Contains(g)) continue;
+            var chain = new List<SvgElement> { g };
+            while (true)
             {
+                var current = chain[^1];
+                if (done.Contains(current)) break;
+                var href = current.Get("href")?.Trim();
+                current.Remove("href");
+                if (href == null) break;
                 if (!href.StartsWith('#'))
                 {
                     _report.Add(SvgReportCodes.ExternalReference, href);
+                    break;
                 }
-                else if (!_ids.TryGetValue(href[1..], out var template) || !Gradients.Contains(template.Name))
+                if (!_ids.TryGetValue(href[1..], out var template) || !Gradients.Contains(template.Name))
                 {
-                    _report.Add(SvgReportCodes.RemovedAttribute, $"{g.Name} href {href}");
+                    _report.Add(SvgReportCodes.RemovedAttribute, $"{current.Name} href {href}");
+                    break;
                 }
-                else if (visiting.Contains(template) || template == g)
+                if (chain.Contains(template))
                 {
-                    _report.Add(SvgReportCodes.RemovedAttribute, $"{g.Name} href {href} (cycle)");
+                    _report.Add(SvgReportCodes.RemovedAttribute, $"{current.Name} href {href} (cycle)");
+                    break;
                 }
-                else
-                {
-                    visiting.Add(g);
-                    Flatten(template, visiting);
-                    visiting.Remove(g);
-                    string[] inherited = template.Name == g.Name
-                        ? (g.Name == "linearGradient" ? ["x1", "y1", "x2", "y2"] : ["cx", "cy", "r", "fx", "fy", "fr"])
-                        : [];
-                    foreach (var name in inherited.Concat(["gradientUnits", "gradientTransform", "spreadMethod"]))
-                    {
-                        if (g.Get(name) == null && template.Get(name) is { } value) g.Set(name, value);
-                    }
-                    if (!g.Elements.Any(c => c.Name == "stop"))
-                    {
-                        foreach (var stop in template.Elements.Where(c => c.Name == "stop")) g.Children.Add(stop.Clone());
-                    }
-                }
+                if (chain.Count >= MaxGradientChain) throw new SvgRejectedException(SvgReportCodes.RejectedLimit, $"gradient href chain > {MaxGradientChain}");
+                chain.Add(template);
             }
-            done.Add(g);
+            // The last element is resolved; inherit towards the start.
+            for (var i = chain.Count - 2; i >= 0; i--) Inherit(chain[i], chain[i + 1]);
+            done.UnionWith(chain);
         }
+    }
+
+    private void Inherit(SvgElement g, SvgElement template)
+    {
+        string[] inherited = template.Name == g.Name
+            ? (g.Name == "linearGradient" ? ["x1", "y1", "x2", "y2"] : ["cx", "cy", "r", "fx", "fy", "fr"])
+            : [];
+        foreach (var name in inherited.Concat(["gradientUnits", "gradientTransform", "spreadMethod"]))
+        {
+            if (g.Get(name) == null && template.Get(name) is { } value) g.Set(name, value);
+        }
+        if (g.Elements.Any(c => c.Name == "stop")) return;
+        var stops = template.Elements.Where(c => c.Name == "stop").ToList();
+        if (stops.Count > SvgLimits.MaxStopsPerGradient) throw new SvgRejectedException(SvgReportCodes.RejectedLimit, $"stops {stops.Count} > {SvgLimits.MaxStopsPerGradient}");
+        _elementCount += stops.Count;
+        if (_elementCount > SvgLimits.MaxExpandedElements) throw new SvgRejectedException(SvgReportCodes.RejectedLimit, $"elements > {SvgLimits.MaxElements} (gradient href)");
+        foreach (var stop in stops) g.Children.Add(stop.Clone());
     }
 
     private void RemoveHrefs(SvgElement element)
@@ -605,10 +641,16 @@ internal sealed partial class SvgNormalizer
     {
         var nodes = new List<(SvgElement Parent, SvgTextNode Node)>();
         Collect(text);
-        if (nodes.Count > 0)
+        // Trimmed up to the first and last visible character, so a second pass changes nothing.
+        foreach (var (_, node) in nodes)
         {
-            nodes[0].Node.Text = nodes[0].Node.Text.TrimStart(' ');
-            nodes[^1].Node.Text = nodes[^1].Node.Text.TrimEnd(' ');
+            node.Text = node.Text.TrimStart(' ');
+            if (node.Text.Length > 0) break;
+        }
+        for (var i = nodes.Count - 1; i >= 0; i--)
+        {
+            nodes[i].Node.Text = nodes[i].Node.Text.TrimEnd(' ');
+            if (nodes[i].Node.Text.Length > 0) break;
         }
         foreach (var (parent, node) in nodes.Where(n => n.Node.Text.Length == 0)) parent.Children.Remove(node);
         RemoveEmptyTspans(text);
@@ -707,6 +749,8 @@ internal sealed partial class SvgNormalizer
             {
                 var status = SvgValues.LengthList(text, name is "x" or "dx" ? LengthAxis.X : LengthAxis.Y, lengths, out var list);
                 if (!Accept(e, name, raw, status)) return null;
+                // Glyph positions count towards the coordinate limit like points.
+                e.Points += (list.Count + 1) / 2;
                 return string.Join(' ', list.Select(v => SvgNumber.Format(SvgValues.Round(v))));
             }
             case "x" or "x1" or "x2" or "cx" or "fx":
@@ -935,7 +979,8 @@ internal sealed partial class SvgNormalizer
     {
         _attached = [.. _content.Descendants()];
         var definitions = new Dictionary<string, SvgElement>();
-        foreach (var e in _content.Descendants())
+        // First in source order wins, as in a browser, also for definitions hoisted out of symbols.
+        foreach (var e in _content.Descendants().OrderBy(d => d.Order))
         {
             if ((Gradients.Contains(e.Name) || e.Name == "clipPath") && !e.IsClone && e.SourceId != null) definitions.TryAdd(e.SourceId, e);
         }
