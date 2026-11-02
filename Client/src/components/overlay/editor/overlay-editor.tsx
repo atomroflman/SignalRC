@@ -39,6 +39,8 @@ export interface OverlayEditorProps {
   onReady?: (api: { store: EditorStore; save: SaveController }) => void;
   /** Extra panels (inspector, timeline) rendered beside the transform panel. */
   children?: React.ReactNode;
+  /** Replaces the design surface, e.g. the running preview (AP11); no design interaction then. */
+  stage?: React.ReactNode;
   className?: string;
 }
 
@@ -114,7 +116,7 @@ export function OverlayEditor(props: OverlayEditorProps) {
       <VariantBar store={store} m={m} streams={props.streams ?? []} />
       <div className="flex gap-2 min-h-0 flex-1">
         <div className="w-56 shrink-0 overflow-auto rounded border border-zinc-800 p-1"><LayersPanel store={store} m={m} /></div>
-        <DesignCanvas key={fitKey} store={store} assets={props.assets} locale={locale} source={props.source} onKeyDown={onKeyDown} className="flex-1 min-h-[300px] rounded border border-zinc-800" />
+        {props.stage ?? <DesignCanvas key={fitKey} store={store} assets={props.assets} locale={locale} source={props.source} onKeyDown={onKeyDown} className="flex-1 min-h-[300px] rounded border border-zinc-800" />}
         <div className="w-64 shrink-0 overflow-auto rounded border border-zinc-800 p-2 flex flex-col gap-2">
           <TransformPanel store={store} m={m} />
           {props.children}
