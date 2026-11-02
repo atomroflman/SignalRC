@@ -695,6 +695,7 @@ Gerätelauf ([modules §4](Shared/Overlay/modules/README.md)).
 | --- | --- | --- |
 | 2026-11-01 | D59–D63: sparsame Übertragung. Telemetrievertrag v1.1, LiDAR-Drahtformat, API v1.1 (PATCH, Kompression), Schema-Mindestfrist 500 ms, Leistungsgrenzen für Datenmengen; neue Referenzfälle `fixtures/telemetry/`, LiDAR `wire`/`deadband` | AP02, AP03, AP04, AP05, AP08, AP09, AP14 |
 | 2026-11-02 | D64, D65; Diagnosecode `OVL_VARIANT_ORPHANED` (Warnung, D53) ergänzt | AP01, AP09, AP14 |
+| 2026-11-02 | AP01 präzisiert Diagnosen (README §8): Codes `OVL_SCHEMA_*`, `OVL_PROP_TYPE`, `OVL_STRUCT_NOT_A_GROUP`, `OVL_REF_UNKNOWN_CLIP/PART/ASSET`, Ortsfelder `path`/`field`/`limit`/`offset`, Abschwächungs- und Prüfreihenfolge; neue Fixture `fixtures/documents/resolution.json` | AP01, AP02, AP06, AP09 |
 
 ## Prüfpunkte nach Freigabe
 

@@ -204,29 +204,87 @@ genau einmal in genau einem Container, keine Zyklen, keine unbekannten IDs.
 ```json
 { "code": "OVL_…", "category": "structure|publish|warning", "severity": "error|warning",
   "location": { "variant": "…", "element": "…", "part": "…", "property": "…",
-                "clip": "…", "track": 0, "keyframe": 0, "container": "…", "ref": "…" },
+                "clip": "…", "track": 0, "keyframe": 0, "container": "…", "ref": "…",
+                "field": "…", "limit": "…", "path": "/…", "offset": 0 },
   "message": "…" }
 ```
 
-- `structure` – verhindert das Speichern des Entwurfs (Struktur/Sicherheit/Limits).
-- `publish` – Entwurf speicherbar, Veröffentlichung blockiert. In deaktivierten
-  Teilen wird daraus eine `warning`.
-- `warning` – nicht blockierend.
+- `structure` verhindert das Speichern des Entwurfs (Struktur, Sicherheit,
+  Grenzen).
+- `publish` lässt den Entwurf speichern, blockiert aber die Veröffentlichung.
+  Bei Formel- und Quellreferenzfehlern (`OVL_EXPR_*`,
+  `OVL_REF_UNKNOWN_SOURCE`) wird daraus eine `warning`, wenn sie in keiner
+  angezeigten Ansicht aktiv sind:
+  - das Element ist (auch über Vorfahren) deaktiviert,
+  - der Clip ist deaktiviert,
+  - die Variante ist deaktiviert,
+  - das ganze Overlay ist deaktiviert.
+
+  Andere Diagnosen werden nicht abgeschwächt.
+- `warning` blockiert nie.
 - `location` enthält nur die zutreffenden Felder; ohne `variant` betrifft die
-  Diagnose den Standard.
+  Diagnose den Standard. Dabei gilt:
+  - `path` ist ein JSON-Pointer und nur bei Schemafehlern gesetzt.
+  - `offset` gibt die Position in einer Formel an.
+  - `field` benennt Felder außerhalb von `props`, z. B. `trigger.condition`,
+    `source` oder `sources.telemetry`.
+  - `limit` benennt die überschrittene Grenze: `elements`, `clips`, `formulas`
+    oder `assets`.
 
-Fehler in Standard-Strukturen sind `structure`. Strukturfehler, die erst in einer
-effektiven Variante entstehen (D38), sind `publish`, damit der Entwurf trotz
-einer späteren Standard-Umstrukturierung speicherbar bleibt.
+**Varianten:**
 
-Bisher definierte Codes: `OVL_STRUCT_MULTIPLE_PARENTS`, `OVL_STRUCT_ORPHAN`,
-`OVL_STRUCT_CYCLE`, `OVL_REF_UNKNOWN_ELEMENT`, `OVL_REF_UNKNOWN_SOURCE`,
-`OVL_ID_DUPLICATE`, `OVL_PROP_UNKNOWN`, `OVL_PROP_MODE_NOT_ALLOWED`,
-`OVL_PROP_LOCKED_ASPECT`, `OVL_PROP_OUT_OF_RANGE`, `OVL_PROP_INVALID_WRAP`,
-`OVL_CLIP_PROPERTY_CONFLICT`, `OVL_CLIP_KEYFRAME_ORDER`, `OVL_CLIP_KEYFRAME_RANGE`,
-`OVL_LIMIT_EXCEEDED` (D33), `OVL_VARIANT_ORPHANED` (Kategorie `warning`,
-Ort `{ variant }`: die `StreamId` ist dem Fahrzeug unbekannt, D53). Die
-Formelcodes stehen im Ausdrucksvertrag.
+- Fehler in eigenen Daten einer Variante sind `structure`. Dazu gehören
+  Überschreibungen, hinzugefügte Elemente und Clips sowie Umgruppierungs- und
+  Reihenfolgeeinträge.
+- Zyklen und Konflikte bei der Clip-Zuständigkeit, die erst im effektiven Baum
+  einer Variante entstehen (D38), sind `publish`. So bleibt der Entwurf nach
+  einer späteren Standard-Änderung speicherbar.
+- Hat der Standard selbst Baumfehler, werden die effektiven Varianten nicht
+  zusätzlich geprüft.
+
+**Reihenfolge der Prüfung:**
+
+1. Schema: Bei Fehlern werden nur diese gemeldet.
+2. ID-Namensraum.
+3. Standard.
+4. Varianten in ordinaler Reihenfolge der `StreamId`.
+5. Referenzen und Formeln.
+6. Grenzen.
+
+Bei einer Doppelbelegung von IDs gilt der erste Eintrag in dieser Reihenfolge;
+gemeldet wird der spätere. Bei der Clip-Zuständigkeit gewinnt der Clip mit der
+ordinal kleineren ID; gemeldet wird jede weitere Spur.
+
+**Codes:**
+
+| Code | Kategorie | Bedeutung |
+| --- | --- | --- |
+| `OVL_SCHEMA_UNSUPPORTED` | structure | `schemaVersion` ≠ 1, wird allein gemeldet |
+| `OVL_SCHEMA_INVALID` | structure | Schemaverletzung, mit `path` |
+| `OVL_ID_DUPLICATE` | structure | ID im gemeinsamen Namensraum doppelt |
+| `OVL_STRUCT_MULTIPLE_PARENTS` | structure | Element in mehreren Containern |
+| `OVL_STRUCT_ORPHAN` | structure | Element in keinem Container |
+| `OVL_STRUCT_CYCLE` | structure / publish (Variante) | Zyklus |
+| `OVL_STRUCT_NOT_A_GROUP` | structure | Umgruppierungsziel ist keine Gruppe |
+| `OVL_REF_UNKNOWN_ELEMENT` | structure | unbekanntes Element (Kinderliste, Überschreibung, Umgruppierung, Reihenfolge, Spur) |
+| `OVL_REF_UNKNOWN_CLIP` | structure | Überschreibung eines unbekannten Clips |
+| `OVL_REF_UNKNOWN_PART` | structure | unbekannter SVG-Teil (nur mit Asset-Metadaten) |
+| `OVL_REF_UNKNOWN_ASSET` | publish | Asset nicht vorhanden (nur mit Asset-Kontext; nie abgeschwächt) |
+| `OVL_REF_UNKNOWN_SOURCE` | publish / warning | unbekannte Quelle in Formel oder LiDAR-Widget; unbekannter Kanal in `sources.telemetry` nur `warning` |
+| `OVL_PROP_UNKNOWN` | structure | Eigenschaft gibt es für den Typ nicht |
+| `OVL_PROP_MODE_NOT_ALLOWED` | structure | Steuerungsmodus nicht erlaubt |
+| `OVL_PROP_TYPE` | structure | Wert hat den falschen Typ (auch Keyframe-Werte) |
+| `OVL_PROP_OUT_OF_RANGE` | structure | Wert außerhalb von Grenzen, Aufzählung oder erlaubten Werten |
+| `OVL_PROP_LOCKED_ASPECT` | structure | `scaleY` bei gesperrtem Seitenverhältnis |
+| `OVL_PROP_INVALID_WRAP` | structure | `wrap.min ≥ wrap.max` |
+| `OVL_CLIP_PROPERTY_CONFLICT` | structure / publish (Variante) | Eigenschaft doppelt animiert oder bereits gebunden (D12) |
+| `OVL_CLIP_KEYFRAME_ORDER` | structure | Keyframes nicht streng aufsteigend |
+| `OVL_CLIP_KEYFRAME_RANGE` | structure | Keyframe hinter dem Clip-Ende |
+| `OVL_LIMIT_EXCEEDED` | structure | Grenze nach D33, mit `limit` |
+| `OVL_VARIANT_ORPHANED` | warning | `StreamId` dem Fahrzeug unbekannt (D53) |
+
+Die Formelcodes stehen im Ausdrucksvertrag. Die erwarteten Auflösungen stehen
+in `fixtures/documents/resolution.json`.
 
 ## 9. Grenzen (D33)
 
