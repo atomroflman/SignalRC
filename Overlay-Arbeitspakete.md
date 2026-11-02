@@ -2,7 +2,7 @@
 
 Stand: 2026-11-02.
 - AP00 ist freigegeben.
-- AP01 bis AP09 und AP11 sind umgesetzt; AP13 ist zur Hälfte umgesetzt (Anzeigeseite).
+- AP01 bis AP11 sind umgesetzt; AP13 ist zur Hälfte umgesetzt (Anzeigeseite).
 - M0 ist erreicht (T0 mit AP01).
 
 „Umgesetzt“ heißt: implementiert, getestet und lokal committet. Die gemeinsame
@@ -59,7 +59,7 @@ nicht ein zusätzliches Verbot, vorher gegen deren vereinbarte Ports zu arbeiten
 | AP07 | ✅ umgesetzt | SVG-Bereinigung, normalisierte Assets und Importvorschau | AP00-Verträge; Speicherung/HTTP-Anbindung über AP02/AP13. |
 | AP08 | ✅ umgesetzt | SVG-/Animationslaufzeit und LiDAR-Widget | AP01, AP05, AP06, AP07. |
 | AP09 | ✅ umgesetzt | Editorzustand, Gestaltungsfläche, Undo/Redo und Autosave | AP01, AP02, AP08. |
-| AP10 | offen | Eigenschaften, Bindungen und Keyframe-Zeitachse | AP06, AP08, AP09. |
+| AP10 | ✅ umgesetzt | Eigenschaften, Bindungen und Keyframe-Zeitachse | AP06, AP08, AP09. |
 | AP11 | ✅ umgesetzt | Lokale Simulation und dynamische Vorschau | AP05, AP08, AP09. |
 | AP12 | offen | Startvorlagen, Paket-Import/-Export und Zuordnung | AP01, AP02, AP07, AP09. |
 | AP13 | ◐ Teil 1 (Anzeigeseite) umgesetzt | Video-, UI-, Steuerungs- und Anwendungsintegration | Verbindet AP01 bis AP12 schrittweise. |
@@ -489,7 +489,23 @@ dürfen keinen konkurrierenden Dokumentzustand oder eigene Autosave-Logik führe
 Undo/Redo, zwei Tabs, Reconnect, Kontrollwechsel und Neustart/Wiederherstellung
 sind getestet. Produktive Integration nutzt AP02 und AP08.
 
-## AP10 – Eigenschaften, Bindungen und Keyframe-Zeitachse
+## AP10 – Eigenschaften, Bindungen und Keyframe-Zeitachse ✅
+
+**Status (2026-11-02):** umgesetzt in `Client/src/components/overlay/editor/`
+(`inspector/`, `timeline/`), eingebunden in `OverlayEditor`.
+- **Inspektor:** jede Katalogeigenschaft mit Herkunft (Standard/geerbt/
+  überschrieben), Zurücksetzen und Grundwert; genau ein Steuerungsmodus je
+  Eigenschaft, Wechsel entfernt fremde Treiber im selben Undo-Schritt (D12).
+- **Bindungen:** einfache Kanalbindung ohne Formel mit Einheit/Dezimalstellen,
+  optionales Formelfeld mit Live-Analyse über AP06 und Live-Wert, Glättung,
+  Rate mit Umbruch. LiDAR-Widgetparameter getrennt von Quellparametern.
+- **Zeitachse:** unabhängige Clips (Dauer, Wiederholung, Endzustand,
+  Deaktivierung), Auslöser `auto`/`whileTrue`/`pulse` mit geprüfter
+  Bedingung, Spuren und Keyframes mit Easing; Varianten überschreiben und
+  setzen zurück. Scrubbing über AP08 `baseFrame(scrub)`, kein Dokumentinhalt.
+- **Tests:** Befehle, Undo-Gruppierung, Varianten, Formeln, Keyframe- und
+  Scrubbing-Logik, UI-Smoke. Ziehen und Scrubben im Browser prüft AP14.
+- **Für AP13 Teil 2:** Texte und Verdrahtung mit dem echten Provider.
 
 **Ziel:** Dynamik vollständig editierbar machen, ohne den Editor-Kern zu duplizieren.
 
