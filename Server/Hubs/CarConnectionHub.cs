@@ -499,9 +499,13 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
         {
             var user = await GetCurrentUserAsync();
             if (user == null) return;
-            if (user.ActiveVehicleId == carId) return;
-            user.ActiveVehicleId = carId;
             var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<SignalRCContext>();
+            // The onboard holds one control session: a takeover ends the previous
+            // driver's, so the announced driver (DriverId, D73) must be unique.
+            var previous = await dbContext.Users.Where(u => u.ActiveVehicleId == carId && u.Id != user.Id).ToListAsync();
+            foreach (var other in previous) other.ActiveVehicleId = null;
+            if (user.ActiveVehicleId == carId && previous.Count == 0) return;
+            user.ActiveVehicleId = carId;
             await dbContext.SaveChangesAsync();
         }
         catch (Exception ex)
@@ -1021,10 +1025,8 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
         var access = httpContext.RequestServices.GetRequiredService<Overlay.OverlayAccess>();
         switch (await access.CheckAdminAsync(user, carId))
         {
-            case Overlay.OverlayAccessError.LoginRequired:
-                throw new HubException("You must be logged in to enable or disable streams.");
-            case Overlay.OverlayAccessError.NoCarAccess:
-                throw new HubException("You do not have access to manage this vehicle.");
+            case Overlay.OverlayAccessError.SessionRequired:
+                throw new HubException("No user session.");
             case Overlay.OverlayAccessError.NotDriver:
                 throw new HubException("You must actively control this vehicle to change stream enable state.");
         }

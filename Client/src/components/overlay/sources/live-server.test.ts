@@ -1,34 +1,15 @@
 // Integration test against a locally started server (opt-in):
 //   SIGNALRC_LIVE_URL=http://127.0.0.1:<port> SIGNALRC_TEST_POSTGRES="Host=…;Username=…;Password=…;Database=…"
 // The server must use the same database. A fake onboard (JSON protocol)
-// registers a vehicle; channels are inserted directly. Everything created
-// here is tagged and removed afterwards.
-import { execFileSync } from "node:child_process";
+// registers a vehicle; channels are inserted directly; the driver is an
+// anonymous session user. Everything created here is tagged and removed afterwards.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as signalR from "@microsoft/signalr";
 import { ControlDisplayPublisher } from "./control-display";
+import { browserSession, LIVE_BASE as BASE, liveEnabled as enabled, removeSessionUsers, removeVehicle, sql, until as untilMs, wait } from "../testing/live";
 import { SourceHub, type HubLike } from "./hub";
 
-const BASE = process.env.SIGNALRC_LIVE_URL;
-const PG = process.env.SIGNALRC_TEST_POSTGRES;
-const enabled = !!BASE && !!PG;
-
-function sql(query: string): string {
-  const kv = Object.fromEntries(PG!.split(";").filter(Boolean).map((p) => p.split("=").map((s) => s.trim()) as [string, string]));
-  return execFileSync("psql", ["-h", kv.Host, "-U", kv.Username, "-d", kv.Database, "-At", "-v", "ON_ERROR_STOP=1", "-c", query], {
-    env: { ...process.env, PGPASSWORD: kv.Password },
-  }).toString().trim();
-}
-
-const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
-async function until(cond: () => boolean, ms = 3000) {
-  const end = Date.now() + ms;
-  while (Date.now() < end) {
-    if (cond()) return true;
-    await wait(20);
-  }
-  return cond();
-}
+const until = (cond: () => boolean, ms = 3000) => untilMs(cond, ms);
 
 const hub = (cookie?: string) =>
   new signalR.HubConnectionBuilder()
@@ -40,7 +21,7 @@ describe.skipIf(!enabled)("live server", () => {
   const tag = Math.random().toString(16).slice(2, 12);
   const conns: signalR.HubConnection[] = [];
   let carId = 0;
-  let userId: number | undefined;
+  const user = browserSession();
   let cookie = "";
   let ids: Record<string, number> = {};
   const demands: number[][] = [];
@@ -62,19 +43,14 @@ describe.skipIf(!enabled)("live server", () => {
       (${carId},'speed',1,'x',2,'x',null),(${carId},'volt',10,'x',2,'x',null),
       (${carId},'lidarGrid',2,'x',4,'x','{"zoneLimitsMm":[400,800,1600,3200,6400]}') returning "Id", "ChannelName"`);
     ids = Object.fromEntries(rows.split("\n").map((r) => { const [id, name] = r.split("|"); return [name, Number(id)]; }));
-    const login = await fetch(`${BASE}/api/user/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userName: `ovl-ap05-${tag}`, password: `pw-${tag}` }),
-    });
-    cookie = login.headers.getSetCookie().find((c) => c.startsWith("SignalRCAuth="))!.split(";")[0];
-    userId = (await login.json()).userId;
+    await user.open();
+    cookie = user.jar.cookie;
   }, 20000);
 
   afterAll(async () => {
     for (const c of conns) await c.stop().catch(() => {});
-    if (userId) sql(`delete from "UserSetups" where "UserId" = ${userId}; delete from "Users" where "Id" = ${userId}`);
-    if (carId) sql(`delete from "UserSetups" where "CarId" = ${carId}; delete from "CarTelemetry" where "CarId" = ${carId}; delete from "CarChannels" where "CarId" = ${carId}; delete from "Cars" where "Id" = ${carId}`);
+    removeVehicle(carId);
+    removeSessionUsers(user);
   });
 
   const sources = () =>

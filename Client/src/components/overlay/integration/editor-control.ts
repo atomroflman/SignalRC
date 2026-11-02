@@ -52,7 +52,6 @@ export function sendState(s: { updatesEnabled: boolean; isInConfigMode: boolean;
 
 export interface MeLike {
   userId?: number | string | null;
-  loginName?: string | null;
 }
 
 export interface CarStateLike {
@@ -60,18 +59,33 @@ export interface CarStateLike {
   driverId?: string | null;
 }
 
+/** Why this session user is (not) the overlay administrator. */
+export type ControlReason =
+  /** Holds control of the connected vehicle. */
+  | "control"
+  /** No session user (yet). */
+  | "noSession"
+  /** No vehicle state received yet. */
+  | "unknown"
+  | "offline"
+  /** The vehicle is connected, but someone else (or nobody) holds control. */
+  | "notDriver";
+
 /**
- * Client view of OverlayAccess (regular login and active control). The server
- * checks every request; this only decides whether the editor tries server access.
- * - no regular login → false;
- * - vehicle connected → the announced driver (CarStateUpdated) must be this user;
- * - vehicle state unknown or offline → true: the server decides, a 403
- *   OVL_API_NOT_DRIVER puts the editor into local-only mode.
+ * Client view of OverlayAccess (D73): the administrator is the session user who
+ * currently holds control of the connected vehicle (CarStateUpdated.driverId).
+ * No login. The server checks every request; this only decides whether the
+ * editor tries server access, otherwise it edits locally only.
  */
+export function controlReason(me: MeLike | null | undefined, car: CarStateLike | undefined): ControlReason {
+  if (!me || me.userId == null) return "noSession";
+  if (!car) return "unknown";
+  if (!car.isConnected) return "offline";
+  return car.driverId != null && car.driverId === String(me.userId) ? "control" : "notDriver";
+}
+
 export function deriveHasControl(me: MeLike | null | undefined, car: CarStateLike | undefined): boolean {
-  if (!me || !me.loginName || me.userId == null) return false;
-  if (car?.isConnected) return car.driverId != null && car.driverId === String(me.userId);
-  return true;
+  return controlReason(me, car) === "control";
 }
 
 // --- Keyboard separation ---

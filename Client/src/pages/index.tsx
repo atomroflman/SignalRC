@@ -98,7 +98,7 @@ export default function Home() {
       content: selectedCarId ? (
         <VideoSettingsControl
           carId={selectedCarId}
-          canManageEnabled={Boolean(user?.loginName && selectedCarId && carSession)}
+          canManageEnabled={Boolean(selectedCarId && carSession)}
         />
       ) : null,
       visible: Boolean(selectedCarId),

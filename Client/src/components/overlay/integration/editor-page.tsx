@@ -25,7 +25,7 @@ import { sharedSourceHub } from "../sources";
 import { TemplateInserter } from "../templates/template-inserter";
 import { EditorAssetLoader, editorResolveContext, previewStream, withDraftAssetMetadata } from "./editor-assets";
 import {
-  deriveHasControl, endLiveTest, installEditorKeyboardGuard, pauseOnEditorOpen, releaseForLiveTest, sendState,
+  controlReason, endLiveTest, installEditorKeyboardGuard, pauseOnEditorOpen, releaseForLiveTest, sendState,
   type MeLike, type PauseStoreLike,
 } from "./editor-control";
 import { PublishPanel } from "./publish-panel";
@@ -101,7 +101,8 @@ export function OverlayEditorPage({ carId }: { carId: number }) {
   const [me, setMe] = useState<MeLike | null | undefined>(undefined);
   const connectCarUi = useCarUiStore((s) => s.connect);
   const carState = useCarUiStore((s) => s.states[carId]);
-  const hasControl = deriveHasControl(me, carState);
+  const reason = controlReason(me, carState);
+  const hasControl = reason === "control";
 
   // Opening pauses sending; leaving never reactivates (api/README.md §6).
   useEffect(() => { pauseOnEditorOpen(flowStore); }, [carId]);
@@ -233,8 +234,7 @@ export function OverlayEditorPage({ carId }: { carId: number }) {
         <span className="ml-auto text-[11px] text-zinc-500">{m.editorPage.keyboardHint}</span>
       </div>
       <SendBanner carId={carId} />
-      {me && !me.loginName && <div className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-300">{m.editorPage.loginRequired}</div>}
-      {me?.loginName && !hasControl && <div className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-300">{m.editorPage.noControl}</div>}
+      {me !== undefined && reason !== "control" && <div className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-300" data-ovl-local-only={reason}>{m.editorPage.localOnly[reason]}</div>}
       {!ready && <div className="text-xs text-zinc-400">{m.editorPage.loading}</div>}
       {ready && (
         <OverlayEditorWithPreview
@@ -254,7 +254,7 @@ export function OverlayEditorPage({ carId }: { carId: number }) {
           {api && (
             <>
               <Section title={m.publish.title} open>
-                <PublishPanel carId={carId} store={api.store} save={api.save} persistence={persistence!} locale={locale} m={m.publish} />
+                <PublishPanel carId={carId} store={api.store} save={api.save} persistence={persistence!} locale={locale} m={m.publish} reason={reason} />
               </Section>
               <Section title={m.templates.title}>
                 <TemplateInserter store={api.store} locale={locale} channels={vehicle?.telemetry ?? []} />

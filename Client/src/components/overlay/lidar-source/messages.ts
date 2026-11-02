@@ -25,7 +25,7 @@ export type LidarSourceMessages = {
   saved: string;
   saveFailed: string;
   errors: Record<OptionError, string>;
-  denied: Record<"OVL_API_LOGIN_REQUIRED" | "OVL_API_NO_CAR_ACCESS" | "OVL_API_NOT_DRIVER" | "other", string>;
+  denied: Record<"OVL_API_SESSION_REQUIRED" | "OVL_API_NOT_DRIVER" | "other", string>;
 };
 
 const de: LidarSourceMessages = {
@@ -62,9 +62,8 @@ const de: LidarSourceMessages = {
     minPoints: "Mindestpunkte zwischen 1 und 1440.",
   },
   denied: {
-    OVL_API_LOGIN_REQUIRED: "Nur mit regulärer Anmeldung möglich.",
-    OVL_API_NO_CAR_ACCESS: "Kein Zugang zu diesem Fahrzeug.",
-    OVL_API_NOT_DRIVER: "Nur der aktive Fahrer darf die Quelle einrichten.",
+    OVL_API_SESSION_REQUIRED: "Keine Benutzersitzung.",
+    OVL_API_NOT_DRIVER: "Nur wer die Steuerung des Fahrzeugs hält, darf die Quelle einrichten.",
     other: "Einrichten fehlgeschlagen.",
   },
 };
@@ -103,9 +102,8 @@ const en: LidarSourceMessages = {
     minPoints: "Minimum points between 1 and 1440.",
   },
   denied: {
-    OVL_API_LOGIN_REQUIRED: "Requires a regular login.",
-    OVL_API_NO_CAR_ACCESS: "No access to this vehicle.",
-    OVL_API_NOT_DRIVER: "Only the active driver may set up the source.",
+    OVL_API_SESSION_REQUIRED: "No user session.",
+    OVL_API_NOT_DRIVER: "Only whoever holds control of the vehicle may set up the source.",
     other: "Setup failed.",
   },
 };

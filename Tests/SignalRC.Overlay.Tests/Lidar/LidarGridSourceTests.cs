@@ -1,6 +1,8 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using SignalRC.Overlay.Tests.Overlay;
+using SignalRC.Overlay.Tests.Testing;
+using SignalRC.Server;
 using SignalRC.Server.Data;
 using SignalRC.Server.Overlay;
 using SignalRC.Server.Overlay.Lidar;
@@ -20,6 +22,7 @@ public abstract class LidarGridSourceTests : IDisposable
     private readonly SignalRCContext _ctx = null!;
     private readonly User _driver = null!, _guest = null!, _outsider = null!, _passive = null!;
     private readonly int _carId;
+    private readonly CarConnectionStore _connections = new();
 
     protected LidarGridSourceTests(IOverlayTestDb? db)
     {
@@ -33,12 +36,14 @@ public abstract class LidarGridSourceTests : IDisposable
         _ctx.Cars.Add(car);
         _ctx.SaveChanges();
         _carId = car.Id;
-        _driver = new User { Name = $"Driver-{tag}", LoginName = $"driver-{tag}", ActiveVehicleId = _carId, SessionId = Session(), LastSeen = DateTime.UtcNow };
+        _driver = new User { Name = $"Driver-{tag}", SessionId = Session(), LastSeen = DateTime.UtcNow };
         _guest = new User { Name = $"Guest-{tag}", ActiveVehicleId = _carId, SessionId = Session(), LastSeen = DateTime.UtcNow };
         _outsider = new User { Name = $"Other-{tag}", LoginName = $"other-{tag}", ActiveVehicleId = _carId, SessionId = Session(), LastSeen = DateTime.UtcNow };
         _passive = new User { Name = $"Passive-{tag}", LoginName = $"passive-{tag}", SessionId = Session(), LastSeen = DateTime.UtcNow };
         _ctx.Users.AddRange(_driver, _guest, _outsider, _passive);
         _ctx.SaveChanges();
+        _connections.Connect(_carId);
+        _connections.Acquire(_carId, _driver);
         _ctx.UserSetups.AddRange(
             new UserCarSetup { UserId = _driver.Id, CarId = _carId },
             new UserCarSetup { UserId = _guest.Id, CarId = _carId },
@@ -48,7 +53,7 @@ public abstract class LidarGridSourceTests : IDisposable
 
     private void Require() => Skip.If(_db == null, $"{PostgresOverlayTestDb.Variable} ist nicht gesetzt");
 
-    private LidarGridSourceService Service() => new(_ctx, new OverlayAccess(_ctx));
+    private LidarGridSourceService Service() => new(_ctx, new OverlayAccess(_ctx, _connections));
 
     private CarTelemetry? Channel()
     {
@@ -74,13 +79,13 @@ public abstract class LidarGridSourceTests : IDisposable
     }
 
     [SkippableFact]
-    public async Task OnlyTheRegularActiveDriverMaySetItUp()
+    public async Task OnlyTheSessionUserHoldingControlMaySetItUp()
     {
         Require();
         var service = Service();
-        Assert.Equal("OVL_API_LOGIN_REQUIRED", (await service.EnsureAsync(_carId, null)).Error?.Code);
-        Assert.Equal("OVL_API_LOGIN_REQUIRED", (await service.EnsureAsync(_carId, _guest)).Error?.Code);
-        Assert.Equal("OVL_API_NO_CAR_ACCESS", (await service.EnsureAsync(_carId, _outsider)).Error?.Code);
+        Assert.Equal("OVL_API_SESSION_REQUIRED", (await service.EnsureAsync(_carId, null)).Error?.Code);
+        Assert.Equal("OVL_API_NOT_DRIVER", (await service.EnsureAsync(_carId, _guest)).Error?.Code);
+        Assert.Equal("OVL_API_NOT_DRIVER", (await service.EnsureAsync(_carId, _outsider)).Error?.Code);
         Assert.Equal("OVL_API_NOT_DRIVER", (await service.EnsureAsync(_carId, _passive)).Error?.Code);
         Assert.Equal(404, (await service.EnsureAsync(int.MaxValue, _driver)).Error?.Status);
         Assert.Null(Channel());

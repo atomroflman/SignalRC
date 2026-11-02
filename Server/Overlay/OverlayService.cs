@@ -62,9 +62,8 @@ public sealed class OverlayService(
 
     private static OverlayError AccessError(OverlayAccessError error) => error switch
     {
-        OverlayAccessError.LoginRequired => new("OVL_API_LOGIN_REQUIRED", 401, "Anmeldung erforderlich"),
-        OverlayAccessError.NoCarAccess => new("OVL_API_NO_CAR_ACCESS", 403, "Kein Zugang zu diesem Fahrzeug"),
-        _ => new("OVL_API_NOT_DRIVER", 403, "Nur der aktive Fahrer darf das Overlay verwalten"),
+        OverlayAccessError.SessionRequired => new("OVL_API_SESSION_REQUIRED", 401, "Sitzung fehlt"),
+        _ => new("OVL_API_NOT_DRIVER", 403, "Nur wer die Steuerung des Fahrzeugs hält, darf das Overlay verwalten"),
     };
 
     private static OverlayError NotFound(string what) => new("OVL_API_NOT_FOUND", 404, what);

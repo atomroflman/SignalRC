@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useControlFlowStore } from "../../control-flow-store";
 import { isPaused } from "./control-display-binding";
 import {
-  deriveHasControl, endLiveTest, GUARDED_KEY_EVENTS, installEditorKeyboardGuard, isEditorKeyboardGuarded, pauseOnEditorOpen,
+  controlReason, deriveHasControl, endLiveTest, GUARDED_KEY_EVENTS, installEditorKeyboardGuard, isEditorKeyboardGuarded, pauseOnEditorOpen,
   releaseForLiveTest, sendState, type KeyTargetLike, type PauseStoreLike,
 } from "./editor-control";
 
@@ -107,23 +107,27 @@ describe("sending pause of the overlay editor (api/README.md §6)", () => {
   });
 });
 
-describe("management permission on the client (OverlayAccess mirror)", () => {
-  const me = { userId: 5, loginName: "driver" };
+describe("management permission on the client (OverlayAccess mirror, D73)", () => {
+  // Anonymous session user: no loginName is needed.
+  const me = { userId: 5 };
 
-  it("requires a regular login", () => {
+  it("requires a session user", () => {
     expect(deriveHasControl(null, { isConnected: true, driverId: "5" })).toBe(false);
-    expect(deriveHasControl({ userId: 5, loginName: null }, { isConnected: true, driverId: "5" })).toBe(false);
+    expect(deriveHasControl({ userId: null }, { isConnected: true, driverId: "5" })).toBe(false);
+    expect(controlReason(undefined, { isConnected: true, driverId: "5" })).toBe("noSession");
   });
 
   it("follows the announced driver of a connected vehicle (CarStateUpdated)", () => {
     expect(deriveHasControl(me, { isConnected: true, driverId: "5" })).toBe(true);
-    expect(deriveHasControl(me, { isConnected: true, driverId: "6" })).toBe(false);
-    expect(deriveHasControl(me, { isConnected: true, driverId: null })).toBe(false);
+    expect(controlReason(me, { isConnected: true, driverId: "6" })).toBe("notDriver");
+    expect(controlReason(me, { isConnected: true, driverId: null })).toBe("notDriver");
   });
 
-  it("leaves the decision to the server while the vehicle state is unknown", () => {
-    expect(deriveHasControl(me, undefined)).toBe(true);
-    expect(deriveHasControl(me, { isConnected: false })).toBe(true);
+  it("is local-only while the vehicle is offline or its state unknown", () => {
+    expect(controlReason(me, undefined)).toBe("unknown");
+    expect(controlReason(me, { isConnected: false, driverId: "5" })).toBe("offline");
+    expect(deriveHasControl(me, undefined)).toBe(false);
+    expect(deriveHasControl(me, { isConnected: false, driverId: "5" })).toBe(false);
   });
 });
 

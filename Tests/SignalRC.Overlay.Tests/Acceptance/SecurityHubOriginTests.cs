@@ -45,7 +45,7 @@ public sealed class SecurityHubOriginTests : IDisposable
         _displayRelay = new ControlDisplayRelay(_display, TimeProvider.System, NullLogger<ControlDisplayRelay>.Instance);
         _services = new ServiceCollection()
             .AddSingleton(_relay).AddSingleton(_displayRelay)
-            .AddSingleton(_ctx).AddSingleton(sp => new OverlayAccess(sp.GetRequiredService<SignalRCContext>()))
+            .AddSingleton(_ctx).AddSingleton(sp => new OverlayAccess(sp.GetRequiredService<SignalRCContext>(), _store))
             .BuildServiceProvider();
         _store.RegisterConnection(_car.ToString(), "onboard-a");
         _store.RegisterConnection(_otherCar.ToString(), "onboard-b");
