@@ -85,7 +85,10 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
     /// watchdog after it has seen the peer at least once, otherwise a single
     /// board on the bench would latch a fault 200 ms after boot. A node that
     /// never appears is therefore invisible to the other node, and only the
-    /// master knows how many there are supposed to be.</summary>
+    /// master knows how many there are supposed to be.
+    ///
+    /// It is a count, not a list of addresses: with 1, either board alone
+    /// releases the drive.</summary>
     public int ExpectedNodes { get; set; } = 2;
 
     /// <summary>How long the fault-reset flag stays set after the button is
@@ -805,12 +808,11 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
             return;
         }
 
-        var present = 0;
+        var present = CountPresent(nowMs);
         string? faulted = null;
-        for (var i = 0; i < _nodes.Length && i < ExpectedNodes; i++)
+        for (var i = 0; i < _nodes.Length; i++)
         {
             var n = _nodes[i];
-            if (n.Seen && nowMs - n.LastSeenMs <= NodeTimeoutMs) present++;
             if (n.Fault != CanTrackProtocol.FaultCode.None)
             {
                 faulted ??= $"node {i} faulted: {CanTrackProtocol.Describe(n.Fault)}";
@@ -845,6 +847,15 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
 
         _inhibitReason = null;
     }
+
+    /// <summary>
+    /// Counts every node that has reported recently, whichever address it has.
+    /// A single bench board may be either side - taking only the first
+    /// ExpectedNodes slots would leave a lone right node uncounted and the
+    /// drive inhibited forever. Must be called under _stateLock.
+    /// </summary>
+    private int CountPresent(long nowMs)
+        => _nodes.Count(n => n.Seen && nowMs - n.LastSeenMs <= NodeTimeoutMs);
 
     private void Send(uint id, byte[] data)
     {
@@ -1172,8 +1183,7 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
         {
             var now = _clock.ElapsedMilliseconds;
             RefreshPresence(now);
-            var present = _nodes.Take(Math.Max(1, ExpectedNodes))
-                                .Count(n => n.Seen && now - n.LastSeenMs <= NodeTimeoutMs);
+            var present = CountPresent(now);
             return new TrackDriveSnapshot
             {
                 Left = _nodes[CanTrackProtocol.LeftNode].ToState(now),

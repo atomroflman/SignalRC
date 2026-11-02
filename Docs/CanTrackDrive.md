@@ -126,7 +126,8 @@ checking for a node that never showed up is this driver's job. The firmware
 detects a peer that was there and went away; the driver detects one that never
 arrived.
 
-Set `ExpectedNodes` to 1 for single-board bench work.
+Set `ExpectedNodes` to 1 for single-board bench work. It is a count, not a
+list of addresses, so either board alone - left or right - releases the drive.
 
 ### The network link
 
