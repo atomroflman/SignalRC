@@ -63,3 +63,18 @@ describe("deletion of a standard group", () => {
     expect(deletionImpact(doc, ["e_nope"])).toEqual({ elements: [], clips: [], variants: [] });
   });
 });
+
+describe("deletion with a cycle in a variant", () => {
+  it("terminates", () => {
+    const cyclic: OverlayDocument = {
+      schemaVersion: 1, workspace: { width: 1, height: 1 },
+      elements: { e_g: { type: "group", children: [] }, e_h: { type: "group", children: [] } },
+      children: ["e_g", "e_h"],
+      variants: { cam: {
+        addedElements: { e_v: { type: "group", children: [] }, e_w: { type: "group", children: [] } },
+        structure: { parents: { e_v: "e_w", e_w: "e_v" } },
+      } },
+    };
+    expect(deletionImpact(cyclic, ["e_g"])).toEqual({ elements: ["e_g"], clips: [], variants: [] });
+  });
+});

@@ -130,3 +130,22 @@ describe("validate rules beyond the fixtures", () => {
     expect(d).toMatchObject([{ code: "OVL_LIMIT_EXCEEDED", category: "structure", location: { limit: "elements" } }]);
   });
 });
+
+describe("ids and names that exist on Object.prototype", () => {
+  it("treats them as ordinary ids and property names", () => {
+    const d = validate(doc({
+      elements: { constructor: { type: "rect" as const, props: { constructor: 1 } }, __proto__x: { type: "rect" as const } },
+      children: ["constructor", "__proto__x"],
+      variants: { cam: { elements: { toString: { props: { x: 1 } } } } },
+    }));
+    expect(d.map((x) => `${x.code}:${x.location.element}`).sort()).toEqual([
+      "OVL_PROP_UNKNOWN:constructor",
+      "OVL_REF_UNKNOWN_ELEMENT:toString",
+    ]);
+  });
+
+  it("handles an element id __proto__ parsed from JSON", () => {
+    const parsed = JSON.parse('{"schemaVersion":1,"workspace":{"width":1,"height":1},"elements":{"__proto__":{"type":"rect"}},"children":["__proto__"]}');
+    expect(validate(parsed)).toEqual([]);
+  });
+});

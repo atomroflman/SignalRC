@@ -2,6 +2,7 @@
 // Shared/Overlay/catalog/property-catalog.json (the Client Docker build cannot
 // reach Shared/); catalog.test.ts fails when the copy drifts.
 import catalogJson from "../contracts/property-catalog.json";
+import { detach } from "./dict";
 import type { ElementType } from "./types";
 
 export type ControlMode = "static" | "binding" | "rate" | "clip";
@@ -42,7 +43,7 @@ interface Catalog {
   types: Record<string, TypeDef>;
 }
 
-export const catalog = catalogJson as unknown as Catalog;
+export const catalog = detach(catalogJson) as unknown as Catalog;
 
 export const ELEMENT_TYPES = Object.keys(catalog.types) as ElementType[];
 

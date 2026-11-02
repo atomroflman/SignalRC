@@ -1,5 +1,6 @@
 // Variant resolution (Shared/Overlay/README.md §7).
 import { defaultLockAspect } from "./catalog";
+import { detach, dict } from "./dict";
 import {
   ROOT,
   type Clip,
@@ -66,7 +67,7 @@ export function buildView(doc: OverlayDocument, variant?: Variant): View {
   }
 
   // Effective parent: variant structure wins (D38), else the declared one.
-  const moved = variant?.structure?.parents ?? {};
+  const moved = variant?.structure?.parents ?? dict<string>();
   const parent = new Map<string, string>();
   for (const id of elements.keys()) {
     const declared = declaredParents.get(id) ?? [];
@@ -137,21 +138,21 @@ function mergeParts(
   base: Record<string, PartOverride> | undefined,
   over: Record<string, PartOverride> | undefined,
 ): Record<string, PartOverride> {
-  const result: Record<string, PartOverride> = {};
-  for (const [id, part] of Object.entries(base ?? {})) result[id] = { ...part, props: { ...part.props } };
+  const result = dict<PartOverride>();
+  for (const [id, part] of Object.entries(base ?? {})) result[id] = { ...part, props: Object.assign(dict(), part.props) };
   for (const [id, part] of Object.entries(over ?? {})) {
     const current = result[id] ?? {};
     result[id] = {
       ...current,
       ...(part.lockAspect !== undefined ? { lockAspect: part.lockAspect } : {}),
-      props: { ...current.props, ...part.props },
+      props: Object.assign(dict(), current.props, part.props),
     };
   }
   return result;
 }
 
 function effectiveClips(doc: OverlayDocument, variant?: Variant): Record<string, EffectiveClip> {
-  const result: Record<string, EffectiveClip> = {};
+  const result = dict<EffectiveClip>();
   const add = (id: string, clip: Clip, origin: ValueOrigin) => {
     result[id] = { ...clip, id, origin, overridden: [] };
   };
@@ -170,16 +171,17 @@ function effectiveClips(doc: OverlayDocument, variant?: Variant): Record<string,
 }
 
 /** Effective configuration of the standard (streamId null) or a stream, without enable checks. */
-export function effectiveConfig(doc: OverlayDocument, streamId: string | null): EffectiveConfig {
+export function effectiveConfig(input: OverlayDocument, streamId: string | null): EffectiveConfig {
+  const doc = detach(input);
   const variant = streamId === null ? undefined : doc.variants?.[streamId];
   const view = buildView(doc, variant);
-  const elements: Record<string, EffectiveElement> = {};
+  const elements = dict<EffectiveElement>();
 
   const build = (id: string, parentDisabled: boolean) => {
     const { element, origin } = view.elements.get(id)!;
     const override = origin === "standard" ? variant?.elements?.[id] : undefined;
-    const props = { ...element.props };
-    const propOrigins: Record<string, ValueOrigin> = {};
+    const props = Object.assign(dict(), element.props);
+    const propOrigins = dict<ValueOrigin>();
     for (const key of Object.keys(props)) propOrigins[key] = origin;
     for (const [key, value] of Object.entries(override?.props ?? {})) {
       props[key] = value;
@@ -214,8 +216,8 @@ export function effectiveConfig(doc: OverlayDocument, streamId: string | null): 
   const config: EffectiveConfig = {
     streamId,
     workspace: variant?.workspace ?? doc.workspace,
-    signals: doc.signals ?? {},
-    sources: { telemetry: doc.sources?.telemetry ?? {} },
+    signals: doc.signals ?? dict(),
+    sources: { telemetry: doc.sources?.telemetry ?? dict() },
     root,
     elements,
     clips: effectiveClips(doc, variant),
@@ -230,7 +232,8 @@ export function effectiveConfig(doc: OverlayDocument, streamId: string | null): 
  * stream's variant is disabled (no fallback to the standard), else the
  * variant or, without one, the standard.
  */
-export function resolve(doc: OverlayDocument, streamId: string): ResolveResult {
+export function resolve(input: OverlayDocument, streamId: string): ResolveResult {
+  const doc = detach(input);
   if (doc.disabled) return { kind: "none", reason: "vehicleDisabled" };
   const variant = doc.variants?.[streamId];
   if (variant?.disabled) return { kind: "none", reason: "variantDisabled" };

@@ -1,5 +1,6 @@
 // Consequences of deleting standard elements (product plan "Standard und
 // Vererbung"): the editor shows them before the user confirms.
+import { detach } from "./dict";
 import { buildView } from "./resolve";
 import { ROOT, type Clip, type ClipSettings, type OverlayDocument, type Track } from "./types";
 
@@ -40,7 +41,8 @@ const affectedTracks = (tracks: Track[] | undefined, removed: Set<string>) =>
   (tracks ?? []).flatMap((t, i) => (removed.has(t.element) ? [i] : []));
 
 /** What deleting the given standard elements removes. Unknown ids are ignored. */
-export function deletionImpact(doc: OverlayDocument, ids: string[]): DeletionImpact {
+export function deletionImpact(input: OverlayDocument, ids: string[]): DeletionImpact {
+  const doc = detach(input);
   const standard = buildView(doc);
   const removed = descendants(standard.children, ids.filter((id) => doc.elements[id] !== undefined));
 
@@ -54,8 +56,10 @@ export function deletionImpact(doc: OverlayDocument, ids: string[]): DeletionImp
     const view = buildView(doc, variant);
     const inRemoved = [...view.elements.keys()].filter((id) => {
       if (view.elements.get(id)!.origin !== "variant") return false;
-      for (let p = view.parent.get(id); p !== undefined && p !== ROOT; p = view.parent.get(p)) {
+      const seen = new Set<string>();
+      for (let p = view.parent.get(id); p !== undefined && p !== ROOT && !seen.has(p); p = view.parent.get(p)) {
         if (removed.has(p)) return true;
+        seen.add(p);
       }
       return false;
     });

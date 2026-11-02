@@ -7,6 +7,7 @@
 // (D38) are publish, so a later standard change never blocks saving.
 import { allowedModes, checkLiteral, defaultLockAspect, propDef } from "./catalog";
 import { buildView, effectiveConfig, type TreeIssue, type View } from "./resolve";
+import { detach, dict } from "./dict";
 import { checkSchema } from "./schema";
 import {
   ROOT,
@@ -307,10 +308,15 @@ function activeKeys(doc: OverlayDocument): Set<string> {
   return active;
 }
 
-export function validate(input: unknown, ctx: ResolveContext = {}): Diagnostic[] {
+export function validate(input: unknown, context: ResolveContext = {}): Diagnostic[] {
   const schema = checkSchema(input);
   if (schema.length > 0) return schema;
-  const doc = input as OverlayDocument;
+  const doc = detach(input as OverlayDocument);
+  const ctx: ResolveContext = {
+    ...context,
+    ...(context.sources ? { sources: { telemetry: detach(context.sources.telemetry), outputs: [...context.sources.outputs] } } : {}),
+    ...(context.assets ? { assets: detach(context.assets) } : {}),
+  };
   const out = new Collector();
 
   // One id namespace across standard and all added elements/clips.
@@ -382,8 +388,8 @@ export function validate(input: unknown, ctx: ResolveContext = {}): Diagnostic[]
     const props = (element: string, part?: string) => {
       const source = doc.elements[element] ?? variant.addedElements?.[element];
       const override = variant.elements?.[element];
-      if (part) return { ...source?.parts?.[part]?.props, ...override?.parts?.[part]?.props };
-      return { ...source?.props, ...override?.props };
+      if (part) return Object.assign(dict(), source?.parts?.[part]?.props, override?.parts?.[part]?.props);
+      return Object.assign(dict(), source?.props, override?.props);
     };
     const known0 = new Set(standardConflicts.map((c) => `${c.key}\u0000${c.clip}\u0000${c.track}`));
     for (const c of ownershipConflicts(clips, props)) {

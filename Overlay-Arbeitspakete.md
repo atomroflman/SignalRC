@@ -115,6 +115,11 @@ parallel in mehreren Implementierungen.
 
 ## AP01 – Variantenauflösung und Dokumentprüfung
 
+**Status (2026-11-02):** umgesetzt in TS (`Client/src/components/overlay/document/`)
+und C# (`Server/Overlay/Documents/`), beide gegen dieselben Fixtures getestet
+(Vitest, xUnit). Formelprüfung bis AP06 nur über ein Testdouble; die Einbindung
+in Speichern und Veröffentlichen erfolgt mit AP02.
+
 **Ziel:** Aus einem Gesamtstand und ausgewähltem Stream eine eindeutig bestimmte
 effektive Konfiguration erzeugen, unabhängig von UI, Netzwerk und Zeitmodell.
 

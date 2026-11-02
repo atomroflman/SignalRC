@@ -12,18 +12,24 @@ Notation TypeScript; C#-Gegenstücke sind gleichnamig in PascalCase.
 ```ts
 // AP01 – Dokumentauflösung (TS: Client; C#: Server, gleiche Fixtures)
 interface DocumentResolver {
-  validate(doc: unknown, ctx: ResolveContext): Diagnostic[];          // Schema + structure + publish
-  resolve(doc: OverlayDocument, streamId: string, ctx: ResolveContext):
-    { kind: "none"; reason: "noDocument" | "vehicleDisabled" | "variantDisabled" }
-  | { kind: "hud"; config: EffectiveConfig; diagnostics: Diagnostic[] };
+  validate(doc: unknown, ctx?: ResolveContext): Diagnostic[];         // Schema + structure + publish
+  resolve(doc: OverlayDocument, streamId: string):                    // nur für geprüfte Dokumente
+    { kind: "none"; reason: "vehicleDisabled" | "variantDisabled" }
+  | { kind: "hud"; config: EffectiveConfig };
+  effectiveConfig(doc: OverlayDocument, streamId: string | null): EffectiveConfig; // null = Standard
   deletionImpact(doc: OverlayDocument, elementIds: string[]): DeletionImpact;
+  deleteElements(doc: OverlayDocument, elementIds: string[]): OverlayDocument;
 }
-interface ResolveContext {
-  catalog: PropertyCatalog;
-  streams: string[];                          // bekannte StreamIds (D53)
-  sources: SourceCatalog;                     // tel-Kanäle mit DataType, out-Namen
-  assets: Record<string, AssetMetadata>;
+interface ResolveContext {                    // alle Felder optional; fehlende Teile werden nicht geprüft
+  streams?: string[];                         // bekannte StreamIds (D53)
+  sources?: SourceCatalog;                    // tel-Kanäle mit DataType, out-Namen
+  assets?: Record<string, AssetMetadata>;
+  expressions?: ExpressionAnalyzer;           // Port zu AP06
 }
+// Ohne veröffentlichten Stand gibt es kein Dokument; das entscheidet der
+// Aufrufer (AP13), nicht resolve. Implementierung: TS
+// Client/src/components/overlay/document/, C# Server/Overlay/Documents/
+// (statische Klasse DocumentResolver).
 
 // AP06 – Ausdrücke (TS + C#, identische Semantik)
 interface ExpressionEngine {
@@ -131,7 +137,7 @@ Entwicklungswerkzeuge; Laufzeitabhängigkeiten kommen nicht hinzu:
 
 | Bereich | Werkzeug | Ort |
 | --- | --- | --- |
-| C#-Modultests | xUnit | `Tests/SignalRC.Overlay.Tests/` (referenziert Shared, Server, Onboard; in `SignalRC.sln`) |
+| C#-Modultests | xUnit | `Tests/SignalRC.Overlay.Tests/` (in `SignalRC.sln`; referenziert Server und darüber Shared, Onboard bei Bedarf ergänzen) |
 | TS-Modultests | Vitest (jsdom, wo nötig) | `*.test.ts(x)` neben dem Code; `Client/vitest.config.ts` |
 | Browser/Leistung | Playwright (Chromium) | `Client/e2e/` |
 | Fixture-Konformität | je ein Test in C# und TS, der alle `Shared/Overlay/fixtures/**/cases.json` ausführt | jeweils im Paket der getesteten Schnittstelle |
