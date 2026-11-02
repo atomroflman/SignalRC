@@ -1,8 +1,14 @@
 # Fahrzeug-Overlay: Arbeitspakete und Parallelisierung
 
-Stand: 2026-11-01. Status: Planung; kein Arbeitspaket ist damit implementiert
-oder abgenommen. AP00 ist am 2026-11-01 freigegeben (S01–S09, D01–D58);
-M0 folgt mit T0 (Testgerüste).
+Stand: 2026-11-02.
+- AP00 ist freigegeben.
+- AP01 und AP06 sind umgesetzt; AP02 ist bis auf den SVG-Upload (wartet auf
+  AP07) umgesetzt.
+- AP03 ist in Arbeit.
+- M0 ist erreicht (T0 mit AP01).
+
+„Umgesetzt“ heißt: implementiert, getestet und lokal committet. Die gemeinsame
+Abnahme aller Pakete erfolgt in AP14, ein Rollout ist damit nicht verbunden.
 
 ## Zweck und maßgeblicher Gesamtplan
 
@@ -43,25 +49,25 @@ AP00 ist das gemeinsame Start-Gate für die nachfolgenden Implementierungspakete
 Die letzte Spalte benennt Zulieferer für die Fertigstellung mit realen Modulen,
 nicht ein zusätzliches Verbot, vorher gegen deren vereinbarte Ports zu arbeiten.
 
-| ID | Ergebnis / Zuständigkeit | Reale Zulieferer zur Integration |
-| --- | --- | --- |
-| AP00 | Vertragsfundament, Referenzfälle, Modulgerüste und Schreibzuständigkeiten | Keine; setzt den abgestimmten Gesamtplan um. |
-| AP01 | Variantenauflösung und strukturelle Dokumentprüfung | AP00-Verträge. |
-| AP02 | Serverpersistenz, Revisionen, Berechtigungen und Veröffentlichung | AP01, AP06, AP07. |
-| AP03 | Telemetriequalität, Reader-Anbindung und Servertransport | AP00-Verträge; Anwendungsverdrahtung über AP13. |
-| AP04 | LiDAR-Gruppen und kompaktes Winkel-/Distanzraster | AP03 für Qualität und Transport. |
-| AP05 | Client-Telemetrie, Metadaten, Alterung und Verbraucher | AP03; LiDAR-Daten aus AP04. |
-| AP06 | Sicheres Ausdruckssystem in Client und Server | AP00-Verträge. |
-| AP07 | SVG-Bereinigung, normalisierte Assets und Importvorschau | AP00-Verträge; Speicherung/HTTP-Anbindung über AP02/AP13. |
-| AP08 | SVG-/Animationslaufzeit und LiDAR-Widget | AP01, AP05, AP06, AP07. |
-| AP09 | Editorzustand, Gestaltungsfläche, Undo/Redo und Autosave | AP01, AP02, AP08. |
-| AP10 | Eigenschaften, Bindungen und Keyframe-Zeitachse | AP06, AP08, AP09. |
-| AP11 | Lokale Simulation und dynamische Vorschau | AP05, AP08, AP09. |
-| AP12 | Startvorlagen, Paket-Import/-Export und Zuordnung | AP01, AP02, AP07, AP09. |
-| AP13 | Video-, UI-, Steuerungs- und Anwendungsintegration | Verbindet AP01 bis AP12 schrittweise. |
-| AP14 | Browser-, Sicherheits-, Reconnect- und Leistungsabnahme | Gemeinsame Referenzfälle und integrierbare Funktionspfade. |
+| ID | Status | Ergebnis / Zuständigkeit | Reale Zulieferer zur Integration |
+| --- | --- | --- | --- |
+| AP00 | ✅ freigegeben | Vertragsfundament, Referenzfälle, Modulgerüste und Schreibzuständigkeiten | Keine; setzt den abgestimmten Gesamtplan um. |
+| AP01 | ✅ umgesetzt | Variantenauflösung und strukturelle Dokumentprüfung | AP00-Verträge. |
+| AP02 | ◐ umgesetzt bis auf SVG-Upload | Serverpersistenz, Revisionen, Berechtigungen und Veröffentlichung | AP01, AP06, AP07. |
+| AP03 | 🔄 in Arbeit | Telemetriequalität, Reader-Anbindung und Servertransport | AP00-Verträge; Anwendungsverdrahtung über AP13. |
+| AP04 | offen | LiDAR-Gruppen und kompaktes Winkel-/Distanzraster | AP03 für Qualität und Transport. |
+| AP05 | offen | Client-Telemetrie, Metadaten, Alterung und Verbraucher | AP03; LiDAR-Daten aus AP04. |
+| AP06 | ✅ umgesetzt | Sicheres Ausdruckssystem in Client und Server | AP00-Verträge. |
+| AP07 | offen | SVG-Bereinigung, normalisierte Assets und Importvorschau | AP00-Verträge; Speicherung/HTTP-Anbindung über AP02/AP13. |
+| AP08 | offen | SVG-/Animationslaufzeit und LiDAR-Widget | AP01, AP05, AP06, AP07. |
+| AP09 | offen | Editorzustand, Gestaltungsfläche, Undo/Redo und Autosave | AP01, AP02, AP08. |
+| AP10 | offen | Eigenschaften, Bindungen und Keyframe-Zeitachse | AP06, AP08, AP09. |
+| AP11 | offen | Lokale Simulation und dynamische Vorschau | AP05, AP08, AP09. |
+| AP12 | offen | Startvorlagen, Paket-Import/-Export und Zuordnung | AP01, AP02, AP07, AP09. |
+| AP13 | offen | Video-, UI-, Steuerungs- und Anwendungsintegration | Verbindet AP01 bis AP12 schrittweise. |
+| AP14 | offen (T0 mit AP01 erledigt) | Browser-, Sicherheits-, Reconnect- und Leistungsabnahme | Gemeinsame Referenzfälle und integrierbare Funktionspfade. |
 
-## AP00 – Vertragsfundament und Freigabe-Gate
+## AP00 – Vertragsfundament und Freigabe-Gate ✅
 
 Entscheidungen D01–D58 und Spezifikationsstand S01–S09 stehen in
 [Overlay-AP00-Vertraege.md](Overlay-AP00-Vertraege.md); die Verträge selbst
@@ -113,12 +119,15 @@ parallel in mehreren Implementierungen.
 
 **Nicht enthalten:** Vollständige Featureimplementierung oder Rollout.
 
-## AP01 – Variantenauflösung und Dokumentprüfung
+## AP01 – Variantenauflösung und Dokumentprüfung ✅
 
-**Status (2026-11-02):** umgesetzt in TS (`Client/src/components/overlay/document/`)
-und C# (`Server/Overlay/Documents/`), beide gegen dieselben Fixtures getestet
-(Vitest, xUnit). Formelprüfung bis AP06 nur über ein Testdouble; die Einbindung
-in Speichern und Veröffentlichen erfolgt mit AP02.
+**Status (2026-11-02):** umgesetzt.
+- TS (`Client/src/components/overlay/document/`) und C#
+  (`Server/Overlay/Documents/`), beide gegen dieselben Fixtures getestet
+  (Vitest, xUnit).
+- Die Formelprüfung nutzt AP06.
+- Speichern und Veröffentlichen sind über AP02 eingebunden.
+- T0 (Testgerüste) ist hier mit erledigt.
 
 **Ziel:** Aus einem Gesamtstand und ausgewähltem Stream eine eindeutig bestimmte
 effektive Konfiguration erzeugen, unabhängig von UI, Netzwerk und Zeitmodell.
@@ -140,7 +149,7 @@ oder direkten Editorzustandsänderungen.
 **Abnahme:** Alle Vererbungs-, Lösch-, Deaktivierungs- und Grenzfälle sind
 deterministisch getestet; Server und Client stimmen überein.
 
-## AP02 – Serverpersistenz, Berechtigungen und Veröffentlichung
+## AP02 – Serverpersistenz, Berechtigungen und Veröffentlichung ◐
 
 **Status (2026-11-02):** umgesetzt in `Server/Overlay/` mit Migration
 `AddOverlay`, einschließlich Abhängigkeitsauskunft und Formelprüfung beim
@@ -175,7 +184,9 @@ Dokumentauflösung und Sanitizer werden eingebunden, nicht hier erneut erfunden.
 Veröffentlichungen und historische Assets bleiben unverändert; Restore wirkt
 erst nach erneutem Veröffentlichen. Integrationstests decken Kontrollwechsel ab.
 
-## AP03 – Quellqualität und rückwärtsverträgliche Telemetrie
+## AP03 – Quellqualität und rückwärtsverträgliche Telemetrie 🔄
+
+**Status (2026-11-02):** in Arbeit.
 
 **Ziel:** Werte einschließlich ihrer tatsächlichen Quellaktualität transportieren,
 ohne die bisherige manuelle Telemetrie oder ältere Clients zu brechen.
@@ -256,7 +267,7 @@ keine Renderer-DOM-Zugriffe und keine Simulation im gemeinsamen Livebestand.
 Verbrauchers stört andere nicht. Alterung tritt auch ohne weitere Nachrichten
 ein. Persönliche gespeicherte Präferenzen bleiben unverändert.
 
-## AP06 – Sicheres Ausdruckssystem
+## AP06 – Sicheres Ausdruckssystem ✅
 
 **Status (2026-11-02):** umgesetzt.
 - Client (`Client/src/components/overlay/expression/`): Analyse und Auswertung.
@@ -538,7 +549,7 @@ Arbeitsverzeichnis werden nicht überschrieben oder zurückgesetzt.
 
 ## Integrationsreihenfolge und Meilensteine
 
-1. **M0 – Vertragsfreigabe:** AP00 abgeschlossen, Testdoubles und Beispiele
+1. **M0 – Vertragsfreigabe ✅:** AP00 abgeschlossen, Testdoubles und Beispiele
    nutzbar, Eigentümer zentraler Dateien benannt.
 2. **M1 – Parallele Module:** AP01 bis AP12 gegen feste Ports; AP13/AP14 begleiten
    die ersten nutzbaren Pfade. Keine feste Anzahl paralleler Bearbeiter.
@@ -574,7 +585,9 @@ stillschweigend vereinbarte Funktionen in einen späteren Produktumfang.
 
 ## Bewusst noch offene technische Entscheidungen
 
-AP00 muss insbesondere konkrete Formelsyntax, Clip-Zustandsübergänge,
+Erledigt mit AP00 (S01–S09); Änderungen seither stehen im Änderungsprotokoll von
+[Overlay-AP00-Vertraege.md](Overlay-AP00-Vertraege.md). Ursprünglicher Auftrag:
+AP00 musste insbesondere konkrete Formelsyntax, Clip-Zustandsübergänge,
 Schema-/API-Feldnamen, Zeitbasis und exakte Fristen, SVG-Teilmenge/Limits,
 LiDAR-Drahtformat/-Rate/-Filteranbindung, Quellkanal-Provisionierung,
 Austauschformat und Referenz-Leistungsbudget festschreiben.
