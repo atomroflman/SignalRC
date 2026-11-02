@@ -8,6 +8,7 @@ import CarVideoPanel from "@/components/car-video-panel";
 import AudioChat from "@/components/audio-chat";
 import OnboardDiagnostics from "@/components/onboard-diagnostics";
 import { useControlFlowStore } from "@/components/control-flow-store";
+import { useTelemetryStore } from "@/components/telemetry-store";
 import { useI18n } from "@/i18n/provider";
 
 type HubConnection = any;
@@ -68,13 +69,23 @@ export default function TestPage() {
   const [controlChannels, setControlChannels] = useState<ControlChannel[]>([]);
   const [telemetryChannels, setTelemetryChannels] = useState<TelemetryChannel[]>([]);
   const [channelIds, setChannelIds] = useState<ChannelIds | undefined>(undefined);
-  const [telemetryValues, setTelemetryValues] = useState<Record<string, string>>({});
-  const [subscribedChannels, setSubscribedChannels] = useState<Set<string>>(new Set());
+  // Telemetry values come from the shared live sources as a consumer of the
+  // personal selection (AP05), not from the legacy all-channels push.
+  const subscribedChannels = useTelemetryStore(s => s.subscribedChannels);
+  const telemetryEntries = useTelemetryStore(s => s.entries);
+  const connectTelemetry = useTelemetryStore(s => s.connect);
+  const disconnectTelemetry = useTelemetryStore(s => s.disconnect);
+  const subscribeTelemetry = useTelemetryStore(s => s.subscribeChannel);
+  const unsubscribeTelemetry = useTelemetryStore(s => s.unsubscribeChannel);
   const [controlValues, setControlValues] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const carIdStr = carIdNum?.toString() ?? "";
+  useEffect(() => {
+    if (!carIdNum) return;
+    void connectTelemetry(carIdNum);
+    return () => { void disconnectTelemetry(); };
+  }, [carIdNum, connectTelemetry, disconnectTelemetry]);
 
   useEffect(() => {
     if (!carIdNum) return;
@@ -89,19 +100,6 @@ export default function TestPage() {
           .withUrl("/hubs/connection")
           .withAutomaticReconnect()
           .build();
-
-        conn.on("UpdateTelemetry", (valueName: string, value: string) => {
-          if (!mounted) return;
-          setTelemetryValues(prev => ({ ...prev, [valueName]: value }));
-        });
-
-        conn.onreconnected(async () => {
-          if (!mounted || !carIdStr) return;
-          await conn!.invoke("SubscribeToCarTelemetry", carIdStr);
-          for (const ch of subscribedChannels) {
-            await conn!.invoke("SubscribeToChannel", carIdStr, ch).catch(() => {});
-          }
-        });
 
         await conn.start();
         if (!mounted) {
@@ -137,14 +135,6 @@ export default function TestPage() {
         setChannelIds(ids);
         setControlChannels(controls);
         setTelemetryChannels(telemetryList);
-
-        const initialSubs = new Set(telemetryList.filter(t => t.subscribed).map(t => t.channelName));
-        setSubscribedChannels(initialSubs);
-
-        await conn.invoke("SubscribeToCarTelemetry", carIdStr);
-        for (const ch of initialSubs) {
-          await conn.invoke("SubscribeToChannel", carIdStr, ch).catch(() => {});
-        }
       } catch (e: any) {
         console.error("Failed to load test page:", e);
         if (mounted) {
@@ -181,16 +171,8 @@ export default function TestPage() {
   };
 
   const toggleTelemetry = async (channel: TelemetryChannel) => {
-    if (!connection || !carIdStr) return;
-    const next = new Set(subscribedChannels);
-    if (next.has(channel.channelName)) {
-      next.delete(channel.channelName);
-      await connection.invoke("UnsubscribeFromChannel", carIdStr, channel.channelName).catch(() => {});
-    } else {
-      next.add(channel.channelName);
-      await connection.invoke("SubscribeToChannel", carIdStr, channel.channelName).catch(() => {});
-    }
-    setSubscribedChannels(next);
+    if (subscribedChannels.has(channel.channelName)) await unsubscribeTelemetry(channel.channelName);
+    else await subscribeTelemetry(channel.channelName);
   };
 
   const sortedTelemetry = useMemo(() => {
@@ -303,7 +285,8 @@ export default function TestPage() {
             <div className="space-y-1 max-h-96 overflow-y-auto">
               {sortedTelemetry.map(t => {
                 const isSubscribed = subscribedChannels.has(t.channelName);
-                const value = telemetryValues[t.channelName];
+                const entry = telemetryEntries.find(e => e.name === t.channelName);
+                const value = entry && entry.state !== "invalid" ? entry.value : undefined;
                 return (
                   <div key={t.channelName} className="flex items-center justify-between border border-zinc-800 rounded p-2 bg-zinc-950">
                     <div className="flex items-center gap-2">
@@ -317,7 +300,7 @@ export default function TestPage() {
                     </div>
                     <div className="text-xs font-mono text-green-300">
                       {isSubscribed && value !== undefined
-                        ? formatTelemetryValue(value, t.dataType, t.decimals)
+                        ? `${entry?.state === "unchecked" ? "⚠ " : ""}${formatTelemetryValue(value, t.dataType, t.decimals)}`
                         : "—"}
                     </div>
                   </div>

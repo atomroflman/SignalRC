@@ -21,6 +21,20 @@ import {
 import { useI18n } from '@/i18n/provider';
 import type { Messages } from '@/i18n/translations';
 import { usePushToTalkStore } from './audio-store';
+import VideoHud from './overlay/integration/video-hud';
+import type { EffectiveConfig } from './overlay/document';
+import type { RuntimeAsset } from './overlay/runtime/types';
+
+/** The vehicle HUD over this stream (AP13); absent or config null = no HUD. */
+export interface VideoHudInput {
+  carId: number;
+  config: EffectiveConfig | null;
+  assets: Record<string, RuntimeAsset>;
+  hidden: boolean;
+  onHiddenChange: (hidden: boolean) => void;
+  /** Hint about the newest publication (not usable / not loaded). */
+  problem?: string;
+}
 
 interface VideoStreamProps {
   streamId?: number;
@@ -28,6 +42,7 @@ interface VideoStreamProps {
   audioEnabled?: boolean;
   audioInputDeviceId?: string;
   onAudioTrack?: (track: MediaStreamTrack | null) => void;
+  hud?: VideoHudInput;
 }
 
 const NO_DATA_THRESHOLD_MS = 5000;
@@ -587,13 +602,58 @@ function JanusStreamList({ streams, messages }: JanusStreamListProps) {
   );
 }
 
+type FullscreenDocument = Document & { webkitFullscreenElement?: Element | null; webkitExitFullscreen?: () => Promise<void> | void };
+type FullscreenElement = HTMLElement & { webkitRequestFullscreen?: () => Promise<void> | void };
+
+function fullscreenElement(): Element | null {
+  const doc = document as FullscreenDocument;
+  return doc.fullscreenElement ?? doc.webkitFullscreenElement ?? null;
+}
+
+/** Container fullscreen (video, HUD and status together); native video-only fullscreen/PiP is not offered. */
+function useContainerFullscreen(ref: React.RefObject<HTMLElement | null>) {
+  const [supported, setSupported] = useState(false);
+  const [active, setActive] = useState(false);
+  useEffect(() => {
+    const el = ref.current as FullscreenElement | null;
+    const doc = document as FullscreenDocument & { webkitFullscreenEnabled?: boolean };
+    setSupported(!!el && (doc.fullscreenEnabled || doc.webkitFullscreenEnabled === true)
+      && (typeof el.requestFullscreen === 'function' || typeof el.webkitRequestFullscreen === 'function'));
+    const update = () => setActive(fullscreenElement() === ref.current && ref.current !== null);
+    document.addEventListener('fullscreenchange', update);
+    document.addEventListener('webkitfullscreenchange', update);
+    return () => {
+      document.removeEventListener('fullscreenchange', update);
+      document.removeEventListener('webkitfullscreenchange', update);
+    };
+  }, [ref]);
+  const toggle = useCallback(() => {
+    const el = ref.current as FullscreenElement | null;
+    const doc = document as FullscreenDocument;
+    if (!el) return;
+    const call = (fn: (() => Promise<void> | void) | undefined, target: object) => {
+      try {
+        void Promise.resolve(fn?.call(target)).catch((e: unknown) => console.debug('Fullscreen request failed:', e));
+      } catch (e) {
+        console.debug('Fullscreen request failed:', e);
+      }
+    };
+    if (fullscreenElement() === el) call(doc.exitFullscreen ?? doc.webkitExitFullscreen, doc);
+    else call(el.requestFullscreen ?? el.webkitRequestFullscreen, el);
+  }, [ref]);
+  return { supported, active, toggle };
+}
+
 export default function VideoStream({
   streamId,
   streamName,
   audioEnabled = false,
   onAudioTrack,
+  hud,
 }: VideoStreamProps) {
-  const { messages } = useI18n();
+  const { messages, locale } = useI18n();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const fullscreen = useContainerFullscreen(containerRef);
   const { videoRef, audioRef, phase, error, janusStreams, stats, vehicleSending, retryInfo } =
     useJanusStreaming(streamId, onAudioTrack);
   const [overlayVisible, setOverlayVisible] = useState(true);
@@ -616,8 +676,11 @@ export default function VideoStream({
   const sendingDotClass =
     phase === 'receiving' && vehicleSending ? 'bg-green-400' : 'bg-red-400';
 
+  const hudConfig = hud?.config ?? null;
+  const hudMessages = messages.overlay.hud;
+
   return (
-    <div className="relative flex h-full min-h-0 w-full items-center justify-center">
+    <div ref={containerRef} className="relative flex h-full min-h-0 w-full items-center justify-center">
       {overlayVisible && (
         <div
           className={`absolute top-2 left-2 z-10 rounded px-3 py-2 text-sm text-white ${getPhaseClasses(phase)}`}
@@ -681,6 +744,46 @@ export default function VideoStream({
         muted={!audioEnabled}
         className="h-full max-w-full bg-black object-contain"
       />
+      {hud && hudConfig && (
+        <VideoHud
+          carId={hud.carId}
+          config={hudConfig}
+          assets={hud.assets}
+          locale={locale}
+          visible={!hud.hidden}
+          containerRef={containerRef}
+          videoRef={videoRef}
+          pausedText={hudMessages.controlPaused}
+        />
+      )}
+      {hud?.problem && !hud.hidden && (
+        <div className="pointer-events-none absolute bottom-10 right-2 z-10 max-w-xs rounded bg-amber-900/85 px-2 py-1 text-xs text-amber-100" role="status">
+          {hud.problem}
+        </div>
+      )}
+      {(fullscreen.supported || (hud && hudConfig)) && (
+        <div className="absolute bottom-2 right-2 z-10 flex gap-1">
+          {hud && hudConfig && (
+            <button
+              type="button"
+              className="rounded bg-black/60 px-2 py-1 text-xs text-white hover:bg-black/80"
+              aria-pressed={!hud.hidden}
+              onClick={() => hud.onHiddenChange(!hud.hidden)}
+            >
+              {hud.hidden ? hudMessages.show : hudMessages.hide}
+            </button>
+          )}
+          {fullscreen.supported && (
+            <button
+              type="button"
+              className="rounded bg-black/60 px-2 py-1 text-xs text-white hover:bg-black/80"
+              onClick={fullscreen.toggle}
+            >
+              {fullscreen.active ? hudMessages.exitFullscreen : hudMessages.fullscreen}
+            </button>
+          )}
+        </div>
+      )}
       <audio ref={audioRef} autoPlay playsInline muted={!audioEnabled || talking} className="hidden" />
     </div>
   );

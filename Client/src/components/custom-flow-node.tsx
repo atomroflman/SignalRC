@@ -8,6 +8,7 @@ import IifFlowNode from "./iif-flow-node";
 import SmoothFlowNode from "./smooth-flow-node";
 import { ParamInput } from "./param-input";
 import { useI18n } from "@/i18n/provider";
+import { HUD_SIGNAL_FUNCTION, hudSignalName } from "./overlay/integration/control-display-binding";
 
 export type CustomFlowNodeProps = NodeProps & {
   data: any;
@@ -133,6 +134,14 @@ export default function CustomFlowNode(props: NodeProps) {
       </Handle>
   ));
 
+  // HUD-Signal (D37): one node per signal; a missing or doubled mapping makes it unavailable.
+  let hudSignalProblem: string | undefined;
+  if (data?.metadata?.functionName === HUD_SIGNAL_FUNCTION) {
+    const name = hudSignalName(data);
+    if (name === undefined) hudSignalProblem = messages.overlay.flowNode.hudSignalMissing;
+    else if (flowControl.nodes.filter(n => hudSignalName(n) === name).length > 1) hudSignalProblem = messages.overlay.flowNode.hudSignalDuplicate;
+  }
+
   return (
     <div className="bg-zinc-800 border border-zinc-700 rounded p-2 pt-3 pb-6 flex flex-col min-w-[140px] relative">
       <div className="flex items-center justify-between">
@@ -157,6 +166,8 @@ export default function CustomFlowNode(props: NodeProps) {
           ))}
         </div>
       )} 
+
+      {hudSignalProblem && <div className="mt-1 text-[10px] text-red-300">{hudSignalProblem}</div>}
 
       {inputHandles}
       {outputHandles}

@@ -1,4 +1,15 @@
+import { integrationMessages } from '@/components/overlay/integration/messages';
+import { lidarSourceMessages } from '@/components/overlay/lidar-source/messages';
+import { assetMessages } from '@/components/overlay/assets/messages';
+
 export type Locale = 'de' | 'en';
+
+// Overlay texts come as part files from their packages (modules/README.md §2).
+const overlayMessages = (locale: Locale) => ({
+  ...integrationMessages[locale],
+  lidarSource: lidarSourceMessages[locale],
+  assets: assetMessages[locale],
+});
 
 const deMessages = {
   languageSwitcher: {
@@ -396,6 +407,7 @@ const deMessages = {
     assignedSummary: (assigned: number, total: number) => `${assigned} von ${total} Eingangsknoten zugeordnet`,
     missing: 'fehlend',
   },
+  overlay: overlayMessages('de'),
 };
 
 export type Messages = typeof deMessages;
@@ -796,6 +808,7 @@ const enMessages: Messages = {
     assignedSummary: (assigned: number, total: number) => `${assigned} of ${total} input nodes assigned`,
     missing: 'missing',
   },
+  overlay: overlayMessages('en'),
 };
 
 export const messagesByLocale: Record<Locale, Messages> = {
