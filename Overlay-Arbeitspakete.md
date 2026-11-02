@@ -2,7 +2,8 @@
 
 Stand: 2026-11-02.
 - AP00 ist freigegeben.
-- AP01 bis AP13 sind umgesetzt; offen ist AP14 (übergreifende Abnahme).
+- AP01 bis AP14 sind umgesetzt; offen sind der Live-Lauf der Abnahmetests,
+  die manuelle Browser-Checkliste und Hardwaretests (siehe `Overlay-Abnahme.md`).
 - M0 ist erreicht (T0 mit AP01).
 
 „Umgesetzt“ heißt: implementiert, getestet und lokal committet. Die gemeinsame
@@ -63,7 +64,7 @@ nicht ein zusätzliches Verbot, vorher gegen deren vereinbarte Ports zu arbeiten
 | AP11 | ✅ umgesetzt | Lokale Simulation und dynamische Vorschau | AP05, AP08, AP09. |
 | AP12 | ✅ umgesetzt | Startvorlagen, Paket-Import/-Export und Zuordnung | AP01, AP02, AP07, AP09. |
 | AP13 | ✅ umgesetzt | Video-, UI-, Steuerungs- und Anwendungsintegration | Verbindet AP01 bis AP12 schrittweise. |
-| AP14 | offen (T0 mit AP01 erledigt) | Browser-, Sicherheits-, Reconnect- und Leistungsabnahme | Gemeinsame Referenzfälle und integrierbare Funktionspfade. |
+| AP14 | ◐ umgesetzt ohne Browser; Live-Lauf offen | Browser-, Sicherheits-, Reconnect- und Leistungsabnahme | Gemeinsame Referenzfälle und integrierbare Funktionspfade. |
 
 ## AP00 – Vertragsfundament und Freigabe-Gate ✅
 
@@ -691,7 +692,30 @@ verweigert. Danach folgen weitere Funktionen inkrementell.
 **Abnahme:** Alle integrierten Module verwenden reale Implementierungen,
 Fehlzustände bleiben kontrolliert und Video/Steuerung funktionieren unverändert.
 
-## AP14 – Übergreifende Abnahme
+## AP14 – Übergreifende Abnahme ◐
+
+**Status (2026-11-02):** umgesetzt ohne Browser-Automatisierung (Entscheidung
+des Auftraggebers); Bericht in [Overlay-Abnahme.md](Overlay-Abnahme.md).
+- **Übergreifende Tests** (`Client/src/components/overlay/acceptance/`,
+  `Tests/SignalRC.Overlay.Tests/Acceptance/`): zwei Tabs, Kontrollwechsel,
+  Konflikt, Wiederherstellung, Veröffentlichen/Restore, historische Assets,
+  Reconnect mit verpasster Veröffentlichung, fehlerhafte Konfiguration,
+  unbekannte Schemaversion, Quellqualität bis in die Laufzeit (D71),
+  Simulation ohne Befehle.
+- **Sicherheit:** 74 Missbrauchsformeln (Client und Server gleich), 23
+  feindliche SVGs über den echten Upload, feindliche Pakete,
+  Berechtigungsmatrix, D56/D57/D69/D70 an echten Hub-Methoden.
+- **Leistung/Bandbreite (S09):** R2 Fahrt 4,2 kB/s plus LiDAR 1,7 kB/s,
+  Stillstand 0,44 kB/s, ohne Bedarf 0; Frame-p95 in Node R1 0,08 ms, R2
+  ≤ 0,6 ms, R3 ≤ 5,4 ms; kein Heap-Wachstum über 10 min, 0 Frames in Pause.
+- **CI:** `scripts/overlay-check.sh` (Live-Tests nur mit Env,
+  `--start-server`, `--perf`); GitHub-Workflow ohne Live-Tests (nicht
+  gepusht).
+- **Behoben:** unlesbare Asset-Metadaten blockierten Speichern und
+  Veröffentlichen.
+- **Offen:** Live-Lauf `acceptance/live-acceptance.test.ts`, manuelle
+  Browser-Checkliste (Abnahme §6), Hardware (D58, Sensorpfade), Update der
+  MessagePack-/SignalR-Pakete (NuGet-Warnungen).
 
 **Ziel:** Die Produktregeln über Modulgrenzen hinweg absichern und Regressionen
 in Video/Steuerung verhindern.
@@ -777,7 +801,7 @@ Arbeitsverzeichnis werden nicht überschrieben oder zurückgesetzt.
 5. **M4 – Zielumfang vollständig:** LiDAR-Gruppen/Raster einschließlich
    konfigurierbarer Aufteilung, Vorlagen, Pakettransfer, Verlauf/Restore und
    Ausfall-/Kompatibilitätsverhalten integriert.
-6. **M5 – Abnahme:** Modultests, Browser-/Sicherheits-/Leistungsnachweise,
+6. **M5 – Abnahme (◐, Browser/Hardware manuell offen):** Modultests, Browser-/Sicherheits-/Leistungsnachweise,
    dokumentierte Grenzen, keine offenen produktiven Platzhalter.
 
 Die Meilensteine priorisieren Integrationsnachweise. Sie verschieben nicht
