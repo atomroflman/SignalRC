@@ -85,7 +85,9 @@ Revision nach Reconnect/Kontrollrückkehr): Autosave pausiert, Sicherung wird
 geschrieben, `backupPackage()` zum Download, `loadServerState()` (Server gewinnt).
 Kontrolle: `setControl(bool)` aus der Anwendung (AP13, `CarStateUpdated`) oder
 `403 OVL_API_NOT_DRIVER` – danach keine Serverzugriffe. Lokale Sicherungen:
-IndexedDB `signalrc-overlay`/`backups`, ≤ 1 Schreibung/s, 5 je Fahrzeug;
+IndexedDB `signalrc-overlay`/`backups`, ≤ 1 Schreibung/s; je Sitzung wird
+die eigene Sicherung überschrieben, Konfliktsicherungen bleiben getrennt
+erhalten, aufbewahrt werden die letzten 5 Sitzungen je Fahrzeug (D72);
 `getState().backups` bietet sie nach dem Laden an (`continueFromBackup` nur bei
 gleicher Basisrevision).
 
