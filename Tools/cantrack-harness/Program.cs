@@ -537,7 +537,9 @@ Thread.Sleep(200);
 var snap = manager.GetSnapshot();
 Check("command frames are sent", seenCommands > 5, $"{seenCommands} in 200 ms");
 Check("no nodes -> drive inhibited", !snap.DriveEnabled, snap.InhibitReason);
-Check("no nodes -> mode stop", lastMode == (byte)P.DriveMode.Stop, $"mode {lastMode}");
+// Coast, not Stop: nothing is moving, and the firmware's Stop keeps the
+// driver on, which oscillates at standstill.
+Check("no nodes -> mode coast", lastMode == (byte)P.DriveMode.Coast, $"mode {lastMode}");
 Check("no nodes -> zero target", lastLeft == 0 && lastRight == 0, $"{lastLeft}/{lastRight}");
 
 // 2. Both nodes report in. Now full throttle has to reach the wire.
@@ -614,6 +616,27 @@ Check("silent node detected", !snap.AllNodesPresent, snap.InhibitReason ?? "(non
 Check("silent node -> mode stop", lastMode == (byte)P.DriveMode.Stop, $"mode {lastMode}");
 simLeftAlive = true;
 Thread.Sleep(200);
+
+// 5b. Standstill. The firmware's Stop holds the driver on and swings the
+// wheel at zero speed, so once nothing is commanded and both tracks stand the
+// nodes have to be told to coast - but not while they are still braking.
+throttle.SetValue(0f);
+steering.SetValue(0f);
+Thread.Sleep(100);
+Check("zero command while moving -> not coast yet", lastMode != (byte)P.DriveMode.Coast,
+      $"mode {lastMode}");
+simLeftSpeed = simRightSpeed = 0.0;
+Thread.Sleep(400);
+Check("zero command and standing -> coast", lastMode == (byte)P.DriveMode.Coast, $"mode {lastMode}");
+simLeftSpeed = 5.0;            // pushed by hand: stays off, nothing asked for torque
+Thread.Sleep(150);
+Check("coast latches against a nudge", lastMode == (byte)P.DriveMode.Coast, $"mode {lastMode}");
+throttle.SetValue(1.0f);
+Thread.Sleep(100);
+Check("nonzero command leaves coast", lastMode == (byte)P.DriveMode.Velocity && lastLeft == 2000,
+      $"mode {lastMode}, {lastLeft}/{lastRight}");
+simLeftSpeed = 7.9;
+simRightSpeed = 8.1;
 
 // 6. The network link. A dropped connection and a merely slow one look the
 // same from here - input stops being fresh - so one age check covers both.

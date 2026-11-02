@@ -107,7 +107,8 @@ forward reports a positive speed on either side.
 ### The drive is inhibited unless everything is in order
 
 Every pass of the send loop checks, and anything short sends mode `Stop` with
-a target of zero instead of the commanded speed:
+a target of zero instead of the commanded speed - or `Coast` once the tracks
+stand, see [Coasting at standstill](#coasting-at-standstill):
 
 - the CAN interface is open
 - `ExpectedNodes` nodes have reported within `NodeTimeoutMs`
@@ -128,6 +129,33 @@ arrived.
 
 Set `ExpectedNodes` to 1 for single-board bench work. It is a count, not a
 list of addresses, so either board alone - left or right - releases the drive.
+
+### Coasting at standstill
+
+The firmware's Stop keeps the driver on and regulates to zero speed. At
+standstill that is unstable. With the driver running, the gate edges put
+roughly 85 spurious Hall edges per second on the sensor lines (measured in the
+firmware repo, commit `f463627`). The velocity loop reads them as motion and
+answers with current, and the wheel swings back and forth at ±20 rad/s against
+the current limit until the DRV8301 latches. A bench recording on 2026-11-02
+showed exactly that, with nothing on the bus but Stop frames at zero.
+
+So the manager sends Coast - driver off - once both commanded speeds are zero
+and every reporting node has stood below `standstillSpeedRadPerSecond` for
+`standstillCoastMs`. Stop is still sent while the tracks move, because that is
+where it brakes. Coast latches until a nonzero command arrives, so a track
+pushed by hand does not switch the driver back on. And it starts latched: a
+node that comes up never sees the driver-on Stop first.
+
+`maxStopMs` is the backstop. If a node keeps reporting motion for two seconds
+at zero command, that is the oscillation itself, and waiting for standstill
+would keep the driver on forever.
+
+Nothing is lost by coasting there. Stop gives no holding torque at standstill
+anyway - the firmware empties the velocity integrator below 1 rad/s.
+
+The proper fix belongs in the firmware: drop the driver in Stop once the motor
+stands. Until that is flashed on every node, this is the guard.
 
 ### The network link
 
@@ -197,6 +225,10 @@ All on the `pinManagers` entry.
 | `nodeTimeoutMs` | `250` | Status arrives at 20 Hz, so this is five missed frames. |
 | `expectedNodes` | `2` | Set to 1 for bench work with one board. |
 | `faultResetHoldMs` | `250` | How long the unlatch flag stays set. |
+| `coastAtStandstill` | `true` | Send Coast instead of Stop once nothing is commanded and the tracks stand. See [Coasting at standstill](#coasting-at-standstill). |
+| `standstillSpeedRadPerSecond` | `1.0` | Below this a track counts as standing. |
+| `standstillCoastMs` | `200` | How long both have to stand before the driver goes off. |
+| `maxStopMs` | `2000` | Coast after this long at zero command even if a track still reports motion. |
 | `controlTimeoutMs` | `500` | Stop if no control input arrived for this long. See [The network link](#the-network-link). |
 | `wheelRadiusM` | `0` | Metres of travel per radian. Zero means the odometry reports only travelled angles. |
 | `trackWidthM` | `0` | Effective track spacing. Zero as above. |
