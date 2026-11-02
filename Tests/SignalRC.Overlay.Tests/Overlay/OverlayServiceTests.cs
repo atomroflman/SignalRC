@@ -255,6 +255,7 @@ public abstract class OverlayServiceTests : IDisposable
         await SaveAsync(Doc(), 1);
         var published = (await Service().GetPublishedAsync(CarId)).Value!;
         Assert.Equal(1, published.Number);
+        Assert.Empty(published.Assets);
         Assert.NotNull(published.Document["elements"]!["e_v"]);
 
         Assert.Equal(2, (await Service().PublishAsync(CarId, _driver, 2, null)).Value?.Number);
@@ -401,6 +402,16 @@ public abstract class OverlayServiceTests : IDisposable
         await SaveAsync(Doc(element, """["e_s"]"""));
         var published = await service.PublishAsync(CarId, _driver, 1, null);
         Assert.True(published.Error == null, string.Join(", ", published.Error?.Diagnostics?.Select(d => d.Code + "@" + d.Location) ?? []));
+
+        // Viewers get the asset metadata of the publication (part bboxes for "center" pivots, AP13).
+        var live = (await service.GetPublishedAsync(CarId)).Value!;
+        var meta = Assert.IsType<JsonObject>(Assert.Single(live.Assets).Value);
+        Assert.Equal(upload.AssetId, live.Assets.Single().Key);
+        Assert.Equal(upload.Metadata.ToJsonString(), meta.ToJsonString());
+        Assert.Equal(4, meta["parts"]!["needle"]!["bbox"]!.AsArray().Count);
+        var byId = (await service.GetPublicationAsync(CarId, live.PublicationId, _driver)).Value!;
+        Assert.Equal(meta.ToJsonString(), byId.Assets[upload.AssetId]!.ToJsonString());
+
         var unknown = element.Replace("needle", "other");
         var refused = await service.SaveDraftAsync(CarId, _driver, Doc(unknown, """["e_s"]"""), 1);
         Assert.Contains(refused.Error!.Diagnostics!, d => d.Code == "OVL_REF_UNKNOWN_PART");

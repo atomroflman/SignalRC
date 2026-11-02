@@ -3,7 +3,7 @@
 // SignalR reconnect, and switch only to a complete, usable state (document
 // checked, all assets loaded). Video and audio are not touched here.
 import { canSave, validate } from "../document";
-import type { OverlayDocument } from "../document";
+import type { AssetMetadata, OverlayDocument } from "../document";
 import type { HubLike } from "../sources/hub";
 import type { RuntimeAsset } from "../runtime/types";
 import type { TimerClock } from "../sources/types";
@@ -57,6 +57,25 @@ export function documentAssetIds(doc: OverlayDocument): string[] {
     collect(v.elements as Record<string, { type?: string; assetId?: unknown }> | undefined);
   }
   return [...ids].sort();
+}
+
+/**
+ * Metadata of one asset from `assets` of GET published (api §3): size and part
+ * bboxes for "center" pivots. Missing or malformed: the SVG viewBox is used.
+ */
+export function assetMetadata(assets: unknown, id: string): AssetMetadata | undefined {
+  if (!assets || typeof assets !== "object") return undefined;
+  const m = (assets as Record<string, unknown>)[id] as { width?: unknown; height?: unknown; parts?: unknown } | undefined;
+  if (!m || typeof m !== "object" || typeof m.width !== "number" || typeof m.height !== "number") return undefined;
+  const parts: AssetMetadata["parts"] = {};
+  if (m.parts && typeof m.parts === "object") {
+    for (const [pid, p] of Object.entries(m.parts as Record<string, { tag?: unknown; bbox?: unknown }>)) {
+      const bbox = p?.bbox;
+      if (!Array.isArray(bbox) || bbox.length !== 4 || !bbox.every((v) => typeof v === "number" && Number.isFinite(v))) continue;
+      parts[pid] = { tag: typeof p.tag === "string" ? p.tag : "", bbox: bbox as [number, number, number, number] };
+    }
+  }
+  return { width: m.width, height: m.height, parts };
 }
 
 const defaultFetch = (url: string) => fetch(url) as Promise<FetchResponse>;
@@ -159,7 +178,7 @@ export class PublishedOverlay {
       return this.fail("load");
     }
     if (this.disposed || seq !== this.loadSeq) return;
-    const b = body as { publicationId?: unknown; number?: unknown; publishedAt?: unknown; document?: unknown } | null;
+    const b = body as { publicationId?: unknown; number?: unknown; publishedAt?: unknown; document?: unknown; assets?: unknown } | null;
     if (!b || typeof b.publicationId !== "number" || typeof b.number !== "number") return this.fail("load");
     const current = this._state.publication;
     if (current && current.publicationId === b.publicationId) {
@@ -192,7 +211,8 @@ export class PublishedOverlay {
           svg = await r.text();
           this.assetCache.set(id, svg);
         }
-        assets[id] = { svg };
+        const metadata = assetMetadata(b.assets, id);
+        assets[id] = metadata ? { svg, metadata } : { svg };
       }
     } catch {
       return this.fail("assets");

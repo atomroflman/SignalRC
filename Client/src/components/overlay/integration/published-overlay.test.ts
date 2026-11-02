@@ -4,7 +4,7 @@ import { FakeHub } from "../sources/testing/fake-hub";
 import { ManualClock } from "../sources/testing/manual-clock";
 import { flush } from "../sources/testing/setup";
 import type { OverlayDocument } from "../document";
-import { PublishedOverlay, RETRY_MS, documentAssetIds, type FetchResponse } from "./published-overlay";
+import { PublishedOverlay, RETRY_MS, assetMetadata, documentAssetIds, type FetchResponse } from "./published-overlay";
 import { hudConfigFor } from "./hud-config";
 
 const m2 = readContractJson<OverlayDocument>("fixtures/documents/valid/m2-value-and-rotation.json");
@@ -43,7 +43,9 @@ function setup(carId = 7) {
   return { hub, clock, routes, requests, published, asset, start, carId };
 }
 
-const publication = (publicationId: number, document: unknown) => ({ publicationId, number: publicationId, publishedAt: "2026-11-02T10:00:00Z", document });
+const META = { width: 10, height: 10, parts: { needle: { tag: "g", bbox: [4, 0, 2, 8] } } };
+const publication = (publicationId: number, document: unknown, assets: unknown = { [ASSET]: META }) =>
+  ({ publicationId, number: publicationId, publishedAt: "2026-11-02T10:00:00Z", document, assets });
 
 describe("published overlay (api §3 GET published, §4 events)", () => {
   it("joins the vehicle group, loads the publication and is ready", async () => {
@@ -108,7 +110,8 @@ describe("published overlay (api §3 GET published, §4 events)", () => {
     release();
     await flush();
     expect(o.state.publication?.publicationId).toBe(2);
-    expect(o.state.publication?.assets[ASSET]).toEqual({ svg: SVG });
+    // Part bboxes come with the publication, so "center" pivots work for viewers.
+    expect(o.state.publication?.assets[ASSET]).toEqual({ svg: SVG, metadata: { width: 10, height: 10, parts: { needle: { tag: "g", bbox: [4, 0, 2, 8] } } } });
 
     t.published(publication(3, withAsset));
     t.hub.push("OverlayPublished", { carId: 7, publicationId: 3, number: 3 });
@@ -222,6 +225,19 @@ describe("published overlay (api §3 GET published, §4 events)", () => {
     await flush();
     expect(o.state.publication?.publicationId).toBe(1);
     expect(t.hub.calls("UnsubscribeFromOverlay")).toEqual([[7]]);
+  });
+
+  it("takes asset metadata only when well-formed; without it the SVG alone is used", async () => {
+    expect(assetMetadata({ a: { width: 1, height: 2, parts: { p: { tag: "path", bbox: [0, 0, 1, "x"] }, q: { bbox: [0, 0, 1, 1] } } } }, "a"))
+      .toEqual({ width: 1, height: 2, parts: { q: { tag: "", bbox: [0, 0, 1, 1] } } });
+    expect(assetMetadata({ a: { width: "1", height: 2 } }, "a")).toBeUndefined();
+    expect(assetMetadata(undefined, "a")).toBeUndefined();
+    const t = setup();
+    t.asset();
+    t.published(publication(1, withAsset, null));
+    const o = t.start();
+    await flush();
+    expect(o.state.publication?.assets[ASSET]).toEqual({ svg: SVG });
   });
 
   it("collects asset ids of the standard and of all variants", () => {

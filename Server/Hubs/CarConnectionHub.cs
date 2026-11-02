@@ -339,6 +339,7 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
             await MarkUserAsActiveVehicle(carId);
             await MarkUserAsHasControlledCar(carId);
             await UpdateCarUiDriverStateAsync(carId);
+            _connectionStore.RememberControlSession(carId.ToString(), session);
             await Service<ControlDisplayRelay>().ControlAcquiredAsync(carId, Context.ConnectionId);
         }
         return session;
@@ -350,6 +351,7 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
         if (!_connectionStore.TryGetValue(carId.ToString(), out var connectionInfo))
             return;
         await Clients.Client(connectionInfo.ConnectionId!).ReleaseCarControl(sessionId);
+        _connectionStore.ForgetControlSession(carId.ToString(), sessionId);
         await ClearUserActiveVehicle(carId);
         await UpdateCarUiDriverStateAsync(carId);
         await Service<ControlDisplayRelay>().ControlEndedAsync(carId);

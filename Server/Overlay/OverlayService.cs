@@ -28,7 +28,8 @@ public sealed class OverlayResult<T>
 
 public sealed record DraftInfo(long Revision, JsonNode Document, DateTime? UpdatedAt, string? UpdatedBy);
 public sealed record SavedDraft(long Revision);
-public sealed record PublishedInfo(int PublicationId, int Number, DateTime PublishedAt, JsonNode Document);
+/// <param name="Assets">Normalized metadata (size, parts with bbox) of the publication's asset set, by asset id.</param>
+public sealed record PublishedInfo(int PublicationId, int Number, DateTime PublishedAt, JsonNode Document, JsonObject Assets);
 public sealed record PublicationInfo(int Id, int Number, DateTime PublishedAt, string? PublishedBy, string? Note);
 public sealed record PublicationResult(int PublicationId, int Number, IReadOnlyList<Diagnostic> Warnings);
 public sealed record AssetUpload(string AssetId, JsonObject Metadata, string Svg, JsonArray Report);
@@ -86,7 +87,8 @@ public sealed class OverlayService(
             .Where(p => p.CarId == carId).OrderByDescending(p => p.Number).FirstOrDefaultAsync();
         return publication == null
             ? (PublishedInfo?)null
-            : new PublishedInfo(publication.Id, publication.Number, publication.PublishedAt, JsonNode.Parse(publication.DocumentJson)!);
+            : new PublishedInfo(publication.Id, publication.Number, publication.PublishedAt, JsonNode.Parse(publication.DocumentJson)!,
+                await PublicationAssetMetadataAsync(carId, publication.Id));
     }
 
     public async Task<OverlayResult<DraftInfo>> GetDraftAsync(int carId, User? user)
@@ -129,7 +131,27 @@ public sealed class OverlayService(
         if (await RequireAdminAsync(user, carId) is { } error) return error;
         var p = await db.OverlayPublications.AsNoTracking().FirstOrDefaultAsync(x => x.Id == publicationId && x.CarId == carId);
         if (p == null) return NotFound("Veröffentlichung nicht gefunden");
-        return new PublishedInfo(p.Id, p.Number, p.PublishedAt, JsonNode.Parse(p.DocumentJson)!);
+        return new PublishedInfo(p.Id, p.Number, p.PublishedAt, JsonNode.Parse(p.DocumentJson)!, await PublicationAssetMetadataAsync(carId, p.Id));
+    }
+
+    /// <summary>
+    /// Metadata of the assets a publication references (api §3): viewers need the
+    /// part bboxes for "center" pivots, but read only the SVG text from GET assets.
+    /// </summary>
+    private async Task<JsonObject> PublicationAssetMetadataAsync(int carId, int publicationId)
+    {
+        var ids = db.OverlayPublicationAssets.Where(pa => pa.PublicationId == publicationId).Select(pa => pa.AssetId);
+        var rows = await db.OverlayAssets.AsNoTracking().Where(a => a.CarId == carId && ids.Contains(a.AssetId))
+            .OrderBy(a => a.AssetId).Select(a => new { a.AssetId, a.MetadataJson }).ToListAsync();
+        var result = new JsonObject();
+        foreach (var row in rows)
+        {
+            JsonNode? meta = null;
+            try { meta = string.IsNullOrEmpty(row.MetadataJson) ? null : JsonNode.Parse(row.MetadataJson); }
+            catch (System.Text.Json.JsonException) { /* unreadable metadata: the client falls back to the SVG viewBox */ }
+            if (meta is JsonObject) result[row.AssetId] = meta;
+        }
+        return result;
     }
 
     /// <summary>

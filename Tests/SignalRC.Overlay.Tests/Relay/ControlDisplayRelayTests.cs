@@ -80,7 +80,7 @@ public class ControlDisplayRelayTests
         Assert.False(await Publish("driver", 2));
     }
 
-    private sealed class FakeTransport : IControlDisplayTransport
+    internal sealed class FakeTransport : IControlDisplayTransport
     {
         public readonly List<(string Connection, string Epoch, long Seq, bool Paused, int Age, object[][] Outputs, object[][] Signals)> Sent = [];
         public readonly List<(string Connection, string Epoch)> Cleared = [];
