@@ -19,7 +19,7 @@ braucht, steht als manuelle Checkliste in §6.
 | --- | --- |
 | **automatisiert** | Ein Test im Standardlauf (`scripts/overlay-check.sh`) prüft die Regel. |
 | **automatisiert (PG)** | Wie oben; zusätzlich läuft der Test gegen PostgreSQL, wenn `SIGNALRC_TEST_POSTGRES` gesetzt ist. |
-| **live, offen** | Der Live-Test existiert (opt-in über `SIGNALRC_LIVE_URL` + `SIGNALRC_TEST_POSTGRES`), lief in AP14 aber noch nicht gegen einen Server (§5.1). |
+| **live** | Live-Test über echtes HTTP/SignalR gegen einen lokalen Server (opt-in über `SIGNALRC_LIVE_URL` + `SIGNALRC_TEST_POSTGRES`); am 2026-11-02 bestanden (§5.1). |
 | **manuell offen** | Braucht einen Browser oder ein Gerät; steht in der Checkliste (§6). |
 | **Hardware offen** | Nur mit Fahrzeug oder Sensor möglich; nach gesonderter Vereinbarung. |
 | **nicht erfüllt** | Abweichung, siehe Befunde (§7). |
