@@ -2,7 +2,7 @@
 
 Stand: 2026-11-02.
 - AP00 ist freigegeben.
-- AP01 bis AP12 sind umgesetzt; AP13 ist zur Hälfte umgesetzt (Anzeigeseite).
+- AP01 bis AP13 sind umgesetzt; offen ist AP14 (übergreifende Abnahme).
 - M0 ist erreicht (T0 mit AP01).
 
 „Umgesetzt“ heißt: implementiert, getestet und lokal committet. Die gemeinsame
@@ -62,7 +62,7 @@ nicht ein zusätzliches Verbot, vorher gegen deren vereinbarte Ports zu arbeiten
 | AP10 | ✅ umgesetzt | Eigenschaften, Bindungen und Keyframe-Zeitachse | AP06, AP08, AP09. |
 | AP11 | ✅ umgesetzt | Lokale Simulation und dynamische Vorschau | AP05, AP08, AP09. |
 | AP12 | ✅ umgesetzt | Startvorlagen, Paket-Import/-Export und Zuordnung | AP01, AP02, AP07, AP09. |
-| AP13 | ◐ Teil 1 (Anzeigeseite) umgesetzt | Video-, UI-, Steuerungs- und Anwendungsintegration | Verbindet AP01 bis AP12 schrittweise. |
+| AP13 | ✅ umgesetzt | Video-, UI-, Steuerungs- und Anwendungsintegration | Verbindet AP01 bis AP12 schrittweise. |
 | AP14 | offen (T0 mit AP01 erledigt) | Browser-, Sicherheits-, Reconnect- und Leistungsabnahme | Gemeinsame Referenzfälle und integrierbare Funktionspfade. |
 
 ## AP00 – Vertragsfundament und Freigabe-Gate ✅
@@ -609,11 +609,11 @@ auslöst. Keine simulierten Werte gelangen in den gemeinsamen Livebestand.
 Fremde Fahrzeugreferenzen lassen sich zuordnen; ungelöste aktive Referenzen
 blockieren Veröffentlichung. Es wird kein bestimmtes Archivformat vorausgesetzt.
 
-## AP13 – Video-, Steuerungs- und Anwendungsintegration ◐
+## AP13 – Video-, Steuerungs- und Anwendungsintegration ✅
 
-**Status (2026-11-02):** Teil 1 (Anzeigeseite) umgesetzt. Teil 2 ist offen
-bis AP09–AP12: Editorroute, Veröffentlichungs- und Verlaufsoberfläche,
-Steuerwert-Pause beim Öffnen des Editors, Editor-Tastatur.
+**Status (2026-11-02):** umgesetzt (Teil 1 Anzeigeseite, Teil 2 Editorseite).
+
+Teil 1 – Anzeigeseite:
 - **HUD im Video** (`Client/src/components/overlay/integration/`): Die Ebene
   liegt exakt auf dem dargestellten `object-contain`-Frame (Resize,
   Vollbild), die Letterbox bleibt frei. Effektive Variante je `StreamId`;
@@ -632,6 +632,32 @@ Steuerwert-Pause beim Öffnen des Editors, Editor-Tastatur.
 - **Grenzen:** Trennt sich das Onboard, kann die Steuerungsanzeige erst nach
   erneutem Erwerben weiterlaufen. Browser-/Layoutprüfung (u. a. iOS-Vollbild)
   in AP14.
+
+Teil 2 – Editorseite:
+- **Route** `/car/[carId]/overlay` (`integration/editor-page.tsx`), erreichbar
+  über „HUD“ in der Fahrzeugsteuerung und die Flow-Seite.
+  `OverlayEditorWithPreview` mit echter Persistenz, Ereignissen, Streams,
+  Kanalkatalog, AP06-Analyse und Live-Quelle; die Vorschau liegt exakt auf dem
+  Videoframe (eigene Janus-Verbindung der Editorseite).
+- **Berechtigung:** Verwaltung nur bei regulärem Login und als aktiver Fahrer;
+  `403 OVL_API_NOT_DRIVER` schaltet auf „nur lokal“, die lokale Arbeit geht
+  weiter.
+- **Werkzeuge:** Vorlagen, Paketaustausch und SVG-Import-Dialog (Upload →
+  bereinigte Vorschau → Bestätigung → ein Undo-Schritt).
+- **Veröffentlichen/Verlauf:** mit Notiz und Serverhinweisen; vorher wird
+  gespeichert und genau die bestätigte Revision veröffentlicht. Restore als
+  Entwurf erst nach Bestätigung.
+- **Steuerungspause:** Öffnen des Editors pausiert Senden und Wiederholungen
+  (`editorPaused`); nur ein ausdrückliches Einschalten (Live-Test) gibt frei,
+  ein Banner zeigt den Zustand. Tastenereignisse erreichen bei offenem Editor
+  keine fensterweiten Fahrzeug-/PTT-Handler.
+- **Übersetzungen:** alle Modultexte unter `messages.overlay`.
+- **Integrationsnachweis M2:** Live-Test gegen lokalen Server mit Test-DB:
+  Zahlenwert und Drehung bearbeitet, gespeichert, veröffentlicht; zweiter
+  Client übernimmt ohne Reconnect; nach Kontrollverlust verweigert der Server
+  das Speichern (403), der Editor behält die Änderung lokal.
+- **Offen für AP14:** Browserprüfung von Seite, Video-Vorschau, Dialogen und
+  Tastatur.
 
 **Ziel:** Die unabhängig entwickelten Module früh und schrittweise in die
 bestehende Anwendung einbinden; kein einmaliger Integrationsversuch erst am Ende.
@@ -744,7 +770,7 @@ Arbeitsverzeichnis werden nicht überschrieben oder zurückgesetzt.
    nutzbar, Eigentümer zentraler Dateien benannt.
 2. **M1 – Parallele Module:** AP01 bis AP12 gegen feste Ports; AP13/AP14 begleiten
    die ersten nutzbaren Pfade. Keine feste Anzahl paralleler Bearbeiter.
-3. **M2 – Kleiner durchgängiger Pfad:** Entwurf, ein Wert, eine Drehung,
+3. **M2 – Kleiner durchgängiger Pfad ✅:** Entwurf, ein Wert, eine Drehung,
    Veröffentlichung, zweiter Client, Kontrollverlustprüfung.
 4. **M3 – Erweiterte Integration:** Varianten/Deaktivierung, sichere SVGs,
    Bindungen/Clips, vollständige Bearbeitung und lokale Simulation.
