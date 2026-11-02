@@ -38,16 +38,19 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator
 {
     private readonly ILogger<MediaMtxConfigurator> _logger;
     private readonly IConfiguration _configuration;
+    private readonly ServerCarConfigurationService _carConfiguration;
     private readonly string _configPath;
     private readonly string _backupPath;
     private readonly string _mediamtxBinary;
 
     public MediaMtxConfigurator(
         ILogger<MediaMtxConfigurator> logger,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        ServerCarConfigurationService carConfiguration)
     {
         _logger = logger;
         _configuration = configuration;
+        _carConfiguration = carConfiguration;
         _configPath = ResolveMediaMtxBinary(logger) + ".yml";
         _backupPath = Path.GetFullPath("./Extern/mediamtx.yml.backup");
 
@@ -125,7 +128,10 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator
     {
         // var template = await File.ReadAllTextAsync(_configPath);
         var generatedPaths = new StringBuilder();
-        var host = _configuration.GetSection("ServerName").Get<string>();
+        // The server names the Janus host it wants RTP on; without one, Janus sits behind ServerName.
+        var host = _carConfiguration.Configuration?.JanusConfiguration?.JanusServerHost;
+        if (string.IsNullOrWhiteSpace(host))
+            host = _configuration.GetSection("ServerName").Get<string>();
         var sourceHost = string.IsNullOrWhiteSpace(host) ? "localhost" : host;
 
         generatedPaths.AppendLine("paths:");

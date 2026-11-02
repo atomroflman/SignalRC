@@ -168,7 +168,8 @@ There is no `LTE_USE_NEW_CONNECTION_MODEL` variable in the current code — it d
 |----------|-------------|
 | `ASPNETCORE_ENVIRONMENT` | Development/Production |
 | `ConnectionStrings__DefaultConnection` | PostgreSQL connection string |
-| `JanusConfiguration__HostName` | Janus host name or IP |
+| `JanusConfiguration__HostName` | Janus host name or IP, as the server reaches it (HTTP API) |
+| `JanusConfiguration__PublicHostName` | Host the vehicles send their RTP video to; empty = the vehicle's `ServerName` |
 | `JanusConfiguration__PortRangeStart` | First UDP video port |
 | `JanusConfiguration__PortRangeEnd` | Last UDP video port |
 | `FileTransfer__StoragePath` | Local file storage path |

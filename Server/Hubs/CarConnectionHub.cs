@@ -105,15 +105,10 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
         await Groups.AddToGroupAsync(Context.ConnectionId, $"Car-{car.Id}");
         Logger.LogInformation($"Car '{car.Name}' (ID: {car.Id}) connected and added to group 'Car-{car.Id}'");
         
-        var janusServerHost = _configService.Janus.HostName;
-        if (string.IsNullOrEmpty(janusServerHost))
-        {
-            janusServerHost = System.Net.Dns.GetHostName();
-            Logger.LogWarning($"Janus server host is not configured. Using default: {janusServerHost}");
-        }
-
         var carConfig = new CarConfiguration();
         carConfig.ServerAssignedCarId = car.Id;
+        if (!string.IsNullOrWhiteSpace(_configService.Janus.PublicHostName))
+            carConfig.JanusConfiguration = new Shared.JanusConfiguration { JanusServerHost = _configService.Janus.PublicHostName };
 
         // SPOT: Server is the source of truth for channel configuration.
         // Compare hashes and push the server's config if the client is out of date.
