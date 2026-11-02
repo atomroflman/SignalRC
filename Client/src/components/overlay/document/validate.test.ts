@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fakeExpressionAnalyzer } from "../testing/fake-expression-analyzer";
+import { expressionAnalyzer } from "../expression";
 import { isSubset, readContractJson } from "../testing/fixtures";
 import type { Diagnostic, OverlayDocument, ResolveContext } from "./types";
 import { canPublish, canSave, validate } from "./validate";
@@ -7,7 +7,7 @@ import { canPublish, canSave, validate } from "./validate";
 interface Expected { code: string; category: string; location: Record<string, unknown> }
 interface Case { file: string; schemaValid: boolean; diagnostics?: Expected[]; allowExtra?: string[] }
 const cases = readContractJson<{ cases: Case[] }>("fixtures/documents/cases.json").cases;
-const ctx: ResolveContext = { expressions: fakeExpressionAnalyzer };
+const ctx: ResolveContext = { expressions: expressionAnalyzer };
 
 const codes = (d: Diagnostic[]) => d.map((x) => x.code);
 

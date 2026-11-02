@@ -180,9 +180,10 @@ export interface ExpressionDiagnostic {
 
 /** Port to the expression system (AP06). Optional for AP01. */
 export interface ExpressionAnalyzer {
+  /** Missing telemetry/outputs mean "not known here": such references are not checked. */
   analyze(
     expr: string,
-    env: SourceCatalog & { signals: string[] },
+    env: { telemetry?: SourceCatalog["telemetry"]; outputs?: string[]; signals: string[] },
     expected: ExpectedKind,
   ): { diagnostics: ExpressionDiagnostic[] };
 }

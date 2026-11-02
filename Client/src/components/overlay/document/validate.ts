@@ -433,8 +433,8 @@ export function validate(input: unknown, context: ResolveContext = {}): Diagnost
   const formulas = collectFormulas(doc);
   if (ctx.expressions) {
     const env = {
-      telemetry: ctx.sources?.telemetry ?? {},
-      outputs: ctx.sources?.outputs ?? [],
+      telemetry: ctx.sources?.telemetry,
+      outputs: ctx.sources?.outputs,
       signals: Object.keys(doc.signals ?? {}),
     };
     for (const formula of formulas) {
