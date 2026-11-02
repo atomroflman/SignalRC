@@ -74,7 +74,7 @@ describe.skipIf(!enabled)("live server", () => {
   afterAll(async () => {
     for (const c of conns) await c.stop().catch(() => {});
     if (userId) sql(`delete from "UserSetups" where "UserId" = ${userId}; delete from "Users" where "Id" = ${userId}`);
-    if (carId) sql(`delete from "UserSetups" where "CarId" = ${carId}; delete from "CarTelemetry" where "CarId" = ${carId}; delete from "Cars" where "Id" = ${carId}`);
+    if (carId) sql(`delete from "UserSetups" where "CarId" = ${carId}; delete from "CarTelemetry" where "CarId" = ${carId}; delete from "CarChannels" where "CarId" = ${carId}; delete from "Cars" where "Id" = ${carId}`);
   });
 
   const sources = () =>
@@ -118,10 +118,35 @@ describe.skipIf(!enabled)("live server", () => {
     let notified = 0;
     p.subscribe(() => { notified++; });
     // No further messages: the value must turn stale on its own.
-    expect(await until(() => bar.source.get("tel", "speed").reason === "stale", 2500)).toBe(true);
+    expect(await until(() => notified > 0 && bar.source.get("tel", "speed").reason === "stale", 2500)).toBe(true);
     expect(notified).toBeGreaterThan(0);
 
     car.release();
+    expect(await until(() => JSON.stringify(demands.at(-1)) === "[]")).toBe(true);
+  }, 15000);
+
+  it("serves anonymous viewers by the stream permission (D69, D70)", async () => {
+    const outputId = Number(sql(`insert into "CarChannels" ("CarId","ChannelName","PinManager","TestDisabled","IsEnabled","RequiresAxis") values (${carId},'steering','x',false,true,false) returning "Id"`).split("\n")[0]);
+    const res = await fetch(`${BASE}/api/cars/${carId}/overlay/sources`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.outputs).toEqual([{ id: outputId, channelName: "steering" }]);
+    expect(body.telemetry.map((t: { channelName: string }) => t.channelName).sort()).toEqual(["lidarGrid", "speed", "volt"]);
+    expect(JSON.stringify(body)).not.toContain("subscribed");
+    expect((await fetch(`${BASE}/api/cars/2147483000/overlay/sources`)).status).toBe(404);
+    // The personal endpoint stays login-only.
+    expect((await fetch(`${BASE}/api/car/${carId}/telemetry`)).status).toBe(401);
+
+    const anon = hub();
+    conns.push(anon);
+    await anon.start();
+    await expect(anon.invoke("SetTelemetryInterest", 2147483000, [1])).rejects.toThrow();
+    await expect(anon.invoke("SetControlDisplayInterest", 2147483000, true)).rejects.toThrow();
+    await anon.invoke("SetTelemetryInterest", 2147483000, []);
+    await anon.invoke("SetControlDisplayInterest", 2147483000, false);
+    await anon.invoke("SetTelemetryInterest", carId, [ids.speed]);
+    expect(await until(() => JSON.stringify(demands.at(-1)) === JSON.stringify([ids.speed]))).toBe(true);
+    await anon.invoke("SetTelemetryInterest", carId, []);
     expect(await until(() => JSON.stringify(demands.at(-1)) === "[]")).toBe(true);
   }, 15000);
 

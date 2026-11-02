@@ -23,9 +23,10 @@ public partial class CarConnectionHub
         await Service<TelemetryRelay>().OnDeltaAsync(carId, delta);
     }
 
+    // Both interests: viewing needs the stream permission (D70); withdrawing never does.
     public async Task SetTelemetryInterest(int carId, int[] channelIds)
     {
-        if (!await Service<OverlayAccess>().CanViewCarAsync(carId)) throw new HubException("Vehicle not found.");
+        if (channelIds.Length > 0 && !await Service<OverlayAccess>().CanViewCarAsync(carId)) throw new HubException("Vehicle not found.");
         await Service<TelemetryRelay>().SetInterestAsync(Context.ConnectionId, carId, channelIds);
     }
 

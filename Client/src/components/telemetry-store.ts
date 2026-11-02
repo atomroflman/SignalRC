@@ -39,7 +39,6 @@ const CONSUMER = "manual-telemetry-bar";
 let _car: { provider: CarSourceProvider; release(): void } | null = null;
 let _requirement: Requirement | null = null;
 let _unsubscribe: (() => void) | null = null;
-let _selectionLoaded = false;
 
 function sameEntries(a: TelemetryEntry[], b: TelemetryEntry[]) {
   return a.length === b.length && a.every((e, i) => e.name === b[i].name && e.state === b[i].state && e.value === b[i].value && e.reason === b[i].reason);
@@ -59,14 +58,8 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
     const channels = provider.channels();
     const available = get().availableChannels;
     if (channels.length !== available.length || channels.some((c, i) => c.id !== available[i].id || c.name !== available[i].channelName)) {
-      patch.availableChannels = channels.map((c) => ({ id: c.id, channelName: c.name, subscribed: c.subscribed, unit: c.unit, decimals: c.decimals }));
-    }
-    if (provider.metadataLoaded && !_selectionLoaded) {
-      // The saved personal selection, read once per vehicle.
-      _selectionLoaded = true;
-      set({ ...patch, subscribedChannels: new Set(channels.filter((c) => c.subscribed).map((c) => c.name)) });
-      requireSelection();
-      return;
+      const selected = get().subscribedChannels;
+      patch.availableChannels = channels.map((c) => ({ id: c.id, channelName: c.name, subscribed: selected.has(c.name), unit: c.unit, decimals: c.decimals }));
     }
     const entries = [...get().subscribedChannels].map((name): TelemetryEntry => {
       const v = provider.get("tel", name);
@@ -87,10 +80,16 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => {
     async connect(carId: number) {
       if (get().carId === carId && _car) return;
       await get().disconnect();
-      _car = sharedSourceHub().acquire(carId);
-      _selectionLoaded = false;
-      set({ carId, availableChannels: [], subscribedChannels: new Set(), entries: [], isConnected: _car.provider.isConnected });
-      _unsubscribe = _car.provider.subscribe(refresh);
+      const car = (_car = sharedSourceHub().acquire(carId));
+      set({ carId, availableChannels: [], subscribedChannels: new Set(), entries: [], isConnected: car.provider.isConnected });
+      _unsubscribe = car.provider.subscribe(refresh);
+      refresh();
+      // The saved personal selection (signed-in users), read once per vehicle;
+      // toggles made before it arrives are kept.
+      const saved = await car.provider.loadPersonalSelection();
+      if (_car !== car) return;
+      set({ subscribedChannels: new Set([...saved, ...get().subscribedChannels]) });
+      requireSelection();
       refresh();
     },
 

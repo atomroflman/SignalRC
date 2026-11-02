@@ -198,7 +198,7 @@ describe("order, reconnect, vehicle state", () => {
     await flush();
     env.clock.advance(200);
     await flush();
-    expect(env.fetched.filter((u) => u.endsWith("/telemetry")).length).toBe(2);
+    expect(env.fetched.filter((u) => u.endsWith("/overlay/sources")).length).toBe(2);
     expect(env.interests().at(-1)).toEqual([11, 99]);
     env.hub.push("Tlm", 1, 2, 0, [[99, "4"]], [], []);
     await flush();
@@ -271,6 +271,21 @@ describe("control display, viewer side (telemetry §7)", () => {
     env.clock.advance(1001);
     expect(listener).toHaveBeenCalled();
     expect(provider.get("sig", "gear").reason).toBe("stale");
+  });
+
+  it("maps out() names to channel ids from the viewer catalog, without login (D69, D70)", async () => {
+    const env = setupSources([{ id: 11, channelName: "speed" }], [{ id: 5, channelName: "steering" }]);
+    env.env.signedIn = false;
+    const car = env.sources.acquire(1);
+    const hud = car.provider.require("hud", [{ kind: "out", name: "steering" }, { kind: "tel", name: "speed" }]);
+    await flush();
+    expect(env.fetched).toEqual(["/api/cars/1/overlay/sources"]);
+    expect(car.provider.metadata("speed")).toMatchObject({ id: 11, dataType: "Number" });
+    env.hub.push("Ctl", ...ctl("A", 1, false, 0, [[5, 0.75]]));
+    env.hub.push("Tlm", 1, 1, 0, [[11, "3"]], [], []);
+    expect(hud.source.get("out", "steering")).toMatchObject({ state: "valid", value: 0.75 });
+    expect(hud.source.get("tel", "speed").state).toBe("valid");
+    expect(await car.provider.loadPersonalSelection()).toEqual([]);
   });
 
   it("the driver reads local values and asks the server for nothing", async () => {
