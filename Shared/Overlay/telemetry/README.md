@@ -124,6 +124,26 @@ Gründe: `source-error`, `stale`, `no-data`, `transport`, `vehicle-offline`,
   nichts gesendet; das Alter wächst weiter.
 - Nach einer Wiederverbindung gilt eine neue Basis: Alle angeforderten Werte
   werden erneut vollständig gesendet.
+- Präzisierungen aus der Umsetzung (AP03):
+  - Das Standardalter wird nur über die tatsächlich gesendeten Einträge
+    bestimmt.
+  - Fällt ein Kanal aus dem Bedarf, wird sein Sendestand vergessen; bei
+    erneutem Bedarf geht er vollständig hinaus.
+  - Einträge sind nach Kanal-ID sortiert. `seq` steigt nur, wenn eine Nachricht
+    entsteht, und bleibt über Wiederverbindungen innerhalb einer Epoche
+    steigend.
+  - Ein fehlgeschlagener Versand setzt den Sendestand zurück.
+  - Qualität je Reader:
+    - CAN-Knotenwerte: Alter des Knotens; Stale nach `NodeTimeoutMs`, Error
+      bei Bus-off, NoData vor dem ersten Kontakt.
+    - Odometrie: der schlechtere der beiden Knoten, NoData solange
+      unkalibriert.
+    - Befehls- und Diagnosewerte des Managers: Valid mit Alter 0.
+    - LiDAR: Alter aus `ScanAgeSeconds`; Error bei geschlossenem Port oder
+      `Problem`, NoData ohne Scan, Stale ohne Rotation; Pico-Werte Unchecked.
+    - BMS: Alter aus dem Abrufzeitpunkt; bei Lesefehler die alten Werte als
+      Error.
+    - CPU-Temperatur und Laufzeit: Valid. Store-basierte Reader: Unchecked.
 - Es gibt keinen Rückfall auf den Altpfad: Ohne Bedarfsmeldung vom Server
   sendet ein neues Onboard keine Telemetrie. Rollout-Reihenfolge: erst Server,
   dann Fahrzeug (D68).

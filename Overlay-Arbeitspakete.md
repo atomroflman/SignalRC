@@ -2,9 +2,8 @@
 
 Stand: 2026-11-02.
 - AP00 ist freigegeben.
-- AP01 und AP06 sind umgesetzt; AP02 ist bis auf den SVG-Upload (wartet auf
-  AP07) umgesetzt.
-- AP03 ist in Arbeit.
+- AP01, AP03 und AP06 sind umgesetzt; AP02 ist bis auf den SVG-Upload (wartet
+  auf AP07) umgesetzt.
 - M0 ist erreicht (T0 mit AP01).
 
 „Umgesetzt“ heißt: implementiert, getestet und lokal committet. Die gemeinsame
@@ -54,7 +53,7 @@ nicht ein zusätzliches Verbot, vorher gegen deren vereinbarte Ports zu arbeiten
 | AP00 | ✅ freigegeben | Vertragsfundament, Referenzfälle, Modulgerüste und Schreibzuständigkeiten | Keine; setzt den abgestimmten Gesamtplan um. |
 | AP01 | ✅ umgesetzt | Variantenauflösung und strukturelle Dokumentprüfung | AP00-Verträge. |
 | AP02 | ◐ umgesetzt bis auf SVG-Upload | Serverpersistenz, Revisionen, Berechtigungen und Veröffentlichung | AP01, AP06, AP07. |
-| AP03 | 🔄 in Arbeit | Telemetriequalität, Reader-Anbindung und Servertransport | AP00-Verträge; Anwendungsverdrahtung über AP13. |
+| AP03 | ✅ umgesetzt | Telemetriequalität, Reader-Anbindung und Servertransport | AP00-Verträge; Anwendungsverdrahtung über AP13. |
 | AP04 | offen | LiDAR-Gruppen und kompaktes Winkel-/Distanzraster | AP03 für Qualität und Transport. |
 | AP05 | offen | Client-Telemetrie, Metadaten, Alterung und Verbraucher | AP03; LiDAR-Daten aus AP04. |
 | AP06 | ✅ umgesetzt | Sicheres Ausdruckssystem in Client und Server | AP00-Verträge. |
@@ -184,9 +183,22 @@ Dokumentauflösung und Sanitizer werden eingebunden, nicht hier erneut erfunden.
 Veröffentlichungen und historische Assets bleiben unverändert; Restore wirkt
 erst nach erneutem Veröffentlichen. Integrationstests decken Kontrollwechsel ab.
 
-## AP03 – Quellqualität und rückwärtsverträgliche Telemetrie 🔄
+## AP03 – Quellqualität und rückwärtsverträgliche Telemetrie ✅
 
-**Status (2026-11-02):** in Arbeit.
+**Status (2026-11-02):** umgesetzt.
+- **Onboard** (`Onboard/Telemetry/`): Reader-Qualität, Delta-Tracker,
+  bedarfsgesteuertes Senden ohne Rückfall (D68).
+- **Server** (`Server/Telemetry/`, `CarConnectionHub.Telemetry.cs`):
+  Telemetrie-Relay mit Cache, Interessen, Bedarf, Alt-Clients und
+  Alt-Onboards sowie Herkunftsprüfung (D56); Relay der Steuerungsanzeige
+  (D57).
+- **Tests:** xUnit gegen die gemeinsamen Delta-Fälle. Zusätzlich End-to-End
+  über SignalR gegen einen lokal gestarteten Server mit simuliertem Onboard,
+  neuem und altem Client, Fahrer, Zuschauer und Störer.
+- **Nicht ohne Hardware getestet:** die Lesepfade von CAN, LiDAR, BMS und
+  CPU. Geprüft ist dort nur die reine Abbildung auf Zustände und Alter.
+- **Client-Seite:** folgt mit AP05. Bis dahin nutzt die bestehende
+  Telemetrieleiste den Altpfad, was den Bedarf auf „alle Kanäle“ setzt.
 
 **Ziel:** Werte einschließlich ihrer tatsächlichen Quellaktualität transportieren,
 ohne die bisherige manuelle Telemetrie oder ältere Clients zu brechen.
