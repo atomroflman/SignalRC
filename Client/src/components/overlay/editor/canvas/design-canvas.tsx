@@ -190,7 +190,8 @@ export function DesignCanvas({ store, assets, locale, source, onKeyDown, classNa
     }
   };
 
-  const onWheel = (e: React.WheelEvent) => {
+  const zoomAt = useRef<(e: WheelEvent) => void>(() => {});
+  zoomAt.current = (e) => {
     const host = hostRef.current;
     if (!host) return;
     const r = host.getBoundingClientRect();
@@ -199,6 +200,18 @@ export function DesignCanvas({ store, assets, locale, source, onKeyDown, classNa
     const z = Math.min(16, Math.max(0.05, zoom * Math.exp(-e.deltaY * 0.0015)));
     store.setView({ zoom: z, panX: cx - ((cx - panX) / zoom) * z, panY: cy - ((cy - panY) / zoom) * z });
   };
+  // The wheel zooms only over the HUD workspace; elsewhere the page scrolls.
+  // A native listener, because React's wheel handler is passive and cannot stop the scroll.
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      zoomAt.current(e);
+    };
+    stage.addEventListener("wheel", onWheel, { passive: false });
+    return () => stage.removeEventListener("wheel", onWheel);
+  }, []);
 
   const keyDown = (e: React.KeyboardEvent) => {
     // Editor keys never reach the vehicle control (api/README.md §6).
@@ -241,7 +254,6 @@ export function DesignCanvas({ store, assets, locale, source, onKeyDown, classNa
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
       onDoubleClick={onDoubleClick}
-      onWheel={onWheel}
       onKeyDown={keyDown}
       onKeyUp={(e) => { if (e.key === " ") setSpaceDown(false); e.stopPropagation(); }}
       data-ovl-design-canvas=""
