@@ -265,6 +265,18 @@ Bus-wide: `busUp`, `nodesPresent`, `driveEnabled`, `inhibit`, `controlAge`,
 `mode`, `commandLeft`, `commandRight`, `framesSent`, `framesReceived`,
 `sendFailures`.
 
+**Each value needs a channel of its own**, named `<group>.<key>`, for example
+`drive.leftState`. `TelemetryService` only forwards keys that a channel asks
+for: it looks up the full channel name, then the part after the last dot. A
+single channel called `drive` matches no key and shows nothing - which is what
+the template did until 2026-11-02, so no drive value ever reached the browser.
+The channels share the `groupKey`, so they still share one reader.
+
+`State` answers "is the driver on": `Off` means the driver is disabled
+(Coast, or never enabled), `Ready` enabled at zero target, `Driving` enabled
+with a target, `Faulted` latched. `Fault` names the latched fault, `none`
+otherwise. `mode` is what the master sends - `Stop`, `Velocity` or `Coast`.
+
 `Temperature` comes back **empty**, not as a number, when the node reports no
 valid reading. The board's thermistor node can read open or shorted and the
 firmware then sends -128; showing that as a temperature would be worse than
@@ -297,10 +309,24 @@ says in words why the drive is held.
     "estop":      { "pinManager": "trackDrive", "controlType": "TrackEmergencyStop", "testDisabled": true }
   },
   "telemetryChannels": {
-    "drive": {
+    "drive.driveEnabled": {
       "pinManager": "trackDrive",
       "telemetryType": "SignalRC.Onboard.Telemetry.CanTrackDriveTelemetryReader",
       "readIntervalTicks": 1,
+      "dataType": "Boolean",
+      "options": { "groupKey": "drive", "pinManager": "trackDrive" }
+    },
+    "drive.rightState": {
+      "pinManager": "trackDrive",
+      "telemetryType": "SignalRC.Onboard.Telemetry.CanTrackDriveTelemetryReader",
+      "readIntervalTicks": 1,
+      "options": { "groupKey": "drive", "pinManager": "trackDrive" }
+    },
+    "drive.rightSpeed": {
+      "pinManager": "trackDrive",
+      "telemetryType": "SignalRC.Onboard.Telemetry.CanTrackDriveTelemetryReader",
+      "readIntervalTicks": 1,
+      "dataType": "Number", "unit": "rad/s", "decimals": 1,
       "options": { "groupKey": "drive", "pinManager": "trackDrive" }
     }
   }
