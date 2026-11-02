@@ -15,6 +15,7 @@ export function setupSources(channels: Channel[], functions: { id: number; chann
   const rest: Record<string, unknown> = {};
   const fetched: string[] = [];
   let carChannels = channels;
+  const env = { signedIn: true };
   const sources = new SourceHub({
     clock,
     createConnection: async () => {
@@ -24,12 +25,22 @@ export function setupSources(channels: Channel[], functions: { id: number; chann
     },
     fetchJson: async (url) => {
       fetched.push(url);
-      if (url.endsWith("/telemetry")) return carChannels.map((c) => ({ dataType: "number", readIntervalTicks: 1, subscribed: false, ...c }));
-      if (url.endsWith("/functions")) return functions;
+      if (url.endsWith("/overlay/sources")) {
+        return {
+          telemetry: carChannels.map(({ subscribed: _s, ...c }) => ({ dataType: "number", readIntervalTicks: 1, ...c })),
+          outputs: functions,
+        };
+      }
+      // Personal flags exist only for signed-in users; anonymous gets 401.
+      if (url.endsWith("/telemetry")) {
+        if (!env.signedIn) throw new Error("401");
+        return carChannels.map((c) => ({ subscribed: false, ...c }));
+      }
       return rest[url];
     },
   });
   return {
+    env,
     clock,
     sources,
     fetched,

@@ -39,7 +39,7 @@ const DATA_TYPES: Record<string, TelemetryDataType> = {
   lidargrid: "LidarGrid", "4": "LidarGrid",
 };
 
-/** Maps one entry of GET /api/car/{id}/telemetry. */
+/** Maps one telemetry entry of GET /api/cars/{id}/overlay/sources. */
 export function parseChannelMetadata(raw: unknown): ChannelMetadata | undefined {
   if (!raw || typeof raw !== "object") return undefined;
   const r = raw as Record<string, unknown>;
@@ -51,7 +51,6 @@ export function parseChannelMetadata(raw: unknown): ChannelMetadata | undefined 
     dataType,
     unit: typeof r.unit === "string" ? r.unit : null,
     decimals: typeof r.decimals === "number" ? r.decimals : null,
-    subscribed: r.subscribed === true,
   };
   if (typeof r.readIntervalTicks === "number") meta.readIntervalTicks = r.readIntervalTicks;
   if (Array.isArray(r.zoneLimitsMm) && r.zoneLimitsMm.length === 5 && r.zoneLimitsMm.every((v) => typeof v === "number")) {
@@ -87,7 +86,6 @@ export class CarSourceProvider implements OverlaySourceProvider {
   private metadataState: MetadataState = "idle";
   private metadataReloads = new Set<number>();
   private outputIds = new Map<string, number>();
-  private outputsState: MetadataState = "idle";
 
   private connected = false;
   private vehicleOnline = true;
@@ -185,8 +183,6 @@ export class CarSourceProvider implements OverlaySourceProvider {
     this.updateWanted();
     this.scheduleInterest();
     this.sendControlInterest();
-    // out() names map to CarChannel ids, for relayed and local values alike.
-    if (this.outputsState === "idle" && [...this.consumers.values()].some((c) => c.control)) void this.loadOutputs();
     this.notify();
   }
 
@@ -330,14 +326,20 @@ export class CarSourceProvider implements OverlaySourceProvider {
 
   // --- Metadata ---
 
+  /** Viewer catalog (D69, D70): telemetry channels and output names, no login needed. */
   private async loadMetadata() {
     if (this.metadataState === "loading") return;
     this.metadataState = "loading";
     try {
-      const raw = await this.fetchJson(`/api/car/${this.carId}/telemetry`);
-      const list = (Array.isArray(raw) ? raw : []).map(parseChannelMetadata).filter((m): m is ChannelMetadata => !!m);
+      const raw = (await this.fetchJson(`/api/cars/${this.carId}/overlay/sources`)) as { telemetry?: unknown; outputs?: unknown } | null;
+      const list = (Array.isArray(raw?.telemetry) ? raw.telemetry : []).map(parseChannelMetadata).filter((m): m is ChannelMetadata => !!m);
       this.byId = new Map(list.map((m) => [m.id, m]));
       this.byName = new Map(list.map((m) => [m.name, m]));
+      this.outputIds = new Map(
+        (Array.isArray(raw?.outputs) ? raw.outputs : [])
+          .filter((f) => f && typeof f.id === "number" && typeof f.channelName === "string")
+          .map((f) => [f.channelName as string, f.id as number]),
+      );
       this.metadataState = "loaded";
     } catch {
       this.metadataState = "failed";
@@ -346,20 +348,17 @@ export class CarSourceProvider implements OverlaySourceProvider {
     this.consumersChanged();
   }
 
-  private async loadOutputs() {
-    this.outputsState = "loading";
+  /**
+   * The viewer's saved selection for the manual bar (GET /api/car/{id}/telemetry,
+   * signed-in users only); empty without login or setup.
+   */
+  async loadPersonalSelection(): Promise<string[]> {
     try {
-      const raw = await this.fetchJson(`/api/car/${this.carId}/functions`);
-      this.outputIds = new Map(
-        (Array.isArray(raw) ? raw : [])
-          .filter((f) => f && typeof f.id === "number" && typeof f.channelName === "string")
-          .map((f) => [f.channelName as string, f.id as number]),
-      );
-      this.outputsState = "loaded";
+      const raw = await this.fetchJson(`/api/car/${this.carId}/telemetry`);
+      return (Array.isArray(raw) ? raw : []).filter((c) => c && c.subscribed === true && typeof c.channelName === "string").map((c) => c.channelName as string);
     } catch {
-      this.outputsState = "failed";
+      return [];
     }
-    if (!this.disposed) this.notify();
   }
 
   // --- Values ---
@@ -382,7 +381,7 @@ export class CarSourceProvider implements OverlaySourceProvider {
     if (this.local) return kind === "out" ? this.local.output(this.outputIds.get(name)) : this.local.signal(name);
     if (!this.connected) return { state: "invalid", reason: "transport" };
     if (kind === "sig") return this.control.signal(name, this.clock.now());
-    if (this.outputsState !== "loaded" && this.outputsState !== "failed") return { state: "invalid", reason: "waiting" };
+    if (!this.metadataLoaded) return { state: "invalid", reason: "waiting" };
     return this.control.output(this.outputIds.get(name), this.clock.now());
   }
 

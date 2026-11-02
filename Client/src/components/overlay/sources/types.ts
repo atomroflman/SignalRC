@@ -27,7 +27,7 @@ export interface QualifiedValue extends SourceValue {
   ageMs?: number;
 }
 
-/** Channel metadata from GET /api/car/{id}/telemetry (telemetry §6). */
+/** Channel metadata from GET /api/cars/{id}/overlay/sources (telemetry §6, D70). */
 export interface ChannelMetadata {
   id: number;
   name: string;
@@ -38,8 +38,6 @@ export interface ChannelMetadata {
   readIntervalTicks?: number;
   /** LiDAR zone upper limits in mm (LiDAR §1), only for LidarGrid channels. */
   zoneLimitsMm?: number[];
-  /** The viewer's saved personal selection for the manual telemetry bar. */
-  subscribed: boolean;
 }
 
 /** Monotonic milliseconds and timers; injectable so that aging is testable. */

@@ -69,6 +69,17 @@ describe("manual telemetry bar on the shared sources", () => {
     expect(env.hub.stopped).toBe(true);
   });
 
+  it("without login the bar lists the channels with an empty selection", async () => {
+    const env = setup();
+    env.env.signedIn = false;
+    await useTelemetryStore.getState().connect(1);
+    await flush();
+    const s = useTelemetryStore.getState();
+    expect(s.availableChannels.map((c) => c.channelName)).toEqual(["speed", "volt"]);
+    expect([...s.subscribedChannels]).toEqual([]);
+    expect(env.interests()).toEqual([]);
+  });
+
   it("marks transport loss and stale values", async () => {
     const env = setup();
     await useTelemetryStore.getState().connect(1);

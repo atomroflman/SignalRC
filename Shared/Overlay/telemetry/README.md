@@ -188,7 +188,9 @@ Gründe: `source-error`, `stale`, `no-data`, `transport`, `vehicle-offline`,
   geänderten Werten; `NoData` wird nicht gesendet. Der Server sendet
   `UpdateTelemetry` nicht mehr an `car:{carId}`.
 - **Leseberechtigung:** über `CanViewCarAsync(carId)` (API-Vertrag). Heute prüft
-  das Ansehen eines Streams nichts; jeder Client darf sehen.
+  das Ansehen eines Streams nichts; jeder Client darf sehen. Geprüft wird beim
+  Anmelden von Interesse (`SetTelemetryInterest` mit nichtleerer Liste,
+  `SetControlDisplayInterest(true)`); das Zurückziehen wird nie geprüft (D70).
 
 ## 6. Client (AP05)
 
@@ -198,10 +200,15 @@ Gründe: `source-error`, `stale`, `no-data`, `transport`, `vehicle-offline`,
   höchstens alle 200 ms.
 - Die manuelle Leiste zeigt weiterhin nur die persönlich gewählten Kanäle; deren
   Speicherung (`SubscribeToChannel`) bleibt unverändert.
-- Kanalmetadaten kommen aus `/api/car/{id}/telemetry`, erweitert um `id`,
-  `dataType`, `unit`, `decimals`, `readIntervalTicks` und bei LiDAR um die
-  Zonengrenzen. Bei unbekannter Kanal-ID werden die Metadaten einmal neu
-  geladen.
+- Kanalmetadaten (`id`, `dataType`, `unit`, `decimals`, `readIntervalTicks`,
+  bei LiDAR die Zonengrenzen) und die Namen der Steuerausgänge kommen aus
+  `GET /api/cars/{id}/overlay/sources` (API-Vertrag §3). Lesbar mit derselben
+  Berechtigung wie der Videostream (`CanViewCarAsync`), ohne Login (D69, D70).
+  Bei unbekannter Kanal-ID werden die Metadaten einmal neu geladen.
+- Die persönliche Auswahl der Leiste (`subscribed`) liefert weiterhin nur
+  `/api/car/{id}/telemetry` und nur angemeldeten Benutzern; ohne Login ist sie
+  leer. Dieser Endpunkt enthält zusätzlich `readIntervalTicks` und
+  `zoneLimitsMm`.
 - Eine Bestätigung setzt nur Alter und Empfangszeit; Wert und Zustand bleiben.
 - Nach Reconnect: Interesse erneut setzen; der Snapshot ersetzt den Bestand.
   Bis dahin ist alles `invalid` (`transport`). Nachrichten mit kleinerer `seq`
@@ -222,7 +229,8 @@ Gründe: `source-error`, `stale`, `no-data`, `transport`, `vehicle-offline`,
 Ctl(carId, seq, paused, outputs, signals, removedOutputs, removedSignals)
 ```
 
-- `outputs`: `[[CarChannel.Id, value]]`; `signals`: `[[name, value]]`.
+- `outputs`: `[[CarChannel.Id, value]]`; `signals`: `[[name, value]]`. Die
+  Zuordnung Id → `out()`-Name liefert `GET /api/cars/{id}/overlay/sources` (D69).
 - Werte sind auf 6 signifikante Stellen gerundet.
 - `removed…`: nicht mehr verfügbare Ausgänge/Signale, z. B. ein entfernter
   HUD-Signal-Knoten.

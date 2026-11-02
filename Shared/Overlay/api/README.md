@@ -59,6 +59,7 @@ gehaltenen Revisionen oder einer Veröffentlichung, werden gelöscht.
 | POST | `draft/restore` | Verwalter | `{ publicationId, baseRevision }` → `200 { revision }` |
 | POST | `assets` | Verwalter | `multipart/form-data` (`file`) → `200 { assetId, metadata, svg, report }` |
 | GET | `dependencies?channel=<name>` | Verwalter | `200 { draft: [{ kind, location }], published: [{ kind, location }] }` für Warnungen der Kanalverwaltung. `kind`: `telemetry` (`tel()`, LiDAR-Quelle, Fristüberschreibung) oder `output` (`out()`); `location` wie bei Diagnosen. Deaktivierte Teile zählen mit; historische Veröffentlichungen nicht. |
+| GET | `sources` | Betrachter | `200 { telemetry: [{ id, channelName, dataType, unit, decimals, readIntervalTicks, zoneLimitsMm }], outputs: [{ id, channelName }] }`, sonst `404`. Quellkatalog für das Live-HUD (D69, D70): ohne Login und ohne `UserSetup`, ohne personenbezogene Felder. `dataType` wie in `GET /api/car/{id}/telemetry` (Enum-Name klein); `zoneLimitsMm` nur, wenn in den Kanaloptionen fünf positive Werte stehen, sonst `null`. `outputs` ordnet die `CarChannel.Id` aus `Ctl` den `out()`-Namen zu. |
 | POST | `lidar-grid-source` | Verwalter | richtet den LiDAR-Rasterkanal ein (LiDAR-Vertrag §7): `200 { created: bool }`; Umsetzung in AP04 |
 
 \* Ein Asset ist für Betrachter nur lesbar, wenn eine Veröffentlichung des
@@ -140,6 +141,7 @@ Veröffentlichung (neue Revision). Das aktuell angezeigte HUD bleibt unveränder
 | Aufruf/Nachricht | Gruppe | Inhalt |
 | --- | --- | --- |
 | `SubscribeToOverlay(carId)` | tritt `overlay:{carId}` bei | `CanViewCarAsync` |
+| `SetTelemetryInterest(carId, ids)`, `SetControlDisplayInterest(carId, bool)` | – | `CanViewCarAsync` beim Anmelden von Interesse (nichtleere Liste bzw. `true`); das Zurückziehen wird nie geprüft (D70) |
 | `OverlayPublished` | `overlay:{carId}` | `{ carId, publicationId, number }` |
 | `OverlayDraftChanged` | `overlay:{carId}` | `{ carId, revision }` (keine Inhalte, keine Benutzerdaten) |
 
