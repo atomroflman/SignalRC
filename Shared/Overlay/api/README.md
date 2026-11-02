@@ -27,11 +27,15 @@ einzeln geprüft (keine Sitzungs-Caches).
 
 | Entität | Felder (Auszug) | Regeln |
 | --- | --- | --- |
-| `OverlayDraft` | `CarId` (unique), `Revision` (long), `DocumentJson` (jsonb), `UpdatedAt`, `UpdatedByUserId` | genau ein Entwurf je Fahrzeug |
+| `OverlayDraft` | `CarId` (unique), `Revision` (long), `DocumentJson` (text), `UpdatedAt`, `UpdatedByUserId` | genau ein Entwurf je Fahrzeug |
 | `OverlayDraftRevision` | `CarId`, `Revision`, `DocumentJson`, `CreatedAt`, `UserId` | die letzten 50 je Fahrzeug (D35) |
 | `OverlayPublication` | `Id`, `CarId`, `Number` (fortlaufend je Fahrzeug), `DocumentJson`, `SchemaVersion`, `PublishedAt`, `PublishedByUserId`, `Note` (≤ 500, D54), `SourceDraftRevision` | unveränderlich, unbegrenzt |
 | `OverlayPublicationAsset` | `PublicationId`, `AssetId` | Asset-Menge der Veröffentlichung |
 | `OverlayAsset` | `CarId`, `AssetId` (unique je Fahrzeug), `Svg` (text), `MetadataJson`, `Status` (`pending`/`active`), `CreatedAt`, `CreatedByUserId` | unveränderlich; Upload-Duplikate liefern das bestehende Asset |
+
+Dokumente werden als `text` gespeichert, nicht als `jsonb`: `jsonb` ordnet
+Schlüssel um, der Client vergleicht aber gegen das exakt gespeicherte Dokument
+(PATCH, D63).
 
 Der aktuell veröffentlichte Stand ist die `OverlayPublication` mit der höchsten
 `Number`.
@@ -51,11 +55,11 @@ gehaltenen Revisionen oder einer Veröffentlichung, werden gelöscht.
 | PATCH | `draft` | Verwalter | Header `If-Match: "<revision>"`, Body `application/json-patch+json` (RFC 6902) → `200 { revision }` |
 | GET | `publications` | Verwalter | `200 [{ id, number, publishedAt, publishedBy, note }]`, neueste zuerst |
 | GET | `publications/{id}` | Verwalter | `200 { …, document }` |
-| POST | `publications` | Verwalter | `{ baseRevision, note? }` → `201 { publicationId, number }` |
+| POST | `publications` | Verwalter | `{ baseRevision, note? }` → `201 { publicationId, number, warnings }` |
 | POST | `draft/restore` | Verwalter | `{ publicationId, baseRevision }` → `200 { revision }` |
 | POST | `assets` | Verwalter | `multipart/form-data` (`file`) → `200 { assetId, metadata, svg, report }` |
-| GET | `dependencies?channel=<name>` | Verwalter | `200 { draft: Location[], published: Location[] }` für Warnungen der Kanalverwaltung |
-| POST | `lidar-grid-source` | Verwalter | richtet den LiDAR-Rasterkanal ein (LiDAR-Vertrag §7): `200 { created: bool }` |
+| GET | `dependencies?channel=<name>` | Verwalter | `200 { draft: Location[], published: Location[] }` für Warnungen der Kanalverwaltung; folgt mit AP06 (braucht die Abhängigkeitsanalyse der Formeln) |
+| POST | `lidar-grid-source` | Verwalter | richtet den LiDAR-Rasterkanal ein (LiDAR-Vertrag §7): `200 { created: bool }`; Umsetzung in AP04 |
 
 \* Ein Asset ist für Betrachter nur lesbar, wenn eine Veröffentlichung des
 Fahrzeugs es referenziert; Verwalter lesen jedes Asset des Fahrzeugs. Asset-Antworten:
@@ -128,6 +132,8 @@ Veröffentlichung (neue Revision). Das aktuell angezeigte HUD bleibt unveränder
 | `OVL_API_ASSET_REJECTED` | 422, mit SVG-Bericht |
 | `OVL_API_NOT_FOUND` | 404 |
 | `OVL_API_PATCH_FAILED` | 422 |
+| `OVL_API_INVALID_REQUEST` | 400 (z. B. Notiz zu lang, Datei fehlt) |
+| `OVL_API_NOT_AVAILABLE` | 501 (SVG-Import ohne Bereinigung, D67) |
 
 ## 4. Ereignisse (CarConnectionHub)
 

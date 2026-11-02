@@ -1,3 +1,4 @@
+using SignalRC.Server.Overlay;
 using SignalRC.Server;
 using SignalRC.Server.Configuration;
 using SignalRC.Server.Data;
@@ -59,6 +60,7 @@ builder.Services.AddSingleton<AvailableTypesRegistry>();
 builder.Services.AddSingleton<IServerBuildInfoService, ServerBuildInfoService>();
 builder.Services.AddSingleton<IOnboardInstallScriptService, OnboardInstallScriptService>();
 builder.Services.AddSingleton<ChannelTemplateService>();
+builder.Services.AddOverlay();
 builder.Services.AddDbContext<SignalRCContext>((serviceProvider, options) =>
 {
     var configService = serviceProvider.GetRequiredService<IConfigurationService>();
@@ -128,6 +130,7 @@ if (app.Environment.IsDevelopment())
     app.UseDeveloperExceptionPage();
 }
 
+app.UseOverlay();
 app.UseRouting();
 
 app.UseAuthentication();

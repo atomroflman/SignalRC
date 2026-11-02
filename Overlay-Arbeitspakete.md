@@ -142,6 +142,12 @@ deterministisch getestet; Server und Client stimmen überein.
 
 ## AP02 – Serverpersistenz, Berechtigungen und Veröffentlichung
 
+**Status (2026-11-02):** umgesetzt in `Server/Overlay/` mit Migration
+`AddOverlay`. Getestet gegen SQLite (xUnit), noch nicht gegen PostgreSQL. Offen:
+- Abhängigkeitsauskunft für die Kanalverwaltung (braucht AP06).
+- Formelprüfung beim Veröffentlichen (AP06; bis dahin D66).
+- SVG-Upload (AP07; bis dahin D67).
+
 **Ziel:** Gemeinsamen Entwurf und unveränderliche Veröffentlichungen sicher
 speichern und berechtigten Clients zugänglich machen.
 

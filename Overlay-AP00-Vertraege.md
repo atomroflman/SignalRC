@@ -573,6 +573,20 @@ Arbeitspakete: [Overlay-Arbeitspakete.md](Overlay-Arbeitspakete.md).
 - Playwright und CI folgen mit AP14. Weitere Pakete nutzen diese Gerüste
   mit und legen keine eigenen an.
 
+### D66 – Veröffentlichen vor AP06 mit Warnung
+
+- Solange keine Formelprüfung registriert ist, werden Formeln ungeprüft
+  veröffentlicht. Die Antwort enthält dann die Warnung `OVL_EXPR_UNCHECKED`.
+- Alle übrigen Prüfungen gelten voll: Struktur, Katalog, LiDAR-Quellen und
+  Assets.
+- Mit Registrierung von AP06 greift die volle Formelprüfung automatisch.
+
+### D67 – SVG-Upload vor AP07 abgelehnt
+
+- Der Upload-Endpunkt besteht, lehnt aber jeden Upload mit `501
+  OVL_API_NOT_AVAILABLE` ab, bis AP07 die Bereinigung registriert.
+- Ungeprüftes SVG gelangt nie in die Datenbank.
+
 ## Spezifikationsstand
 
 ### S01 – Dokumentmodell und Property-Katalog v1 (Entwurf)
@@ -696,6 +710,7 @@ Gerätelauf ([modules §4](Shared/Overlay/modules/README.md)).
 | 2026-11-01 | D59–D63: sparsame Übertragung. Telemetrievertrag v1.1, LiDAR-Drahtformat, API v1.1 (PATCH, Kompression), Schema-Mindestfrist 500 ms, Leistungsgrenzen für Datenmengen; neue Referenzfälle `fixtures/telemetry/`, LiDAR `wire`/`deadband` | AP02, AP03, AP04, AP05, AP08, AP09, AP14 |
 | 2026-11-02 | D64, D65; Diagnosecode `OVL_VARIANT_ORPHANED` (Warnung, D53) ergänzt | AP01, AP09, AP14 |
 | 2026-11-02 | AP01 präzisiert Diagnosen (README §8): Codes `OVL_SCHEMA_*`, `OVL_PROP_TYPE`, `OVL_STRUCT_NOT_A_GROUP`, `OVL_REF_UNKNOWN_CLIP/PART/ASSET`, Ortsfelder `path`/`field`/`limit`/`offset`, Abschwächungs- und Prüfreihenfolge; neue Fixture `fixtures/documents/resolution.json` | AP01, AP02, AP06, AP09 |
+| 2026-11-02 | AP02: D66, D67; Dokumente als `text` statt `jsonb`; Codes `OVL_API_INVALID_REQUEST`, `OVL_API_NOT_AVAILABLE`, Warnung `OVL_EXPR_UNCHECKED`; Veröffentlichungsantwort mit `warnings`; Abhängigkeitsauskunft folgt mit AP06 | AP02, AP06, AP07, AP09 |
 
 ## Prüfpunkte nach Freigabe
 

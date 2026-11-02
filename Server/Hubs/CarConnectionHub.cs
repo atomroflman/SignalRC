@@ -17,7 +17,7 @@ using Sqids;
 
 namespace SignalRC.Server.Hubs;
 
-public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
+public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
 {
     // Handshake Overview:
     // 1. Car connects and (optionally) calls SyncChannelMap first sending full ChannelMap.
@@ -991,20 +991,16 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
             ?? throw new HubException("No HTTP context available for video hub request.");
         var dbContext = httpContext.RequestServices.GetRequiredService<SignalRCContext>();
         var user = await HubUserHelper.GetUserAsync(httpContext, dbContext);
-        if (user == null || string.IsNullOrWhiteSpace(user.LoginName))
+        // Same rule as overlay management (Shared/Overlay/api/README.md §1).
+        var access = httpContext.RequestServices.GetRequiredService<Overlay.OverlayAccess>();
+        switch (await access.CheckAdminAsync(user, carId))
         {
-            throw new HubException("You must be logged in to enable or disable streams.");
-        }
-
-        var hasSetup = await dbContext.UserSetups.AnyAsync(setup => setup.UserId == user.Id && setup.CarId == carId);
-        if (!hasSetup)
-        {
-            throw new HubException("You do not have access to manage this vehicle.");
-        }
-
-        if (user.ActiveVehicleId != carId)
-        {
-            throw new HubException("You must actively control this vehicle to change stream enable state.");
+            case Overlay.OverlayAccessError.LoginRequired:
+                throw new HubException("You must be logged in to enable or disable streams.");
+            case Overlay.OverlayAccessError.NoCarAccess:
+                throw new HubException("You do not have access to manage this vehicle.");
+            case Overlay.OverlayAccessError.NotDriver:
+                throw new HubException("You must actively control this vehicle to change stream enable state.");
         }
     }
 

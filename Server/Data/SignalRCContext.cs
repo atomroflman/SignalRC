@@ -20,6 +20,11 @@ namespace SignalRC.Server.Data
         public DbSet<UserSetupTelemetry> UserSetupTelemetries { get; set; }
         public DbSet<SetupFilterType> SetupFilterTypes { get; set; }
         public DbSet<FileTransfer> FileTransfers { get; set; }
+        public DbSet<OverlayDraft> OverlayDrafts { get; set; }
+        public DbSet<OverlayDraftRevision> OverlayDraftRevisions { get; set; }
+        public DbSet<OverlayPublication> OverlayPublications { get; set; }
+        public DbSet<OverlayPublicationAsset> OverlayPublicationAssets { get; set; }
+        public DbSet<OverlayAsset> OverlayAssets { get; set; }
 
         public async Task<long> GetNextUserSessionId() 
         {
