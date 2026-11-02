@@ -7,24 +7,37 @@ using SignalRC.Shared.Channels;
 
 namespace SignalRC.Overlay.Tests.Overlay;
 
-public sealed class OverlayServiceTests : IDisposable
+public sealed class SqliteOverlayServiceTests() : OverlayServiceTests(new SqliteOverlayTestDb());
+
+/// <summary>Runs only with SIGNALRC_TEST_POSTGRES set; see PostgresOverlayTestDb.</summary>
+public sealed class PostgresOverlayServiceTests() : OverlayServiceTests(PostgresOverlayTestDb.FromEnvironment());
+
+public abstract class OverlayServiceTests : IDisposable
 {
-    private const int CarId = 1;
-    private readonly OverlayTestDb _db = new();
-    private readonly SignalRCContext _ctx;
+    private readonly IOverlayTestDb? _db;
+    private readonly SignalRCContext _ctx = null!;
     private readonly FakeNotifier _events = new();
     private readonly FakeTime _time = new();
     private readonly FakeSanitizer _sanitizer = new();
-    private readonly User _driver, _guest, _outsider, _passive;
+    private readonly User _driver = null!, _guest = null!, _outsider = null!, _passive = null!;
+    private int CarId { get; }
 
-    public OverlayServiceTests()
+    protected OverlayServiceTests(IOverlayTestDb? db)
     {
-        _ctx = _db.Create();
-        _ctx.Cars.Add(new Car { Id = CarId, Name = "Truck" });
-        _driver = new User { Name = "Driver", LoginName = "driver", ActiveVehicleId = CarId, SessionId = 1 };
-        _guest = new User { Name = "User_2", ActiveVehicleId = CarId, SessionId = 2 };
-        _outsider = new User { Name = "Other", LoginName = "other", ActiveVehicleId = CarId, SessionId = 3 };
-        _passive = new User { Name = "Passive", LoginName = "passive", SessionId = 4 };
+        _db = db;
+        if (db == null) return;
+        _ctx = db.Create();
+        // Unique keys so a shared test database never collides with real data.
+        var tag = Guid.NewGuid().ToString("N")[..12];
+        long Session() => Random.Shared.NextInt64(1_000_000_000_000, 9_000_000_000_000);
+        var car = new Car { Name = $"overlay-test-{tag}", CarIdentityKey = $"overlay-test-{tag}", LastSeen = DateTime.UtcNow };
+        _ctx.Cars.Add(car);
+        _ctx.SaveChanges();
+        CarId = car.Id;
+        _driver = new User { Name = $"Driver-{tag}", LoginName = $"driver-{tag}", ActiveVehicleId = CarId, SessionId = Session(), LastSeen = DateTime.UtcNow };
+        _guest = new User { Name = $"User-{tag}", ActiveVehicleId = CarId, SessionId = Session(), LastSeen = DateTime.UtcNow };
+        _outsider = new User { Name = $"Other-{tag}", LoginName = $"other-{tag}", ActiveVehicleId = CarId, SessionId = Session(), LastSeen = DateTime.UtcNow };
+        _passive = new User { Name = $"Passive-{tag}", LoginName = $"passive-{tag}", SessionId = Session(), LastSeen = DateTime.UtcNow };
         _ctx.Users.AddRange(_driver, _guest, _outsider, _passive);
         _ctx.SaveChanges();
         _ctx.UserSetups.AddRange(
@@ -32,17 +45,33 @@ public sealed class OverlayServiceTests : IDisposable
             new UserCarSetup { UserId = _guest.Id, CarId = CarId },
             new UserCarSetup { UserId = _passive.Id, CarId = CarId });
         _ctx.CarVideoStreams.AddRange(
-            new CarVideoStream { CarId = CarId, StreamId = "rear", Name = "Rear", Type = "camera", Priority = 2, Width = 640, Height = 480, StartTime = DateTime.UtcNow },
-            new CarVideoStream { CarId = CarId, StreamId = "front", Name = "Front", Type = "camera", Priority = 1, Width = 1280, Height = 720, StartTime = DateTime.UtcNow });
+            new CarVideoStream { CarId = CarId, StreamId = $"rear-{tag}", Name = "Rear", Type = "camera", Priority = 2, Width = 640, Height = 480, StartTime = DateTime.UtcNow },
+            new CarVideoStream { CarId = CarId, StreamId = $"front-{tag}", Name = "Front", Type = "camera", Priority = 1, Width = 1280, Height = 720, StartTime = DateTime.UtcNow });
         _ctx.CarTelemetry.Add(new CarTelemetry { CarId = CarId, ChannelName = "odoSpeed", DataType = TelemetryDataType.Number, TelemetryType = "x", PinManager = "x" });
         _ctx.CarChannels.Add(new CarChannel { CarId = CarId, ChannelName = "steering" });
         _ctx.SaveChanges();
     }
 
+    private void Require() => Skip.If(_db == null, $"{PostgresOverlayTestDb.Variable} ist nicht gesetzt");
+
     public void Dispose()
     {
+        if (_db == null) return;
         _ctx.Dispose();
+        using (var cleanup = _db.Create())
+        {
+            // A List, not an array: array.Contains binds to the span overload EF Core 9 cannot translate.
+            var users = new List<int> { _driver.Id, _guest.Id, _outsider.Id, _passive.Id };
+            cleanup.UserSetups.Where(s => s.CarId == CarId).ExecuteDelete();
+            cleanup.Users.Where(u => users.Contains(u.Id)).ExecuteDelete();
+            cleanup.CarTelemetry.Where(t => t.CarId == CarId).ExecuteDelete();
+            cleanup.CarChannels.Where(c => c.CarId == CarId).ExecuteDelete();
+            cleanup.CarVideoStreams.Where(v => v.CarId == CarId).ExecuteDelete();
+            // Overlay rows go with the vehicle (cascade).
+            cleanup.Cars.Where(c => c.Id == CarId).ExecuteDelete();
+        }
         _db.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     private OverlayService Service() =>
@@ -62,9 +91,10 @@ public sealed class OverlayServiceTests : IDisposable
 
     // --- Permissions ---
 
-    [Fact]
+    [SkippableFact]
     public async Task OnlyTheRegularActiveDriverManagesTheOverlay()
     {
+        Require();
         var service = Service();
         Assert.Equal("OVL_API_LOGIN_REQUIRED", (await service.GetDraftAsync(CarId, null)).Error?.Code);
         Assert.Equal("OVL_API_LOGIN_REQUIRED", (await service.GetDraftAsync(CarId, _guest)).Error?.Code);
@@ -75,36 +105,40 @@ public sealed class OverlayServiceTests : IDisposable
         Assert.Equal(403, (await service.PublishAsync(CarId, _passive, 0, null)).Error?.Status);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task LosingControlBlocksFurtherWrites()
     {
+        Require();
         await SaveAsync(Doc());
         _driver.ActiveVehicleId = null;
         await _ctx.SaveChangesAsync();
         Assert.Equal("OVL_API_NOT_DRIVER", (await Service().SaveDraftAsync(CarId, _driver, Doc(), 1)).Error?.Code);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task UnknownVehicleIsNotFound()
     {
-        Assert.Equal(404, (await Service().GetDraftAsync(99, _driver)).Error?.Status);
-        Assert.Equal(404, (await Service().GetPublishedAsync(99)).Error?.Status);
+        Require();
+        Assert.Equal(404, (await Service().GetDraftAsync(int.MaxValue, _driver)).Error?.Status);
+        Assert.Equal(404, (await Service().GetPublishedAsync(int.MaxValue)).Error?.Status);
     }
 
     // --- Draft ---
 
-    [Fact]
+    [SkippableFact]
     public async Task StartDocumentUsesTheFirstStream()
     {
+        Require();
         var draft = (await Service().GetDraftAsync(CarId, _driver)).Value!;
         Assert.Equal(0, draft.Revision);
         Assert.Equal(1280, draft.Document["workspace"]!["width"]!.GetValue<int>());
         Assert.Equal(720, draft.Document["workspace"]!["height"]!.GetValue<int>());
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task SavingAdvancesTheRevisionAndRejectsStaleWrites()
     {
+        Require();
         Assert.Equal(1, await SaveAsync(Doc()));
         Assert.Equal(2, await SaveAsync(Doc(Speed, """["e_v"]"""), 1));
         var stale = await Service().SaveDraftAsync(CarId, _driver, Doc(), 1);
@@ -115,19 +149,21 @@ public sealed class OverlayServiceTests : IDisposable
         Assert.Equal([1L, 2L], _events.DraftChanges.Select(e => e.Revision));
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task DraftKeepsTheExactDocument()
     {
+        Require();
         var doc = Doc(Speed, """["e_v"]""");
         await SaveAsync(doc);
         var draft = (await Service().GetDraftAsync(CarId, _driver)).Value!;
         Assert.Equal(JsonNode.Parse(doc)!.ToJsonString(), draft.Document.ToJsonString());
-        Assert.Equal("driver", draft.UpdatedBy);
+        Assert.Equal(_driver.LoginName, draft.UpdatedBy);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task StructureErrorsBlockSavingButPublishErrorsDoNot()
     {
+        Require();
         var broken = await Service().SaveDraftAsync(CarId, _driver, Doc("""{"e_a":{"type":"rect","props":{"fontSize":1}}}""", """["e_a"]"""), 0);
         Assert.Equal("OVL_API_INVALID_DOCUMENT", broken.Error?.Code);
         Assert.Contains(broken.Error!.Diagnostics!, d => d.Code == "OVL_PROP_UNKNOWN");
@@ -136,24 +172,27 @@ public sealed class OverlayServiceTests : IDisposable
         Assert.Equal(1, await SaveAsync(Doc(lidar, """["e_l"]""")));
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task InvalidJsonAndUnsupportedSchemaAreRejected()
     {
+        Require();
         Assert.Equal("OVL_API_INVALID_DOCUMENT", (await Service().SaveDraftAsync(CarId, _driver, "{"u8.ToArray(), 0)).Error?.Code);
         var v2 = Encoding.UTF8.GetBytes("""{"schemaVersion":2,"workspace":{"width":1,"height":1},"elements":{},"children":[]}""");
         Assert.Equal("OVL_API_SCHEMA_UNSUPPORTED", (await Service().SaveDraftAsync(CarId, _driver, v2, 0)).Error?.Code);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task OversizedDocumentsAreRejected()
     {
+        Require();
         var big = new byte[OverlayService.MaxDocumentBytes + 1];
         Assert.Equal(413, (await Service().SaveDraftAsync(CarId, _driver, big, 0)).Error?.Status);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task OnlyTheLastFiftyRevisionsAreKept()
     {
+        Require();
         long revision = 0;
         for (var i = 0; i < 55; i++) revision = await SaveAsync(Doc(), revision);
         var kept = await _ctx.OverlayDraftRevisions.Where(r => r.CarId == CarId).Select(r => r.Revision).OrderBy(r => r).ToListAsync();
@@ -164,9 +203,10 @@ public sealed class OverlayServiceTests : IDisposable
 
     // --- Patch ---
 
-    [Fact]
+    [SkippableFact]
     public async Task PatchAppliesToTheBaseRevision()
     {
+        Require();
         await SaveAsync(Doc());
         var patch = Encoding.UTF8.GetBytes("""[{"op":"add","path":"/elements/e_a","value":{"type":"rect"}},{"op":"replace","path":"/children","value":["e_a"]}]""");
         var result = await Service().PatchDraftAsync(CarId, _driver, patch, 1);
@@ -176,16 +216,18 @@ public sealed class OverlayServiceTests : IDisposable
         Assert.Equal(409, (await Service().PatchDraftAsync(CarId, _driver, patch, 1)).Error?.Status);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task PatchOnTheStartDocumentCreatesTheDraft()
     {
+        Require();
         var patch = Encoding.UTF8.GetBytes("""[{"op":"replace","path":"/workspace/width","value":800}]""");
         Assert.Equal(1, (await Service().PatchDraftAsync(CarId, _driver, patch, 0)).Value?.Revision);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task UnusablePatchesFail()
     {
+        Require();
         await SaveAsync(Doc());
         foreach (var body in new[] { """{"op":"add"}""", """[{"op":"replace","path":"/missing","value":1}]""", """[{"op":"move","path":"/a","from":"/b"}]""" })
         {
@@ -198,9 +240,10 @@ public sealed class OverlayServiceTests : IDisposable
 
     // --- Publishing, history, restore ---
 
-    [Fact]
+    [SkippableFact]
     public async Task PublishingCreatesNumberedImmutableStates()
     {
+        Require();
         await SaveAsync(Doc(Speed, """["e_v"]"""));
         var first = await Service().PublishAsync(CarId, _driver, 1, "erste Version");
         Assert.Equal(1, first.Value?.Number);
@@ -215,22 +258,24 @@ public sealed class OverlayServiceTests : IDisposable
         var history = (await Service().ListPublicationsAsync(CarId, _driver)).Value!;
         Assert.Equal([2, 1], history.Select(h => h.Number));
         Assert.Equal("erste Version", history[1].Note);
-        Assert.Equal("driver", history[1].PublishedBy);
+        Assert.Equal(_driver.LoginName, history[1].PublishedBy);
         Assert.Equal([1, 2], _events.Publications.Select(p => p.Number));
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task PublishingRequiresTheCurrentRevision()
     {
+        Require();
         Assert.Equal(409, (await Service().PublishAsync(CarId, _driver, 0, null)).Error?.Status);
         await SaveAsync(Doc());
         await SaveAsync(Doc(), 1);
         Assert.Equal("OVL_API_REVISION_CONFLICT", (await Service().PublishAsync(CarId, _driver, 1, null)).Error?.Code);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task PublishErrorsBlockPublishing()
     {
+        Require();
         await SaveAsync(Doc("""{"e_l":{"type":"lidarWidget","source":"nope"}}""", """["e_l"]"""));
         var result = await Service().PublishAsync(CarId, _driver, 1, null);
         Assert.Equal("OVL_API_PUBLISH_BLOCKED", result.Error?.Code);
@@ -238,23 +283,26 @@ public sealed class OverlayServiceTests : IDisposable
         Assert.Null((await Service().GetPublishedAsync(CarId)).Value);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task DisabledPartsOnlyWarn()
     {
+        Require();
         await SaveAsync(Doc("""{"e_l":{"type":"lidarWidget","source":"nope","disabled":true}}""", """["e_l"]"""));
         Assert.Equal(1, (await Service().PublishAsync(CarId, _driver, 1, null)).Value?.Number);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task NoteIsLimited()
     {
+        Require();
         await SaveAsync(Doc());
         Assert.Equal(400, (await Service().PublishAsync(CarId, _driver, 1, new string('x', 501))).Error?.Status);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task RestoreLoadsAPublicationAsDraftWithoutPublishing()
     {
+        Require();
         await SaveAsync(Doc(Speed, """["e_v"]"""));
         var publicationId = (await Service().PublishAsync(CarId, _driver, 1, null)).Value!.PublicationId;
         await SaveAsync(Doc(), 1);
@@ -272,48 +320,52 @@ public sealed class OverlayServiceTests : IDisposable
 
     // --- Assets ---
 
-    [Fact]
+    [SkippableFact]
     public async Task UploadsAreRefusedWithoutSanitizer()
     {
+        Require();
         var service = new OverlayService(_ctx, new OverlayAccess(_ctx), new UnavailableSvgAssetSanitizer(), _events, _time);
         Assert.Equal("OVL_API_NOT_AVAILABLE", (await service.UploadAssetAsync(CarId, _driver, "<svg/>"u8.ToArray())).Error?.Code);
-        Assert.Empty(_ctx.OverlayAssets);
+        Assert.Empty(_ctx.OverlayAssets.Where(a => a.CarId == CarId));
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task UploadRequiresAdminAndRespectsLimitsAndRejections()
     {
+        Require();
         Assert.Equal(401, (await Service().UploadAssetAsync(CarId, _guest, "<svg/>"u8.ToArray())).Error?.Status);
         Assert.Equal(413, (await Service().UploadAssetAsync(CarId, _driver, new byte[OverlayService.MaxAssetBytes + 1])).Error?.Status);
         _sanitizer.Reject = true;
         Assert.Equal("OVL_API_ASSET_REJECTED", (await Service().UploadAssetAsync(CarId, _driver, "<svg/>"u8.ToArray())).Error?.Code);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task AssetLifecycleFollowsReferences()
     {
+        Require();
         var upload = (await Service().UploadAssetAsync(CarId, _driver, "<svg/>"u8.ToArray())).Value!;
         var element = "{\"e_s\":{\"type\":\"svgAsset\",\"assetId\":\"" + upload.AssetId + "\",\"parts\":{\"p_1\":{\"props\":{\"opacity\":0.5}}}}}";
-        Assert.Equal(OverlayAssetStatus.Pending, _ctx.OverlayAssets.AsNoTracking().Single().Status);
+        Assert.Equal(OverlayAssetStatus.Pending, _ctx.OverlayAssets.AsNoTracking().Where(a => a.CarId == CarId).Single().Status);
 
         // Viewers only see published assets; the administrator sees all.
         Assert.Equal(404, (await Service().GetAssetAsync(CarId, upload.AssetId, null)).Error?.Status);
         Assert.Equal("<svg/>", (await Service().GetAssetAsync(CarId, upload.AssetId, _driver)).Value);
 
         await SaveAsync(Doc(element, """["e_s"]"""));
-        Assert.Equal(OverlayAssetStatus.Active, _ctx.OverlayAssets.AsNoTracking().Single().Status);
+        Assert.Equal(OverlayAssetStatus.Active, _ctx.OverlayAssets.AsNoTracking().Where(a => a.CarId == CarId).Single().Status);
         await Service().PublishAsync(CarId, _driver, 1, null);
         Assert.Equal("<svg/>", (await Service().GetAssetAsync(CarId, upload.AssetId, null)).Value);
 
         // Removed from the draft, the asset stays: a kept revision and the publication still use it.
         long revision = 1;
         for (var i = 0; i < 55; i++) revision = await SaveAsync(Doc(), revision);
-        Assert.Single(_ctx.OverlayAssets.AsNoTracking());
+        Assert.Single(_ctx.OverlayAssets.AsNoTracking().Where(a => a.CarId == CarId));
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task UnreferencedAssetsAreCollected()
     {
+        Require();
         var pending = (await Service().UploadAssetAsync(CarId, _driver, "<svg/>"u8.ToArray())).Value!;
         _sanitizer.Next = "<svg id='2'/>";
         var used = (await Service().UploadAssetAsync(CarId, _driver, "<svg/>"u8.ToArray())).Value!;
@@ -321,24 +373,80 @@ public sealed class OverlayServiceTests : IDisposable
         var revision = await SaveAsync(Doc(element, """["e_s"]"""));
 
         await Service().CollectGarbageAsync(CarId);
-        Assert.Equal(2, _ctx.OverlayAssets.AsNoTracking().Count());
+        Assert.Equal(2, _ctx.OverlayAssets.AsNoTracking().Where(a => a.CarId == CarId).Count());
 
         _time.Advance(TimeSpan.FromHours(25));
         await Service().CollectGarbageAsync(CarId);
-        Assert.Equal([used.AssetId], _ctx.OverlayAssets.AsNoTracking().Select(a => a.AssetId));
+        Assert.Equal([used.AssetId], _ctx.OverlayAssets.AsNoTracking().Where(a => a.CarId == CarId).Select(a => a.AssetId));
         Assert.NotEqual(pending.AssetId, used.AssetId);
 
         // Once no revision refers to it any more, an active asset goes too.
         for (var i = 0; i < 50; i++) revision = await SaveAsync(Doc(), revision);
-        Assert.Empty(_ctx.OverlayAssets.AsNoTracking());
+        Assert.Empty(_ctx.OverlayAssets.AsNoTracking().Where(a => a.CarId == CarId));
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task UnknownAssetsBlockPublishing()
     {
+        Require();
         await SaveAsync(Doc($$$"""{"e_s":{"type":"svgAsset","assetId":"sha256-{{{new string('a', 64)}}}"}}""", """["e_s"]"""));
         var result = await Service().PublishAsync(CarId, _driver, 1, null);
         Assert.Contains(result.Error!.Diagnostics!, d => d.Code == "OVL_REF_UNKNOWN_ASSET");
+    }
+
+    // --- Concurrency (real database only) ---
+
+    [SkippableFact]
+    public async Task ConcurrentSavesFromTheSameRevisionHaveOneWinner()
+    {
+        Require();
+        Skip.IfNot(_db!.SupportsConcurrency, "nur mit echter Datenbank aussagekräftig");
+        await SaveAsync(Doc());
+        var results = await Task.WhenAll(Enumerable.Range(0, 8).Select(async _ =>
+        {
+            await using var ctx = _db.Create();
+            var service = new OverlayService(ctx, new OverlayAccess(ctx), _sanitizer, _events, _time);
+            var user = await ctx.Users.SingleAsync(u => u.Id == _driver.Id);
+            return await service.SaveDraftAsync(CarId, user, Doc(), 1);
+        }));
+        Assert.Single(results, r => r.Error == null);
+        Assert.All(results.Where(r => r.Error != null), r => Assert.Equal("OVL_API_REVISION_CONFLICT", r.Error!.Code));
+        Assert.Equal(2, (await Service().GetDraftAsync(CarId, _driver)).Value!.Revision);
+    }
+
+    [SkippableFact]
+    public async Task ConcurrentFirstSavesHaveOneWinner()
+    {
+        Require();
+        Skip.IfNot(_db!.SupportsConcurrency, "nur mit echter Datenbank aussagekräftig");
+        var results = await Task.WhenAll(Enumerable.Range(0, 8).Select(async _ =>
+        {
+            await using var ctx = _db.Create();
+            var service = new OverlayService(ctx, new OverlayAccess(ctx), _sanitizer, _events, _time);
+            var user = await ctx.Users.SingleAsync(u => u.Id == _driver.Id);
+            return await service.SaveDraftAsync(CarId, user, Doc(), 0);
+        }));
+        Assert.Single(results, r => r.Error == null);
+        Assert.All(results.Where(r => r.Error != null), r => Assert.Equal(409, r.Error!.Status));
+    }
+
+    [SkippableFact]
+    public async Task ConcurrentPublishesGetDistinctNumbers()
+    {
+        Require();
+        Skip.IfNot(_db!.SupportsConcurrency, "nur mit echter Datenbank aussagekräftig");
+        await SaveAsync(Doc());
+        var results = await Task.WhenAll(Enumerable.Range(0, 4).Select(async _ =>
+        {
+            await using var ctx = _db.Create();
+            var service = new OverlayService(ctx, new OverlayAccess(ctx), _sanitizer, _events, _time);
+            var user = await ctx.Users.SingleAsync(u => u.Id == _driver.Id);
+            return await service.PublishAsync(CarId, user, 1, null);
+        }));
+        var numbers = results.Where(r => r.Error == null).Select(r => r.Value!.Number).OrderBy(n => n).ToList();
+        Assert.NotEmpty(numbers);
+        Assert.Equal(numbers.Count, numbers.Distinct().Count());
+        Assert.All(results.Where(r => r.Error != null), r => Assert.Equal(409, r.Error!.Status));
     }
 
     // --- Test doubles ---

@@ -297,7 +297,13 @@ public sealed class OverlayService(
         {
             db.ChangeTracker.Clear();
             await using var transaction = await db.Database.BeginTransactionAsync();
-            if (!await db.OverlayDrafts.AnyAsync(d => d.CarId == carId && d.Revision == baseRevision)) return null;
+            // A no-op update locks the draft row until commit, so publishes of a
+            // vehicle run one after another and each sees the previous number.
+            // It also re-checks the revision under that lock.
+            var locked = await db.OverlayDrafts
+                .Where(d => d.CarId == carId && d.Revision == baseRevision)
+                .ExecuteUpdateAsync(u => u.SetProperty(d => d.Revision, d => d.Revision));
+            if (locked == 0) return null;
             var number = (await db.OverlayPublications.Where(p => p.CarId == carId).MaxAsync(p => (int?)p.Number) ?? 0) + 1;
             var entity = new OverlayPublication
             {
@@ -316,7 +322,7 @@ public sealed class OverlayService(
             await ActivateAsync(carId, assetIds);
             await db.SaveChangesAsync();
             await transaction.CommitAsync();
-            return entity;
+            return (OverlayPublication?)entity;
         });
         if (publication == null)
         {
