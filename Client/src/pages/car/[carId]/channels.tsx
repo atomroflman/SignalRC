@@ -89,6 +89,27 @@ function Field({ label, children, hint, className }: { label: string; children: 
 }
 
 const inputClass = "bg-zinc-800 text-zinc-100 border border-zinc-700 rounded px-2 py-1 text-xs";
+
+// The onboard reads telemetry every n-th tick of its 100 ms loop; the editor speaks milliseconds.
+const TICK_MS = 100;
+const msToTicks = (ms: number) => Math.max(1, Math.round(ms / TICK_MS));
+
+/** Read interval edited in ms, stored as ticks; converted when the field loses focus. */
+function ReadIntervalInput({ ticks, onChange }: { ticks: number; onChange: (ticks: number) => void }) {
+  const [text, setText] = useState(String(ticks * TICK_MS));
+  useEffect(() => { setText(String(ticks * TICK_MS)); }, [ticks]);
+  const commit = () => {
+    const ms = Number(text);
+    if (!Number.isFinite(ms) || ms <= 0) { setText(String(ticks * TICK_MS)); return; }
+    const next = msToTicks(ms);
+    setText(String(next * TICK_MS));
+    if (next !== ticks) onChange(next);
+  };
+  return (
+    <input className={inputClass} type="number" min={TICK_MS} step={TICK_MS} value={text}
+      onChange={e => setText(e.target.value)} onBlur={commit} onKeyDown={e => { if (e.key === "Enter") commit(); }} />
+  );
+}
 const btnPrimary = "px-2 py-1 bg-green-900 hover:bg-green-800 text-green-100 rounded text-xs border border-green-800";
 const btnDanger = "px-2 py-1 bg-red-900 hover:bg-red-800 text-red-100 rounded text-xs border border-red-800";
 const btnGhost = "px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded text-xs border border-zinc-700";
@@ -161,7 +182,7 @@ function TelemetryEditor({
   initial, isNew, onSave, onCancel, telemetryTypes,
 }: { initial?: TelemetryChannel; isNew: boolean; onSave: (t: TelemetryChannel) => Promise<void>; onCancel: () => void; telemetryTypes: string[] }) {
   const [t, setT] = useState<TelemetryChannel>(initial ?? {
-    channelName: "", readIntervalTicks: 1000, telemetryType: "", dataType: 0, unit: "", decimals: null,
+    channelName: "", readIntervalTicks: msToTicks(1000), telemetryType: "", dataType: 0, unit: "", decimals: null,
     pinManager: "default", address: null, optionsJson: "",
   });
   const update = (patch: Partial<TelemetryChannel>) => setT(prev => ({ ...prev, ...patch }));
@@ -171,7 +192,9 @@ function TelemetryEditor({
       <Field label="Telemetry type">
         <input className={inputClass + " font-mono"} value={t.telemetryType} onChange={e => update({ telemetryType: e.target.value })} list="telemetry-type-options" placeholder="e.g. SignalRC.Onboard.Telemetry.CpuTemperatureReader" />
       </Field>
-      <Field label="Read interval (ms)"><input className={inputClass} type="number" value={t.readIntervalTicks} onChange={e => update({ readIntervalTicks: Number(e.target.value) })} /></Field>
+      <Field label="Read interval (ms)" hint={`${t.readIntervalTicks} × ${TICK_MS} ms onboard ticks; rounded to whole ticks`}>
+        <ReadIntervalInput ticks={t.readIntervalTicks} onChange={readIntervalTicks => update({ readIntervalTicks })} />
+      </Field>
       <Field label="Data type">
         <select className={inputClass} value={t.dataType} onChange={e => update({ dataType: Number(e.target.value) })}>
           {DATA_TYPES.map((d, i) => <option key={d} value={i}>{d}</option>)}
@@ -287,7 +310,7 @@ export default function ChannelsPage() {
       })));
       setTelemetries(Object.entries(map.telemetryChannels ?? {}).map(([k, v]: [string, any]) => ({
         channelName: k,
-        readIntervalTicks: v.readIntervalTicks ?? 1000,
+        readIntervalTicks: v.readIntervalTicks ?? 1,
         telemetryType: v.telemetryType ?? "",
         dataType: v.dataType ?? 0,
         unit: v.unit ?? null,
