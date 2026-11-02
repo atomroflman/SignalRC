@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Text.Json;
+using SignalRC.Onboard.Control;
 using SignalRC.Shared.Channels;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -82,83 +83,8 @@ namespace SignalRC.Onboard.Hardware
                 instance = ActivatorUtilities.CreateInstance(_serviceProvider, type);
             }
 
-            // Set properties from options dictionary
-            foreach (var kv in managerConfig.Options)
-            {
-                var pi = type.GetProperty(kv.Key, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
-                if (pi != null && pi.CanWrite)
-                {
-                    if (kv.Value is JsonElement jsonElement && jsonElement.ValueKind == System.Text.Json.JsonValueKind.Null)
-                        continue; // Skip null values
-                    if (kv.Value is JsonElement jsonValue)
-                    {
-                        // Handle JsonElement conversion
-                        if (jsonValue.ValueKind == System.Text.Json.JsonValueKind.String)
-                        {
-                            pi.SetValue(instance, jsonValue.GetString());
-                        }
-                        else if (jsonValue.ValueKind == System.Text.Json.JsonValueKind.Number)
-                        {
-                            if (pi.PropertyType == typeof(int))
-                                pi.SetValue(instance, jsonValue.GetInt32());
-                            else if (pi.PropertyType == typeof(float))
-                                pi.SetValue(instance, jsonValue.GetSingle());
-                            else if (pi.PropertyType == typeof(double))
-                                pi.SetValue(instance, jsonValue.GetDouble());
-                            else if (pi.PropertyType == typeof(long))
-                                pi.SetValue(instance, jsonValue.GetInt64());
-                        }
-                        else if (jsonValue.ValueKind == System.Text.Json.JsonValueKind.True || jsonValue.ValueKind == System.Text.Json.JsonValueKind.False)
-                        {
-                            if (pi.PropertyType == typeof(bool))
-                                pi.SetValue(instance, jsonValue.GetBoolean());
-                        }
-                        else if (jsonValue.ValueKind == System.Text.Json.JsonValueKind.Object || jsonValue.ValueKind == System.Text.Json.JsonValueKind.Array)
-                        {
-                            // Handle complex types (e.g. dictionaries, lists)
-                            var optionsJson = jsonValue.GetRawText();
-                            var optionsType = pi.PropertyType;
-                            if (optionsType.IsGenericType && optionsType.GetGenericTypeDefinition() == typeof(Dictionary<,>))
-                            {
-                                var genericArgs = optionsType.GetGenericArguments();
-                                if (genericArgs.Length == 2 && genericArgs[0] == typeof(string))
-                                {
-                                    // Deserialize to Dictionary<string, object>        
-                                    var dictType = typeof(Dictionary<,>).MakeGenericType(genericArgs);
-                                    var dict = JsonSerializer.Deserialize(optionsJson, dictType);
-                                    pi.SetValue(instance, dict);
-                                }
-                            }
-                            else if (optionsType.IsArray)
-                            {
-                                // Deserialize to array
-                                var elementType = optionsType.GetElementType();
-                                if (elementType != null)
-                                {
-                                    var array = JsonSerializer.Deserialize(optionsJson, optionsType);
-                                    pi.SetValue(instance, array);
-                                }
-                            }
-                        }
-                    }
-                    else
-                    {
-                        if (kv.Value is not IConvertible)
-                            continue;
-                        // Handle primitive types directly
-                        if (pi.PropertyType == typeof(string))
-                            pi.SetValue(instance, kv.Value.ToString());
-                        else if (pi.PropertyType == typeof(int))
-                            pi.SetValue(instance, Convert.ToInt32(kv.Value));
-                        else if (pi.PropertyType == typeof(float))
-                            pi.SetValue(instance, Convert.ToSingle(kv.Value));
-                        else if (pi.PropertyType == typeof(double))
-                            pi.SetValue(instance, Convert.ToDouble(kv.Value));
-                        else if (pi.PropertyType == typeof(bool))
-                            pi.SetValue(instance, Convert.ToBoolean(kv.Value));
-                    }
-                }
-            }
+            // Set properties from options dictionary; unknown keys are ignored as before.
+            ChannelOptionBinder.Apply(instance!, managerConfig.Options, logger, $"pinManager {name}", warnUnknown: false);
             var res = instance as IModuleManager ?? throw new InvalidCastException($"{typeName} does not implement IModuleManager");
             _instances.Add(name, res);
             return res;

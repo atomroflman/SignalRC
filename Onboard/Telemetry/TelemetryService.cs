@@ -1,3 +1,4 @@
+using SignalRC.Onboard.Control;
 using SignalRC.Shared.Channels;
 using SignalRC.Shared.HubClients;
 using SignalRC.Shared.Hubs;
@@ -14,12 +15,7 @@ namespace SignalRC.Onboard.Telemetry;
 
 public class TelemetryService : IHubConnectionObserver, ITelemetryClient
 {
-    private static readonly JsonSerializerOptions JsonSerializerOptions = new()
-    {
-        PropertyNameCaseInsensitive = true
-    };
-
-    private const string GroupKeyOption = "groupKey";
+    private readonly HashSet<string> _groupKeyWarnings = new(StringComparer.Ordinal);
 
     private int _tick = 0;
     private IConnectionHubServer? _server;
@@ -29,6 +25,7 @@ public class TelemetryService : IHubConnectionObserver, ITelemetryClient
     // Reader instances, keyed by groupKey (e.g. "battery"). Multiple channels
     // that share a source share a single reader instance and a single tick.
     private readonly Dictionary<string, TelemetryReaderBase> _sourceReaders = new(StringComparer.Ordinal);
+    internal IReadOnlyDictionary<string, TelemetryReaderBase> SourceReaders => _sourceReaders;
 
     // groupKey -> list of channel names that belong to this source.
     private readonly Dictionary<string, List<string>> _sourceChannels = new(StringComparer.Ordinal);
@@ -316,7 +313,7 @@ public TelemetryService(ChannelMap channelMap, ServerConnectionService serverCon
         }
     }
 
-    private void EnsureReaders()
+    internal void EnsureReaders()
     {
         foreach (var (groupKey, channels) in _sourceChannels.ToList())
         {
@@ -395,17 +392,15 @@ public TelemetryService(ChannelMap channelMap, ServerConnectionService serverCon
         return Task.CompletedTask;
     }
 
-    private static string ResolveGroupKey(string channelName, TelemetryChannelMapItem definition)
+    private string ResolveGroupKey(string channelName, TelemetryChannelMapItem definition)
     {
-        if (definition.Options.TryGetValue(GroupKeyOption, out var raw) && raw != null)
+        var key = ChannelOptionBinder.ResolveGroupKey(channelName, definition.Options, out var warning);
+        // EnsureReaders runs every tick: warn once per channel.
+        if (warning != null && _groupKeyWarnings.Add(channelName))
         {
-            var s = raw.ToString();
-            if (!string.IsNullOrWhiteSpace(s))
-            {
-                return s;
-            }
+            Logger.LogWarning("{Warning}", warning);
         }
-        return channelName;
+        return key;
     }
 
     private TelemetryReaderBase? CreateReader(string channelName, TelemetryChannelMapItem definition)
@@ -425,68 +420,9 @@ public TelemetryService(ChannelMap channelMap, ServerConnectionService serverCon
         }
         reader.ReadIntervalTicks = Math.Max(1, definition.ReadIntervalTicks);
 
-        foreach (var option in definition.Options)
-        {
-            var property = resolvedReaderType.GetProperty(option.Key, BindingFlags.IgnoreCase | BindingFlags.Public | BindingFlags.Instance);
-            if (property == null || !property.CanWrite)
-            {
-                Logger.LogWarning("Option {Option} not found or not writable on reader type {Reader} for channel {Channel}", option.Key, resolvedReaderType.Name, channelName);
-                continue;
-            }
-            try
-            {
-                if (IsNullOptionValue(option.Value))
-                {
-                    continue;
-                }
-                var convertedValue = ConvertOptionValue(option.Value, property.PropertyType);
-                property.SetValue(reader, convertedValue);
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError(ex, "Failed to set option {Option} for channel {Channel} with value {Value}", option.Key, channelName, option.Value);
-            }
-        }
+        ChannelOptionBinder.Apply(reader, definition.Options, Logger, $"channel {channelName}");
 
         return reader;
-    }
-
-    private static bool IsNullOptionValue(object? value) =>
-        value == null || value is JsonElement { ValueKind: JsonValueKind.Null or JsonValueKind.Undefined };
-
-    private static object? ConvertOptionValue(object value, Type targetType)
-    {
-        var underlyingType = Nullable.GetUnderlyingType(targetType) ?? targetType;
-        if (value is JsonElement jsonElement)
-        {
-            return jsonElement.Deserialize(underlyingType, JsonSerializerOptions);
-        }
-
-        if (underlyingType.IsInstanceOfType(value))
-        {
-            return value;
-        }
-
-        if (underlyingType.IsEnum)
-        {
-            return value is string enumName
-                ? Enum.Parse(underlyingType, enumName, ignoreCase: true)
-                : Enum.ToObject(underlyingType, value);
-        }
-
-        if (underlyingType == typeof(Guid) && value is string guidText)
-        {
-            return Guid.Parse(guidText);
-        }
-
-        try
-        {
-            return JsonSerializer.Deserialize(JsonSerializer.Serialize(value), underlyingType, JsonSerializerOptions);
-        }
-        catch (JsonException)
-        {
-            return Convert.ChangeType(value, underlyingType);
-        }
     }
 
     public Task OnClosed(Exception? exception)
