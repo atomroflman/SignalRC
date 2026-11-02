@@ -74,7 +74,7 @@ Einstieg: `scripts/overlay-check.sh`.
 | Regel | Status | Nachweis |
 | --- | --- | --- |
 | Standard/Varianten, Vererbung, Rücksetzen, stabile IDs, Löschfolgen, deaktivierte Variante = kein HUD | automatisiert | AP01 `document/*.test.ts`, `Documents/*Tests.cs` (gleiche Fixtures); Editor `editor/core` |
-| Nur der reguläre aktive Fahrer verwaltet; Prüfung bei jedem Zugriff | automatisiert (PG) | `SecurityServiceTests.EveryManagementOperationRequiresTheRegularActiveDriver`: alle 10 Verwaltungsoperationen × anonym/Gast/ohne Zugang/ohne Kontrolle/Fahrer; abgelehnte Schreibzugriffe ändern nichts. `ControllerAppliesTheMatrixFromTheSessionCookie`: 401/403/428, gefälschtes Cookie 401 |
+| Nur der Sitzungsbenutzer, der die Steuerung hält, verwaltet (D73); Prüfung bei jedem Zugriff | automatisiert (PG) / live | `SecurityServiceTests.EveryManagementOperationRequiresTheSessionUserHoldingControl`: alle 10 Verwaltungsoperationen × ohne Sitzung (401 `OVL_API_SESSION_REQUIRED`) / veraltetes `ActiveVehicleId` / Login ohne Setup / Login mit Setup ohne Steuerung / Fahrer eines anderen Fahrzeugs (je 403 `OVL_API_NOT_DRIVER`) / anonymer Fahrer (erlaubt); abgelehnte Schreibzugriffe ändern nichts. `OverlayServiceTests.AnonymousSessionUserWithControlSavesAndPublishesUntilRelease`: speichern/veröffentlichen, anderer Benutzer nicht, nach Release, Übernahme und Onboard-Trennung nicht mehr. `ControllerAppliesTheMatrixFromTheSessionCookie`: 401/403/428, gefälschtes Cookie 401. Live: `editor-live-server.test.ts` (anonymer Fahrer über Fake-Onboard veröffentlicht, zweiter anonymer Benutzer 403, nach `ReleaseCarControl` 403) |
 | Veröffentlichtes HUD lesbar wie der Videostream, auch anonym (D69/D70); Asset nur bei Veröffentlichung | automatisiert (PG) | `ViewersReadOnlyPublishedStateAssetsAndTheSourceCatalog`; Client-Sicht in `scenarios.test.ts` |
 | Kontrollverlust: lokal weiter, keine Serverzugriffe; nach Rückkehr Revisionsprüfung | automatisiert | `scenarios` › „losing control mid-edit …“; `editor/persistence/autosave.test.ts` |
 | Genau ein Entwurf, Autosave, Statusanzeige | automatisiert | `autosave.test.ts`; `OverlayServiceTests` |
@@ -206,7 +206,8 @@ der Bildzeit nach D42 bleibt manuell offen (§6 Nr. 10).
 `acceptance/live-acceptance.test.ts` deckt sechs Szenarien über echtes HTTP und
 SignalR ab:
 
-1. Berechtigungsmatrix anonym und Fahrer.
+1. Berechtigungsmatrix: ohne Sitzung, anderer anonymer Sitzungsbenutzer,
+   Fahrer nach Release und anonymer Fahrer mit Steuerung (D73).
 2. Bösartige SVG-Uploads; Asset-Header.
 3. Zwei Tabs: 409, 403 und Revisionsprüfung.
 4. Veröffentlichen an einen anonymen Betrachter, historische Veröffentlichung
@@ -216,13 +217,16 @@ SignalR ab:
    verworfen.
 6. `ResumeCarControl`.
 
-Die Datei legt einen eigenen getaggten Benutzer und ein eigenes Fahrzeug an
-und räumt sie danach wieder auf.
+Alle Live-Tests nutzen anonyme Sitzungsbenutzer (`GET /api/user/me`) und
+erwerben die Steuerung über ein simuliertes Onboard (`testing/live.ts`), wie
+auf der Webseite. Sie legen eigene getaggte Fahrzeuge an und räumen
+Fahrzeuge und ihre Sitzungsbenutzer danach wieder auf (B6).
 
 **Live-Lauf am 2026-11-02 bestanden** mit `scripts/overlay-check.sh
 --start-server` gegen die PostgreSQL-Testdatenbank: alle 6 Szenarien grün,
 zusammen mit den Live-Tests aus AP05 (3), AP09 (5) und AP13 (1); Vitest
-gesamt 742/742, alle Schritte des Skripts ok.
+gesamt 742/742, alle Schritte des Skripts ok. Nach D73 erneut bestanden
+(2026-11-02, Vitest 745/745); Datenbank danach im Ausgangsstand.
 
 Nach dem Lauf waren vier anonyme Sitzungsbenutzer (`User_<n>`) aus früheren
 Live-Läufen der Pakete übrig. Sie wurden entfernt. Anonyme Hub-/HTTP-Zugriffe
@@ -310,7 +314,7 @@ Ein Bildschirm-Reader-Test ist nicht Teil der Abnahme.
 | B3 | niedrig | Eine Formel mit mehr als 1000 Zeichen wird beim Speichern mit `OVL_SCHEMA_INVALID` (Schema `maxLength`) abgelehnt, die Analyse meldet dagegen `OVL_LIMIT_EXCEEDED`. Blockiert ist beides; nur der Code unterscheidet sich. | offen; betrifft die Editoranzeige. |
 | B4 | niedrig | Ein dichtes LiDAR-Raster (mehr als 239 Felder) braucht bei Fahrt etwa 7 kB/s, gesamt etwa 9 kB/s je Zuschauer. Das entspricht der Rechnung in T01; das S09-Budget ist für etwa 60 Felder definiert. | bekannte Grenze, kein Fix. |
 | B5 | Info | Ctl kostet bei 10 Hz etwa 107 B je Nachricht, weil die Fahrer-Epoche jedes Mal mitreist. Das liegt im Budget. | Optimierung optional. |
-| B6 | Prozess | Die Live-Tests (§5.1) waren in AP14 zunächst nicht ausgeführt. Bei anonymen Zugriffen legt der Server Sitzungsbenutzer an, die die Live-Tests nicht aufräumen. | Lauf am 2026-11-02 bestanden; Aufräumen anonymer Benutzer offen (niedrig). |
+| B6 | Prozess | Die Live-Tests (§5.1) waren in AP14 zunächst nicht ausgeführt. Bei anonymen Zugriffen legt der Server Sitzungsbenutzer an, die die Live-Tests nicht aufräumen. | **behoben** mit D73: Live-Tests legen ihre anonymen Sitzungsbenutzer gezielt an und löschen sie (nur ohne `LoginName`) samt Setups. |
 | B7 | hoch (Abhängigkeiten) | NuGet-Warnungen im Server-Build: `MessagePack` 2.5.187 (NU1902/NU1903, u. a. GHSA-hv8m-jj95-wg3x, GHSA-vh6j-jc39-fggf), `Microsoft.AspNetCore.SignalR.Protocols.MessagePack` 9.0.3 und `Microsoft.AspNetCore.SignalR.Common` 9.0.3 (NU1903), dazu NU1510 (überflüssige Paketreferenzen). | Bestand vor dem Overlay, nicht in AP14 geändert; Update als eigenes Paket mit Onboard-Kompatibilitätstest empfohlen. |
 | E1 | – | D58: Zählrichtung der LiDAR-Indizes (`scannerClockwise`, Standard `true`) | Hardwaretest nach gesonderter Vereinbarung. |
 | E2 | – | Lesepfade CAN, LiDAR, BMS und CPU nur über die Zustandsabbildung getestet (AP03) | Hardwaretest. |

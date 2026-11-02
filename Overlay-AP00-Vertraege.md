@@ -502,7 +502,8 @@ Arbeitspakete: [Overlay-Arbeitspakete.md](Overlay-Arbeitspakete.md).
 
 - Steuerausgänge und Flow-Signale werden für jeden aktiven Fahrer angezeigt,
   auch für Gast-Fahrer. Maßgeblich ist die Verbindung, die die Steuerung
-  erworben hat. Die HUD-Verwaltung bleibt regulärem Login vorbehalten.
+  erworben hat. Die HUD-Verwaltung bleibt regulärem Login vorbehalten
+  (ersetzt durch D73: Verwalter ist, wer die Steuerung hält; kein Login).
 
 ### D58 – Drehrichtung der LiDAR-Indizes als AP04-Prüfpunkt
 
@@ -625,6 +626,27 @@ Arbeitspakete: [Overlay-Arbeitspakete.md](Overlay-Arbeitspakete.md).
   überschrieben.
 - Aufbewahrt werden die letzten 5 Sitzungen je Fahrzeug; eine angebotene
   Konfliktsicherung überlebt so weiteres Bearbeiten.
+
+### D73 – HUD-Verwalter ist, wer die Steuerung hält
+
+- Die Webseite hat keine Benutzerkonten; Nutzer sind anonyme
+  Sitzungsbenutzer (Cookie). Den Fahrzeugzugang weist die SSH-Key-Challenge
+  bei `AquireCarControl` nach.
+- Verwalter (Entwurf lesen/speichern, Veröffentlichen, Verlauf,
+  Wiederherstellen, Asset-Upload, LiDAR-Einrichtung, Abhängigkeitsauskunft)
+  ist genau der Sitzungsbenutzer, der die Steuerung des verbundenen Fahrzeugs
+  aktuell hält – live laut Server (`CarConnectionStore`: Onboard verbunden,
+  Steuersitzung aktiv, `DriverId` = Benutzer der Anfrage). Kein Login, kein
+  `UserSetup`.
+- Fahrzeug offline, Steuerung freigegeben oder übernommen → kein Verwalter.
+  Der Editor bearbeitet dann nur lokal (AP09) und speichert, sobald die
+  Steuerung zurück ist.
+- Fehlercodes: ohne Sitzungsbenutzer `OVL_API_SESSION_REQUIRED` (401), sonst
+  `OVL_API_NOT_DRIVER` (403). `OVL_API_LOGIN_REQUIRED` und
+  `OVL_API_NO_CAR_ACCESS` entfallen.
+- Betrachterrechte (D69, D70) bleiben unverändert. Die Stream-Freigabe
+  (`EnsureDriverCanManageStreamAsync`) nutzt dieselbe Prüfung.
+- Ersetzt die Login-Regel aus D57 und API §1.
 
 ## Spezifikationsstand
 
@@ -757,6 +779,7 @@ Gerätelauf ([modules §4](Shared/Overlay/modules/README.md)).
 | 2026-11-02 | AP08: D71; Laufzeit-Diagnosecodes `OVL_RUNTIME_*`; Frame-Zeiten der Laufzeit-Fixtures relativ zu t = 0 | AP08, AP10, AP11, AP14 |
 | 2026-11-02 | AP13 Teil 1: `GET published`/`publications/{id}` liefern `assets` (Metadaten je Asset, API §3); `ResumeCarControl` bindet die Fahrerverbindung nach Reconnect neu (Telemetrievertrag §7) | AP02, AP03, AP08, AP13 |
 | 2026-11-02 | AP06 auf dem Server registriert: Veröffentlichen prüft Formeln, D66 greift nur noch ohne registrierte Prüfung; `LidarGrid`-Kanäle sind kein Formelwert; Abhängigkeitsauskunft (`dependencies`) umgesetzt | AP02, AP06, AP13 |
+| 2026-11-02 | D73: Verwalter ist der Sitzungsbenutzer, der die Steuerung des verbundenen Fahrzeugs hält (ersetzt Login-Regel aus D57, API §1); Codes `OVL_API_SESSION_REQUIRED` statt `OVL_API_LOGIN_REQUIRED`, `OVL_API_NO_CAR_ACCESS` entfällt; Stream-Freigabe folgt derselben Regel | AP02, AP04, AP09, AP13, AP14 |
 
 ## Prüfpunkte nach Freigabe
 

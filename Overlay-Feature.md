@@ -44,8 +44,10 @@ LiDAR-Felder sind insbesondere keine Garantie für freien Raum.
 - Es gibt genau einen gemeinsamen serverseitigen Entwurf je Fahrzeug.
   Änderungen werden automatisch als Entwurf gespeichert; Veröffentlichung ist
   immer eine separate, ausdrückliche Aktion.
-- Verwaltungszugriff erfordert regulären Login und aktive Fahrzeugkontrolle.
-  Eine zusätzliche Fahrzeug-Verwalterrolle wird nicht eingeführt.
+- Verwaltungszugriff hat genau der Sitzungsbenutzer, der die Steuerung des
+  verbundenen Fahrzeugs aktuell hält (D73). Ein Login gibt es auf der Webseite
+  nicht; den Fahrzeugzugang weist die SSH-Key-Challenge beim Steuerungserwerb
+  nach. Eine zusätzliche Fahrzeug-Verwalterrolle wird nicht eingeführt.
 - Nach Kontrollverlust darf am geladenen Stand lokal weitergearbeitet werden,
   aber nicht auf dem Server gespeichert oder veröffentlicht werden.
 - Bei konkurrierenden Änderungen hat der Serverstand Vorrang. Es gibt weder
@@ -83,8 +85,9 @@ LiDAR-Felder sind insbesondere keine Garantie für freien Raum.
   Herkunft von Onboard-Daten ausdrücklich prüfen; bestehende Zugriffe sind
   keine pauschal ausreichende Berechtigungsgrundlage.
 - Eine einheitliche Fahrzeug-Verwalterrolle ist im geprüften Code nicht
-  vorhanden. Für Stream-Verwaltung existiert bereits die Prüfung auf regulären
-  Login, Fahrzeugzugang und aktive Fahrzeugkontrolle.
+  vorhanden. Für Stream-Verwaltung existierte die Prüfung auf regulären
+  Login, Fahrzeugzugang und aktive Fahrzeugkontrolle; seit D73 gilt dort wie
+  für das HUD: Verwalter ist, wer die Steuerung hält.
 - Der Steuerungs-Store unterstützt Konfigurationsmodus und pausierte Updates.
   Dessen bisherige automatische Reaktivierung beim Verlassen darf nicht
   ungeprüft für den Overlay-Editor übernommen werden.
@@ -182,9 +185,11 @@ Maus-/Touch-Eingaben zur Fahransicht nicht unbeabsichtigt abfangen.
 
 Das veröffentlichte HUD darf jeder sehen, der den jeweiligen Fahrzeugstream
 sehen darf. Entwurf und Versionsverlauf vom Server laden, serverseitig speichern,
-veröffentlichen und wiederherstellen darf nur der aktive Fahrer mit regulärem
-Login. Maßgeblich ist die serverseitig geprüfte aktuelle Berechtigung, nicht ein
-alter Clientzustand. Eine aktive Fahrsitzung bleibt auch bei pausierter
+veröffentlichen und wiederherstellen darf nur der Sitzungsbenutzer, der die
+Steuerung des verbundenen Fahrzeugs gerade hält (D73) – kein Login, keine
+Fahrzeugzuordnung. Fahrzeug offline oder Steuerung freigegeben/übernommen
+bedeutet: kein Verwalter. Maßgeblich ist die serverseitig geprüfte aktuelle
+Berechtigung, nicht ein alter Clientzustand. Eine aktive Fahrsitzung bleibt auch bei pausierter
 Steuerwertübertragung die Berechtigungsgrundlage.
 
 Nach Verlust/Abgabe der Kontrolle darf der bereits geöffnete lokale Entwurf
@@ -675,8 +680,9 @@ Es erfolgt keine automatische Einführung auf Server oder Fahrzeug.
 
 - Standard/Varianten, nicht überschriebene Vererbung, Rücksetzen, stabile IDs,
   Löschwarnungen einschließlich lokaler Unterelemente und Deaktivierung.
-- Regulärer aktiver Fahrer versus Zuschauer, Kontrollübergabe bei offenem
-  Editor, serverseitige Prüfung jedes Verwaltungszugriffs.
+- Sitzungsbenutzer mit Steuerung versus anderer Sitzungsbenutzer und Zuschauer,
+  Kontrollübergabe und Fahrzeug offline bei offenem Editor, serverseitige
+  Prüfung jedes Verwaltungszugriffs.
 - Autosave, Verbindungsabbruch, lokale Wiederherstellung, zwei Tabs, Konflikt mit
   neuer Serverrevision; kein Überschreiben und kein Verlust lokaler Sicherungen.
 - Undo/Redo trotz Autosave; unveränderliche Veröffentlichungen und Assets;
