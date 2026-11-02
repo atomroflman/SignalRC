@@ -495,7 +495,8 @@ public class ChannelsController : ControllerBase
         await _controlHub.Clients.Group($"Car-{carId}").ApplyChannelMap(map, hash);
     }
 
-    private static ControlChannelMapItem ToMapItem(CarChannel ch) => new()
+    // Public for tests: the pushed item must carry the server id.
+    public static ControlChannelMapItem ToMapItem(CarChannel ch) => new()
     {
         PinManager = ch.PinManager,
         Address = ch.Address,
@@ -503,6 +504,8 @@ public class ChannelsController : ControllerBase
         MaxResendInterval = ch.MaxResendInterval,
         TestDisabled = ch.TestDisabled,
         Options = DeserializeOptions(ch.OptionsJson),
+        // Without it the onboard stores the channel without id and UpdateChannel(id) no longer finds it.
+        ServerId = ch.Id,
         ModifiedAt = ch.ModifiedAt,
     };
 
