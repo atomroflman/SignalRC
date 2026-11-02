@@ -1,7 +1,9 @@
 // Telemetry diagnostics panel: logic without React. The panel is a reading
 // consumer – it never adds its own requirement, except the explicit
 // "request all channels" toggle, which ends when the panel closes.
-import type { CarSourceProvider, ChannelDiagnostics, LidarGridSummary, ProviderDiagnostics, QualifiedValue, Requirement } from "../sources";
+import type {
+  CarSourceProvider, ChannelDiagnostics, LidarGridSummary, ProviderDiagnostics, QualifiedValue, Requirement, TrafficMeter, TrafficRate, WsCompression,
+} from "../sources";
 
 export const ALL_CHANNELS_CONSUMER = "telemetry-diagnostics:all";
 
@@ -35,6 +37,28 @@ export interface ServerTelemetryDebug {
   interestedConnections: number;
   legacyClients: number;
   channels: ServerChannelDebug[];
+  traffic?: ServerTraffic;
+}
+
+export interface ServerTrafficRate {
+  perSecond: number;
+  /** null: nothing in the window was measured (endpoint not watched long enough). */
+  bytesPerSecond?: number | null;
+  realBytesPerSecond?: number | null;
+  total: { messages: number; measuredMessages: number; bytes: number; realBytes: number };
+}
+
+/** telemetry-debug `traffic` (api/README.md §3). */
+export interface ServerTraffic {
+  windowMs: number;
+  measuring: boolean;
+  measuringSinceAgoMs?: number | null;
+  incoming: ServerTrafficRate;
+  outgoing: ServerTrafficRate;
+  clients: { perSecond: number; bytesPerSecond?: number | null; messages: number; bytes: number }[];
+  incomingMeasure: string;
+  outgoingMeasure: string;
+  compression: string;
 }
 
 export type ServerDebugResult =
@@ -59,7 +83,42 @@ export class TelemetryDiagnosticsSession {
   private all: Requirement | undefined;
   private allNames = "";
 
-  constructor(private readonly provider: CarSourceProvider) {}
+  private releaseMeter: (() => void) | undefined;
+  private clientBase: Record<"tlm" | "ctl", TrafficRate["total"]> | undefined;
+  private serverBase: ServerTraffic | undefined;
+
+  constructor(private readonly provider: CarSourceProvider, private readonly meter?: TrafficMeter) {}
+
+  /** Starts measuring the received traffic; totals count from here. */
+  open() {
+    if (this.releaseMeter || !this.meter) return;
+    this.releaseMeter = this.meter.activate();
+    this.clientBase = { tlm: this.meter.rate("tlm", this.provider.carId).total, ctl: this.meter.rate("ctl", this.provider.carId).total };
+    this.serverBase = undefined;
+  }
+
+  /** Client and server traffic side by side, totals since open(). */
+  traffic(server?: ServerTraffic): TrafficRow[] {
+    if (server && !this.serverBase) this.serverBase = server;
+    const rows: TrafficRow[] = [];
+    if (this.meter) {
+      const compression = this.meter.compression;
+      for (const kind of ["tlm", "ctl"] as const) {
+        const r = this.meter.rate(kind, this.provider.carId);
+        const base = this.clientBase?.[kind] ?? { messages: 0, bytes: 0, realBytes: 0 };
+        rows.push({
+          key: kind === "tlm" ? "browserTlm" : "browserCtl",
+          perSecond: r.perSecond,
+          bytesPerSecond: r.bytesPerSecond,
+          realBytesPerSecond: r.realBytesPerSecond,
+          compression,
+          total: { messages: r.total.messages - base.messages, bytes: r.total.bytes - base.bytes, realBytes: r.total.realBytes - base.realBytes },
+        });
+      }
+    }
+    if (server) rows.push(...serverTrafficRows(server, this.serverBase));
+    return rows;
+  }
 
   get requestingAll() {
     return this.all !== undefined;
@@ -91,7 +150,77 @@ export class TelemetryDiagnosticsSession {
 
   close() {
     this.setRequestAll(false);
+    this.releaseMeter?.();
+    this.releaseMeter = undefined;
   }
+}
+
+export type TrafficRowKey = "browserTlm" | "browserCtl" | "serverIn" | "serverOut" | "client";
+
+export interface TrafficRow {
+  key: TrafficRowKey;
+  /** Anonymous client number (1 = busiest), only for "client". */
+  index?: number;
+  perSecond: number;
+  /** null: not measured. */
+  bytesPerSecond: number | null;
+  realBytesPerSecond: number | null;
+  /** WebSocket compression of this hop; "none" = compressed equals transferred. */
+  compression: WsCompression;
+  /** Since the panel opened (server: since the first server state of this opening); null if unknown. */
+  total: { messages: number; bytes: number; realBytes: number } | null;
+}
+
+const serverCompression = (c: string): WsCompression => (c === "none" ? "none" : c === "deflate" ? "deflate" : "unknown");
+
+export function serverTrafficRows(server: ServerTraffic, base?: ServerTraffic): TrafficRow[] {
+  const since = (now: ServerTrafficRate, then?: ServerTrafficRate) => ({
+    messages: now.total.messages - (then?.total.messages ?? now.total.messages),
+    bytes: now.total.bytes - (then?.total.bytes ?? now.total.bytes),
+    realBytes: now.total.realBytes - (then?.total.realBytes ?? now.total.realBytes),
+  });
+  const compression = serverCompression(server.compression);
+  const row = (key: TrafficRowKey, r: ServerTrafficRate, then?: ServerTrafficRate): TrafficRow => ({
+    key,
+    perSecond: r.perSecond,
+    bytesPerSecond: r.bytesPerSecond ?? null,
+    realBytesPerSecond: r.realBytesPerSecond ?? null,
+    compression,
+    total: since(r, then),
+  });
+  return [
+    row("serverIn", server.incoming, base?.incoming),
+    row("serverOut", server.outgoing, base?.outgoing),
+    ...server.clients.map((c, i): TrafficRow => ({
+      key: "client", index: i + 1, perSecond: c.perSecond, bytesPerSecond: c.bytesPerSecond ?? null,
+      realBytesPerSecond: null, compression, total: null,
+    })),
+  ];
+}
+
+/** Messages flow but the server has no byte figures yet (it measures only while asked). */
+export function serverUnmeasured(t: ServerTraffic | undefined): boolean {
+  if (!t) return false;
+  return (t.incoming.perSecond > 0 && t.incoming.bytesPerSecond == null) || (t.outgoing.perSecond > 0 && t.outgoing.bytesPerSecond == null);
+}
+
+/** B/s below 1000, then kB/s and MB/s (decimal units). */
+export function formatBytes(bytes: number | null | undefined, perSecond = false): string {
+  if (bytes === null || bytes === undefined || !Number.isFinite(bytes)) return "–";
+  const unit = perSecond ? "/s" : "";
+  if (bytes < 1000) return `${Math.round(bytes)} B${unit}`;
+  if (bytes < 1_000_000) return `${(bytes / 1000).toFixed(1)} kB${unit}`;
+  return `${(bytes / 1_000_000).toFixed(2)} MB${unit}`;
+}
+
+export function formatPerSecond(n: number): string {
+  return n >= 10 ? `${Math.round(n)}/s` : `${n.toFixed(1)}/s`;
+}
+
+/** real ÷ transferred, e.g. "×3.2"; how much delta and compact coding save. */
+export function savingFactor(real: number | null, transferred: number | null): string {
+  if (!real || !transferred) return "–";
+  return `×${(real / transferred).toFixed(1)}`;
 }
 
 export interface DiagnosticsRow {

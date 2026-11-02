@@ -12,6 +12,13 @@ namespace SignalRC.Server.Telemetry;
 public sealed class TelemetryRelayLog(ILogger logger, TimeProvider time)
 {
     public const string Category = "SignalRC.Server.Telemetry.TelemetryRelay.Diagnostics";
+
+    /// <summary>Traffic of a vehicle; Measure re-serialises one delta and is called at most once per summary.</summary>
+    public interface ITrafficSource
+    {
+        (int MessagePackBytes, int RealBytes) Measure(TelemetryDelta delta);
+        TelemetryTrafficSnapshot TrafficSnapshot(long nowMs);
+    }
     public static readonly TimeSpan Interval = TimeSpan.FromSeconds(5);
 
     private sealed class Window
@@ -43,7 +50,7 @@ public sealed class TelemetryRelayLog(ILogger logger, TimeProvider time)
     }
 
     /// <summary>An accepted delta; <paramref name="names"/> resolves channel ids for the details.</summary>
-    public void Delta(int carId, TelemetryDelta delta, IReadOnlyDictionary<int, string> names)
+    public void Delta(int carId, TelemetryDelta delta, IReadOnlyDictionary<int, string> names, ITrafficSource? traffic = null)
     {
         if (!logger.IsEnabled(LogLevel.Information)) return;
         if (logger.IsEnabled(LogLevel.Trace))
@@ -69,7 +76,7 @@ public sealed class TelemetryRelayLog(ILogger logger, TimeProvider time)
             }
             foreach (var id in delta.Touched) w.TouchedIds.Add(id);
             for (var i = 0; i + 1 < delta.TouchedAged.Length; i += 2) w.TouchedIds.Add(delta.TouchedAged[i]);
-            Flush(carId, w, names);
+            if (Flush(carId, w, names) && traffic != null) LogTraffic(carId, delta, traffic);
         }
     }
 
@@ -114,10 +121,24 @@ public sealed class TelemetryRelayLog(ILogger logger, TimeProvider time)
     public void Demand(int carId, int[] previous, int[] demand) =>
         logger.LogInformation("Telemetry car {CarId}: demand to onboard [{Demand}] (was [{Previous}])", carId, string.Join(", ", demand), string.Join(", ", previous));
 
-    private void Flush(int carId, Window w, IReadOnlyDictionary<int, string> names)
+    /// <summary>
+    /// Rates of the last 5 s; bytes from one re-serialised sample delta (this one)
+    /// and, for Tlm, the measured bytes while the diagnostics endpoint is watched.
+    /// </summary>
+    private void LogTraffic(int carId, TelemetryDelta delta, ITrafficSource source)
+    {
+        var (messagePack, real) = source.Measure(delta);
+        var t = source.TrafficSnapshot(Now);
+        logger.LogInformation(
+            "Telemetry car {CarId} traffic: in {InPerSecond} deltas/s, sample delta {MessagePackBytes} B MessagePack / {RealBytes} B real JSON (≈ {InBytesPerSecond} B/s); out {OutPerSecond} Tlm/s to {Clients} clients, {OutBytesPerSecond} B/s JSON",
+            carId, t.Incoming.PerSecond, messagePack, real, Math.Round(messagePack * t.Incoming.PerSecond),
+            t.Outgoing.PerSecond, t.Clients.Count, t.Outgoing.BytesPerSecond?.ToString() ?? "not measured");
+    }
+
+    private bool Flush(int carId, Window w, IReadOnlyDictionary<int, string> names)
     {
         var now = Now;
-        if (w.EmittedAt != long.MinValue && now - w.EmittedAt < Interval.TotalMilliseconds) return;
+        if (w.EmittedAt != long.MinValue && now - w.EmittedAt < Interval.TotalMilliseconds) return false;
         var windowMs = w.EmittedAt == long.MinValue ? 0 : now - w.EmittedAt;
         logger.LogInformation(
             "Telemetry car {CarId}: {Deltas} deltas in {WindowMs} ms (changed {Changed}, touched {Touched}, legacy values {Legacy}), dropped {DroppedOldSeq} with old seq, rejected {Rejected} of foreign origin; epoch {Epoch} seq {Seq}, longest value {MaxValueLength} chars",
@@ -130,6 +151,7 @@ public sealed class TelemetryRelayLog(ILogger logger, TimeProvider time)
                 string.Join(", ", w.TouchedIds));
         }
         w.Reset(now);
+        return true;
     }
 
     private static string Name(IReadOnlyDictionary<int, string> names, int id) => names.GetValueOrDefault(id) ?? "?";

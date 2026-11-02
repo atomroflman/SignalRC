@@ -8,8 +8,8 @@ import { useI18n } from "@/i18n/provider";
 import { LIDAR_FIELDS, sharedSourceHub, type CarSourceProvider, type HubState, type LidarGridSummary } from "../sources";
 import type { IntegrationMessages } from "./messages";
 import {
-  TelemetryDiagnosticsSession, diagnosticsRows, fetchServerDebug, formatMs, stateText, truncate, wallTime,
-  type DiagnosticsRow, type ServerDebugResult, type StateTone,
+  TelemetryDiagnosticsSession, diagnosticsRows, serverUnmeasured, fetchServerDebug, formatBytes, formatMs, formatPerSecond, savingFactor, stateText, truncate, wallTime,
+  type DiagnosticsRow, type ServerDebugResult, type StateTone, type TrafficRow,
 } from "./telemetry-diagnostics";
 
 type Messages = IntegrationMessages["telemetryDiagnostics"];
@@ -61,12 +61,28 @@ function DiagnosticsBody({ carId, provider: given, m }: { carId: number; provide
 }
 
 export function DiagnosticsView({ provider, m }: { provider: CarSourceProvider; m: Messages }) {
-  const session = useMemo(() => new TelemetryDiagnosticsSession(provider), [provider]);
+  const session = useMemo(() => new TelemetryDiagnosticsSession(provider, sharedSourceHub().traffic), [provider]);
   const [, rerender] = useReducer((n: number) => n + 1, 0);
   const [server, setServer] = useState<ServerDebugResult | undefined>(undefined);
   const [loading, setLoading] = useState(false);
+  const [live, setLive] = useState(false);
+
+  // Polling keeps the server measuring bytes (it measures only while asked).
+  useEffect(() => {
+    if (!live) return;
+    let cancelled = false;
+    const timer = setInterval(() => {
+      void fetchServerDebug(provider.carId).then((r) => {
+        if (cancelled) return;
+        setServer(r);
+        if (!r.ok) setLive(false);
+      });
+    }, 2000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [live, provider.carId]);
 
   useEffect(() => {
+    session.open();
     const unsubscribe = provider.subscribe(() => {
       session.refresh();
       rerender();
@@ -128,6 +144,11 @@ export function DiagnosticsView({ provider, m }: { provider: CarSourceProvider; 
         <button type="button" className="rounded border border-zinc-600 bg-zinc-800 px-2 py-0.5 hover:bg-zinc-700" disabled={loading} onClick={() => void loadServer()}>
           {loading ? m.loadingServer : server ? m.reloadServer : m.loadServer}
         </button>
+        {server?.ok && (
+          <button type="button" className="rounded border border-zinc-600 bg-zinc-800 px-2 py-0.5 hover:bg-zinc-700" aria-pressed={live} onClick={() => setLive(!live)}>
+            {live ? m.traffic.stopRefresh : m.traffic.liveRefresh}
+          </button>
+        )}
         {server && !server.ok && <span className="text-red-300" role="alert">{m.serverError(server.status)}</span>}
         {server?.ok && <span className="text-zinc-500">{m.serverLoaded(new Date(server.loadedAt).toLocaleTimeString())}</span>}
       </div>
@@ -142,6 +163,8 @@ export function DiagnosticsView({ provider, m }: { provider: CarSourceProvider; 
           <dd>{idList(serverState.demand)} · {m.interested(serverState.interestedConnections)}{serverState.legacyClients > 0 ? ` · ${m.legacy(serverState.legacyClients)}` : ""}</dd>
         </dl>
       )}
+
+      <TrafficTable rows={session.traffic(serverState?.traffic)} serverUnmeasured={serverUnmeasured(serverState?.traffic)} m={m} />
 
       {rows.length === 0 ? (
         <div className="text-zinc-500">{m.noChannels}</div>
@@ -171,6 +194,47 @@ export function DiagnosticsView({ provider, m }: { provider: CarSourceProvider; 
           </table>
         </div>
       )}
+    </div>
+  );
+}
+
+function TrafficTable({ rows, serverUnmeasured, m }: { rows: TrafficRow[]; serverUnmeasured: boolean; m: Messages }) {
+  const t = m.traffic;
+  return (
+    <div className="flex flex-col gap-1 rounded border border-zinc-800 p-1" data-ovl-diag-traffic="">
+      <div className="font-semibold text-zinc-400">{t.title}</div>
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse text-left font-mono">
+          <thead className="text-zinc-500">
+            <tr>
+              <th className="pr-2" />
+              <th className="pr-2">{t.col.messages}</th>
+              <th className="pr-2">{t.col.transferred}</th>
+              <th className="pr-2">{t.col.compressed}</th>
+              <th className="pr-2">{t.col.real}</th>
+              <th className="pr-2">{t.col.factor}</th>
+              <th className="pr-2">{t.col.total}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={`${r.key}${r.index ?? ""}`} className="border-t border-zinc-800" data-ovl-diag-traffic-row={r.key}>
+                <td className="whitespace-pre pr-2 font-sans">{r.key === "client" ? t.rows.client(r.index ?? 0) : t.rows[r.key]}</td>
+                <td className="pr-2">{formatPerSecond(r.perSecond)}</td>
+                <td className="pr-2">{r.bytesPerSecond === null ? t.notMeasured : formatBytes(r.bytesPerSecond, true)}</td>
+                <td className="pr-2 font-sans">{t.compression[r.compression]}</td>
+                <td className="pr-2">{r.realBytesPerSecond === null ? "–" : formatBytes(r.realBytesPerSecond, true)}</td>
+                <td className="pr-2">{savingFactor(r.realBytesPerSecond, r.bytesPerSecond)}</td>
+                <td className="pr-2">{r.total ? `${r.total.messages} / ${formatBytes(r.total.bytes)} / ${formatBytes(r.total.realBytes)}` : "–"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {serverUnmeasured && <div className="text-amber-300">{t.measuringHint}</div>}
+      <ul className="list-disc pl-4 text-zinc-500">
+        {t.legend.map((l) => <li key={l}>{l}</li>)}
+      </ul>
     </div>
   );
 }

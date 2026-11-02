@@ -52,7 +52,7 @@ public sealed class TelemetryRelay(
         public long Touches;
     }
 
-    private sealed class Car
+    private sealed class Car(long createdAt) : TelemetryRelayLog.ITrafficSource
     {
         public readonly object Lock = new();
         public string? OnboardConnection;
@@ -72,6 +72,28 @@ public sealed class TelemetryRelay(
         public long AcceptedDeltas;
         public long DroppedOldSeq;
         public readonly Dictionary<int, Counter> Counters = [];
+        public readonly TelemetryTraffic Traffic = new(createdAt);
+
+        public IEnumerable<TelemetryTraffic.FullValue> FullValues(IEnumerable<int> ids)
+        {
+            foreach (var id in ids)
+            {
+                if (Cache.TryGetValue(id, out var e)) yield return new(id, Names.GetValueOrDefault(id), e.Value, e.State, e.AgeMs);
+            }
+        }
+
+        public static IEnumerable<int> ContainedIds(IEnumerable<int> changed, int[] touched, IReadOnlyList<int> touchedAged)
+        {
+            foreach (var id in changed) yield return id;
+            foreach (var id in touched) yield return id;
+            for (var i = 0; i + 1 < touchedAged.Count; i += 2) yield return touchedAged[i];
+        }
+
+        // Called by the log at most once per summary, under Lock.
+        public (int MessagePackBytes, int RealBytes) Measure(TelemetryDelta delta) =>
+            (TelemetryTraffic.MessagePackBytes(delta), TelemetryTraffic.RealJsonBytes(FullValues(ContainedIds(delta.Changed.Select(c => c.Id), delta.Touched, delta.TouchedAged))));
+
+        public TelemetryTrafficSnapshot TrafficSnapshot(long nowMs) => Traffic.Snapshot(nowMs);
     }
 
     private readonly Dictionary<int, Car> _cars = [];
@@ -81,7 +103,7 @@ public sealed class TelemetryRelay(
     {
         lock (_carsLock)
         {
-            if (!_cars.TryGetValue(carId, out var car)) _cars[carId] = car = new Car();
+            if (!_cars.TryGetValue(carId, out var car)) _cars[carId] = car = new Car(Now);
             return car;
         }
     }
@@ -152,6 +174,7 @@ public sealed class TelemetryRelay(
             }
             if (delta.Seq <= car.OnboardSeq)
             {
+                car.Traffic.Incoming(now);
                 car.DroppedOldSeq++;
                 _log.DroppedOldSeq(carId, delta, car.OnboardSeq, car.Names);
                 return;
@@ -168,7 +191,16 @@ public sealed class TelemetryRelay(
             foreach (var id in delta.Touched) Touch(car, id, delta.AgeMs, now);
             for (var i = 0; i + 1 < delta.TouchedAged.Length; i += 2) Touch(car, delta.TouchedAged[i], delta.TouchedAged[i + 1], now);
             unknownId = changed.Any(c => !car.Names.ContainsKey(c.Id));
-            _log.Delta(carId, delta, car.Names);
+            if (car.Traffic.Measuring(now))
+            {
+                var (bytes, real) = car.Measure(delta);
+                car.Traffic.Incoming(now, bytes, real);
+            }
+            else
+            {
+                car.Traffic.Incoming(now);
+            }
+            _log.Delta(carId, delta, car.Names, car);
         }
         if (unknownId) await RefreshNamesAsync(carId, car);
         await ForwardAsync(carId, car, delta.AgeMs, changed, delta.Touched, delta.TouchedAged);
@@ -257,6 +289,7 @@ public sealed class TelemetryRelay(
                 .Select(id => Change(id, car.Cache[id], (int)Math.Min(int.MaxValue, car.Cache[id].AgeMs + (now - car.Cache[id].ReceivedAt)), -1))
                 .ToArray();
             seq = ++car.ClientSeq;
+            if (snapshot.Length > 0) CountOutgoing(car, now, connectionId, carId, seq, 0, snapshot, [], []);
         }
         if (snapshot.Length > 0) await transport.SendSamplesAsync(connectionId, carId, seq, 0, snapshot, [], []);
         await UpdateDemandAsync(carId, car);
@@ -287,6 +320,7 @@ public sealed class TelemetryRelay(
             lock (car.Lock)
             {
                 changed = car.Interests.Remove(connectionId) | car.LegacyClients.Remove(connectionId);
+                car.Traffic.Forget(connectionId);
             }
             OnboardDisconnected(carId, connectionId);
             if (changed) await UpdateDemandAsync(carId, car);
@@ -304,6 +338,7 @@ public sealed class TelemetryRelay(
     private async Task ForwardAsync(int carId, Car car, int defaultAge, List<(int Id, Entry Entry)> changed, int[] touched, int[] touchedAged)
     {
         var sends = new List<(string Connection, long Seq, object[][] Changed, int[] Touched, int[] TouchedAged)>();
+        var now = Now;
         lock (car.Lock)
         {
             foreach (var (connection, ids) in car.Interests)
@@ -316,13 +351,29 @@ public sealed class TelemetryRelay(
                     if (ids.Contains(touchedAged[i])) ta.AddRange([touchedAged[i], touchedAged[i + 1]]);
                 }
                 if (c.Length == 0 && t.Length == 0 && ta.Count == 0) continue;
-                sends.Add((connection, ++car.ClientSeq, c, t, ta.ToArray()));
+                var seq = ++car.ClientSeq;
+                var taArray = ta.ToArray();
+                CountOutgoing(car, now, connection, carId, seq, defaultAge, c, t, taArray);
+                sends.Add((connection, seq, c, t, taArray));
             }
         }
         foreach (var s in sends)
         {
             await transport.SendSamplesAsync(s.Connection, carId, s.Seq, defaultAge, s.Changed, s.Touched, s.TouchedAged);
         }
+    }
+
+    /// <summary>Counts one Tlm; its bytes only while the diagnostics are watched. Under car.Lock.</summary>
+    private static void CountOutgoing(Car car, long now, string connection, int carId, long seq, int ageMs, object[][] changed, int[] touched, int[] touchedAged)
+    {
+        if (!car.Traffic.Measuring(now))
+        {
+            car.Traffic.Outgoing(now, connection);
+            return;
+        }
+        var bytes = TelemetryTraffic.TlmJsonBytes(carId, seq, ageMs, changed, touched, touchedAged);
+        var real = TelemetryTraffic.RealJsonBytes(car.FullValues(Car.ContainedIds(changed.Select(c => (int)c[0]), touched, touchedAged)));
+        car.Traffic.Outgoing(now, connection, bytes, real);
     }
 
     /// <summary>Old clients get changed values only, the way they always got them; NoData is not sent.</summary>
@@ -346,12 +397,12 @@ public sealed class TelemetryRelay(
     /// </summary>
     public TelemetryRelaySnapshot Snapshot(int carId)
     {
-        Car? car;
-        lock (_carsLock) _cars.TryGetValue(carId, out car);
-        if (car == null) return new TelemetryRelaySnapshot(false, null, -1, null, 0, 0, [], null, 0, 0, []);
+        // Asking for the snapshot is what switches byte measuring on (TelemetryTraffic.WatchTimeout).
+        var car = Get(carId);
         var now = Now;
         lock (car.Lock)
         {
+            car.Traffic.Watch(now);
             var interested = new Dictionary<int, int>();
             foreach (var ids in car.Interests.Values)
             {
@@ -385,7 +436,8 @@ public sealed class TelemetryRelay(
                 car.DemandSentAt == long.MinValue ? null : now - car.DemandSentAt,
                 car.Interests.Count,
                 car.LegacyClients.Count,
-                channels);
+                channels,
+                car.Traffic.Snapshot(now));
         }
     }
 
@@ -468,4 +520,5 @@ public sealed record TelemetryRelaySnapshot(
     long? DemandSentAgoMs,
     int InterestedConnections,
     int LegacyClients,
-    IReadOnlyList<TelemetryRelayChannelSnapshot> Channels);
+    IReadOnlyList<TelemetryRelayChannelSnapshot> Channels,
+    TelemetryTrafficSnapshot Traffic);

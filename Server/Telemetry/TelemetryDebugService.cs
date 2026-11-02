@@ -36,7 +36,8 @@ public sealed record TelemetryDebugState(
     long? DemandSentAgoMs,
     int InterestedConnections,
     int LegacyClients,
-    IReadOnlyList<TelemetryDebugChannel> Channels);
+    IReadOnlyList<TelemetryDebugChannel> Channels,
+    TelemetryTrafficSnapshot Traffic);
 
 /// <summary>
 /// GET telemetry-debug (Shared/Overlay/api/README.md §3): the relay's view of a
@@ -94,7 +95,8 @@ public sealed partial class TelemetryDebugService(SignalRCContext db, OverlayAcc
             snapshot.DemandSentAgoMs,
             snapshot.InterestedConnections,
             snapshot.LegacyClients,
-            channels);
+            channels,
+            snapshot.Traffic);
     }
 
     public static string Truncate(string value) => value.Length <= MaxValueChars ? value : value[..MaxValueChars] + "…";

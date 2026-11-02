@@ -5,6 +5,7 @@
 import type { CtlMessage } from "./control-display";
 import { CarSourceProvider, type ProviderOptions } from "./provider";
 import type { TlmChange } from "./telemetry-buffer";
+import { MeteredProtocol, TrafficMeter, meteredWebSocket, type RealSize } from "./traffic";
 import type { TimerClock } from "./types";
 import { systemClock } from "./types";
 
@@ -37,10 +38,15 @@ export interface SourceHubOptions {
 
 const RETRY_MS = [0, 1000, 2000, 5000, 10000];
 
-async function defaultCreateConnection(): Promise<HubLike> {
+async function defaultCreateConnection(meter: TrafficMeter, realSize: RealSize): Promise<HubLike> {
   const signalR = await import("@microsoft/signalr");
+  const WebSocket = meteredWebSocket(meter);
   return new signalR.HubConnectionBuilder()
-    .withUrl("/hubs/connection")
+    // HttpConnection takes a WebSocket constructor (options.WebSocket, not in the public typings);
+    // ours only reports the negotiated extensions (permessage-deflate or not).
+    .withUrl("/hubs/connection", (WebSocket ? { WebSocket } : {}) as import("@microsoft/signalr").IHttpConnectionOptions)
+    // JSON as before; the wrapper measures received frames only while a diagnostics panel is open.
+    .withHubProtocol(new MeteredProtocol(new signalR.JsonHubProtocol(), meter, realSize))
     // Never give up while sources are in use.
     .withAutomaticReconnect({ nextRetryDelayInMilliseconds: (c) => RETRY_MS[Math.min(c.previousRetryCount, RETRY_MS.length - 1)] })
     .build();
@@ -64,9 +70,13 @@ export class SourceHub {
   private readonly createConnection: () => Promise<HubLike>;
   private readonly fetchJson: (url: string) => Promise<unknown>;
   private readonly clock: TimerClock;
+  /** Received Tlm/Ctl traffic; measures only while activated (diagnostics panel). */
+  readonly traffic: TrafficMeter;
 
   constructor(options: SourceHubOptions = {}) {
-    this.createConnection = options.createConnection ?? defaultCreateConnection;
+    this.traffic = new TrafficMeter(options.clock ?? systemClock);
+    const realSize: RealSize = (target, args) => this.cars.get(Number(args[0]))?.provider.realSize(target, args);
+    this.createConnection = options.createConnection ?? (() => defaultCreateConnection(this.traffic, realSize));
     this.fetchJson = options.fetchJson ?? defaultFetchJson;
     this.clock = options.clock ?? systemClock;
   }

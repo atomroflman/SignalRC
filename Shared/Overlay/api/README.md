@@ -69,7 +69,7 @@ gehaltenen Revisionen oder einer Veröffentlichung, werden gelöscht.
 | GET | `dependencies?channel=<name>` | Verwalter | `200 { draft: [{ kind, location }], published: [{ kind, location }] }` für Warnungen der Kanalverwaltung. `kind`: `telemetry` (`tel()`, LiDAR-Quelle, Fristüberschreibung) oder `output` (`out()`); `location` wie bei Diagnosen. Deaktivierte Teile zählen mit; historische Veröffentlichungen nicht. |
 | GET | `sources` | Betrachter | `200 { telemetry: [{ id, channelName, dataType, unit, decimals, readIntervalTicks, zoneLimitsMm }], outputs: [{ id, channelName }] }`, sonst `404`. Quellkatalog für das Live-HUD (D69, D70): ohne Login und ohne `UserSetup`, ohne personenbezogene Felder. `dataType` wie in `GET /api/car/{id}/telemetry` (Enum-Name klein); `zoneLimitsMm` nur, wenn in den Kanaloptionen fünf positive Werte stehen, sonst `null`. `outputs` ordnet die `CarChannel.Id` aus `Ctl` den `out()`-Namen zu. |
 | POST | `lidar-grid-source` | Verwalter | richtet den LiDAR-Rasterkanal ein (LiDAR-Vertrag §7): `200 { created: bool }`; Umsetzung in AP04 |
-| GET | `telemetry-debug` | Verwalter | Diagnose des Telemetrie-Relays (Telemetrie-Vertrag §5 „Diagnose“): `200 { carId, onboardConnected, epoch, seq, lastMessageAgoMs, acceptedDeltas, droppedOldSeq, demand, demandSentAgoMs, interestedConnections, legacyClients, channels }`, `Cache-Control: no-store`; ohne Sitzung `401`, ohne Steuerung `403` (D73), unbekanntes Fahrzeug `404` (siehe unten) |
+| GET | `telemetry-debug` | Verwalter | Diagnose des Telemetrie-Relays (Telemetrie-Vertrag §5 „Diagnose“): `200 { carId, onboardConnected, epoch, seq, lastMessageAgoMs, acceptedDeltas, droppedOldSeq, demand, demandSentAgoMs, interestedConnections, legacyClients, channels, traffic }`, `Cache-Control: no-store`; ohne Sitzung `401`, ohne Steuerung `403` (D73), unbekanntes Fahrzeug `404` (siehe unten) |
 
 **Telemetrie-Diagnose (`GET telemetry-debug`):** zeigt, was der Server vom
 Fahrzeug hat, damit sich „kommt nicht am Server an“ von „kommt nicht im Client
@@ -97,6 +97,19 @@ an“ trennen lässt. Nur lesend; der Aufruf ändert weder Bedarf noch Interesse
   `occupied` = belegte Felder (≠ `0xFFFF`) von 480, `error` die erste verletzte
   Regel des LiDAR-Vertrags §4/§5 (`format`, `base64`, `length`, `index`) oder
   `null`. Der Client dekodiert mit denselben Regeln.
+- `traffic`: Datenraten des Fahrzeugs (Telemetrie-Vertrag §5 „Datenrate“):
+  `{ windowMs, measuring, measuringSinceAgoMs, incoming, outgoing, clients,
+  incomingMeasure, outgoingMeasure, compression }`. `incoming` (Onboard →
+  Server, `UpdateTelemetrySamples`) und `outgoing` (Server → alle Browser,
+  `Tlm`) jeweils `{ perSecond, bytesPerSecond, realBytesPerSecond, total:
+  { messages, measuredMessages, bytes, realBytes } }`; Raten über die letzten
+  5 s, Summen seit dem ersten Kontakt des Relays mit dem Fahrzeug (Bytes nur
+  der gemessenen Nachrichten). `bytesPerSecond`/`realBytesPerSecond` sind
+  `null`, solange im Fenster nichts gemessen wurde. `clients`: je
+  Browser-Verbindung anonym `{ perSecond, bytesPerSecond, messages, bytes }`,
+  meiste Nachrichten zuerst, ohne Kennung. `incomingMeasure`
+  `"messagepack-reserialized"`, `outgoingMeasure` `"json-reserialized"`,
+  `compression` `"none"`. Der Abruf schaltet die Byte-Messung für 30 s ein.
 
 **Asset-Metadaten in Veröffentlichungen:** `assets` enthält für jedes Asset der
 Veröffentlichung die gespeicherten normalisierten Metadaten (`OverlayAsset.MetadataJson`,

@@ -6,7 +6,8 @@ import { ControlDisplayBuffer, type CtlMessage, type LocalControlSource } from "
 import { summarizeLidarGrid, type ChannelDiagnostics, type ProviderDiagnostics } from "./diagnostics";
 import { DEFAULT_ZONE_LIMITS_MM, decodeLidarGrid } from "./lidar-grid";
 import { evaluateSample, expiresAt, staleAfterMs, type Context } from "./quality";
-import { TelemetryBuffer, type TlmMessage } from "./telemetry-buffer";
+import { TelemetryBuffer, type TlmChange, type TlmMessage } from "./telemetry-buffer";
+import { utf8Length } from "./traffic";
 import type {
   ChannelMetadata,
   Dependency,
@@ -28,6 +29,8 @@ export interface ProviderOptions {
   /** Hub invocation; rejects while disconnected. */
   invoke: (name: string, ...args: unknown[]) => Promise<unknown>;
 }
+
+const STATE_NAMES = ["Valid", "Unchecked", "Stale", "Error", "NoData"];
 
 /** Interest changes are coalesced to at most one send per 200 ms (§6). */
 export const INTEREST_INTERVAL_MS = 200;
@@ -490,6 +493,43 @@ export class CarSourceProvider implements OverlaySourceProvider {
       channels,
       now: this.clock.now(),
     };
+  }
+
+  /**
+   * "Real" size of a received Tlm or Ctl (diagnostics): every contained value
+   * in full as JSON – { id, name, value, state, ageMs } per telemetry channel
+   * (confirmations with their cached value), { kind, id, name, value, paused, ageMs }
+   * per control value. Same shape as the server's "real" in telemetry-debug.
+   */
+  realSize(target: string, args: unknown[]): number | undefined {
+    if (target === "Tlm") {
+      const [, , ageMs, changed, touched, touchedAged] = args as [number, number, number, TlmChange[], number[], number[]];
+      const full: object[] = [];
+      for (const c of changed ?? []) {
+        full.push({ id: c[0], name: this.byId.get(c[0])?.name ?? null, value: String(c[1] ?? ""), state: STATE_NAMES[c.length >= 3 ? (c[2] as number) : 0] ?? "Valid", ageMs: c.length >= 4 ? c[3] : ageMs });
+      }
+      const confirm = (id: number, age: number) => {
+        const sample = this.telemetry.samples.get(id);
+        if (sample) full.push({ id, name: this.byId.get(id)?.name ?? null, value: sample.value, state: STATE_NAMES[sample.state] ?? "Valid", ageMs: age });
+      };
+      for (const id of touched ?? []) confirm(id, ageMs);
+      const aged = touchedAged ?? [];
+      for (let i = 0; i + 1 < aged.length; i += 2) confirm(aged[i], aged[i + 1]);
+      return utf8Length(JSON.stringify(full));
+    }
+    if (target === "Ctl") {
+      const [, , , paused, ageMs, outputs, signals, removedOutputs, removedSignals] =
+        args as [number, string, number, boolean, number, [number, number][], [string, number][], number[], string[]];
+      const outName = new Map([...this.outputIds].map(([name, id]) => [id, name]));
+      const full: object[] = [
+        ...(outputs ?? []).map(([id, value]) => ({ kind: "out", id, name: outName.get(id) ?? null, value, paused, ageMs })),
+        ...(signals ?? []).map(([name, value]) => ({ kind: "sig", name, value, paused, ageMs })),
+        ...(removedOutputs ?? []).map((id) => ({ kind: "out", id, name: outName.get(id) ?? null, removed: true })),
+        ...(removedSignals ?? []).map((name) => ({ kind: "sig", name, removed: true })),
+      ];
+      return utf8Length(JSON.stringify(full));
+    }
+    return undefined;
   }
 
   // --- Change signal and aging ---

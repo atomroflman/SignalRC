@@ -3,7 +3,7 @@
 import type { ControlReason } from "./editor-control";
 import type { NoControlHint } from "./publish-model";
 import type { PublicationProblem } from "./published-overlay";
-import type { HubState, InvalidReason, LidarGridSummary } from "../sources";
+import type { HubState, InvalidReason, LidarGridSummary, WsCompression } from "../sources";
 
 const de = {
   hud: {
@@ -174,6 +174,31 @@ const de = {
         length: "Dekodierfehler: Länge",
         index: "Dekodierfehler: Index (sparse)",
       } satisfies Record<NonNullable<LidarGridSummary["error"]>, string>,
+    },
+    traffic: {
+      title: "Datenrate (Fenster 5 s, Summen seit Öffnen)",
+      rows: {
+        browserTlm: "Browser ← Server: Tlm (dieser Client)",
+        browserCtl: "Browser ← Server: Ctl (dieser Client)",
+        serverIn: "Server ← Onboard: Deltas (MessagePack)",
+        serverOut: "Server → alle Browser: Tlm (JSON)",
+        client: (n: number) => `  Client ${n} (anonym)`,
+      },
+      col: { messages: "Nachr./s", transferred: "übertragen", compressed: "komprimiert", real: "real", factor: "real/übertr.", total: "Summe: Nachr. / übertragen / real" },
+      compression: {
+        none: "= übertragen (keine WS-Kompression)",
+        deflate: "WS-Kompression aktiv – Größe hier nicht messbar",
+        unknown: "unbekannt (kein WebSocket offen)",
+      } satisfies Record<WsCompression, string>,
+      notMeasured: "nicht gemessen",
+      measuringHint: "Bytes misst der Server nur, solange der Serverstand abgefragt wird (Live-Aktualisierung); der erste Abruf zeigt deshalb oft nur Nachrichten/s.",
+      legend: [
+        "übertragen: Bytes der empfangenen Nachrichten. Browser: Länge des JSON-Frames (SignalR, mit Trennzeichen), direkt am Protokoll gemessen. Server: mit denselben Hub-Protokollen nachserialisiert (eingehend MessagePack-Frame von UpdateTelemetrySamples, ausgehend JSON-Frame von Tlm).",
+        "komprimiert: Größe nach WebSocket-Kompression (permessage-deflate). SignalR auf Kestrel handelt sie nicht aus, dann gleich „übertragen“.",
+        "real: dieselbe Information, wenn jeder enthaltene Wert vollständig gesendet würde – JSON-Objekte mit ID, Name, Wert, Zustand und Alter, Bestätigungen als volle Werte. real/übertr. zeigt den Effekt von Delta und kompakter Kodierung.",
+      ],
+      liveRefresh: "Live-Aktualisierung (2 s)",
+      stopRefresh: "Live-Aktualisierung beenden",
     },
     reasons: {
       "source-error": "Quellenfehler",
@@ -357,6 +382,31 @@ const en: typeof de = {
         length: "Decode error: length",
         index: "Decode error: index (sparse)",
       },
+    },
+    traffic: {
+      title: "Data rate (5 s window, totals since opening)",
+      rows: {
+        browserTlm: "Browser ← server: Tlm (this client)",
+        browserCtl: "Browser ← server: Ctl (this client)",
+        serverIn: "Server ← onboard: deltas (MessagePack)",
+        serverOut: "Server → all browsers: Tlm (JSON)",
+        client: (n: number) => `  Client ${n} (anonymous)`,
+      },
+      col: { messages: "Msgs/s", transferred: "transferred", compressed: "compressed", real: "real", factor: "real/transf.", total: "Total: msgs / transferred / real" },
+      compression: {
+        none: "= transferred (no WS compression)",
+        deflate: "WS compression active – size not measurable here",
+        unknown: "unknown (no open WebSocket)",
+      },
+      notMeasured: "not measured",
+      measuringHint: "The server measures bytes only while its state is being polled (live refresh); the first request therefore often shows messages/s only.",
+      legend: [
+        "transferred: bytes of the received messages. Browser: length of the JSON frame (SignalR, with separator), measured at the protocol. Server: re-serialised with the same hub protocols (incoming MessagePack frame of UpdateTelemetrySamples, outgoing JSON frame of Tlm).",
+        "compressed: size after WebSocket compression (permessage-deflate). SignalR on Kestrel does not negotiate it; then equal to \"transferred\".",
+        "real: the same information if every contained value were sent in full – JSON objects with id, name, value, state and age, confirmations as full values. real/transf. shows the effect of deltas and compact coding.",
+      ],
+      liveRefresh: "Live refresh (2 s)",
+      stopRefresh: "Stop live refresh",
     },
     reasons: {
       "source-error": "source error",

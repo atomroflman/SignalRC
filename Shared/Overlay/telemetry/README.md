@@ -226,6 +226,50 @@ Gründe: `source-error`, `stale`, `no-data`, `transport`, `vehicle-offline`,
   schaltet die Diagnose ab. Ohne eigenen Eintrag gilt `Default`.
 - **Statusendpunkt** `GET /api/cars/{carId}/overlay/telemetry-debug` für den
   Verwalter (D73): Cache, Bedarf und Interessenten je Kanal (API-Vertrag §3).
+- **Datenrate.** Nachrichten pro Sekunde und Bytes pro Sekunde über ein
+  gleitendes Fenster von 5 s (Eimer zu 250 ms), dazu Summen. Die Messgrößen:
+  - **übertragen:** Bytes der Nachricht im Hub-Protokoll.
+    - Im Browser ist das die UTF-8-Länge des empfangenen JSON-Frames
+      einschließlich Trennzeichen `0x1E`. Gemessen wird am Rohtext, mit einer
+      schlanken Hülle um `JsonHubProtocol` (`MeteredProtocol`).
+    - Im Server erreicht der Hub nur die deserialisierten Argumente. Darum
+      wird mit denselben Protokollen nachserialisiert: eingehend der
+      MessagePack-Frame von `UpdateTelemetrySamples` (Standardoptionen wie
+      `AddMessagePackProtocol`, Invocation-ID mit vier Zeichen geschätzt),
+      ausgehend der JSON-Frame von `Tlm` (JSON-Protokoll der Browser).
+  - **komprimiert:** Größe nach WebSocket-Kompression (permessage-deflate).
+    - SignalR auf Kestrel handelt sie nicht aus: Die Antwort auf ein Angebot
+      enthält keinen `Sec-WebSocket-Extensions`-Header (geprüft mit einem
+      lokalen Server). nginx reicht nur den Upgrade weiter. Damit ist
+      „komprimiert“ gleich „übertragen“.
+    - Der Browser liest die ausgehandelten Erweiterungen am WebSocket ab
+      (eigener WebSocket-Konstruktor über die Option `WebSocket` von
+      `HttpConnection`). Zeigt er doch einmal Kompression an, ist die Größe im
+      Browser nicht messbar und wird so ausgewiesen.
+  - **real:** dieselbe Information, wenn jeder enthaltene Wert vollständig
+    gesendet würde. Das ist ein JSON-Array mit `{ id, name, value, state,
+    ageMs }` je enthaltenem Telemetriekanal, Bestätigungen mit ihrem
+    gespeicherten Wert. Für `Ctl` sind es `{ kind, id, name, value, paused,
+    ageMs }` je Ausgang und Signal. Client und Server verwenden dieselbe
+    Form. „real/übertragen“ zeigt den Effekt von Delta und kompakter
+    Kodierung.
+- **Last der Messung:** Nachrichten werden immer gezählt (Zähler und Eimer).
+  Bytes werden nur gemessen, solange jemand hinschaut:
+  - Im Browser nur, solange ein Diagnose-Panel geöffnet ist; sonst reicht die
+    Hülle nur durch.
+  - Im Server nur, solange `telemetry-debug` innerhalb der letzten 30 s
+    abgefragt wurde. Das Panel fragt mit „Live-Aktualisierung“ alle 2 s ab.
+  - Das Log serialisiert höchstens einmal je 5-s-Zusammenfassung ein
+    Beispiel-Delta (zusätzliche Zeile `… traffic: in … deltas/s, sample
+    delta … B MessagePack / … B real JSON …; out … Tlm/s to … clients …`).
+- **Panel:** Die Tabelle „Datenrate“ zeigt untereinander:
+  - Browser ← Tlm und Browser ← Ctl (dieser Client)
+  - Server ← Onboard und Server → alle Browser
+  - je Client anonym die Anzahl Nachrichten und Bytes
+
+  Die Spalten sind Nachr./s, übertragen, komprimiert, real, real/übertragen
+  und Summe seit Öffnen. Es gibt eine kurze Legende. Die Server-Summen zählen
+  ab dem ersten Serverstand nach dem Öffnen.
 - **Client:** Die aufklappbare „Telemetrie-Diagnose“ (Fahransicht unter der
   Telemetrieleiste, HUD-Editor in der Seitenleiste) liest den gemeinsamen
   Bestand (`CarSourceProvider.diagnostics()`): je Kanal Rohwert, Zustand mit
