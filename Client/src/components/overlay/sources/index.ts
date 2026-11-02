@@ -11,4 +11,6 @@ export { ControlDisplayBuffer, ControlDisplayPublisher, round6 } from "./control
 export type { ControlDisplayPort, CtlMessage, LocalControlSource } from "./control-display";
 export { CarSourceProvider, INTEREST_INTERVAL_MS, parseChannelMetadata } from "./provider";
 export { SourceHub, setSharedSourceHub, sharedSourceHub } from "./hub";
+export { MeteredProtocol, RateWindow, TRAFFIC_WINDOW_MS, TrafficMeter, meteredWebSocket, utf8Length } from "./traffic";
+export type { RealSize, TrafficKind, TrafficRate, TrafficTotal, WsCompression } from "./traffic";
 export type { HubLike, HubState, SourceHubOptions } from "./hub";
