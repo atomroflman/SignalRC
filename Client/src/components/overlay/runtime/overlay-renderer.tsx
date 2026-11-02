@@ -2,8 +2,7 @@
 // AP08 – <OverlayRenderer config assets source clock mode locale scrub? onDiagnostics? />
 // (Shared/Overlay/modules/README.md §1). React renders only the <svg> frame;
 // frames patch the SVG directly. No HTTP, SignalR or control calls here.
-// React in scope: Vitest compiles JSX with the classic runtime.
-import React, { useEffect, useRef, type CSSProperties } from "react";
+import { useEffect, useRef, type CSSProperties } from "react";
 import type { EffectiveConfig } from "../document/types";
 import { animationFrameClock } from "./clock";
 import { OverlayController, type RendererSource } from "./controller";

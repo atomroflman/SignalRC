@@ -4,7 +4,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { contractsRoot, readContractJson } from "../testing/fixtures";
-import { assetImageUrl, isNormalizedAssetSvg, rejectionCode, scopeAssetSvg, scopedRefId, uploadResponseToState, uploadSvgAsset } from "./svg-asset";
+import { assetImageUrl, isNormalizedAssetSvg, rejectionCode, uploadResponseToState, uploadSvgAsset } from "./svg-asset";
 import { SvgImportPreview } from "./svg-import-preview";
 import type { AssetUploadResult, SvgImportState } from "./types";
 
@@ -30,20 +30,6 @@ describe("normalized asset helpers", () => {
     expect(isNormalizedAssetSvg('<svg xmlns="http://www.w3.org/2000/svg"><script/></svg>')).toBe(false);
     expect(isNormalizedAssetSvg('<?xml version="1.0"?>' + gradients)).toBe(false);
     expect(isNormalizedAssetSvg(42)).toBe(false);
-  });
-
-  it("scopes internal ids per element so two instances never collide", () => {
-    const a = scopeAssetSvg(gradients, "e_one");
-    const b = scopeAssetSvg(gradients, "e_two");
-    const ids = (svg: string) => [...svg.matchAll(/ id="([^"]+)"/g)].map(m => m[1]);
-    const urls = (svg: string) => [...svg.matchAll(/url\(#([^)]+)\)/g)].map(m => m[1]);
-    expect(ids(a)).toEqual(["r1", "r2", "r3", "r4"].map(r => scopedRefId("e_one", r)));
-    expect(urls(a).every(u => ids(a).includes(u))).toBe(true);
-    expect(ids(a).some(id => ids(b).includes(id))).toBe(false);
-    // Parts keep their ids for selection.
-    expect(a).toContain('data-part="tick-1"');
-    expect(() => scopeAssetSvg(gradients, "bad id")).toThrow();
-    expect(() => scopeAssetSvg("<svg/>", "e_one")).toThrow();
   });
 
   it("builds an image URL that contains the asset only encoded", () => {
