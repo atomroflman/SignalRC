@@ -25,7 +25,7 @@ public class OverlayController(SignalRCContext context, OverlayService overlay) 
         var result = await overlay.GetPublishedAsync(carId);
         if (result.Error != null) return Problem(result.Error);
         if (result.Value == null) return NoContent();
-        return Ok(new { result.Value.PublicationId, result.Value.Number, result.Value.PublishedAt, document = result.Value.Document });
+        return Ok(new { result.Value.PublicationId, result.Value.Number, result.Value.PublishedAt, document = result.Value.Document, assets = result.Value.Assets });
     }
 
     [HttpGet("assets/{assetId}")]
@@ -94,7 +94,7 @@ public class OverlayController(SignalRCContext context, OverlayService overlay) 
         var result = await overlay.GetPublicationAsync(carId, publicationId, await GetCurrentUserAsync());
         if (result.Error != null) return Problem(result.Error);
         var p = result.Value!;
-        return Ok(new { p.PublicationId, p.Number, p.PublishedAt, document = p.Document });
+        return Ok(new { p.PublicationId, p.Number, p.PublishedAt, document = p.Document, assets = p.Assets });
     }
 
     [HttpPost("publications")]

@@ -48,19 +48,26 @@ gehaltenen Revisionen oder einer Veröffentlichung, werden gelöscht.
 
 | Methode | Pfad | Rolle | Ergebnis |
 | --- | --- | --- | --- |
-| GET | `published` | Betrachter | `200 { publicationId, number, publishedAt, document }` oder `204` |
+| GET | `published` | Betrachter | `200 { publicationId, number, publishedAt, document, assets }` oder `204`; `assets`: `{ [assetId]: metadata }` der Asset-Menge der Veröffentlichung (siehe unten) |
 | GET | `assets/{assetId}` | Betrachter* | `200 image/svg+xml` |
 | GET | `draft` | Verwalter | `200 { revision, document, updatedAt, updatedBy }`; ohne Entwurf `revision: 0` und Startdokument (D22) |
 | PUT | `draft` | Verwalter | Header `If-Match: "<revision>"`, Body Dokument → `200 { revision }` |
 | PATCH | `draft` | Verwalter | Header `If-Match: "<revision>"`, Body `application/json-patch+json` (RFC 6902) → `200 { revision }` |
 | GET | `publications` | Verwalter | `200 [{ id, number, publishedAt, publishedBy, note }]`, neueste zuerst |
-| GET | `publications/{id}` | Verwalter | `200 { …, document }` |
+| GET | `publications/{id}` | Verwalter | `200 { …, document, assets }` (wie `published`) |
 | POST | `publications` | Verwalter | `{ baseRevision, note? }` → `201 { publicationId, number, warnings }` |
 | POST | `draft/restore` | Verwalter | `{ publicationId, baseRevision }` → `200 { revision }` |
 | POST | `assets` | Verwalter | `multipart/form-data` (`file`) → `200 { assetId, metadata, svg, report }` |
 | GET | `dependencies?channel=<name>` | Verwalter | `200 { draft: [{ kind, location }], published: [{ kind, location }] }` für Warnungen der Kanalverwaltung. `kind`: `telemetry` (`tel()`, LiDAR-Quelle, Fristüberschreibung) oder `output` (`out()`); `location` wie bei Diagnosen. Deaktivierte Teile zählen mit; historische Veröffentlichungen nicht. |
 | GET | `sources` | Betrachter | `200 { telemetry: [{ id, channelName, dataType, unit, decimals, readIntervalTicks, zoneLimitsMm }], outputs: [{ id, channelName }] }`, sonst `404`. Quellkatalog für das Live-HUD (D69, D70): ohne Login und ohne `UserSetup`, ohne personenbezogene Felder. `dataType` wie in `GET /api/car/{id}/telemetry` (Enum-Name klein); `zoneLimitsMm` nur, wenn in den Kanaloptionen fünf positive Werte stehen, sonst `null`. `outputs` ordnet die `CarChannel.Id` aus `Ctl` den `out()`-Namen zu. |
 | POST | `lidar-grid-source` | Verwalter | richtet den LiDAR-Rasterkanal ein (LiDAR-Vertrag §7): `200 { created: bool }`; Umsetzung in AP04 |
+
+**Asset-Metadaten in Veröffentlichungen:** `assets` enthält für jedes Asset der
+Veröffentlichung die gespeicherten normalisierten Metadaten (`OverlayAsset.MetadataJson`,
+SVG-Vertrag §4: `width`, `height`, `parts` mit `bbox`). `GET assets/{assetId}` liefert
+nur das SVG; ohne die Metadaten könnten Betrachter den Pivot `"center"` von Teilen
+nicht bestimmen. Fehlende oder unlesbare Metadaten werden ausgelassen; der Client
+verwendet dann die `viewBox` des SVG.
 
 \* Ein Asset ist für Betrachter nur lesbar, wenn eine Veröffentlichung des
 Fahrzeugs es referenziert; Verwalter lesen jedes Asset des Fahrzeugs. Asset-Antworten:
