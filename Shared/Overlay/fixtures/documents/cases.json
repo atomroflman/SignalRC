@@ -17,6 +17,11 @@
       "diagnostics": []
     },
     {
+      "file": "valid/lidar-contour.json",
+      "schemaValid": true,
+      "diagnostics": []
+    },
+    {
       "file": "invalid-schema/unknown-schema-version.json",
       "schemaValid": false
     },
@@ -266,6 +271,20 @@
           "location": {
             "element": "e_l",
             "property": "sectors"
+          }
+        }
+      ]
+    },
+    {
+      "file": "invalid-semantic/lidar-display-not-allowed.json",
+      "schemaValid": true,
+      "diagnostics": [
+        {
+          "code": "OVL_PROP_OUT_OF_RANGE",
+          "category": "structure",
+          "location": {
+            "element": "e_l",
+            "property": "display"
           }
         }
       ]

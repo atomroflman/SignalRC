@@ -475,6 +475,7 @@ keine Quelle erfundener Hindernispunkte.
 
 | Parameter | Festlegung |
 | --- | --- |
+| Darstellung | Je Widget: Sektoren (Standard) oder Kontur der nächsten Punkte (D74, LiDAR-Vertrag §6.2). |
 | Winkelsektoren | Je Widget auswählbar: 4, 6, 8, 12, 16 oder 24; Standard 8. |
 | Distanzzonen | Fünf, mit Grenzen je LiDAR-Quelle; nicht frei je HUD. |
 | Standardgrenzen | 0,5 / 1 / 2 / 3 / 5 m. |

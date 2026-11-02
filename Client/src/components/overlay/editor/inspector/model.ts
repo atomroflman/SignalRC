@@ -68,7 +68,11 @@ export function sections(el: EffectiveElement, part?: string): { key: SectionKey
   const rest = names.filter((n) => !TRANSFORM.includes(n));
   if (el.type === "lidarWidget" && part === undefined) {
     const appearance = rest.filter((n) => n === "radius" || n in catalog.common);
-    const widget = rest.filter((n) => !appearance.includes(n));
+    // Display mode first; only the parameters of the chosen mode (lidar §6, D74).
+    const contour = el.props.display === "contour";
+    const widget = rest
+      .filter((n) => !appearance.includes(n) && (contour ? n !== "sectors" : !n.startsWith("contour")))
+      .sort((a, b) => Number(b === "display") - Number(a === "display"));
     return [{ key: "transform", names: transform }, { key: "appearance", names: appearance }, { key: "widget", names: widget }];
   }
   return ([{ key: "transform", names: transform }, { key: "appearance", names: rest }] as { key: SectionKey; names: string[] }[]).filter((s) => s.names.length > 0);

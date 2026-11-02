@@ -13,6 +13,7 @@ Werkzeugen bearbeitbar; es gibt keine Verknüpfung zur Vorlage.
 | `trackRun` | Geschwindigkeit links/rechts (m/s) | Glieder per `rate` mit `wrap` auf den Gliederabstand |
 | `distanceWarning` | Abstand (m) | Farbbalken, Hinweis unter der Warnschwelle, Blink-Clip (`whileTrue`) unter der kritischen Schwelle |
 | `lidarGrid` | LiDAR-Rasterkanal | LiDAR-Widget, Sektoren, optional Sweep |
+| `lidarContour` | LiDAR-Rasterkanal | LiDAR-Widget im Kontur-Modus (D74), optional Schatten und Sweep |
 
 - **Kanalzuordnung:** Jeder Eingang braucht einen vorhandenen Kanal passenden
   Typs (`Integer`/`Number` bzw. `LidarGrid`) aus dem Kanalkatalog (AP05).

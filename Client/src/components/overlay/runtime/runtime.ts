@@ -364,6 +364,8 @@ export function createRuntime(config: EffectiveConfig, options: RuntimeOptions =
       sectors = DEFAULT_SECTORS;
     }
     return {
+      display: v("display") === "contour" ? "contour" : "sectors",
+      contourJoinMm: Number(v("contourJoinMm")),
       sectors,
       nearDistanceM: Number(v("nearDistanceM")),
       farDistanceM: Number(v("farDistanceM")),

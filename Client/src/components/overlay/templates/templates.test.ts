@@ -47,7 +47,7 @@ function docWith(def: TemplateDefinition, mapping = mappingFor(def)): OverlayDoc
 
 describe("templates", () => {
   it("offers the five starting templates of the product plan", () => {
-    expect(TEMPLATES.map((t) => t.id)).toEqual(["compass", "attitude", "trackRun", "distanceWarning", "lidarGrid"]);
+    expect(TEMPLATES.map((t) => t.id)).toEqual(["compass", "attitude", "trackRun", "distanceWarning", "lidarGrid", "lidarContour"]);
   });
 
   for (const def of TEMPLATES) {
@@ -124,6 +124,14 @@ describe("templates", () => {
     const sweep = Object.values(docWith(def, mappingFor(def, { sweep: true, sectors: 12 })).elements).find((e) => e.type === "lidarWidget")!;
     expect(plain.props).toMatchObject({ sweepEnabled: false, sectors: 8 });
     expect(sweep.props).toMatchObject({ sweepEnabled: true, sectors: 12 });
+  });
+
+  it("LiDAR contour uses the contour display, shadow optional", () => {
+    const def = templateById("lidarContour")!;
+    const plain = Object.values(docWith(def).elements).find((e) => e.type === "lidarWidget")!;
+    const bare = Object.values(docWith(def, mappingFor(def, { shadow: false })).elements).find((e) => e.type === "lidarWidget")!;
+    expect(plain.props).toMatchObject({ display: "contour", contourShadow: true, sweepEnabled: false });
+    expect(bare.props).toMatchObject({ display: "contour", contourShadow: false });
   });
 });
 

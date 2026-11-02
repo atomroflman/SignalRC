@@ -240,7 +240,37 @@ const lidar: TemplateDefinition = {
   },
 };
 
-export const TEMPLATES: readonly TemplateDefinition[] = [compass, attitude, trackRun, distance, lidar];
+// --- LiDAR contour (D74) ---
+
+const lidarContour: TemplateDefinition = {
+  id: "lidarContour",
+  name: { de: "LiDAR-Kontur", en: "LiDAR contour" },
+  description: {
+    de: "LiDAR-Widget im Kontur-Modus: nächste Punkte als zusammenhängende Linie, optional mit Schatten und Sweep-Effekt. Der Kanal muss in der Kanalverwaltung eingerichtet sein.",
+    en: "LiDAR widget in contour mode: nearest points as a connected line, optional shadow and sweep effect. The channel must be set up in the channel settings.",
+  },
+  slots: [{ id: "grid", label: { de: "LiDAR-Rasterkanal", en: "LiDAR grid channel" }, kind: "lidarGrid" }],
+  params: [
+    { id: "radius", label: { de: "Radius (px)", en: "Radius (px)" }, type: "number", default: 120, min: 20, max: 1000 },
+    { id: "shadow", label: { de: "Schatten hinter Objekten", en: "Shadow behind objects" }, type: "bool", default: true },
+    { id: "sweep", label: { de: "Sweep-Effekt", en: "Sweep effect" }, type: "bool", default: false },
+  ],
+  size: { width: 240, height: 240 },
+  build(ctx) {
+    const de = ctx.locale === "de";
+    const r = ctx.param<number>("radius");
+    const elements: Record<string, OverlayElement> = {
+      widget: {
+        type: "lidarWidget", name: "LiDAR", source: ctx.channel("grid"),
+        props: { radius: r, display: "contour", contourShadow: ctx.param<boolean>("shadow"), sweepEnabled: ctx.param<boolean>("sweep") },
+      },
+    };
+    elements.root = group(de ? "LiDAR-Kontur" : "LiDAR contour", ["widget"], { pivotX: r, pivotY: r });
+    return { elements, root: "root" };
+  },
+};
+
+export const TEMPLATES: readonly TemplateDefinition[] = [compass, attitude, trackRun, distance, lidar, lidarContour];
 
 export function templateById(id: string): TemplateDefinition | undefined {
   return TEMPLATES.find((t) => t.id === id);
