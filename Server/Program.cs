@@ -54,7 +54,7 @@ builder.Services.AddSingleton(sqids);
 builder.Services.AddKeyedSingleton("transfer", transferSqids);
 
 builder.Services.AddSingleton<VideoStreamReceiverService>();
-builder.Services.AddSingleton<ActiveVideoStreamViewerRegistry>();
+builder.Services.AddSingleton<VideoStreamActivationService>();
 builder.Services.AddSingleton<PushToTalkRegistry>();
 builder.Services.AddSingleton<CarConnectionStore>();
 builder.Services.AddSingleton<AvailableTypesRegistry>();

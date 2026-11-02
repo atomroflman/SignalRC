@@ -60,7 +60,7 @@ Five flags can be set in `appSettings.json` — but only `bashTool` (`Onboard/Pr
 ## WebRTC / Janus
 - Path: camera → MediaMTX (RTSP) → ffmpeg/TCP relay → Janus (RTP → WebRTC) → browser.
 - `VideoStreamReceiverService` allocates UDP ports (`10000`–`10200` in the Compose stack), sets up Janus stream endpoints.
-- `ActiveVideoStreamViewerRegistry` starts/stops the stream only while a viewer is actually watching.
+- `VideoStreamActivationService` keeps every enabled stream running (Janus mountpoint + onboard) and stops disabled ones; there is no manual start.
 - A coturn TURN server (`turn` service in Compose) is available alongside plain STUN; the server hands out ICE server config (STUN always, TURN if configured) via `GET /api/webrtc/ice-servers`, and the client feeds it into the Janus session.
 
 ## Database (EF Core 9, PostgreSQL)

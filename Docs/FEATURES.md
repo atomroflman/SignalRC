@@ -83,7 +83,7 @@ Mic ─ALSA─► ffmpeg (Opus/RTP) ──UDP──► Janus mountpoint (video +
 ```
 
 - A video stream with an audio input gets an audio port on its Janus mountpoint (Opus, PT 111) next to the video port.
-- When the stream starts (first viewer), the server sends `StartVideoStream` and `StartAudioUplink(streamId, port)`; when it stops, `StopAudioUplink`. The Onboard's `AudioService` runs the capture in its **own** ffmpeg, so a broken microphone can't take the video down, and restarts it if it dies. Outbound UDP like the video, so it works behind LTE CGNAT.
+- When the stream starts (it is enabled, or the car connects), the server sends `StartVideoStream` and `StartAudioUplink(streamId, port)`; when it stops, `StopAudioUplink`. The Onboard's `AudioService` runs the capture in its **own** ffmpeg, so a broken microphone can't take the video down, and restarts it if it dies. Outbound UDP like the video, so it works behind LTE CGNAT.
 - *Noise filter* adds `highpass=f=100,afftdn=nf=-25` (rumble cut + FFT denoiser against steady motor/wind noise).
 - The video panel shows a *Vehicle audio* toggle for streams with audio; it starts muted (browser autoplay rules).
 - Changing the audio input or noise filter of a running stream applies immediately: the server recreates the stream's Janus mountpoint and restarts/stops the uplink. Viewers drop for a moment and re-watch automatically.

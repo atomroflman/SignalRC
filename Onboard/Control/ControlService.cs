@@ -27,6 +27,7 @@ public class ControlService : IControlClient, IHubConnectionObserver
     public ServerCarConfigurationService CarConfigurationService { get; }
     public OnboardChannelStore ChannelStore { get; }
     public ChannelMap ChannelMap { get; }
+    public IMediaMtxConfigurator MediaMtx { get; }
     public Process BashProcess { get; } = new Process();
 
     private string? _sessionId;
@@ -47,7 +48,7 @@ public class ControlService : IControlClient, IHubConnectionObserver
     public void MarkSessionActivity() => _lastControlUpdate = DateTime.Now;
     private IConnectionHubServer _server = null!;
 
-    public ControlService(ILogger<ControlService> logger, TelemetryService telemetryService, ControlExecutionService control, IServiceProvider serviceProvider, IConfiguration configuration, ServerConnectionService serverConnectionService, SshKeyService sshKeyService, ServerCarConfigurationService carConfigurationService, OnboardChannelStore channelStore, ChannelMap channelMap)
+    public ControlService(ILogger<ControlService> logger, TelemetryService telemetryService, ControlExecutionService control, IServiceProvider serviceProvider, IConfiguration configuration, ServerConnectionService serverConnectionService, SshKeyService sshKeyService, ServerCarConfigurationService carConfigurationService, OnboardChannelStore channelStore, ChannelMap channelMap, IMediaMtxConfigurator mediaMtx)
     {
         Logger = logger;
         TelemetryService = telemetryService;
@@ -59,6 +60,7 @@ public class ControlService : IControlClient, IHubConnectionObserver
         CarConfigurationService = carConfigurationService;
         ChannelStore = channelStore;
         ChannelMap = channelMap;
+        MediaMtx = mediaMtx;
         BashProcess.StartInfo.FileName = "/bin/bash";
         BashProcess.StartInfo.RedirectStandardInput = true;
         BashProcess.StartInfo.RedirectStandardOutput = true;
@@ -359,6 +361,7 @@ public class ControlService : IControlClient, IHubConnectionObserver
         ChannelMap.VideoStreams[dictKey] = item;
         await ChannelStore.UpsertVideoStreamAsync(dictKey, item);
         Logger.LogInformation("UpsertVideoStream {Key}", dictKey);
+        await MediaMtx.GenerateFromChannelMapAsync(ChannelMap);
     }
 
     public async Task DeleteVideoStream(string dictKey)
@@ -368,6 +371,7 @@ public class ControlService : IControlClient, IHubConnectionObserver
         {
             await ChannelStore.DeleteVideoStreamAsync(dictKey);
             Logger.LogInformation("DeleteVideoStream {Key}", dictKey);
+            await MediaMtx.GenerateFromChannelMapAsync(ChannelMap);
         }
     }
 
@@ -396,6 +400,7 @@ public class ControlService : IControlClient, IHubConnectionObserver
             ChannelMap.VideoStreams[kv.Key] = kv.Value;
 
         await ChannelStore.ReplaceAllAsync(ChannelMap);
+        await MediaMtx.GenerateFromChannelMapAsync(ChannelMap);
 
         Logger.LogInformation("Applied server-pushed channel map (hash {Hash}) with {Control} control, {Telemetry} telemetry, {Video} video streams, {Pin} pin managers",
             channelMapHash,

@@ -22,7 +22,7 @@ public class ChannelsController : ControllerBase
     private readonly IHubContext<CarConnectionHub, IConnectionHubClient> _controlHub;
     private readonly AvailableTypesRegistry _availableTypes;
     private readonly VideoStreamReceiverService _streamService;
-    private readonly ActiveVideoStreamViewerRegistry _viewerRegistry;
+    private readonly VideoStreamActivationService _streamActivation;
     private readonly ILogger<ChannelsController> _logger;
 
     public ChannelsController(
@@ -30,13 +30,13 @@ public class ChannelsController : ControllerBase
         IHubContext<CarConnectionHub, IConnectionHubClient> controlHub,
         AvailableTypesRegistry availableTypes,
         VideoStreamReceiverService streamService,
-        ActiveVideoStreamViewerRegistry viewerRegistry,
+        VideoStreamActivationService streamActivation,
         ILogger<ChannelsController> logger) : base(context)
     {
         _controlHub = controlHub;
         _availableTypes = availableTypes;
         _streamService = streamService;
-        _viewerRegistry = viewerRegistry;
+        _streamActivation = streamActivation;
         _logger = logger;
     }
 
@@ -297,6 +297,7 @@ public class ChannelsController : ControllerBase
 
         var sid = string.IsNullOrEmpty(body.StreamId) ? streamId : body.StreamId;
         var s = await _context.CarVideoStreams.FirstOrDefaultAsync(v => v.CarId == carId && v.StreamId == sid);
+        var wasEnabled = s?.Enabled ?? false;
         if (s == null)
         {
             s = new CarVideoStream
@@ -320,11 +321,11 @@ public class ChannelsController : ControllerBase
         }
         var previousAudioDevice = s.AudioDevice;
         var previousAudioDenoise = s.AudioDenoise;
+        var previousPort = s.Port;
         s.Name = body.Name ?? s.Name;
         s.Type = body.Type ?? s.Type;
         s.Location = body.Location;
         s.Enabled = body.Enabled;
-        s.IsActive = body.Enabled;
         if (body.Width.HasValue) s.Width = body.Width.Value;
         if (body.Height.HasValue) s.Height = body.Height.Value;
         if (body.Framerate.HasValue) s.Framerate = body.Framerate.Value;
@@ -347,14 +348,16 @@ public class ChannelsController : ControllerBase
         await _context.SaveChangesAsync();
         await UpdateCarChannelMapHashAsync(carId);
 
-        var mapItem = ToMapItem(s);
+        var mapItem = ChannelMapMapper.ToMapItem(s);
         await _controlHub.Clients.Group($"Car-{carId}").UpsertVideoStream(s.StreamId, mapItem);
         _logger.LogInformation("Upsert video stream {Stream} for car {CarId} by {User}", s.StreamId, carId, user.LoginName);
 
-        if ((previousAudioDevice != s.AudioDevice || previousAudioDenoise != s.AudioDenoise)
-            && s.Enabled && _viewerRegistry.GetViewerCount(s.Id) > 0)
+        // The onboard applies everything else from the pushed item. Switching on/off, a new port or
+        // different audio also needs the Janus mountpoint (re)created or removed.
+        if (wasEnabled != s.Enabled || previousPort != s.Port
+            || (s.Enabled && (previousAudioDevice != s.AudioDevice || previousAudioDenoise != s.AudioDenoise)))
         {
-            await ApplyAudioChangeToRunningStreamAsync(carId, s);
+            await _streamActivation.ApplyAsync(s.Id);
         }
         return Ok(mapItem);
     }
@@ -366,11 +369,12 @@ public class ChannelsController : ControllerBase
         if (user == null) return Unauthorized();
         var s = await _context.CarVideoStreams.FirstOrDefaultAsync(v => v.CarId == carId && v.StreamId == streamId);
         if (s == null) return NotFound();
+        // Before the row goes: tearing down the Janus mountpoint looks the stream up.
+        await _streamActivation.StopAsync(carId, s.StreamId, s.Id);
         _context.CarVideoStreams.Remove(s);
         await _context.SaveChangesAsync();
         await UpdateCarChannelMapHashAsync(carId);
 
-        await _controlHub.Clients.Group($"Car-{carId}").StopAudioUplink(streamId);
         await _controlHub.Clients.Group($"Car-{carId}").DeleteVideoStream(streamId);
         _logger.LogInformation("Delete video stream {Stream} for car {CarId} by {User}", streamId, carId, user.LoginName);
         return NoContent();
@@ -416,31 +420,6 @@ public class ChannelsController : ControllerBase
         var user = await GetCurrentUserAsync();
         if (user == null) return Unauthorized();
         return Ok(_availableTypes.Get(carId)?.TelemetryTypes ?? Array.Empty<string>());
-    }
-
-    /// <summary>
-    /// A running stream only picks up audio changes when its Janus mountpoint is recreated (Janus can't
-    /// add or remove media on an existing mountpoint). Recreate it now and (re)start or stop the uplink,
-    /// so the change is live without waiting for the next stream start. Watching browsers see the
-    /// mountpoint go away and reconnect through their normal retry.
-    /// </summary>
-    private async Task ApplyAudioChangeToRunningStreamAsync(int carId, CarVideoStream stream)
-    {
-        try
-        {
-            _logger.LogInformation("Audio config of running stream {Stream} (car {CarId}) changed, recreating its Janus mountpoint", stream.StreamId, carId);
-            await _streamService.StartStreamAsync(stream.Id);
-            var audioPort = _streamService.GetAudioPort(stream.Id);
-            // Same connection as the UpsertVideoStream above, so the Onboard already has the new device.
-            if (audioPort != null)
-                await _controlHub.Clients.Group($"Car-{carId}").StartAudioUplink(stream.StreamId, audioPort.Value);
-            else
-                await _controlHub.Clients.Group($"Car-{carId}").StopAudioUplink(stream.StreamId);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to apply audio change to running stream {Stream} of car {CarId}; it takes effect on the next stream start", stream.StreamId, carId);
-        }
     }
 
     [HttpGet("available-audio-devices")]
@@ -522,25 +501,6 @@ public class ChannelsController : ControllerBase
         // Without it the onboard replaces its item and can no longer send the channel (TelemetryDelta uses ids).
         ServerId = t.Id,
         ModifiedAt = t.ModifiedAt,
-    };
-
-    private static VideoStreamMapItem ToMapItem(CarVideoStream s) => new()
-    {
-        StreamId = s.StreamId,
-        Name = s.Name,
-        Type = s.Type,
-        Location = s.Location,
-        Enabled = s.Enabled,
-        Width = s.Width,
-        Height = s.Height,
-        Framerate = s.Framerate,
-        Bitrate = s.Bitrate,
-        CameraDevice = s.CameraDevice,
-        RpiCamId = s.RpiCamId,
-        Options = ChannelOptions.FromJson(s.OptionsJson),
-        ModifiedAt = s.ModifiedAt,
-        AudioDevice = s.AudioDevice,
-        AudioDenoise = s.AudioDenoise,
     };
 
     // Browser DTOs keep JsonElement values; map items for the onboard use ChannelOptions.FromJson.

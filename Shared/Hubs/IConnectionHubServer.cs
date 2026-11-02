@@ -42,11 +42,7 @@ public interface IConnectionHubServer
     // Video streams (onboard + browser → server; formerly ICarVideoServer)
     Task ConnectCar(string carIdentityKey);
     Task<IReadOnlyList<VideoStreamMapItem>> GetVideoStreamsForCar(int carId);
-    Task ActivateStream(int streamId);
-    Task DeactivateStream(int streamId);
-    Task StartVideoStream(int streamId);
     Task ChangeVideoStreamSettings(int streamId, VideoStreamMapItem settings);
-    Task StopVideoStream(int streamId);
     Task SetVideoStreamEnabled(int carId, int streamId, bool enabled);
 
     // Push-to-talk (browser → server → onboard). Requires the control session id.

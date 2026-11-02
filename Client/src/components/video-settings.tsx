@@ -206,44 +206,6 @@ export default function VideoSettingsControl(props: { carId?: number; canManageE
     }
   }
 
-  async function handleStartStream(streamId: number) {
-    setBusyMap(b => ({ ...b, [streamId]: true }));
-    try {
-      const hub = videoConnection;
-      if (hub) {
-        await hub.invoke('ActivateStream', streamId);
-      }
-    } catch (startError) {
-      console.error('Failed to start stream:', startError);
-      setError(messages.videoSettings.startStreamFailed);
-    } finally {
-      if (videoConnection && carId) {
-        await loadStreams(videoConnection, carId);
-      }
-      window.dispatchEvent(new Event(STREAM_REFRESH_EVENT));
-      setBusyMap(b => ({ ...b, [streamId]: false }));
-    }
-  }
-
-  async function handleStopStream(streamId: number) {
-    setBusyMap(b => ({ ...b, [streamId]: true }));
-    try {
-      const hub = videoConnection;
-      if (hub) {
-        await hub.invoke('DeactivateStream', streamId);
-      }
-    } catch (stopError) {
-      console.error('Failed to stop stream:', stopError);
-      setError(messages.videoSettings.stopStreamFailed);
-    } finally {
-      if (videoConnection && carId) {
-        await loadStreams(videoConnection, carId);
-      }
-      window.dispatchEvent(new Event(STREAM_REFRESH_EVENT));
-      setBusyMap(b => ({ ...b, [streamId]: false }));
-    }
-  }
-
   return (
     <CollapsibleSection title={messages.videoSettings.title} label={messages.videoSettings.title} defaultCollapsed={true} className="px-2">
       <div className="space-y-2 text-xs leading-tight">
@@ -264,8 +226,6 @@ export default function VideoSettingsControl(props: { carId?: number; canManageE
                 <span>{s.enabled ? messages.common.enabled : messages.common.disabled}</span>
                 <span>·</span>
                 <span>{s.isActive ? messages.common.live : messages.common.idle}</span>
-                <span>·</span>
-                <span>{messages.videoSettings.viewers(s.viewerCount)}</span>
               </div>
 
               <div className="grid grid-cols-2 gap-2 mb-2">
@@ -355,24 +315,6 @@ export default function VideoSettingsControl(props: { carId?: number; canManageE
                   >
                     {s.enabled ? messages.videoSettings.disable : messages.videoSettings.enable}
                   </button>
-                )}
-                {s.enabled && (
-                  <>
-                    <button
-                      className="px-2 py-1 text-xs rounded bg-blue-700 hover:bg-blue-600 text-zinc-100"
-                      onClick={() => handleStartStream(s.serverId)}
-                      disabled={busyMap[s.serverId]}
-                    >
-                      {messages.videoSettings.startStream}
-                    </button>
-                    <button
-                      className="px-2 py-1 text-xs rounded bg-red-700 hover:bg-red-600 text-zinc-100"
-                      onClick={() => handleStopStream(s.serverId)}
-                      disabled={busyMap[s.serverId]}
-                    >
-                      {messages.videoSettings.stopStream}
-                    </button>
-                  </>
                 )}
               </div>
             </div>

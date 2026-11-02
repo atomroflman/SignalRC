@@ -484,7 +484,7 @@ public class VideoStreamReceiverService
             await ctx.SaveChangesAsync();
             ReleaseAudioPort(streamId);
 
-            // Tear down the Janus mountpoint so the next ActivateStream can create it fresh.
+            // Tear down the Janus mountpoint so the next start can create it fresh.
             // We do this on a brand-new session/handle: the original one is gone after a
             // server restart, and even when the server is still alive the streaming plugin
             // accepts "destroy" on any handle attached to the same plugin.

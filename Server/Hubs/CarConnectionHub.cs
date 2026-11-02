@@ -37,7 +37,7 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
     private readonly IConfigurationService _configService;
     private readonly CarConnectionStore _connectionStore;
     private readonly SqidsEncoder<long> _sqidsEncoder;
-    private readonly ActiveVideoStreamViewerRegistry _viewerRegistry;
+    private readonly VideoStreamActivationService _streamActivation;
     private readonly AvailableTypesRegistry _availableTypes;
     private readonly PushToTalkRegistry _pushToTalk;
 
@@ -47,7 +47,7 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
         VideoStreamReceiverService streamService,
         CarConnectionStore connectionStore,
         SqidsEncoder<long> sqidsEncoder,
-        ActiveVideoStreamViewerRegistry viewerRegistry,
+        VideoStreamActivationService streamActivation,
         AvailableTypesRegistry availableTypes,
         PushToTalkRegistry pushToTalk)
     {
@@ -56,7 +56,7 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
         _configService = configService;
         _connectionStore = connectionStore;
         _sqidsEncoder = sqidsEncoder;
-        _viewerRegistry = viewerRegistry;
+        _streamActivation = streamActivation;
         _availableTypes = availableTypes;
         _pushToTalk = pushToTalk;
     }
@@ -207,16 +207,6 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
                 DriverId = connectionInfo?.DriverId,
                 DriverName = connectionInfo?.DriverName
             });
-        }
-
-        var stoppedStreamIds = _viewerRegistry.RemoveConnection(Context.ConnectionId);
-        foreach (var streamId in stoppedStreamIds)
-        {
-            var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<SignalRCContext>();
-            var stream = await dbContext.CarVideoStreams.FirstOrDefaultAsync(s => s.Id == streamId);
-            if (stream == null)
-                continue;
-            await StopStreamForViewersAsync(stream);
         }
 
         await CleanupAudioForConnectionAsync(Context.ConnectionId);
@@ -677,19 +667,8 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
             throw new InvalidOperationException($"Car with identity key {carIdentityKey} not found!");
         }
         await this.AddCarToGroupAsync(car.Id);
-        Logger.LogInformation("Car {CarIdentityKey} connected with ID {CarId}. Synchronizing viewer-driven video streams.", carIdentityKey, car.Id);
-
-        foreach (var stream in car.VideoStreams.Where(stream => stream.Enabled && _viewerRegistry.GetViewerCount(stream.Id) > 0))
-        {
-            await StartStreamForViewersAsync(stream);
-        }
-    }
-
-    public async Task StartVideoStream(int streamId)
-    {
-        Logger.LogInformation($"Starting Video Stream: {streamId}");
-        var stream = await GetStreamAsync(streamId);
-        await StartStreamForViewersAsync(stream);
+        Logger.LogInformation("Car {CarIdentityKey} connected with ID {CarId}. Starting its enabled video streams.", carIdentityKey, car.Id);
+        await _streamActivation.ApplyCarAsync(car.Id);
     }
 
     private async Task SanitizeStreamSettings(CarVideoStream s)
@@ -794,38 +773,6 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
                 AudioDenoise = s.AudioDenoise,
             })
             .ToList();
-    }
-
-    public async Task ActivateStream(int streamId)
-    {
-        var stream = await GetStreamAsync(streamId);
-        if (!stream.Enabled)
-        {
-            throw new HubException($"Stream {stream.Name} is disabled.");
-        }
-        var firstViewer = _viewerRegistry.Activate(Context.ConnectionId, streamId);
-        Logger.LogInformation("Connection {ConnectionId} activated stream {StreamId}. Viewers: {ViewerCount}", Context.ConnectionId, streamId, _viewerRegistry.GetViewerCount(streamId));
-        if (firstViewer)
-        {
-            await StartStreamForViewersAsync(stream);
-        }
-    }
-
-    [Obsolete]
-    public async Task DeactivateStream(int streamId)
-    {
-        Logger.LogInformation("Connection {ConnectionId} deactivated stream {StreamId}. (Legacy Endpoint!!!)", Context.ConnectionId, streamId);
-        await StopVideoStream(streamId);
-    }
-
-    public async Task StopVideoStream(int streamId)
-    {
-        Logger.LogInformation("Connection {ConnectionId} deactivated stream {StreamId}.", Context.ConnectionId, streamId);
-        var stream = await GetStreamAsync(streamId);
-        // Forget the viewers too, otherwise the next ActivateStream isn't the "first viewer" and never
-        // reaches the car.
-        _viewerRegistry.ClearStream(streamId);
-        await StopStreamForViewersAsync(stream);
     }
 
     public async Task ChangeVideoStreamSettings(int streamId, VideoStreamMapItem settings)
@@ -975,13 +922,7 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
         await dbContext.SaveChangesAsync();
         Logger.LogInformation("Driver changed enabled state for stream {StreamId} on car {CarId} to {Enabled}", streamId, carId, enabled);
 
-        if (enabled)
-        {
-            return;
-        }
-
-        _viewerRegistry.ClearStream(streamId);
-        await StopStreamForViewersAsync(stream);
+        await _streamActivation.ApplyAsync(streamId);
     }
 
     private async Task<CarVideoStream> GetStreamAsync(int streamId)
@@ -990,32 +931,6 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
         return await dbContext.CarVideoStreams
             .FirstOrDefaultAsync(s => s.Id == streamId)
             ?? throw new InvalidOperationException($"Video stream with ID {streamId} not found.");
-    }
-
-    private async Task StartStreamForViewersAsync(CarVideoStream stream)
-    {
-        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<SignalRCContext>();
-        Logger.LogInformation("Starting video stream {StreamId} ({StreamName}) for car {CarId}", stream.Id, stream.Name, stream.CarId);
-        await _streamService.StartStreamAsync(stream.Id);
-        stream.IsActive = true;
-        await dbContext.SaveChangesAsync();
-        await Clients.Car(stream.CarId).StartVideoStream(stream.StreamId);
-        var audioPort = _streamService.GetAudioPort(stream.Id);
-        if (audioPort != null)
-            await Clients.Car(stream.CarId).StartAudioUplink(stream.StreamId, audioPort.Value);
-        else
-            await Clients.Car(stream.CarId).StopAudioUplink(stream.StreamId);
-    }
-
-    private async Task StopStreamForViewersAsync(CarVideoStream stream)
-    {
-        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<SignalRCContext>();
-        Logger.LogInformation("Stopping video stream {StreamId} ({StreamName}) for car {CarId}", stream.Id, stream.Name, stream.CarId);
-        await Clients.Car(stream.CarId).StopVideoStream(stream.StreamId);
-        await Clients.Car(stream.CarId).StopAudioUplink(stream.StreamId);
-        await _streamService.StopStream(stream.Id);
-        stream.IsActive = false;
-        await dbContext.SaveChangesAsync();
     }
 
     private async Task EnsureDriverCanManageStreamAsync(int carId)
