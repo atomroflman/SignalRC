@@ -12,10 +12,26 @@ public class JanusPluginMessageResponse<TBody> : JanusResponseBase
     public TBody Body { get; set; } = default!;
 }   
 
-public class JanusPluginMessageListResponseBody
+/// <summary>The plugindata envelope: the plugin's actual reply sits under "data".</summary>
+public class JanusPluginData<TData>
 {
     [JsonPropertyName("plugin")]
     public string Plugin { get; set; } = string.Empty;
+    [JsonPropertyName("data")]
+    public TData Data { get; set; } = default!;
+}
+
+/// <summary>Common part of every streaming-plugin reply; a failed request is still "janus": "success".</summary>
+public class JanusPluginResult
+{
+    [JsonPropertyName("error_code")]
+    public int? ErrorCode { get; set; }
+    [JsonPropertyName("error")]
+    public string? Error { get; set; }
+}
+
+public class JanusPluginMessageListResponseBody : JanusPluginResult
+{
     [JsonPropertyName("list")]
     public List<JanusStreamInfo> Streams { get; set; } = new();
 }
