@@ -806,7 +806,7 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
         settings.AudioDevice = stream.AudioDevice;
         settings.AudioDenoise = stream.AudioDenoise;
         settings.RpiCamId = stream.RpiCamId;
-        settings.Port = stream.Port;
+        settings.Port = stream.OnboardTargetPort;
         settings.Width = stream.Width;
         settings.Height = stream.Height;
         settings.Framerate = stream.Framerate;

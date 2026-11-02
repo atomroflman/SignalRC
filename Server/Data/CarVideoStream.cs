@@ -26,6 +26,13 @@ public class CarVideoStream : EntityBase, IVideoSettings
     public int Port { get; set; }
     public int? JanusPort { get; set; }
 
+    /// <summary>
+    /// Where the onboard sends its RTP. It only speaks RTP over UDP, so that is the Janus mountpoint;
+    /// <see cref="Port"/> is the listen port of the server's TCP relay.
+    /// </summary>
+    [NotMapped]
+    public int OnboardTargetPort => JanusPort ?? Port;
+
     [Required]
     public DateTime StartTime { get; set; }
 

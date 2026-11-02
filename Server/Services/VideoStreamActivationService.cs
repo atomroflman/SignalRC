@@ -67,12 +67,12 @@ public class VideoStreamActivationService(
         logger.LogInformation("Starting video stream {StreamId} ({StreamName}) for car {CarId}", stream.Id, stream.Name, stream.CarId);
         await streamService.StartStreamAsync(stream.Id);
 
-        // Janus may have moved the stream to a free port; the onboard has to send there.
+        // A first start assigns the Janus port, a TCP stream may have moved; the onboard has to send there.
         using var scope = scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SignalRCContext>();
         var started = await db.CarVideoStreams.AsNoTracking().FirstAsync(s => s.Id == stream.Id);
         var car = hub.Clients.Group($"Car-{stream.CarId}");
-        if (started.Port != stream.Port)
+        if (started.OnboardTargetPort != stream.OnboardTargetPort)
             await car.UpsertVideoStream(started.StreamId, ChannelMapMapper.ToMapItem(started));
 
         await car.StartVideoStream(started.StreamId);

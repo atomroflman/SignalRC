@@ -83,7 +83,7 @@ public static class ChannelMapMapper
         Options = DeserializeOptions(s.OptionsJson),
         ServerId = s.Id,
         ModifiedAt = s.ModifiedAt,
-        Port = s.Port,
+        Port = s.OnboardTargetPort,
         AudioDevice = s.AudioDevice,
         AudioDenoise = s.AudioDenoise,
     };

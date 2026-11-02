@@ -65,8 +65,12 @@ public class VideoStreamReceiverService
             Logger.LogInformation("Stream '{StreamId}' is already active, recreating Janus mountpoint", stream.StreamId);
         }
         var protocol = stream.Protocol;
-        var port = (stream.Port > 0 && IsPortAvailable(stream.Port, stream.Protocol)) ? stream.Port : FindFreePort(stream.Protocol);
-        if (port == 0)
+        // Only the TCP relay listens on Port. For UDP Janus itself holds the port, so the availability
+        // check would fail on every restart and move the stream away from its mountpoint.
+        var port = stream.Protocol == StreamProtocol.UDP || (stream.Port > 0 && IsPortAvailable(stream.Port, stream.Protocol))
+            ? stream.Port
+            : FindFreePort(stream.Protocol);
+        if (port == 0 && stream.Protocol == StreamProtocol.TCP)
         {
             Logger.LogError($"No free port available for {protocol} stream");
             throw new InvalidOperationException("No free port available");
