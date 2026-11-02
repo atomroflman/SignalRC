@@ -67,7 +67,7 @@
   },
   {
    "id": "spatial-limit-inside",
-   "description": "1049 mm nach 1000 mm ist verbunden (49,2 mm)",
+   "description": "1049 mm nach 1000 mm ist verbunden (49,2 mm); 1049 mm liegt in Zone 2",
    "points": {
     "10": 1000,
     "11": 1000,
@@ -79,6 +79,11 @@
       "cell": 0,
       "zone": 1,
       "mm": 1000
+     },
+     {
+      "cell": 0,
+      "zone": 2,
+      "mm": 1049
      }
     ]
    }
