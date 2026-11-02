@@ -2,7 +2,7 @@
 
 Stand: 2026-11-02.
 - AP00 ist freigegeben.
-- AP01 bis AP11 sind umgesetzt; AP13 ist zur Hälfte umgesetzt (Anzeigeseite).
+- AP01 bis AP12 sind umgesetzt; AP13 ist zur Hälfte umgesetzt (Anzeigeseite).
 - M0 ist erreicht (T0 mit AP01).
 
 „Umgesetzt“ heißt: implementiert, getestet und lokal committet. Die gemeinsame
@@ -61,7 +61,7 @@ nicht ein zusätzliches Verbot, vorher gegen deren vereinbarte Ports zu arbeiten
 | AP09 | ✅ umgesetzt | Editorzustand, Gestaltungsfläche, Undo/Redo und Autosave | AP01, AP02, AP08. |
 | AP10 | ✅ umgesetzt | Eigenschaften, Bindungen und Keyframe-Zeitachse | AP06, AP08, AP09. |
 | AP11 | ✅ umgesetzt | Lokale Simulation und dynamische Vorschau | AP05, AP08, AP09. |
-| AP12 | offen | Startvorlagen, Paket-Import/-Export und Zuordnung | AP01, AP02, AP07, AP09. |
+| AP12 | ✅ umgesetzt | Startvorlagen, Paket-Import/-Export und Zuordnung | AP01, AP02, AP07, AP09. |
 | AP13 | ◐ Teil 1 (Anzeigeseite) umgesetzt | Video-, UI-, Steuerungs- und Anwendungsintegration | Verbindet AP01 bis AP12 schrittweise. |
 | AP14 | offen (T0 mit AP01 erledigt) | Browser-, Sicherheits-, Reconnect- und Leistungsabnahme | Gemeinsame Referenzfälle und integrierbare Funktionspfade. |
 
@@ -564,7 +564,30 @@ Sensorwerte prüfen können.
 Schreibaufrufe, Änderungen persönlicher Kanalpräferenzen oder Fahrzeugbefehle
 auslöst. Keine simulierten Werte gelangen in den gemeinsamen Livebestand.
 
-## AP12 – Vorlagen und vollständiger Paketaustausch
+## AP12 – Vorlagen und vollständiger Paketaustausch ✅
+
+**Status (2026-11-02):** umgesetzt.
+- **Vorlagen** (`Client/src/components/overlay/templates/`): Kompass,
+  Pitch/Roll, Kettenlauf, Abstandswarnung und LiDAR-Raster mit optionalem
+  Sweep. Einfügen als ein Undo-Schritt; jeder Eingang braucht einen
+  vorhandenen Kanal passenden Typs und eine ausdrückliche Umrechnung, keine
+  erfundenen Werte.
+- **Export** (`Client/src/components/overlay/exchange/`): Standard,
+  Varianten, Bindungen, Raten, Clips und alle referenzierten Assets; keine
+  Revision, Livewerte, Benutzer- oder Berechtigungsdaten.
+- **Import nur als Entwurf:** Paketprüfung, Strukturprüfung (AP01), erneute
+  Serverbereinigung jedes Assets über den bestehenden Upload, Zuordnung von
+  Kanälen/Ausgängen/Streams (Formeln über den AST), `replaceDocument`
+  (undo-fähig). Ungelöste aktive Referenzen blockieren die Veröffentlichung
+  in Client und Server.
+- **Konfliktsicherung:** nutzt den AP09-Download; Sicherungen lassen sich als
+  Entwurf importieren.
+- **Tests:** Rundlauf Export → Import mit Assets (Fixture
+  `fixtures/exchange/roundtrip.json`, Vitest und xUnit), Zuordnung,
+  Sperre, Grenzen, `__proto__`; Vorlagen gültig und ohne Diagnosen;
+  Asset-Rundlauf mit echter Bereinigung gegen SQLite und PostgreSQL.
+- **Für AP13 Teil 2:** `PackageExchange` und `TemplateInserter` in den Editor
+  einhängen, Texte übernehmen. Browserprüfung der Dialoge in AP14.
 
 **Ziel:** Fertige Startpunkte und übertragbare, vollständige HUD-Designs anbieten.
 

@@ -17,6 +17,7 @@ Dieses Verzeichnis ist nach D43 die gemeinsame Vertragsquelle für Client und Se
 | `lidar/README.md` | LiDAR-Gruppen, Grundraster, Drahtformat; Fälle in `fixtures/lidar/`. |
 | `svg/README.md` | SVG-Bereinigung, Positivliste, Parts, Austauschpaket. |
 | `fixtures/svg/` | SVG-Referenzfälle: Rohdateien (`input/`), normalisierte Ausgaben (`expected/`), Erwartungen (`cases.json`). |
+| `fixtures/exchange/` | Austausch-Rundlauf: Paket, Zielfahrzeug, Zuordnung und erwartetes Dokument (`roundtrip.json`). |
 | `api/README.md` | Persistenz, REST, Ereignisse, Autosave/Konflikte. |
 | `modules/README.md` | Modulschnittstellen, Dateiverantwortung, Tests, Leistungsprofil. |
 
