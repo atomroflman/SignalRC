@@ -331,7 +331,7 @@ export default function ChannelsPage() {
         width: v.width ?? null,
         height: v.height ?? null,
         framerate: v.framerate ?? null,
-        bitrateKbps: v.bitrateKbps ?? (typeof v.bitrate === "number" ? v.bitrate : null),
+        bitrateKbps: typeof v.bitrate === "number" ? Math.round(v.bitrate / 1000) : null,
         cameraDevice: v.cameraDevice ?? null,
         rpiCamId: v.rpiCamId ?? null,
         priority: v.priority ?? null,
@@ -497,7 +497,8 @@ export default function ChannelsPage() {
     }
     const body: any = {
       streamId: v.streamId, name: v.name, type: v.type, location: v.location, enabled: v.enabled,
-      width: v.width, height: v.height, framerate: v.framerate, bitrateKbps: v.bitrateKbps,
+      // The server stores bit/s; only the editor shows kbps.
+      width: v.width, height: v.height, framerate: v.framerate, bitrateKbps: v.bitrateKbps == null ? null : Math.round(v.bitrateKbps * 1000),
       cameraDevice: v.cameraDevice, rpiCamId: v.rpiCamId, priority: v.priority, options,
       audioDevice: v.audioDevice, audioDenoise: v.audioDenoise ?? false,
     };

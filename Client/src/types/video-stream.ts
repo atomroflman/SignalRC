@@ -12,7 +12,7 @@ export class VideoStreamMapItem {
   width: number = 1280;
   height: number = 720;
   framerate: number = 30;
-  bitrate: number = 1500;
+  bitrate: number = 1_500_000; // bit/s, the GUI shows kbps
   modifiedAt?: Date | null = null;
   options: Record<string, unknown> = {};
   gain?: number | null = null;

@@ -266,7 +266,7 @@ export default function VideoSettingsControl(props: { carId?: number; canManageE
 
                 <div>
                   <label className="block text-xs text-zinc-300">{messages.common.bitrateKbps}</label>
-                  <input type="number" className="w-full text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.bitrate ?? s.bitrate ?? ''} onChange={e => updateFieldFor(s.serverId, 'bitrate', e.target.value ? Number(e.target.value) : 0)} onBlur={() => void handleSave(s.serverId)} />
+                  <input type="number" className="w-full text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={(cfg.bitrate ?? s.bitrate) != null ? Math.round((cfg.bitrate ?? s.bitrate) / 1000) : ''} onChange={e => updateFieldFor(s.serverId, 'bitrate', e.target.value ? Math.round(Number(e.target.value) * 1000) : 0)} onBlur={() => void handleSave(s.serverId)} />
                 </div>
 
                 <div>
