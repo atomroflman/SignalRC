@@ -2,8 +2,7 @@
 
 Stand: 2026-11-02.
 - AP00 ist freigegeben.
-- AP01, AP03, AP04, AP05 und AP06 sind umgesetzt; AP02 ist bis auf den
-  SVG-Upload (wartet auf AP07) umgesetzt.
+- AP01 bis AP08 sind umgesetzt.
 - M0 ist erreicht (T0 mit AP01).
 
 „Umgesetzt“ heißt: implementiert, getestet und lokal committet. Die gemeinsame
@@ -52,13 +51,13 @@ nicht ein zusätzliches Verbot, vorher gegen deren vereinbarte Ports zu arbeiten
 | --- | --- | --- | --- |
 | AP00 | ✅ freigegeben | Vertragsfundament, Referenzfälle, Modulgerüste und Schreibzuständigkeiten | Keine; setzt den abgestimmten Gesamtplan um. |
 | AP01 | ✅ umgesetzt | Variantenauflösung und strukturelle Dokumentprüfung | AP00-Verträge. |
-| AP02 | ◐ umgesetzt bis auf SVG-Upload | Serverpersistenz, Revisionen, Berechtigungen und Veröffentlichung | AP01, AP06, AP07. |
+| AP02 | ✅ umgesetzt | Serverpersistenz, Revisionen, Berechtigungen und Veröffentlichung | AP01, AP06, AP07. |
 | AP03 | ✅ umgesetzt | Telemetriequalität, Reader-Anbindung und Servertransport | AP00-Verträge; Anwendungsverdrahtung über AP13. |
 | AP04 | ✅ umgesetzt (Ausrichtung D58 offen) | LiDAR-Gruppen und kompaktes Winkel-/Distanzraster | AP03 für Qualität und Transport. |
 | AP05 | ✅ umgesetzt | Client-Telemetrie, Metadaten, Alterung und Verbraucher | AP03; LiDAR-Daten aus AP04. |
 | AP06 | ✅ umgesetzt | Sicheres Ausdruckssystem in Client und Server | AP00-Verträge. |
-| AP07 | offen | SVG-Bereinigung, normalisierte Assets und Importvorschau | AP00-Verträge; Speicherung/HTTP-Anbindung über AP02/AP13. |
-| AP08 | offen | SVG-/Animationslaufzeit und LiDAR-Widget | AP01, AP05, AP06, AP07. |
+| AP07 | ✅ umgesetzt | SVG-Bereinigung, normalisierte Assets und Importvorschau | AP00-Verträge; Speicherung/HTTP-Anbindung über AP02/AP13. |
+| AP08 | ✅ umgesetzt | SVG-/Animationslaufzeit und LiDAR-Widget | AP01, AP05, AP06, AP07. |
 | AP09 | offen | Editorzustand, Gestaltungsfläche, Undo/Redo und Autosave | AP01, AP02, AP08. |
 | AP10 | offen | Eigenschaften, Bindungen und Keyframe-Zeitachse | AP06, AP08, AP09. |
 | AP11 | offen | Lokale Simulation und dynamische Vorschau | AP05, AP08, AP09. |
@@ -148,7 +147,7 @@ oder direkten Editorzustandsänderungen.
 **Abnahme:** Alle Vererbungs-, Lösch-, Deaktivierungs- und Grenzfälle sind
 deterministisch getestet; Server und Client stimmen überein.
 
-## AP02 – Serverpersistenz, Berechtigungen und Veröffentlichung ◐
+## AP02 – Serverpersistenz, Berechtigungen und Veröffentlichung ✅
 
 **Status (2026-11-02):** umgesetzt in `Server/Overlay/` mit Migration
 `AddOverlay`, einschließlich Abhängigkeitsauskunft und Formelprüfung beim
@@ -156,7 +155,7 @@ Veröffentlichen (AP06).
 - Getestet gegen SQLite und die PostgreSQL-Testdatenbank, inklusive
   Nebenläufigkeit.
 - Zusätzlich End-to-End über HTTP und Hub gegen einen lokal gestarteten Server.
-- Offen: SVG-Upload (AP07; bis dahin D67).
+- SVG-Upload mit der Bereinigung aus AP07 umgesetzt; D67 entfällt.
 
 **Ziel:** Gemeinsamen Entwurf und unveränderliche Veröffentlichungen sicher
 speichern und berechtigten Clients zugänglich machen.
@@ -347,7 +346,29 @@ Wertekontext. Kein `eval`, `Function`-Konstruktor oder beliebiger Plattformzugri
 **Abnahme:** Übereinstimmende Semantik und Diagnosen; missbräuchliche Ausdrücke
 werden kontrolliert abgewiesen. Keine eigene UI oder eigene Telemetrieverbindung.
 
-## AP07 – SVG-Assets und Importvorschau
+## AP07 – SVG-Assets und Importvorschau ✅
+
+**Status (2026-11-02):** umgesetzt.
+- **Server** (`Server/Overlay/Assets/`): Positivlisten-Bereinigung
+  `SvgAssetSanitizer` mit .NET-Bordmitteln (XmlReader ohne DTD/Resolver);
+  ersetzt den D67-Platzhalter.
+  - CSS-Auflösung (D52), `use`/`symbol`-Expansion mit Zyklen- und
+    Expansionsbudget, Normalisierung (Einheiten, Farben, Schriften, absolute
+    Pfade, kanonische Zahlen), Teile mit stabilen IDs und `bbox`, Grenzen D32
+    (ablehnen statt kürzen), `assetId` = sha256 der Ausgabe.
+  - Unabhängige Sicherheitsprüfung `SvgSafetyCheck` auf der Ausgabe;
+    erneutes Bereinigen ist idempotent (Austausch, AP12).
+- **Client** (`Client/src/components/overlay/assets/`): `SvgImportPreview`
+  zeigt nur die bereinigte Ausgabe als Bild mit ausdrücklicher Bestätigung;
+  Upload-Helfer. Einbindung über AP09/AP13.
+- **Tests:** gemeinsame Fixtures `Shared/Overlay/fixtures/svg/` mit
+  byte-genauen Ausgaben; Negativfälle (Skripte, Handler, foreignObject,
+  externe/data-URLs, CSS-Importe, SMIL, XXE, Billion Laughs, use-Bomben,
+  Grenzen). Ein adversarialer Review fand keinen Weg zu ausführbarem Code oder
+  externen Abrufen; gefundene Robustheitsprobleme (u. a. Stapelüberlauf,
+  quadratische Laufzeiten) sind behoben und durch Regressionstests abgedeckt.
+  End-to-End-Upload über HTTP gegen lokalen Server mit Test-DB.
+- **Offen für AP14:** Browserprüfung der Vorschau.
 
 **Ziel:** Statische importierte Geometrie sicher und reproduzierbar bereitstellen.
 
@@ -371,7 +392,26 @@ das unsichere Original ausführen.
 interne Referenzen/Elementauswahl bleiben stabil. Keine externen Requests aus
 importierten Dateien, auch nicht während der Vorschau.
 
-## AP08 – SVG-/Animationslaufzeit und LiDAR-Widget
+## AP08 – SVG-/Animationslaufzeit und LiDAR-Widget ✅
+
+**Status (2026-11-02):** umgesetzt.
+- **Kern** (`Client/src/components/overlay/runtime/`):
+  `createRuntime(config, options).step(t, source)` mit Clip-Zustandsmaschine,
+  Raten (dt-Kappung 0,25 s, Wrap), Bindungen mit Glättung (Winkel über den
+  kürzesten Weg), Keyframes mit Easing und Scrubbing; Qualitätsmarkierungen
+  ungültig > ungeprüft > pausiert, `onInvalid: hide` (D71).
+- **Szene:** alle Elementtypen, Transformationsreihenfolge, Markierungen in
+  fester Bildschirmgröße, normalisierte Assets mit ID-Präfix `ovl-<elementId>-`.
+- **LiDAR-Widget** (`runtime/widgets/lidar/`): Sektoren 4/6/8/12/16/24, fünf
+  beschriftete Ringe, Farbskala, Pulsieren 0,5–2 Hz, 0,5 s Nachleuchten,
+  Teilscan-Warnung, Sweep.
+- **Einbettung:** `OverlayController` und `<OverlayRenderer>` mit Bedarf über
+  AP05, Pause bei verborgenem Tab/Element, Neustart ohne Nachholen;
+  DOM-Patch ohne React-Render pro Bild.
+- **Tests:** alle Laufzeit-Fixtures, Qualitätsfälle, alle LiDAR-Aufteilungen,
+  Asset-Parser und -Scoping, Referenzdokumente R1/R2/Varianten, grobe
+  Kostenprüfung. Die React-Verdrahtung (Observer) ist nicht automatisiert
+  geprüft (kein jsdom); Browsermessungen in AP14, Videoeinbau in AP13.
 
 **Ziel:** Effektive Konfiguration mit gemeinsamen Laufzeitregeln rendern,
 unabhängig von Videoeinbettung, Editorpersistenz und Fahrzeugsteuerung.

@@ -612,6 +612,13 @@ Arbeitspakete: [Overlay-Arbeitspakete.md](Overlay-Arbeitspakete.md).
   Benutzern vorbehalten; `/api/car/{id}/telemetry` ist unverändert.
 - Geprüft wird beim Anmelden von Interesse, nicht beim Zurückziehen.
 
+### D71 – Ungeprüfte Quelle: Bindungen folgen, Raten und Clips halten
+
+- Direkte Bindungen, auch Transformationen wie Drehung oder Länge, wenden
+  einen ungeprüften Wert an und zeigen das gelbe Warndreieck.
+- Integrierende Raten und Clips halten bei ungeprüfter Quelle an (Laufzeit-
+  vertrag §3). Overlay-Feature.md ist entsprechend präzisiert.
+
 ## Spezifikationsstand
 
 ### S01 – Dokumentmodell und Property-Katalog v1 (Entwurf)
@@ -739,6 +746,8 @@ Gerätelauf ([modules §4](Shared/Overlay/modules/README.md)).
 | 2026-11-02 | AP06 präzisiert die Analyse (Ausdrucksvertrag §7): Rangfolge der einen Diagnose, Typregeln für `if`/`fallback`/`==`, Bezeichner ohne Klammern, Tiefe von `pi()`, unbekannte Quellenlisten werden nicht geprüft | AP01, AP06, AP10 |
 | 2026-11-02 | AP04: Quelloption `scannerClockwise` (D58), Optionsprüfung und Zustandsregeln im LiDAR-Vertrag §1/§5/§7; Fixture `spatial-limit-inside` korrigiert (Zone 2); `TelemetryDataType.LidarGrid = 4`; Einrichtungsaktion `overlay/lidar-grid-source` | AP04, AP05, AP08, AP13 |
 | 2026-11-02 | AP05: D69, D70; Endpunkt `overlay/sources`, Metadaten um `readIntervalTicks`/`zoneLimitsMm` ergänzt (Telemetrievertrag §6/§7, API §3/§4) | AP03, AP05, AP08, AP13 |
+| 2026-11-02 | AP07: SVG-Vertrag präzisiert (zusammengesetzte Selektoren ohne Kombinatoren, `switch`, Wurzel-`x`/`y`, Größenrückfall, Zählweise der Grenzen und zusätzliche Arbeitsgrenzen, `data-part` beim Re-Import); Fixtures `fixtures/svg/`; D67 entfällt mit registrierter Bereinigung | AP02, AP07, AP08, AP12 |
+| 2026-11-02 | AP08: D71; Laufzeit-Diagnosecodes `OVL_RUNTIME_*`; Frame-Zeiten der Laufzeit-Fixtures relativ zu t = 0 | AP08, AP10, AP11, AP14 |
 | 2026-11-02 | AP06 auf dem Server registriert: Veröffentlichen prüft Formeln, D66 greift nur noch ohne registrierte Prüfung; `LidarGrid`-Kanäle sind kein Formelwert; Abhängigkeitsauskunft (`dependencies`) umgesetzt | AP02, AP06, AP13 |
 
 ## Prüfpunkte nach Freigabe

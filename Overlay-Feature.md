@@ -416,7 +416,7 @@ Zuordnung zu einzelnen Videoframes.
 | Zustand | Standardverhalten |
 | --- | --- |
 | Aktuell und gültig | Reguläre Anzeige und erlaubte telemetriegetriebene Bewegung. |
-| Quellzustand ungeprüft, etwa Alt-Onboard | Zahlen/Werte dürfen mit gelbem Warndreieck mit Ausrufezeichen angezeigt werden; abhängige Bewegungen bleiben gestoppt. |
+| Quellzustand ungeprüft, etwa Alt-Onboard | Zahlen/Werte und direkte Bindungen (auch Drehung/Länge) folgen dem Wert mit gelbem Warndreieck mit Ausrufezeichen; integrierende Raten und Clips bleiben gestoppt (D71). |
 | Fehlend, ungültig oder veraltet | Zahlen zeigen „—“; grafische Anzeigen halten die letzte gültige Position und werden sichtbar als ungültig markiert; abhängige Bewegungen stoppen. |
 | Aktueller, unvollständiger LiDAR-Scan | Erkannte gültige Gruppen werden dargestellt; gelbes Warndreieck am gesamten Raster kennzeichnet eingeschränkte Datenqualität. |
 
@@ -702,8 +702,9 @@ Es erfolgt keine automatische Einführung auf Server oder Fahrzeug.
   Verbraucher und deren unabhängiger Verbindungs-/Abhängigkeitslebenszyklus.
 - Regelmäßig weitergesendete alte Sensorwerte, Transportausfall und
   quellseitige Fehler; Fristüberschreibung heilt keine ungültige Quelle.
-- Alt-Onboard/ungeprüfte Quelle: sichtbare Werte mit gelbem Warndreieck,
-  aber gestoppte abhängige Bewegung; echte ungültige Werte nicht als null.
+- Alt-Onboard/ungeprüfte Quelle: sichtbare Werte und direkte Bindungen mit
+  gelbem Warndreieck, aber gestoppte Raten und Clips (D71); echte ungültige
+  Werte nicht als null.
 - Lokale Testwerte/Verläufe/Fehlerzustände beeinflussen weder echte Telemetrie
   noch Fahrzeugsteuerung oder persönliche Telemetriepräferenzen.
 - Editor-Steuerungspause, bewusste Freigabe und keine automatische Reaktivierung.
