@@ -2,14 +2,18 @@
 // AP10 – formula input with live AP06 diagnostics and live value, plus the
 // channel picker of simple bindings. Shared by inspector and timeline.
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { setDiagnostics } from "@codemirror/lint";
+import { EditorState } from "@codemirror/state";
+import { EditorView } from "@codemirror/view";
 import type { PropDef } from "../../document/catalog";
 import type { SignalDefinition } from "../../document/types";
-import type { AnalysisEnv, ValueSource } from "../../expression";
+import type { AnalysisEnv, ExprDiagnostic, ValueSource } from "../../expression";
 import type { RendererSource } from "../../runtime/controller";
 import type { Locale } from "../../runtime/types";
 import type { OverlaySourceProvider } from "../../sources/types";
 import { bindableSources, type ChannelDirectory } from "./channels";
 import { checkFormula, liveValue, simpleSource, sourceExpr, type FormulaCheck, type LiveValue } from "./formula";
+import { formulaDiagnostics, formulaExtensions, formulaSources, type FormulaContext } from "./formula-language";
 import type { DynamicsMessages } from "./messages";
 
 export const btn = "px-1.5 py-0.5 rounded text-[11px] border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 disabled:opacity-40";
@@ -67,6 +71,9 @@ export interface FormulaFieldProps {
   /** Expected result kind: property kind, "bool" (condition) or "number" (rate). */
   expected: string;
   env: AnalysisEnv;
+  /** Units and decimals for completion and hover; names come from `env` alone without it. */
+  dir?: ChannelDirectory;
+  signals?: Record<string, SignalDefinition>;
   source?: RendererSource;
   locale: Locale;
   def?: PropDef;
@@ -86,22 +93,17 @@ export function FormulaField(props: FormulaFieldProps) {
   useEffect(() => setDraft(value), [value]);
   const check = useMemo(() => checkFormula(draft, env, expected), [draft, env, expected]);
   const live = useLiveValue(check, props.source, props.locale, props.def);
-  const commit = () => { if (draft !== value) props.onCommit(draft); };
+  const sources = useMemo(() => formulaSources(env, props.dir, props.signals), [env, props.dir, props.signals]);
   const d = check.diagnostic;
   return (
     <div className="flex flex-col gap-0.5" data-ovl-formula={props.testId ?? ""}>
-      <textarea
-        className={`${input} font-mono resize-y ${d ? "border-red-700" : ""}`}
-        rows={Math.min(4, Math.max(1, Math.ceil(draft.length / 32)))}
+      <FormulaInput
         value={draft}
-        spellCheck={false}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          e.stopPropagation();
-          if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); commit(); }
-          if (e.key === "Escape") setDraft(value);
-        }}
+        diagnostic={d}
+        context={{ expected, locale: props.locale, sources }}
+        onChange={setDraft}
+        onCommit={(text) => { if (text !== value) props.onCommit(text); }}
+        onRevert={() => setDraft(value)}
       />
       {d ? (
         <span className={`text-[11px] ${d.category === "structure" ? "text-red-400" : "text-amber-400"}`} data-ovl-diagnostic={d.code}>
@@ -110,6 +112,49 @@ export function FormulaField(props: FormulaFieldProps) {
       ) : <LiveBadge live={live} m={m} />}
     </div>
   );
+}
+
+interface FormulaInputProps {
+  value: string;
+  diagnostic?: ExprDiagnostic;
+  context: FormulaContext;
+  onChange(text: string): void;
+  onCommit(text: string): void;
+  onRevert(): void;
+}
+
+/** CodeMirror with the formula language; created after mount, so server rendering shows the frame only. */
+function FormulaInput(props: FormulaInputProps) {
+  const host = useRef<HTMLDivElement>(null);
+  const view = useRef<EditorView | null>(null);
+  const latest = useRef(props);
+  latest.current = props;
+  useEffect(() => {
+    const v = new EditorView({
+      parent: host.current!,
+      state: EditorState.create({
+        doc: latest.current.value,
+        extensions: formulaExtensions({
+          context: () => latest.current.context,
+          onChange: (text) => latest.current.onChange(text),
+          onCommit: (text) => latest.current.onCommit(text),
+          onRevert: () => latest.current.onRevert(),
+        }),
+      }),
+    });
+    view.current = v;
+    return () => { v.destroy(); view.current = null; };
+  }, []);
+  useEffect(() => {
+    const v = view.current;
+    if (v && v.state.doc.toString() !== props.value) v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: props.value } });
+  }, [props.value]);
+  useEffect(() => {
+    const v = view.current;
+    if (v) v.dispatch(setDiagnostics(v.state, formulaDiagnostics(v.state.doc.toString(), props.diagnostic)));
+  }, [props.value, props.diagnostic]);
+  const border = props.diagnostic ? "border-red-700" : "border-zinc-700 focus-within:border-zinc-500";
+  return <div ref={host} className={`min-w-0 rounded border overflow-hidden ${border}`} data-ovl-formula-input />;
 }
 
 export interface ChannelPickerProps {

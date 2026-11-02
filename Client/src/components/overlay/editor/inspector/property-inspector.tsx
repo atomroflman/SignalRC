@@ -284,7 +284,7 @@ function BindingEditor({ row, ctx }: { row: PropertyRow; ctx: RowContext }) {
       )}
       {showFormula && (
         <div className="flex flex-col gap-0.5">
-          <FormulaField value={expr} expected={row.def.kind} env={ctx.env} source={ctx.source} locale={ctx.locale} def={row.def} m={m} onCommit={commit} testId={row.property} />
+          <FormulaField value={expr} expected={row.def.kind} env={ctx.env} dir={ctx.dir} signals={ctx.signals} source={ctx.source} locale={ctx.locale} def={row.def} m={m} onCommit={commit} testId={row.property} />
           {hasChannels && <button className={`${btn} self-start`} onClick={() => setFormula(false)}>{m.simpleBinding}</button>}
         </div>
       )}
@@ -328,6 +328,8 @@ function RateEditor({ row, ctx }: { row: PropertyRow; ctx: RowContext }) {
         value={rate.expr}
         expected="number"
         env={ctx.env}
+        dir={ctx.dir}
+        signals={ctx.signals}
         source={ctx.source}
         locale={ctx.locale}
         m={m}

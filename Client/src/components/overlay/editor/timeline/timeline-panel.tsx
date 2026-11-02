@@ -164,7 +164,7 @@ function ClipEditor({ store, info, m, channels, source, locale, onDeleted }: Tim
           {trigger.mode !== "auto" && (
             <label className="flex flex-1 min-w-[14rem] items-start gap-1">{m.condition}
               <div className="flex-1">
-                <FormulaField value={trigger.condition} expected="bool" env={env} source={source} locale={locale} m={m} testId="condition"
+                <FormulaField value={trigger.condition} expected="bool" env={env} dir={channels} signals={state.document.signals} source={source} locale={locale} m={m} testId="condition"
                   onCommit={(expr) => dispatch(conditionCommand(id, trigger, expr), "condition")} />
               </div>
             </label>
