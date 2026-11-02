@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">
+  <foreignObject x="0" y="0" width="10" height="10">
+    <div xmlns="http://www.w3.org/1999/xhtml"><img src="https://evil.example/t.png" onerror="alert(1)"/></div>
+  </foreignObject>
+  <foreignobject><body xmlns="http://www.w3.org/1999/xhtml">case variant</body></foreignobject>
+  <rect width="10" height="10"/>
+</svg>

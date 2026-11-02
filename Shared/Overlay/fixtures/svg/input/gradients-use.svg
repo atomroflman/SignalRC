@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="base" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#00ff00"/>
+      <stop offset="100%" stop-color="red" stop-opacity="0.5"/>
+    </linearGradient>
+    <linearGradient id="derived" xlink:href="#base" x2="1" y2="0"/>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0" style="stop-color:white"/>
+      <stop offset="1" stop-color="currentColor"/>
+    </radialGradient>
+    <linearGradient id="unused"><stop offset="0" stop-color="blue"/></linearGradient>
+    <clipPath id="round">
+      <circle cx="50" cy="50" r="40"/>
+    </clipPath>
+    <symbol id="tick" viewBox="0 0 10 10">
+      <rect x="4" y="0" width="2" height="10" fill="url(#base)"/>
+    </symbol>
+    <path id="marker" d="M0 0L4 0L2 4Z"/>
+  </defs>
+  <g id="bar" clip-path="url(#round)">
+    <rect x="0" y="0" width="100" height="50" fill="url(#derived)"/>
+    <rect x="0" y="50" width="100" height="50" fill="url(#glow) #000" color="blue"/>
+    <rect x="0" y="90" width="10" height="10" fill="url(#missing) green"/>
+  </g>
+  <use id="tick-1" href="#tick" x="10" y="10" width="20" height="20"/>
+  <use id="tick-2" xlink:href="#tick" x="40" y="10" width="20" height="20" fill="blue"/>
+  <use href="#marker" transform="translate(80 80)" fill="white"/>
+</svg>

@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 10">
+  <defs>
+    <mask id="m"><rect width="10" height="10" fill="white"/></mask>
+    <filter id="f"><feGaussianBlur stdDeviation="2"/><feImage href="https://evil.example/x.png"/></filter>
+    <pattern id="p" width="2" height="2"><rect width="1" height="1"/></pattern>
+    <marker id="mk"><circle r="1"/></marker>
+  </defs>
+  <rect width="10" height="10" mask="url(#m)" filter="url(#f)" fill="url(#p) gray" vector-effect="non-scaling-stroke" stroke="black"/>
+  <path d="M0 0L10 10" marker-end="url(#mk)" stroke="black"/>
+  <g display="none"><rect x="10" width="10" height="10" fill="red"/></g>
+  <rect x="10" width="10" height="10" style="display:none"/>
+  <rect x="10" width="10" height="10" visibility="hidden"/>
+  <svg x="10" width="10" height="10"><rect width="10" height="10"/></svg>
+  <textPath href="#x">t</textPath>
+  <rect x="10" width="1em" height="10" font-size="2em" stroke-width="0.5ex" fill="blue"/>
+  <text x="12" y="8" font-family="Courier New" font-size="large" letter-spacing="normal" font-weight="bold">A<tspan font-family="Georgia" font-style="italic">b</tspan></text>
+</svg>

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="10 10 80 40" preserveAspectRatio="xMinYMin meet" width="160" height="100">
+  <g>
+    <rect id="a b" x="10" y="10" width="10" height="10"/>
+    <rect id="a_b" x="25" y="10" width="10" height="10"/>
+    <rect id="a&amp;b" x="40" y="10" width="10" height="10"/>
+  </g>
+  <circle id="part-2" cx="60" cy="30" r="5"/>
+  <circle cx="75" cy="30" r="5"/>
+  <a href="https://example.com/" id="link"><rect x="10" y="30" width="10" height="10"/></a>
+  <text x="50" y="45" font-size="8" text-anchor="middle">  two
+     words  </text>
+</svg>
