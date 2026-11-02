@@ -16,6 +16,7 @@ import { SubtractFunction } from "./SubtractFunction";
 import { ToggleFunction } from "./ToggleFunction";
 import { TurnSignal } from "./TurnSignal";
 import { SignFunction } from "./SignFunction";
+import { HudSignalFunction } from "./HudSignalFunction";
 
 export var storedToggleValues = {} as Record<number, {switchState: boolean, toggleState: boolean}>;
 
@@ -57,5 +58,6 @@ export const filterFunctionRegistry = {
   FloatValue: new FloatValueFunction(),
   Smooth: new SmoothFunction(),
   Sign: new SignFunction(),
+  HudSignal: new HudSignalFunction(),
 };
 

@@ -5,6 +5,8 @@ import CollapsibleSection from "@/components/collapsible-section";
 import LanguageSwitcher from "@/components/language-switcher";
 import ConfigGuard from "@/components/config-guard";
 import { useI18n } from "@/i18n/provider";
+import LidarSourceSetup from "@/components/overlay/lidar-source/lidar-source-setup";
+import { confirmationText, dependencyWarning, loadChannelDependencies } from "@/components/overlay/integration/channel-dependencies";
 
 type PinManager = {
   name: string;
@@ -73,7 +75,8 @@ type Template = {
   updatedAt?: string | null;
 };
 
-const DATA_TYPES = ["String", "Integer", "Float", "Boolean"];
+// Index = TelemetryDataType (Shared/Channels/TelemetryDataType.cs); 4 = compact LiDAR grid (AP04).
+const DATA_TYPES = ["String", "Integer", "Float", "Boolean", "LidarGrid"];
 
 function Field({ label, children, hint, className }: { label: string; children: React.ReactNode; hint?: string; className?: string }) {
   return (
@@ -251,9 +254,9 @@ export default function ChannelsPage() {
   const [editingTelemetry, setEditingTelemetry] = useState<{ key: string; channel: TelemetryChannel; isNew: boolean } | null>(null);
   const [editingVideo, setEditingVideo] = useState<{ key: string; stream: VideoStream; isNew: boolean } | null>(null);
 
-  const reload = useCallback(async () => {
+  const load = useCallback(async (showLoading: boolean) => {
     if (!carIdNum) return;
-    setLoading(true);
+    if (showLoading) setLoading(true);
     try {
       const [r, t] = await Promise.all([
         fetch(`/api/cars/${carIdNum}/channels`),
@@ -319,6 +322,9 @@ export default function ChannelsPage() {
       setLoading(false);
     }
   }, [carIdNum]);
+  const reload = useCallback(() => load(true), [load]);
+  // Keeps embedded helpers (LiDAR source) mounted with their status message.
+  const reloadQuietly = useCallback(() => { void load(false); }, [load]);
 
   useEffect(() => { reload(); }, [reload]);
 
@@ -409,8 +415,16 @@ export default function ChannelsPage() {
     reload();
   };
 
+  // Deleting a channel the HUD uses breaks its bindings: warn first (AP02 dependencies).
+  const confirmChannelDelete = async (question: string, channel: string) => {
+    if (!carIdNum) return false;
+    const m = messages.overlay.channels;
+    const warning = dependencyWarning(await loadChannelDependencies(carIdNum, channel), channel, m);
+    return confirm(confirmationText(question, warning, m));
+  };
+
   const deleteControl = async (key: string) => {
-    if (!carIdNum || !confirm(`Delete control channel "${key}"?`)) return;
+    if (!carIdNum || !(await confirmChannelDelete(`Delete control channel "${key}"?`, key))) return;
     const r = await fetch(`/api/cars/${carIdNum}/channels/control/${encodeURIComponent(key)}`, { method: "DELETE" });
     if (!r.ok) { alert(await r.text()); return; }
     reload();
@@ -443,7 +457,7 @@ export default function ChannelsPage() {
   };
 
   const deleteTelemetry = async (key: string) => {
-    if (!carIdNum || !confirm(`Delete telemetry channel "${key}"?`)) return;
+    if (!carIdNum || !(await confirmChannelDelete(`Delete telemetry channel "${key}"?`, key))) return;
     const r = await fetch(`/api/cars/${carIdNum}/channels/telemetry/${encodeURIComponent(key)}`, { method: "DELETE" });
     if (!r.ok) { alert(await r.text()); return; }
     reload();
@@ -620,6 +634,10 @@ export default function ChannelsPage() {
               <TelemetryEditor isNew={true} onSave={(nt) => saveTelemetry("__new__", nt, true)} onCancel={() => setEditingTelemetry(null)} telemetryTypes={availableTelemetryTypes} />
             )}
           </div>
+        </CollapsibleSection>
+
+        <CollapsibleSection title={messages.overlay.lidarSource.title} defaultCollapsed={false}>
+          <LidarSourceSetup carId={carIdNum} onChanged={reloadQuietly} />
         </CollapsibleSection>
 
         <CollapsibleSection title={`Video streams (${videos.length})`} defaultCollapsed={false}>
