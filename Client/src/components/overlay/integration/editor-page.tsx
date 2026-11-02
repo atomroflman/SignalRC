@@ -31,6 +31,7 @@ import {
 import type { IntegrationMessages } from "./messages";
 import { PublishPanel } from "./publish-panel";
 import { SvgImportDialog } from "./svg-import-dialog";
+import { TelemetryDiagnosticsPanel } from "./telemetry-diagnostics-panel";
 import type { Size, VideoGeometry } from "./video-frame";
 
 type EditorPageMessages = IntegrationMessages["editorPage"];
@@ -292,6 +293,8 @@ export function OverlayEditorPage({ carId }: { carId: number }) {
               <Section title={m.svgImport.title}>
                 <SvgImportDialog store={api.store} carId={carId} locale={locale} m={m.svgImport} canImport={hasControl} onAsset={addAssets} />
               </Section>
+              {/* Its own <details>: a collapsed Section would keep it mounted. */}
+              <TelemetryDiagnosticsPanel carId={carId} provider={live} />
             </>
           )}
         </OverlayEditorWithPreview>

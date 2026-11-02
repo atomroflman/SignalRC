@@ -63,6 +63,7 @@ public partial class CarConnectionHub
 
     private void LogRejectedTelemetry(string? claimedCarId)
     {
+        Service<TelemetryRelay>().RejectedDelta(claimedCarId);
         if (Interlocked.Increment(ref _rejectedTelemetry) % 100 == 1)
         {
             Logger.LogWarning("Rejected telemetry from {Connection} (claimed car {CarId}): not the registered onboard", Context.ConnectionId, claimedCarId);
