@@ -1,12 +1,13 @@
 using System.Text.Json.Nodes;
 using SignalRC.Overlay.Tests.Testing;
 using SignalRC.Server.Overlay.Documents;
+using SignalRC.Server.Overlay.Expressions;
 
 namespace SignalRC.Overlay.Tests.Documents;
 
 public class ValidateTests
 {
-    private static readonly ResolveContext Ctx = new() { Expressions = FakeExpressionAnalyzer.Instance };
+    private static readonly ResolveContext Ctx = new() { Expressions = ExpressionAnalyzer.Instance };
 
     private static JsonObject Case(string file) =>
         Contracts.ReadJson("fixtures/documents/cases.json")!["cases"]!.AsArray()

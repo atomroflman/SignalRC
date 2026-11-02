@@ -58,7 +58,7 @@ gehaltenen Revisionen oder einer Veröffentlichung, werden gelöscht.
 | POST | `publications` | Verwalter | `{ baseRevision, note? }` → `201 { publicationId, number, warnings }` |
 | POST | `draft/restore` | Verwalter | `{ publicationId, baseRevision }` → `200 { revision }` |
 | POST | `assets` | Verwalter | `multipart/form-data` (`file`) → `200 { assetId, metadata, svg, report }` |
-| GET | `dependencies?channel=<name>` | Verwalter | `200 { draft: Location[], published: Location[] }` für Warnungen der Kanalverwaltung; folgt mit AP06 (braucht die Abhängigkeitsanalyse der Formeln) |
+| GET | `dependencies?channel=<name>` | Verwalter | `200 { draft: [{ kind, location }], published: [{ kind, location }] }` für Warnungen der Kanalverwaltung. `kind`: `telemetry` (`tel()`, LiDAR-Quelle, Fristüberschreibung) oder `output` (`out()`); `location` wie bei Diagnosen. Deaktivierte Teile zählen mit; historische Veröffentlichungen nicht. |
 | POST | `lidar-grid-source` | Verwalter | richtet den LiDAR-Rasterkanal ein (LiDAR-Vertrag §7): `200 { created: bool }`; Umsetzung in AP04 |
 
 \* Ein Asset ist für Betrachter nur lesbar, wenn eine Veröffentlichung des

@@ -75,16 +75,20 @@ public sealed record AssetMetadata(
     IReadOnlyDictionary<string, AssetPart> Parts,
     long? SizeBytes = null);
 
+/// <summary>
+/// Known sources of a formula. Null telemetry or outputs mean "not known here":
+/// such references are then neither checked nor typed.
+/// </summary>
 public sealed record ExpressionEnvironment(
-    IReadOnlyDictionary<string, TelemetryDataType> Telemetry,
-    IReadOnlyList<string> Outputs,
+    IReadOnlyDictionary<string, TelemetryDataType>? Telemetry,
+    IReadOnlyList<string>? Outputs,
     IReadOnlyList<string> Signals);
 
 public sealed record ExpressionDiagnostic(string Code, DiagnosticCategory Category, int Offset, string? Message = null);
 
 public sealed record ExpressionAnalysis(IReadOnlyList<ExpressionDiagnostic> Diagnostics);
 
-/// <summary>Port to the expression system (AP06). Optional for AP01.</summary>
+/// <summary>Port to the expression system (AP06); implemented by Expressions.ExpressionAnalyzer.</summary>
 public interface IExpressionAnalyzer
 {
     /// <param name="expected">Kind a formula result must have, as named in expression/README.md §3.</param>

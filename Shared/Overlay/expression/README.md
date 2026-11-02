@@ -214,6 +214,8 @@ Ergänzende Typregeln:
 - Ein Bezeichner ohne Klammern (z. B. `speed`) ist ein Syntaxfehler am
   Bezeichner, weil es keine Variablen gibt.
 - Ein Funktionsaufruf ohne Argumente (`pi()`) hat Tiefe 1.
+- Ein Kanal vom Typ `LidarGrid` ist kein Formelwert: `tel()` darauf ergibt
+  `OVL_EXPR_TYPE` am Aufruf.
 
 **Unbekannte Quellenlisten:** Kennt der Aufrufer keine Telemetrie- bzw.
 Ausgangsliste, etwa weil eine Prüfung ohne Fahrzeugkontext läuft, werden

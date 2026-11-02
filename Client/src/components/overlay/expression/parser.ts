@@ -181,7 +181,10 @@ class Parser {
         if (token.value === "true" || token.value === "false") {
           return { kind: "bool", value: token.value === "true", start: token.start };
         }
-        if (!this.isOp("(")) throw new SyntaxError(token.start, `${token.value} ist keine Funktion`);
+        // Look at the raw next token: a lexical error after the identifier is
+        // later in the source and must not hide this one.
+        const next = this.tokens[this.index];
+        if (next.type !== "op" || next.value !== "(") throw new SyntaxError(token.start, `${token.value} ist keine Funktion`);
         this.index++;
         const args: Node[] = [];
         if (!this.isOp(")")) {

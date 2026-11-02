@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using SignalRC.Server.Data;
 using SignalRC.Server.Overlay;
+using SignalRC.Server.Overlay.Expressions;
 using SignalRC.Shared.Channels;
 
 namespace SignalRC.Overlay.Tests.Overlay;
@@ -74,8 +75,9 @@ public abstract class OverlayServiceTests : IDisposable
         GC.SuppressFinalize(this);
     }
 
-    private OverlayService Service() =>
-        new(_ctx, new OverlayAccess(_ctx), _sanitizer, _events, _time);
+    /// <summary>Without an analyzer the service takes the D66 fallback (formulas unchecked).</summary>
+    private OverlayService Service(Server.Overlay.Documents.IExpressionAnalyzer? expressions = null) =>
+        new(_ctx, new OverlayAccess(_ctx), _sanitizer, _events, _time, expressions);
 
     private static byte[] Doc(string elements = "{}", string children = "[]", string extra = "") =>
         Encoding.UTF8.GetBytes($$"""{"schemaVersion":1,"workspace":{"width":1280,"height":720},"elements":{{elements}},"children":{{children}}{{extra}}}""");
@@ -263,6 +265,22 @@ public abstract class OverlayServiceTests : IDisposable
     }
 
     [SkippableFact]
+    public async Task TheRegisteredAnalyzerChecksFormulaSources()
+    {
+        Require();
+        var service = Service(ExpressionAnalyzer.Instance);
+        await SaveAsync(Doc("""{"e_v":{"type":"valueText","props":{"value":{"base":null,"binding":{"expr":"tel(\"nope\")"}}}}}""", """["e_v"]"""));
+        var blocked = await service.PublishAsync(CarId, _driver, 1, null);
+        Assert.Equal("OVL_API_PUBLISH_BLOCKED", blocked.Error?.Code);
+        Assert.Contains(blocked.Error!.Diagnostics!, d => d.Code == "OVL_REF_UNKNOWN_SOURCE" && d.Location.Element == "e_v");
+
+        await SaveAsync(Doc(Speed, """["e_v"]"""), 1);
+        var published = await service.PublishAsync(CarId, _driver, 2, null);
+        Assert.Equal(1, published.Value?.Number);
+        Assert.DoesNotContain(published.Value!.Warnings, d => d.Code == "OVL_EXPR_UNCHECKED");
+    }
+
+    [SkippableFact]
     public async Task PublishingRequiresTheCurrentRevision()
     {
         Require();
@@ -316,6 +334,25 @@ public abstract class OverlayServiceTests : IDisposable
         Assert.Equal(2, live.Number);
         Assert.Null(live.Document["elements"]!["e_v"]);
         Assert.Equal(409, (await Service().RestoreAsync(CarId, _driver, publicationId, 2)).Error?.Status);
+    }
+
+    // --- Channel dependencies ---
+
+    [SkippableFact]
+    public async Task DependenciesListDraftAndPublishedUses()
+    {
+        Require();
+        var elements = """{"e_v":{"type":"valueText","props":{"value":{"base":null,"binding":{"expr":"tel(\"odoSpeed\") * 3.6"}}}},"e_l":{"type":"lidarWidget","source":"odoSpeed","disabled":true},"e_s":{"type":"linearGauge","props":{"value":{"base":0,"binding":{"expr":"out(\"steering\")"}}}}}""";
+        await SaveAsync(Doc(elements, """["e_v","e_l","e_s"]"""));
+        await Service().PublishAsync(CarId, _driver, 1, null);
+        await SaveAsync(Doc(), 1);
+
+        var speed = (await Service().GetDependenciesAsync(CarId, _driver, "odoSpeed")).Value!;
+        Assert.Empty(speed.Draft);
+        Assert.Equal(["telemetry:e_v:value", "telemetry:e_l:source"], speed.Published.Select(r => $"{r.Kind}:{r.Location.Element}:{r.Location.Property ?? r.Location.Field}"));
+        var steering = (await Service().GetDependenciesAsync(CarId, _driver, "steering")).Value!;
+        Assert.Equal(["output"], steering.Published.Select(r => r.Kind));
+        Assert.Equal(403, (await Service().GetDependenciesAsync(CarId, _passive, "odoSpeed")).Error?.Status);
     }
 
     // --- Assets ---

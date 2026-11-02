@@ -73,6 +73,14 @@ public class OverlayController(SignalRCContext context, OverlayService overlay) 
         return Ok(new { result.Value.Revision });
     }
 
+    [HttpGet("dependencies")]
+    public async Task<IActionResult> GetDependencies(int carId, [FromQuery] string? channel)
+    {
+        if (string.IsNullOrEmpty(channel)) return Problem(new OverlayError("OVL_API_INVALID_REQUEST", 400, "Parameter channel fehlt"));
+        var result = await overlay.GetDependenciesAsync(carId, await GetCurrentUserAsync(), channel);
+        return result.Error != null ? Problem(result.Error) : Ok(JsonSerializer.SerializeToNode(result.Value, Json));
+    }
+
     [HttpGet("publications")]
     public async Task<IActionResult> ListPublications(int carId)
     {

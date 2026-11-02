@@ -2,6 +2,7 @@ using System.IO.Compression;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.ResponseCompression;
 using SignalRC.Server.Overlay.Documents;
+using SignalRC.Server.Overlay.Expressions;
 
 namespace SignalRC.Server.Overlay;
 
@@ -21,6 +22,8 @@ public static partial class OverlayRegistration
             sp.GetRequiredService<IOverlayNotifier>(),
             sp.GetRequiredService<TimeProvider>(),
             sp.GetService<IExpressionAnalyzer>()));
+        // AP06: formulas are checked on publish (replaces the D66 fallback warning).
+        services.AddSingleton<IExpressionAnalyzer>(ExpressionAnalyzer.Instance);
         services.AddSingleton<IOverlayNotifier, HubOverlayNotifier>();
         // D67: refuses uploads until AP07 registers the real sanitizer.
         services.AddSingleton<ISvgAssetSanitizer, UnavailableSvgAssetSanitizer>();

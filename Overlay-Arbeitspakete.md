@@ -143,10 +143,12 @@ deterministisch getestet; Server und Client stimmen überein.
 ## AP02 – Serverpersistenz, Berechtigungen und Veröffentlichung
 
 **Status (2026-11-02):** umgesetzt in `Server/Overlay/` mit Migration
-`AddOverlay`. Getestet gegen SQLite (xUnit), noch nicht gegen PostgreSQL. Offen:
-- Abhängigkeitsauskunft für die Kanalverwaltung (braucht AP06).
-- Formelprüfung beim Veröffentlichen (AP06; bis dahin D66).
-- SVG-Upload (AP07; bis dahin D67).
+`AddOverlay`, einschließlich Abhängigkeitsauskunft und Formelprüfung beim
+Veröffentlichen (AP06).
+- Getestet gegen SQLite und die PostgreSQL-Testdatenbank, inklusive
+  Nebenläufigkeit.
+- Zusätzlich End-to-End über HTTP und Hub gegen einen lokal gestarteten Server.
+- Offen: SVG-Upload (AP07; bis dahin D67).
 
 **Ziel:** Gemeinsamen Entwurf und unveränderliche Veröffentlichungen sicher
 speichern und berechtigten Clients zugänglich machen.
@@ -255,6 +257,13 @@ Verbrauchers stört andere nicht. Alterung tritt auch ohne weitere Nachrichten
 ein. Persönliche gespeicherte Präferenzen bleiben unverändert.
 
 ## AP06 – Sicheres Ausdruckssystem
+
+**Status (2026-11-02):** umgesetzt.
+- Client (`Client/src/components/overlay/expression/`): Analyse und Auswertung.
+- Server (`Server/Overlay/Expressions/`): Analyse.
+- Alle gemeinsamen Referenzfälle bestehen. Zusätzlich bestätigt ein
+  Differenztest mit 400 000 Vergleichen, dass Client und Server gleich
+  analysieren.
 
 **Ziel:** Gleiche sichere Formelsemantik für Client-Laufzeit und serverseitige
 Veröffentlichungsprüfung.

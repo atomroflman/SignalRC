@@ -229,6 +229,10 @@ class Analyzer {
       case "tel": {
         if (!this.env.telemetry) return "unknown";
         const t = Object.hasOwn(this.env.telemetry, arg.value) ? this.env.telemetry[arg.value] : undefined;
+        if (t === "LidarGrid") {
+          this.error("OVL_EXPR_TYPE", node.start, "Ein LiDAR-Raster ist kein Formelwert");
+          return "unknown";
+        }
         return t === undefined ? unknown() : telemetryType(t);
       }
       case "out":

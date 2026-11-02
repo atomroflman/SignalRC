@@ -89,6 +89,10 @@ describe("analysis rules", () => {
     expect(codes('1 + foo(2)', env, "bool")).toEqual(["OVL_EXPR_UNKNOWN_FUNCTION@4"]);
   });
 
+  it("rejects a LiDAR grid channel as formula value", () => {
+    expect(codes('tel("grid") + 1', { telemetry: { grid: "LidarGrid" }, signals: [] })).toEqual(["OVL_EXPR_TYPE@0"]);
+  });
+
   it("does not check sources the environment does not know", () => {
     expect(codes('tel("anything") + out("x")', { signals: [] })).toEqual([]);
     expect(codes('sig("x")', { signals: [] })).toEqual(["OVL_REF_UNKNOWN_SOURCE@0"]);
@@ -110,6 +114,7 @@ describe("analysis rules", () => {
     expect(codes("1 # 2")).toEqual(["OVL_EXPR_SYNTAX@2"]);
     expect(codes("1e999")).toEqual(["OVL_EXPR_SYNTAX@0"]);
     expect(codes("1 2 ?")).toEqual(["OVL_EXPR_SYNTAX@2"]);
+    expect(codes("speed #")).toEqual(["OVL_EXPR_SYNTAX@0"]);
   });
 
   it("counts length in code points", () => {

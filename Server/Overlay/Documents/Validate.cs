@@ -318,6 +318,19 @@ public static partial class DocumentResolver
     private static string FormulaKey(DiagnosticLocation l) =>
         string.Join('\0', l.Variant ?? "", l.Element ?? "", l.Part ?? "", l.Property ?? "", l.Clip ?? "", l.Field ?? "");
 
+    /// <summary>Standard elements and the variants' added elements, with their location.</summary>
+    private static IEnumerable<(JsonObject Element, DiagnosticLocation Location)> AllElements(JsonObject doc)
+    {
+        foreach (var (id, element) in Json.Sorted(doc.Obj("elements"))) yield return (element!.AsObject(), new DiagnosticLocation { Element = id });
+        foreach (var (streamId, variant) in Json.Sorted(doc.Obj("variants")))
+        {
+            foreach (var (id, element) in Json.Sorted(variant!.AsObject().Obj("addedElements")))
+            {
+                yield return (element!.AsObject(), new DiagnosticLocation { Variant = streamId, Element = id });
+            }
+        }
+    }
+
     /// <summary>
     /// Keys of formulas and LiDAR sources that are active in at least one shown
     /// view; everything else lies in explicitly disabled parts.
@@ -493,20 +506,9 @@ public static partial class DocumentResolver
         var active = ActiveKeys(doc);
         DiagnosticCategory Downgrade(string key, DiagnosticCategory category) =>
             category == DiagnosticCategory.Publish && !active.Contains(key) ? DiagnosticCategory.Warning : category;
-        IEnumerable<(JsonObject Element, DiagnosticLocation Location)> AllElements()
-        {
-            foreach (var (id, element) in Json.Sorted(elements)) yield return (element!.AsObject(), new DiagnosticLocation { Element = id });
-            foreach (var (streamId, variant) in variants)
-            {
-                foreach (var (id, element) in Json.Sorted(variant.Obj("addedElements")))
-                {
-                    yield return (element!.AsObject(), new DiagnosticLocation { Variant = streamId, Element = id });
-                }
-            }
-        }
         if (ctx.Sources is { } sources)
         {
-            foreach (var (element, loc) in AllElements())
+            foreach (var (element, loc) in AllElements(doc))
             {
                 if (element.Str("type") != "lidarWidget" || element.Str("source") is not { } source) continue;
                 if (sources.Telemetry.TryGetValue(source, out var dataType) && dataType == TelemetryDataType.LidarGrid) continue;
@@ -525,7 +527,7 @@ public static partial class DocumentResolver
         }
         if (ctx.Assets is { } assets)
         {
-            foreach (var (element, loc) in AllElements())
+            foreach (var (element, loc) in AllElements(doc))
             {
                 if (element.Str("type") == "svgAsset" && element.Str("assetId") is { Length: > 0 } assetId && !assets.ContainsKey(assetId))
                 {
@@ -537,8 +539,8 @@ public static partial class DocumentResolver
         if (ctx.Expressions is { } expressions)
         {
             var env = new ExpressionEnvironment(
-                ctx.Sources?.Telemetry ?? new Dictionary<string, TelemetryDataType>(),
-                ctx.Sources?.Outputs ?? [],
+                ctx.Sources?.Telemetry,
+                ctx.Sources?.Outputs,
                 Json.Keys(doc.Obj("signals")));
             foreach (var formula in formulas)
             {
@@ -564,7 +566,7 @@ public static partial class DocumentResolver
         if (ctx.Assets is { } usedAssets)
         {
             var used = new HashSet<string>();
-            foreach (var (element, _) in AllElements())
+            foreach (var (element, _) in AllElements(doc))
             {
                 if (element.Str("assetId") is { Length: > 0 } assetId) used.Add(assetId);
             }

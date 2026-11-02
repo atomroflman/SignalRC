@@ -32,6 +32,9 @@ public sealed record PublishedInfo(int PublicationId, int Number, DateTime Publi
 public sealed record PublicationInfo(int Id, int Number, DateTime PublishedAt, string? PublishedBy, string? Note);
 public sealed record PublicationResult(int PublicationId, int Number, IReadOnlyList<Diagnostic> Warnings);
 public sealed record AssetUpload(string AssetId, JsonObject Metadata, string Svg, JsonArray Report);
+/// <param name="Kind">"telemetry" (tel(), LiDAR source, staleness override) or "output" (out()).</param>
+public sealed record ChannelReference(string Kind, DiagnosticLocation Location);
+public sealed record ChannelDependencies(IReadOnlyList<ChannelReference> Draft, IReadOnlyList<ChannelReference> Published);
 
 /// <summary>
 /// Overlay draft, publications and assets of a vehicle
@@ -127,6 +130,29 @@ public sealed class OverlayService(
         var p = await db.OverlayPublications.AsNoTracking().FirstOrDefaultAsync(x => x.Id == publicationId && x.CarId == carId);
         if (p == null) return NotFound("Veröffentlichung nicht gefunden");
         return new PublishedInfo(p.Id, p.Number, p.PublishedAt, JsonNode.Parse(p.DocumentJson)!);
+    }
+
+    /// <summary>
+    /// Where the draft and the current publication use a channel, for the
+    /// warning before deleting or renaming it. Historic publications are not
+    /// listed: they are never rewritten.
+    /// </summary>
+    public async Task<OverlayResult<ChannelDependencies>> GetDependenciesAsync(int carId, User? user, string channel)
+    {
+        if (await RequireAdminAsync(user, carId) is { } error) return error;
+        var draft = await db.OverlayDrafts.AsNoTracking().Where(d => d.CarId == carId).Select(d => d.DocumentJson).FirstOrDefaultAsync();
+        var published = await db.OverlayPublications.AsNoTracking().Where(p => p.CarId == carId)
+            .OrderByDescending(p => p.Number).Select(p => p.DocumentJson).FirstOrDefaultAsync();
+        return new ChannelDependencies(References(draft, channel), References(published, channel));
+    }
+
+    private static IReadOnlyList<ChannelReference> References(string? json, string channel)
+    {
+        if (json == null || JsonNode.Parse(json) is not JsonObject doc) return [];
+        return DocumentResolver.SourceReferences(doc)
+            .Where(r => r.Name == channel && r.Kind is Expressions.SourceKind.Tel or Expressions.SourceKind.Out)
+            .Select(r => new ChannelReference(r.Kind == Expressions.SourceKind.Tel ? "telemetry" : "output", r.Location))
+            .ToList();
     }
 
     // --- Draft writes ---
