@@ -7,7 +7,7 @@
 //   the patch is larger than half the document, once more after 422 PATCH_FAILED.
 // - Conflict (409 or a foreign OverlayDraftChanged): autosave pauses, the
 //   server wins, the local state stays available as download and backup.
-// - Without control (403 NOT_DRIVER or setControl(false)): local editing goes
+// - Without control (403 NOT_DRIVER, 401 SESSION_REQUIRED or setControl(false)): local editing goes
 //   on, nothing is sent; regaining control checks the revision first.
 import type { Diagnostic, OverlayDocument } from "../../document/types";
 import { validate } from "../../document/validate";
@@ -17,6 +17,9 @@ import type { EditorStore } from "../core/store";
 import { jsonEqual } from "../core/writer";
 import { backupPackage, type BackupEntry, type BackupStore, type OverlayPackage, type PackageSource } from "./backup";
 import { OverlayApiError, type OverlayEvent, type OverlayPersistence } from "./types";
+
+/** OverlayAccess refusals (D73): the editor goes on locally. */
+const deniesAccess = (code: string | undefined) => code === "OVL_API_NOT_DRIVER" || code === "OVL_API_SESSION_REQUIRED";
 
 export type SaveStatus = "loading" | "unsaved" | "saving" | "saved" | "error" | "conflict" | "localOnly";
 
@@ -166,7 +169,7 @@ export class SaveController {
       await this.offerBackups(draft.revision, this.confirmed);
     } catch (e) {
       const err = this.toError(e);
-      if (err.code === "OVL_API_NOT_DRIVER") {
+      if (deniesAccess(err.code)) {
         this.set({ status: "localOnly", hasControl: false, error: err });
         await this.offerBackups(undefined, undefined);
       } else {
@@ -373,7 +376,7 @@ export class SaveController {
     const err = this.toError(e);
     if (err.status === 409) {
       this.enterConflict(err.currentRevision ?? undefined);
-    } else if (err.code === "OVL_API_NOT_DRIVER") {
+    } else if (deniesAccess(err.code)) {
       this.clearTimer();
       this.set({ hasControl: false, status: this.state.status === "conflict" ? "conflict" : "localOnly", error: err });
     } else {

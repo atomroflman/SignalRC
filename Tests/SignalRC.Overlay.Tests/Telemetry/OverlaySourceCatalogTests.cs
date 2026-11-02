@@ -33,7 +33,7 @@ public sealed class OverlaySourceCatalogTests : IDisposable
     {
         var carId = SeedCar();
         using var ctx = _db.Create();
-        var sources = await OverlaySourceCatalog.LoadAsync(ctx, new OverlayAccess(ctx), carId);
+        var sources = await OverlaySourceCatalog.LoadAsync(ctx, new OverlayAccess(ctx, new SignalRC.Server.CarConnectionStore()), carId);
         Assert.NotNull(sources);
         var speed = Assert.Single(sources.Telemetry, t => t.ChannelName == "speed");
         Assert.Equal(("number", "km/h", (byte?)1, 1, (int[]?)null), (speed.DataType, speed.Unit, speed.Decimals, speed.ReadIntervalTicks, speed.ZoneLimitsMm));
@@ -48,7 +48,7 @@ public sealed class OverlaySourceCatalogTests : IDisposable
     public async Task UnknownVehicleIsNotViewable()
     {
         using var ctx = _db.Create();
-        Assert.Null(await OverlaySourceCatalog.LoadAsync(ctx, new OverlayAccess(ctx), 987654));
+        Assert.Null(await OverlaySourceCatalog.LoadAsync(ctx, new OverlayAccess(ctx, new SignalRC.Server.CarConnectionStore()), 987654));
     }
 
     [Theory]

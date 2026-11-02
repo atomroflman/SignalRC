@@ -10,9 +10,10 @@ import type { SaveController } from "../editor/persistence/autosave";
 import type { OverlayPersistence, PublicationInfo } from "../editor/persistence/types";
 import { describeLocation } from "../exchange/package-exchange";
 import type { Locale } from "../runtime/types";
+import type { ControlReason } from "./editor-control";
 import type { IntegrationMessages } from "./messages";
 import {
-  activePublication, NOTE_MAX, publishBlockers, publishDraft, publishUnavailable, restorePublication, sortHistory,
+  activePublication, noControlHint, NOTE_MAX, publishBlockers, publishDraft, publishUnavailable, restorePublication, sortHistory,
   type ActionFailure,
 } from "./publish-model";
 
@@ -45,11 +46,13 @@ export interface PublishPanelProps {
   persistence: OverlayPersistence;
   locale: Locale;
   m: IntegrationMessages["publish"];
+  /** Client view of the administrator role (controlReason); explains a disabled button. */
+  reason?: ControlReason;
 }
 
 type Notice = { tone: "ok" | "error"; text: string; diagnostics?: Diagnostic[] };
 
-export function PublishPanel({ carId, store, save, persistence, locale, m }: PublishPanelProps) {
+export function PublishPanel({ carId, store, save, persistence, locale, m, reason = "control" }: PublishPanelProps) {
   const editor = useEditorState(store);
   const saveState = useSaveState(save);
   const [note, setNote] = useState("");
@@ -132,6 +135,7 @@ export function PublishPanel({ carId, store, save, persistence, locale, m }: Pub
       <div className="text-zinc-500">{m.hint}</div>
       {editor.document.disabled && <div className="text-amber-300">{m.vehicleDisabled}</div>}
       {unavailable && unavailable !== "blocked" && <div className="text-zinc-400">{m.unavailable[unavailable]}</div>}
+      {unavailable === "noControl" && <div className="text-zinc-400" data-ovl-no-control={noControlHint(reason, saveState)}>{m.noControlHint[noControlHint(reason, saveState)]}</div>}
       {unavailable === "blocked" && (
         <div className="text-red-300">{m.unavailable.blocked}<DiagnosticList store={store} diagnostics={blockers} /></div>
       )}

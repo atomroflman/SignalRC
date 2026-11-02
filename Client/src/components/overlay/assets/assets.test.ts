@@ -88,7 +88,7 @@ describe("SvgImportPreview", () => {
     expect(forged).not.toContain("<img");
     expect(forged).not.toContain("übernehmen");
     expect(forged).not.toContain("script");
-    expect(render({ kind: "failed", code: "OVL_API_NOT_DRIVER" })).toContain("Nur der aktive Fahrer darf importieren");
+    expect(render({ kind: "failed", code: "OVL_API_NOT_DRIVER" })).toContain("Nur wer die Steuerung des Fahrzeugs hält, darf importieren");
     expect(render({ kind: "uploading" })).toContain("SVG wird bereinigt");
   });
 });

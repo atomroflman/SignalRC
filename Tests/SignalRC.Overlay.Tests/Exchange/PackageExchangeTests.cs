@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using SignalRC.Overlay.Tests.Overlay;
 using SignalRC.Overlay.Tests.Testing;
+using SignalRC.Server;
 using SignalRC.Server.Data;
 using SignalRC.Server.Overlay;
 using SignalRC.Server.Overlay.Assets;
@@ -29,6 +30,7 @@ public abstract class PackageExchangeTests : IDisposable
     private readonly User _driver = null!;
     private readonly JsonNode _fixture = Contracts.ReadJson("fixtures/exchange/roundtrip.json")!;
     private int CarId { get; }
+    private readonly CarConnectionStore _connections = new();
 
     protected PackageExchangeTests(IOverlayTestDb? db)
     {
@@ -42,11 +44,13 @@ public abstract class PackageExchangeTests : IDisposable
         CarId = car.Id;
         _driver = new User
         {
-            Name = $"Driver-{tag}", LoginName = $"driver-{tag}", ActiveVehicleId = CarId,
+            Name = $"Driver-{tag}",
             SessionId = Random.Shared.NextInt64(1_000_000_000_000, 9_000_000_000_000), LastSeen = DateTime.UtcNow,
         };
         _ctx.Users.Add(_driver);
         _ctx.SaveChanges();
+        _connections.Connect(CarId);
+        _connections.Acquire(CarId, _driver);
         _ctx.UserSetups.Add(new UserCarSetup { UserId = _driver.Id, CarId = CarId });
         // The fixture's target vehicle (streams are only a warning and stay out: StreamIds are global).
         _ctx.CarTelemetry.AddRange(
@@ -75,7 +79,7 @@ public abstract class PackageExchangeTests : IDisposable
     private void Require() => Skip.If(_db == null, $"{PostgresOverlayTestDb.Variable} ist nicht gesetzt");
 
     private OverlayService Service() =>
-        new(_ctx, new OverlayAccess(_ctx), new SvgAssetSanitizer(), new NoNotifier(), TimeProvider.System, ExpressionAnalyzer.Instance);
+        new(_ctx, new OverlayAccess(_ctx, _connections), new SvgAssetSanitizer(), new NoNotifier(), TimeProvider.System, ExpressionAnalyzer.Instance);
 
     private static byte[] Bytes(JsonNode? node) => Encoding.UTF8.GetBytes(node!.ToJsonString());
 

@@ -1,63 +1,29 @@
 // Integration test of the HTTP persistence adapter and the autosave against a
 // locally started server (opt-in):
 //   SIGNALRC_LIVE_URL=http://127.0.0.1:<port> SIGNALRC_TEST_POSTGRES="Host=…;Username=…;Password=…;Database=…"
-// Creates its own user and vehicle (tagged) and removes them afterwards.
-import { execFileSync } from "node:child_process";
+// An anonymous session user takes control of a fake onboard's vehicle (D73);
+// everything is tagged and removed afterwards.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import * as signalR from "@microsoft/signalr";
+import type * as signalR from "@microsoft/signalr";
 import type { OverlayDocument } from "../../document/types";
+import { acquireControl, browserSession, fakeOnboard, LIVE_BASE as BASE, liveEnabled as enabled, liveHub, removeSessionUsers, removeVehicle, until as untilMs, wait } from "../../testing/live";
 import { EditorStore } from "../core/store";
 import { SaveController } from "./autosave";
-import { HttpOverlayPersistence, type Fetch } from "./http";
+import { HttpOverlayPersistence } from "./http";
 import { OverlayApiError } from "./types";
 
-const BASE = process.env.SIGNALRC_LIVE_URL;
-const PG = process.env.SIGNALRC_TEST_POSTGRES;
-const enabled = !!BASE && !!PG;
-
-function sql(query: string): string {
-  const kv = Object.fromEntries(PG!.split(";").filter(Boolean).map((p) => p.split("=").map((s) => s.trim()) as [string, string]));
-  return execFileSync("psql", ["-h", kv.Host, "-U", kv.Username, "-d", kv.Database, "-At", "-v", "ON_ERROR_STOP=1", "-c", query], {
-    env: { ...process.env, PGPASSWORD: kv.Password },
-  }).toString().trim();
-}
-
-const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
-async function until(cond: () => boolean, ms = 4000) {
-  const end = Date.now() + ms;
-  while (Date.now() < end) {
-    if (cond()) return true;
-    await wait(20);
-  }
-  return cond();
-}
-
-/** fetch with a cookie jar of one browser session. */
-function session() {
-  const jar = { cookie: "" };
-  const f: Fetch = async (input, init = {}) => {
-    const headers = new Headers(init.headers);
-    if (jar.cookie) headers.set("Cookie", jar.cookie);
-    const res = await fetch(input, { ...init, headers });
-    for (const c of res.headers.getSetCookie?.() ?? []) if (c.startsWith("SignalRCAuth=")) jar.cookie = c.split(";")[0];
-    return res;
-  };
-  return { jar, fetch: f };
-}
+const until = (cond: () => boolean, ms = 4000) => untilMs(cond, ms);
 
 describe.skipIf(!enabled)("live server: HTTP persistence and autosave", () => {
   const tag = Math.random().toString(16).slice(2, 12);
-  const driver = session();
+  const driver = browserSession();
   const hubs: signalR.HubConnection[] = [];
   const controllers: SaveController[] = [];
   let carId = 0;
-  let userId: number | undefined;
+  let control: Awaited<ReturnType<typeof acquireControl>> | undefined;
 
   const hub = async () => {
-    const h = new signalR.HubConnectionBuilder()
-      .withUrl(`${BASE}/hubs/connection`, { headers: { Cookie: driver.jar.cookie } })
-      .configureLogging(signalR.LogLevel.Error)
-      .build();
+    const h = liveHub(driver.jar.cookie);
     await h.start();
     hubs.push(h);
     return h;
@@ -74,26 +40,19 @@ describe.skipIf(!enabled)("live server: HTTP persistence and autosave", () => {
   };
 
   beforeAll(async () => {
-    const login = await driver.fetch(`${BASE}/api/user/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userName: `ovl-ap09-${tag}`, password: `pw-${tag}` }),
-    });
-    expect(login.status).toBe(200);
-    userId = (await login.json()).userId;
-    carId = Number(sql(`insert into "Cars" ("Name","CarIdentityKey","ChannelMapHash","LastSeen") values ('ovl-ap09-${tag}','ovl-ap09-${tag}','',now()) returning "Id"`).split("\n")[0]);
-    sql(`insert into "UserSetups" ("UserId","CarId") values (${userId}, ${carId})`);
-    sql(`update "Users" set "ActiveVehicleId" = ${carId} where "Id" = ${userId}`);
+    const onboard = await fakeOnboard(`ovl-ap09-${tag}`, `sess-ap09-${tag}`);
+    hubs.push(onboard.conn);
+    carId = onboard.carId;
+    await driver.open();
+    control = await acquireControl(driver, carId);
+    hubs.push(control.hub);
   });
 
   afterAll(async () => {
     for (const c of controllers) c.dispose();
     for (const h of hubs) await h.stop().catch(() => {});
-    // Overlay rows of the vehicle are removed with it (cascade).
-    if (userId) sql(`delete from "UserSetups" where "UserId" = ${userId}`);
-    if (carId) sql(`update "Users" set "ActiveVehicleId" = null where "ActiveVehicleId" = ${carId}`);
-    if (carId) sql(`delete from "Cars" where "Id" = ${carId}`);
-    if (userId) sql(`delete from "Users" where "Id" = ${userId}`);
+    removeVehicle(carId);
+    removeSessionUsers(driver);
   });
 
   it("loads the start draft, saves by PUT, then PATCH, also gzip-compressed", async () => {
@@ -140,12 +99,13 @@ describe.skipIf(!enabled)("live server: HTTP persistence and autosave", () => {
 
   it("losing control: 403 NOT_DRIVER keeps editing local; regaining continues with the same revision", async () => {
     const a = await tab();
-    sql(`update "Users" set "ActiveVehicleId" = null where "Id" = ${userId}`);
+    await control!.release();
     a.store.dispatch({ type: "setProperty", element: "e_box", property: "x", value: 7 });
     await until(() => a.save.getState().status === "localOnly");
     expect(a.save.getState()).toMatchObject({ status: "localOnly", hasControl: false, error: { code: "OVL_API_NOT_DRIVER" } });
     a.store.dispatch({ type: "setProperty", element: "e_box", property: "x", value: 8 });
-    sql(`update "Users" set "ActiveVehicleId" = ${carId} where "Id" = ${userId}`);
+    control = await acquireControl(driver, carId);
+    hubs.push(control.hub);
     a.save.setControl(true);
     await until(() => a.save.getState().status === "saved");
     expect((await a.persistence.getDraft(carId)).document.elements.e_box.props!.x).toBe(8);

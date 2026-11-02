@@ -11,17 +11,25 @@ D47, D53–D55. Zuständig: AP02 (Server), AP09 (Client-Adapter), AP13 (Verdraht
 | Betrachter | `CanViewCarAsync(carId)`; heute wie Video: jeder Client | veröffentlichten Stand, dessen Assets, Ereignisse lesen |
 | Verwalter | `RequireOverlayAdminAsync(carId)` | Entwurf, Verlauf, Speichern, Veröffentlichen, Wiederherstellen, Asset-Upload, LiDAR-Einrichtung |
 
-Für Verwalter gelten drei Bedingungen, dieselben wie in
-`EnsureDriverCanManageStreamAsync` (`CarConnectionHub.cs`):
+Verwalter ist genau der Sitzungsbenutzer, der die Steuerung des Fahrzeugs
+aktuell hält (D73). Die Webseite hat keine Benutzerkonten: Nutzer sind anonyme
+Sitzungsbenutzer (Cookie), den Fahrzeugzugang weist die SSH-Key-Challenge bei
+`AquireCarControl` nach. Geprüft wird live im `CarConnectionStore`:
 
-1. regulärer Login (`LoginName` gesetzt),
-2. Fahrzeugzugang (`UserSetups` für `carId`),
-3. aktive Kontrolle (`User.ActiveVehicleId == carId`).
+1. Sitzungsbenutzer der Anfrage vorhanden (sonst `OVL_API_SESSION_REQUIRED`),
+2. Onboard des Fahrzeugs verbunden und Steuersitzung aktiv,
+3. angekündigter Fahrer (`CarConnectionInfo.DriverId`, gesetzt bei
+   erfolgreichem `AquireCarControl`, geleert bei `ReleaseCarControl`, ersetzt
+   bei Übernahme, verworfen mit der Onboard-Verbindung) ist dieser Benutzer.
 
-AP02 zieht beide Prüfungen in einen gemeinsamen Dienst
-`Server/Overlay/OverlayAccess.cs`. Hub und Controller rufen ihn auf; die
-bestehende Stream-Prüfung wird darauf umgestellt. Jede Verwaltungsanfrage wird
-einzeln geprüft (keine Sitzungs-Caches).
+Kein Login (`LoginName`) und kein `UserSetup` nötig. Fahrzeug offline oder
+Steuerung freigegeben/übernommen: `OVL_API_NOT_DRIVER`; der Editor bearbeitet
+dann nur lokal und speichert, sobald die Steuerung zurück ist.
+
+Beide Prüfungen liegen im gemeinsamen Dienst `Server/Overlay/OverlayAccess.cs`.
+Hub und Controller rufen ihn auf, ebenso die Stream-Freigabe
+`EnsureDriverCanManageStreamAsync`. Jede Verwaltungsanfrage wird einzeln geprüft
+(keine Sitzungs-Caches).
 
 ## 2. Datenmodell (EF Core, PostgreSQL; nur AP02 schreibt Migrationen)
 
@@ -134,8 +142,7 @@ Veröffentlichung (neue Revision). Das aktuell angezeigte HUD bleibt unveränder
 
 | Code | Status |
 | --- | --- |
-| `OVL_API_LOGIN_REQUIRED` | 401 |
-| `OVL_API_NO_CAR_ACCESS` | 403 |
+| `OVL_API_SESSION_REQUIRED` | 401 (kein Sitzungsbenutzer) |
 | `OVL_API_NOT_DRIVER` | 403 |
 | `OVL_API_PRECONDITION_REQUIRED` | 428 |
 | `OVL_API_REVISION_CONFLICT` | 409, mit `currentRevision` |

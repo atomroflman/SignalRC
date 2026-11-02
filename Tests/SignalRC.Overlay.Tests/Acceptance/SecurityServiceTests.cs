@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using SignalRC.Overlay.Tests.Overlay;
 using SignalRC.Overlay.Tests.Testing;
+using SignalRC.Server;
 using SignalRC.Server.Data;
 using SignalRC.Server.Overlay;
 using SignalRC.Server.Overlay.Assets;
@@ -35,6 +36,8 @@ public abstract class SecurityServiceTests : IDisposable
     private readonly SignalRCContext _ctx = null!;
     private readonly User _driver = null!, _guest = null!, _outsider = null!, _passive = null!, _otherDriver = null!;
     private readonly int _car, _otherCar;
+    /// <summary>D73: _driver holds control of _car, _otherDriver of _otherCar.</summary>
+    private readonly CarConnectionStore _connections = new();
     private readonly string _tag = Guid.NewGuid().ToString("N")[..12];
     private static readonly Sqids.SqidsEncoder<long> Sqids = new(new Sqids.SqidsOptions { MinLength = 16 });
 
@@ -50,14 +53,19 @@ public abstract class SecurityServiceTests : IDisposable
         _ctx.SaveChanges();
         _car = car.Id;
         _otherCar = other.Id;
-        _driver = new User { Name = $"D-{_tag}", LoginName = $"ap14-driver-{_tag}", ActiveVehicleId = _car, SessionId = Session(), LastSeen = DateTime.UtcNow };
-        // A guest drives (active control) but has no regular login.
+        // The driver is an anonymous session user like every website user (D73).
+        _driver = new User { Name = $"D-{_tag}", SessionId = Session(), LastSeen = DateTime.UtcNow };
+        // Stale ActiveVehicleId without control grants nothing.
         _guest = new User { Name = $"G-{_tag}", ActiveVehicleId = _car, SessionId = Session(), LastSeen = DateTime.UtcNow };
         _outsider = new User { Name = $"O-{_tag}", LoginName = $"ap14-out-{_tag}", ActiveVehicleId = _car, SessionId = Session(), LastSeen = DateTime.UtcNow };
         _passive = new User { Name = $"P-{_tag}", LoginName = $"ap14-pas-{_tag}", SessionId = Session(), LastSeen = DateTime.UtcNow };
         _otherDriver = new User { Name = $"X-{_tag}", LoginName = $"ap14-x-{_tag}", ActiveVehicleId = _otherCar, SessionId = Session(), LastSeen = DateTime.UtcNow };
         _ctx.Users.AddRange(_driver, _guest, _outsider, _passive, _otherDriver);
         _ctx.SaveChanges();
+        _connections.Connect(_car);
+        _connections.Acquire(_car, _driver);
+        _connections.Connect(_otherCar);
+        _connections.Acquire(_otherCar, _otherDriver);
         _ctx.UserSetups.AddRange(
             new UserCarSetup { UserId = _driver.Id, CarId = _car },
             new UserCarSetup { UserId = _guest.Id, CarId = _car },
@@ -92,7 +100,7 @@ public abstract class SecurityServiceTests : IDisposable
     private OverlayService Service(SignalRCContext? ctx = null)
     {
         ctx ??= _ctx;
-        return new OverlayService(ctx, new OverlayAccess(ctx), new SvgAssetSanitizer(), new NullNotifier(), TimeProvider.System, ExpressionAnalyzer.Instance);
+        return new OverlayService(ctx, new OverlayAccess(ctx, _connections), new SvgAssetSanitizer(), new NullNotifier(), TimeProvider.System, ExpressionAnalyzer.Instance);
     }
 
     private static byte[] Doc(string elements = "{}", string children = "[]") =>
@@ -113,7 +121,7 @@ public abstract class SecurityServiceTests : IDisposable
     // --- 4. Permission matrix ---
 
     [SkippableFact]
-    public async Task EveryManagementOperationRequiresTheRegularActiveDriver()
+    public async Task EveryManagementOperationRequiresTheSessionUserHoldingControl()
     {
         Require();
         // A publication so publication reads/restore have a real target.
@@ -132,15 +140,15 @@ public abstract class SecurityServiceTests : IDisposable
             ["POST draft/restore"] = async u => (await Service().RestoreAsync(_car, u, publication, revision)).Error,
             ["POST assets"] = async u => (await Service().UploadAssetAsync(_car, u, Encoding.UTF8.GetBytes(Svg))).Error,
             ["GET dependencies"] = async u => (await Service().GetDependenciesAsync(_car, u, "speed")).Error,
-            ["POST lidar-grid-source"] = async u => (await new LidarGridSourceService(_ctx, new OverlayAccess(_ctx)).EnsureAsync(_car, u)).Error,
+            ["POST lidar-grid-source"] = async u => (await new LidarGridSourceService(_ctx, new OverlayAccess(_ctx, _connections)).EnsureAsync(_car, u)).Error,
         };
         var expected = new (string Who, User? User, string Code)[]
         {
-            ("anonymous", null, "OVL_API_LOGIN_REQUIRED"),
-            ("guest driver without login", _guest, "OVL_API_LOGIN_REQUIRED"),
-            ("login without vehicle access", _outsider, "OVL_API_NO_CAR_ACCESS"),
-            ("login without control", _passive, "OVL_API_NOT_DRIVER"),
-            ("driver of another vehicle", _otherDriver, "OVL_API_NO_CAR_ACCESS"),
+            ("no session", null, "OVL_API_SESSION_REQUIRED"),
+            ("session user with stale ActiveVehicleId", _guest, "OVL_API_NOT_DRIVER"),
+            ("login without user setup", _outsider, "OVL_API_NOT_DRIVER"),
+            ("login with user setup, no control", _passive, "OVL_API_NOT_DRIVER"),
+            ("driver of another vehicle", _otherDriver, "OVL_API_NOT_DRIVER"),
         };
         foreach (var (name, op) in operations)
         {
@@ -156,7 +164,7 @@ public abstract class SecurityServiceTests : IDisposable
         Assert.Empty(_ctx.OverlayAssets.AsNoTracking().Where(a => a.CarId == _car));
         Assert.Empty(_ctx.CarTelemetry.AsNoTracking().Where(t => t.CarId == _car && t.ChannelName == LidarGridSourceService.ChannelName));
 
-        // The regular active driver passes every operation.
+        // The anonymous session user holding control passes every operation.
         foreach (var (name, op) in operations)
         {
             var error = await op(_driver);
@@ -171,15 +179,15 @@ public abstract class SecurityServiceTests : IDisposable
         Require();
         // Unknown vehicle: nothing, also no catalog.
         Assert.Equal(404, (await Service().GetPublishedAsync(int.MaxValue - 7)).Error?.Status);
-        Assert.Null(await OverlaySourceCatalog.LoadAsync(_ctx, new OverlayAccess(_ctx), int.MaxValue - 7));
+        Assert.Null(await OverlaySourceCatalog.LoadAsync(_ctx, new OverlayAccess(_ctx, _connections), int.MaxValue - 7));
 
         // Anonymous viewers get the catalog without personal or wiring fields (D69/D70).
-        var sources = await OverlaySourceCatalog.LoadAsync(_ctx, new OverlayAccess(_ctx), _car);
+        var sources = await OverlaySourceCatalog.LoadAsync(_ctx, new OverlayAccess(_ctx, _connections), _car);
         var json = Contracts.ToJson(sources)!.ToJsonString();
         Assert.Contains("\"speed\"", json);
         Assert.Contains("\"steering\"", json);
         Assert.DoesNotContain("secret-pin", json);
-        Assert.DoesNotContain(_driver.LoginName!, json);
+        Assert.DoesNotContain(_driver.Name!, json);
 
         var upload = (await Service().UploadAssetAsync(_car, _driver, Encoding.UTF8.GetBytes(Svg))).Value!;
         foreach (var viewer in new[] { null, _guest, _outsider, _passive, _otherDriver })
@@ -197,7 +205,7 @@ public abstract class SecurityServiceTests : IDisposable
         Assert.Equal(404, (await Service().GetAssetAsync(_otherCar, upload.AssetId, _otherDriver)).Error?.Status);
         // The published document carries no user data.
         var published = (await Service().GetPublishedAsync(_car)).Value!;
-        Assert.DoesNotContain(_driver.LoginName!, published.Document.ToJsonString());
+        Assert.DoesNotContain(_driver.Name!, published.Document.ToJsonString());
     }
 
     [SkippableFact]
@@ -370,9 +378,9 @@ public abstract class SecurityServiceTests : IDisposable
         var file = () => new FormFile(new MemoryStream(Encoding.UTF8.GetBytes(Svg)), 0, Svg.Length, "file", "a.svg");
         var cases = new (User? User, int Status, string? Code)[]
         {
-            (null, 401, "OVL_API_LOGIN_REQUIRED"),
-            (_guest, 401, "OVL_API_LOGIN_REQUIRED"),
-            (_outsider, 403, "OVL_API_NO_CAR_ACCESS"),
+            (null, 401, "OVL_API_SESSION_REQUIRED"),
+            (_guest, 403, "OVL_API_NOT_DRIVER"),
+            (_outsider, 403, "OVL_API_NOT_DRIVER"),
             (_passive, 403, "OVL_API_NOT_DRIVER"),
             (_driver, 200, null),
         };

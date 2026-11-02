@@ -149,7 +149,7 @@ Telemetrievertrag:
 
 ## 7. Einrichtung bestehender Installationen (D17)
 
-- Aktion „LiDAR-HUD-Quelle einrichten“, nur für regulären aktiven Fahrer
+- Aktion „LiDAR-HUD-Quelle einrichten“, nur für den Sitzungsbenutzer, der die Steuerung hält (D73)
   (wie die HUD-Verwaltung). Sie legt über die bestehende Kanalverwaltung
   einen `CarTelemetry`-Kanal `lidarGrid` an:
   - Typ `LidarGridTelemetryReader`,

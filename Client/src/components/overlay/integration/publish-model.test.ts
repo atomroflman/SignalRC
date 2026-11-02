@@ -6,7 +6,7 @@ import { InMemoryOverlayServer, startDocument } from "../editor/testing/in-memor
 import { MemoryBackupStore } from "../editor/testing/memory-backup-store";
 import { OverlayApiError } from "../editor/persistence/types";
 import {
-  activePublication, NOTE_MAX, publishBlockers, publishDraft, publishUnavailable, restorePublication, sortHistory,
+  activePublication, isAccessDenied, noControlHint, NOTE_MAX, publishBlockers, publishDraft, publishUnavailable, restorePublication, sortHistory,
 } from "./publish-model";
 
 async function setup() {
@@ -33,6 +33,22 @@ describe("publish availability", () => {
     expect(publishUnavailable({ status: "conflict", hasControl: true }, [], "")).toBe("conflict");
     expect(publishUnavailable({ status: "unsaved", hasControl: true }, [], "x".repeat(NOTE_MAX))).toBeNull();
     expect(publishUnavailable({ status: "unsaved", hasControl: true }, [], "x".repeat(NOTE_MAX + 1))).toBe("noteTooLong");
+  });
+});
+
+describe("reason under a disabled publish button (D73)", () => {
+  it("names the client-side reason first", () => {
+    expect(noControlHint("offline", {})).toBe("offline");
+    expect(noControlHint("unknown", {})).toBe("unknown");
+    expect(noControlHint("notDriver", { error: { code: "OVL_API_NOT_DRIVER", message: "" } })).toBe("notDriver");
+    expect(noControlHint("noSession", {})).toBe("noSession");
+  });
+
+  it("reports a server refusal while the client believes it holds control", () => {
+    expect(noControlHint("control", { error: { code: "OVL_API_NOT_DRIVER", status: 403, message: "" } })).toBe("denied");
+    expect(noControlHint("control", { error: { code: "OVL_API_SESSION_REQUIRED", status: 401, message: "" } })).toBe("denied");
+    expect(noControlHint("control", {})).toBe("localOnly");
+    expect(isAccessDenied("OVL_API_NO_CAR_ACCESS")).toBe(false);
   });
 });
 

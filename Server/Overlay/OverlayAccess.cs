@@ -6,8 +6,7 @@ namespace SignalRC.Server.Overlay;
 public enum OverlayAccessError
 {
     None,
-    LoginRequired,
-    NoCarAccess,
+    SessionRequired,
     NotDriver,
 }
 
@@ -15,7 +14,7 @@ public enum OverlayAccessError
 /// The two overlay roles (Shared/Overlay/api/README.md §1). Every management
 /// request is checked anew; nothing is cached per session.
 /// </summary>
-public sealed class OverlayAccess(SignalRCContext db)
+public sealed class OverlayAccess(SignalRCContext db, CarConnectionStore connections)
 {
     /// <summary>
     /// Whoever may see the vehicle's streams. Streams have no read check today,
@@ -23,17 +22,20 @@ public sealed class OverlayAccess(SignalRCContext db)
     /// </summary>
     public Task<bool> CanViewCarAsync(int carId) => db.Cars.AnyAsync(c => c.Id == carId);
 
-    /// <summary>Regular login, access to the vehicle and active control of it.</summary>
-    public async Task<OverlayAccessError> CheckAdminAsync(User? user, int carId)
+    /// <summary>
+    /// D73: the session user who currently holds control of the connected vehicle
+    /// (driver announced by AquireCarControl). No login, no user setup.
+    /// </summary>
+    public Task<OverlayAccessError> CheckAdminAsync(User? user, int carId) => Task.FromResult(CheckAdmin(user, carId));
+
+    public OverlayAccessError CheckAdmin(User? user, int carId)
     {
-        if (user == null || string.IsNullOrWhiteSpace(user.LoginName))
-        {
-            return OverlayAccessError.LoginRequired;
-        }
-        if (!await db.UserSetups.AnyAsync(setup => setup.UserId == user.Id && setup.CarId == carId))
-        {
-            return OverlayAccessError.NoCarAccess;
-        }
-        return user.ActiveVehicleId == carId ? OverlayAccessError.None : OverlayAccessError.NotDriver;
+        if (user == null) return OverlayAccessError.SessionRequired;
+        return connections.TryGetValue(carId.ToString(), out var info)
+            && !string.IsNullOrEmpty(info.ConnectionId)
+            && info.ControlSessionHash != null
+            && info.DriverId == user.Id.ToString()
+            ? OverlayAccessError.None
+            : OverlayAccessError.NotDriver;
     }
 }

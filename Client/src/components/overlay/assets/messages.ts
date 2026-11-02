@@ -35,9 +35,8 @@ const de = {
   errors: {
     OVL_API_TOO_LARGE: "Datei ist größer als 256 kB",
     OVL_API_NOT_AVAILABLE: "SVG-Import ist auf dem Server nicht verfügbar",
-    OVL_API_LOGIN_REQUIRED: "Anmeldung erforderlich",
-    OVL_API_NO_CAR_ACCESS: "Kein Zugriff auf dieses Fahrzeug",
-    OVL_API_NOT_DRIVER: "Nur der aktive Fahrer darf importieren",
+    OVL_API_SESSION_REQUIRED: "Keine Benutzersitzung",
+    OVL_API_NOT_DRIVER: "Nur wer die Steuerung des Fahrzeugs hält, darf importieren",
   } as Record<string, string>,
 };
 
@@ -73,9 +72,8 @@ const en: typeof de = {
   errors: {
     OVL_API_TOO_LARGE: "File is larger than 256 kB",
     OVL_API_NOT_AVAILABLE: "SVG import is not available on the server",
-    OVL_API_LOGIN_REQUIRED: "Login required",
-    OVL_API_NO_CAR_ACCESS: "No access to this vehicle",
-    OVL_API_NOT_DRIVER: "Only the active driver may import",
+    OVL_API_SESSION_REQUIRED: "No user session",
+    OVL_API_NOT_DRIVER: "Only whoever holds control of the vehicle may import",
   },
 };
 

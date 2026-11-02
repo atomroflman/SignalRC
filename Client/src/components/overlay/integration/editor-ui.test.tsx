@@ -59,6 +59,22 @@ describe("editor page parts", () => {
     save.dispose();
   });
 
+  it("explains a disabled publish button by the control reason (D73)", async () => {
+    const server = new InMemoryOverlayServer(1);
+    const persistence = server.client();
+    const store = new EditorStore({ carId: 1, document: startDocument() });
+    const save = new SaveController({ store, persistence, backups: new MemoryBackupStore(), hasControl: false });
+    await save.open();
+    for (const reason of ["offline", "notDriver"] as const) {
+      const html = renderToStaticMarkup(
+        <PublishPanel carId={1} store={store} save={save} persistence={persistence} locale="de" m={integrationMessages.de.publish} reason={reason} />,
+      );
+      expect(html).toContain(`data-ovl-no-control="${reason}"`);
+      expect(html).toContain(integrationMessages.de.publish.noControlHint[reason]);
+    }
+    save.dispose();
+  });
+
   it("disables the SVG import without control", () => {
     const store = new EditorStore({ carId: 1, document: startDocument() });
     const html = renderToStaticMarkup(

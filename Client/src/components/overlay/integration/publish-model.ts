@@ -5,6 +5,7 @@
 import type { Diagnostic } from "../document/types";
 import type { SaveController, SaveState } from "../editor/persistence/autosave";
 import { OverlayApiError, type OverlayPersistence, type PublicationInfo } from "../editor/persistence/types";
+import type { ControlReason } from "./editor-control";
 
 /** D54. */
 export const NOTE_MAX = 500;
@@ -26,6 +27,23 @@ export function publishUnavailable(save: Pick<SaveState, "status" | "hasControl"
   return null;
 }
 
+/** Server answers of OverlayAccess (D73). */
+export function isAccessDenied(code: string | undefined): boolean {
+  return code === "OVL_API_NOT_DRIVER" || code === "OVL_API_SESSION_REQUIRED";
+}
+
+export type NoControlHint = Exclude<ControlReason, "control"> | "denied" | "localOnly";
+
+/**
+ * The reason shown under a disabled publish button when unavailable is
+ * "noControl": the client view (controlReason) first; if that says control,
+ * the server refused (403) or the draft is otherwise local only.
+ */
+export function noControlHint(reason: ControlReason, save: Pick<SaveState, "error">): NoControlHint {
+  if (reason !== "control") return reason;
+  return isAccessDenied(save.error?.code) ? "denied" : "localOnly";
+}
+
 export type ActionFailure =
   | { kind: "noControl" }
   | { kind: "conflict" }
@@ -39,7 +57,7 @@ export type RestoreOutcome = { kind: "restored"; revision: number } | ActionFail
 
 function failure(e: unknown): ActionFailure {
   if (e instanceof OverlayApiError) {
-    if (e.code === "OVL_API_NOT_DRIVER" || e.code === "OVL_API_LOGIN_REQUIRED" || e.code === "OVL_API_NO_CAR_ACCESS") return { kind: "noControl" };
+    if (isAccessDenied(e.code)) return { kind: "noControl" };
     if (e.status === 409) return { kind: "conflict" };
     if (e.code === "OVL_API_PUBLISH_BLOCKED") return { kind: "blocked", diagnostics: e.diagnostics ?? [] };
     return { kind: "failed", status: e.status, code: e.code, message: e.message };

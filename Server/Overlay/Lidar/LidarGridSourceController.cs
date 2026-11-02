@@ -35,7 +35,7 @@ public class LidarGridSourceController(
             // Same push as the channel management, but with the server id so
             // the onboard can address the channel right away.
             await hub.Clients.Group($"Car-{carId}").UpsertTelemetryChannel(channel.ChannelName, LidarGridSourceService.ToMapItem(channel));
-            logger.LogInformation("LiDAR grid source created for car {CarId} by {User}", carId, user!.LoginName);
+            logger.LogInformation("LiDAR grid source created for car {CarId} by {User}", carId, user!.LoginName ?? user.Name);
         }
         return Ok(new { created });
     }

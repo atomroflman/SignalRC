@@ -4,101 +4,60 @@
 // A number and a rotation are edited through editor commands, autosaved and
 // published through the editor page logic; a second, already open client takes
 // the publication over by OverlayPublished on its existing connection; after
-// losing control the server refuses saving. Everything created is tagged and
-// removed afterwards.
-import { execFileSync } from "node:child_process";
+// losing control the server refuses saving. The driver is an anonymous session
+// user who took control of a fake onboard's vehicle (D73), exactly as on the
+// website; a second anonymous user may not manage. Everything created is
+// tagged and removed afterwards.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as signalR from "@microsoft/signalr";
 import type { OverlayDocument } from "../document/types";
 import { withBase } from "../editor/core/commands";
 import { EditorStore } from "../editor/core/store";
 import { SaveController } from "../editor/persistence/autosave";
-import { HttpOverlayPersistence, type Fetch } from "../editor/persistence/http";
+import { HttpOverlayPersistence } from "../editor/persistence/http";
 import { MemoryBackupStore } from "../editor/testing/memory-backup-store";
 import { readContractJson } from "../testing/fixtures";
+import { acquireControl, browserSession, fakeOnboard, LIVE_BASE as BASE, liveEnabled as enabled, liveHub, removeSessionUsers, removeVehicle, sql, until } from "../testing/live";
 import { hudConfigFor } from "./hud-config";
 import { publishDraft } from "./publish-model";
 import { PublishedOverlay, type FetchResponse } from "./published-overlay";
 
-const BASE = process.env.SIGNALRC_LIVE_URL;
-const PG = process.env.SIGNALRC_TEST_POSTGRES;
-const enabled = !!BASE && !!PG;
-
-function sql(query: string): string {
-  const kv = Object.fromEntries(PG!.split(";").filter(Boolean).map((p) => p.split("=").map((s) => s.trim()) as [string, string]));
-  return execFileSync("psql", ["-h", kv.Host, "-U", kv.Username, "-d", kv.Database, "-At", "-v", "ON_ERROR_STOP=1", "-c", query], {
-    env: { ...process.env, PGPASSWORD: kv.Password },
-  }).toString().trim();
-}
-
-const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
-async function until(cond: () => boolean, ms = 5000) {
-  const end = Date.now() + ms;
-  while (Date.now() < end) {
-    if (cond()) return true;
-    await wait(20);
-  }
-  return cond();
-}
-
-/** fetch with the cookie jar of one browser session. */
-function session() {
-  const jar = { cookie: "" };
-  const f: Fetch = async (input, init = {}) => {
-    const headers = new Headers(init.headers);
-    if (jar.cookie) headers.set("Cookie", jar.cookie);
-    const res = await fetch(input, { ...init, headers });
-    for (const c of res.headers.getSetCookie?.() ?? []) if (c.startsWith("SignalRCAuth=")) jar.cookie = c.split(";")[0];
-    return res;
-  };
-  return { jar, fetch: f };
-}
-
 describe.skipIf(!enabled)("live server: editor → publish → second client → control loss", () => {
   const tag = Math.random().toString(16).slice(2, 12);
-  const driver = session();
+  const driver = browserSession();
+  const other = browserSession();
   const hubs: signalR.HubConnection[] = [];
   let carId = 0;
-  let userId: number | undefined;
   let save: SaveController | undefined;
   let viewer: PublishedOverlay | undefined;
+  let control: Awaited<ReturnType<typeof acquireControl>> | undefined;
 
   const hub = async (cookie?: string) => {
-    const h = new signalR.HubConnectionBuilder()
-      .withUrl(`${BASE}/hubs/connection`, cookie ? { headers: { Cookie: cookie } } : {})
-      .configureLogging(signalR.LogLevel.Error)
-      .build();
+    const h = liveHub(cookie);
     await h.start();
     hubs.push(h);
     return h;
   };
 
   beforeAll(async () => {
-    const login = await driver.fetch(`${BASE}/api/user/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userName: `ovl-ap13-${tag}`, password: `pw-${tag}` }),
-    });
-    expect(login.status).toBe(200);
-    userId = (await login.json()).userId;
-    carId = Number(sql(`insert into "Cars" ("Name","CarIdentityKey","ChannelMapHash","LastSeen") values ('ovl-ap13-${tag}','ovl-ap13-${tag}','',now()) returning "Id"`).split("\n")[0]);
-    sql(`insert into "UserSetups" ("UserId","CarId") values (${userId}, ${carId})`);
+    const onboard = await fakeOnboard(`ovl-ap13-${tag}`, `sess-ap13-${tag}`);
+    hubs.push(onboard.conn);
+    carId = onboard.carId;
     // The channels the M2 document binds (DataType 2 = Number); publishing checks them.
     sql(`insert into "CarTelemetry" ("CarId","ChannelName","ReadIntervalTicks","TelemetryType","DataType","PinManager","OptionsJson") values
       (${carId},'odoSpeed',1,'x',2,'x',null),(${carId},'odoHeading',1,'x',2,'x',null)`);
-    sql(`update "Users" set "ActiveVehicleId" = ${carId} where "Id" = ${userId}`);
+    await driver.open();
+    await other.open();
+    control = await acquireControl(driver, carId);
+    hubs.push(control.hub);
   });
 
   afterAll(async () => {
     save?.dispose();
     viewer?.dispose();
     for (const h of hubs) await h.stop().catch(() => {});
-    // Overlay rows of the vehicle are removed with it (cascade).
-    if (userId) sql(`delete from "UserSetups" where "UserId" = ${userId}`);
-    if (carId) sql(`update "Users" set "ActiveVehicleId" = null where "ActiveVehicleId" = ${carId}`);
-    if (carId) sql(`delete from "CarTelemetry" where "CarId" = ${carId}`);
-    if (carId) sql(`delete from "Cars" where "Id" = ${carId}`);
-    if (userId) sql(`delete from "Users" where "Id" = ${userId}`);
+    removeVehicle(carId);
+    removeSessionUsers(driver, other);
   });
 
   it("M2: edit value and rotation, save, publish; the open viewer switches without reconnecting; no saving after control loss", async () => {
@@ -157,8 +116,17 @@ describe.skipIf(!enabled)("live server: editor → publish → second client →
     const history = await persistence.listPublications(carId);
     expect(history[0]).toMatchObject({ number: 1, note: "M2 live" });
 
-    // Control loss: the server refuses saving; the editor keeps the local change.
-    sql(`update "Users" set "ActiveVehicleId" = null where "Id" = ${userId}`);
+    // Another anonymous session user (no control) may neither read the draft nor publish.
+    const foreignDraft = await other.fetch(`${BASE}/api/cars/${carId}/overlay/draft`);
+    expect(foreignDraft.status).toBe(403);
+    expect((await foreignDraft.json()).code).toBe("OVL_API_NOT_DRIVER");
+    const foreignPublish = await other.fetch(`${BASE}/api/cars/${carId}/overlay/publications`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ baseRevision: save.getState().baseRevision }),
+    });
+    expect(foreignPublish.status).toBe(403);
+
+    // Control loss (ReleaseCarControl): the server refuses saving; the editor keeps the local change.
+    await control!.release();
     store.dispatch({ type: "setProperty", element: "e_speed", property: "decimals", value: 3 });
     expect(await until(() => save!.getState().status === "localOnly")).toBe(true);
     expect(save.getState()).toMatchObject({ hasControl: false, error: { code: "OVL_API_NOT_DRIVER" } });

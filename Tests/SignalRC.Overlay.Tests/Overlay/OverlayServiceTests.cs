@@ -1,6 +1,8 @@
 using System.Text;
 using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
+using SignalRC.Overlay.Tests.Testing;
+using SignalRC.Server;
 using SignalRC.Server.Data;
 using SignalRC.Server.Overlay;
 using SignalRC.Server.Overlay.Assets;
@@ -23,6 +25,8 @@ public abstract class OverlayServiceTests : IDisposable
     private readonly FakeSanitizer _sanitizer = new();
     private readonly User _driver = null!, _guest = null!, _outsider = null!, _passive = null!;
     private int CarId { get; }
+    /// <summary>D73: _driver holds control of the connected vehicle; nobody else does.</summary>
+    private readonly CarConnectionStore _connections = new();
 
     protected OverlayServiceTests(IOverlayTestDb? db)
     {
@@ -36,12 +40,15 @@ public abstract class OverlayServiceTests : IDisposable
         _ctx.Cars.Add(car);
         _ctx.SaveChanges();
         CarId = car.Id;
-        _driver = new User { Name = $"Driver-{tag}", LoginName = $"driver-{tag}", ActiveVehicleId = CarId, SessionId = Session(), LastSeen = DateTime.UtcNow };
-        _guest = new User { Name = $"User-{tag}", ActiveVehicleId = CarId, SessionId = Session(), LastSeen = DateTime.UtcNow };
+        // Anonymous session users (no LoginName) like the website creates them.
+        _driver = new User { Name = $"Driver-{tag}", SessionId = Session(), LastSeen = DateTime.UtcNow };
+        _guest = new User { Name = $"User-{tag}", SessionId = Session(), LastSeen = DateTime.UtcNow };
         _outsider = new User { Name = $"Other-{tag}", LoginName = $"other-{tag}", ActiveVehicleId = CarId, SessionId = Session(), LastSeen = DateTime.UtcNow };
         _passive = new User { Name = $"Passive-{tag}", LoginName = $"passive-{tag}", SessionId = Session(), LastSeen = DateTime.UtcNow };
         _ctx.Users.AddRange(_driver, _guest, _outsider, _passive);
         _ctx.SaveChanges();
+        _connections.Connect(CarId);
+        _connections.Acquire(CarId, _driver);
         _ctx.UserSetups.AddRange(
             new UserCarSetup { UserId = _driver.Id, CarId = CarId },
             new UserCarSetup { UserId = _guest.Id, CarId = CarId },
@@ -78,7 +85,7 @@ public abstract class OverlayServiceTests : IDisposable
 
     /// <summary>Without an analyzer the service takes the D66 fallback (formulas unchecked).</summary>
     private OverlayService Service(Server.Overlay.Documents.IExpressionAnalyzer? expressions = null) =>
-        new(_ctx, new OverlayAccess(_ctx), _sanitizer, _events, _time, expressions);
+        new(_ctx, new OverlayAccess(_ctx, _connections), _sanitizer, _events, _time, expressions);
 
     private static byte[] Doc(string elements = "{}", string children = "[]", string extra = "") =>
         Encoding.UTF8.GetBytes($$"""{"schemaVersion":1,"workspace":{"width":1280,"height":720},"elements":{{elements}},"children":{{children}}{{extra}}}""");
@@ -95,17 +102,44 @@ public abstract class OverlayServiceTests : IDisposable
     // --- Permissions ---
 
     [SkippableFact]
-    public async Task OnlyTheRegularActiveDriverManagesTheOverlay()
+    public async Task OnlyTheSessionUserHoldingControlManagesTheOverlay()
     {
         Require();
         var service = Service();
-        Assert.Equal("OVL_API_LOGIN_REQUIRED", (await service.GetDraftAsync(CarId, null)).Error?.Code);
-        Assert.Equal("OVL_API_LOGIN_REQUIRED", (await service.GetDraftAsync(CarId, _guest)).Error?.Code);
-        Assert.Equal("OVL_API_NO_CAR_ACCESS", (await service.GetDraftAsync(CarId, _outsider)).Error?.Code);
+        Assert.Equal("OVL_API_SESSION_REQUIRED", (await service.GetDraftAsync(CarId, null)).Error?.Code);
+        // Login, user setup or a stale ActiveVehicleId grant nothing (D73).
+        Assert.Equal("OVL_API_NOT_DRIVER", (await service.GetDraftAsync(CarId, _guest)).Error?.Code);
+        Assert.Equal("OVL_API_NOT_DRIVER", (await service.GetDraftAsync(CarId, _outsider)).Error?.Code);
         Assert.Equal("OVL_API_NOT_DRIVER", (await service.GetDraftAsync(CarId, _passive)).Error?.Code);
         Assert.Null((await service.GetDraftAsync(CarId, _driver)).Error);
-        Assert.Equal(401, (await service.SaveDraftAsync(CarId, _guest, Doc(), 0)).Error?.Status);
+        Assert.Equal(401, (await service.SaveDraftAsync(CarId, null, Doc(), 0)).Error?.Status);
+        Assert.Equal(403, (await service.SaveDraftAsync(CarId, _guest, Doc(), 0)).Error?.Status);
         Assert.Equal(403, (await service.PublishAsync(CarId, _passive, 0, null)).Error?.Status);
+    }
+
+    [SkippableFact]
+    public async Task AnonymousSessionUserWithControlSavesAndPublishesUntilRelease()
+    {
+        Require();
+        var service = Service();
+        var revision = await SaveAsync(Doc());
+        Assert.Null((await service.PublishAsync(CarId, _driver, revision, "d73")).Error);
+        Assert.Equal(403, (await service.PublishAsync(CarId, _guest, revision, null)).Error?.Status);
+
+        _connections.Release(CarId);
+        Assert.Equal("OVL_API_NOT_DRIVER", (await service.SaveDraftAsync(CarId, _driver, Doc(), revision)).Error?.Code);
+        Assert.Equal("OVL_API_NOT_DRIVER", (await service.PublishAsync(CarId, _driver, revision, null)).Error?.Code);
+
+        // Takeover by another anonymous session user.
+        _connections.Acquire(CarId, _guest);
+        Assert.Null((await service.PublishAsync(CarId, _guest, revision, null)).Error);
+        Assert.Equal(403, (await service.GetDraftAsync(CarId, _driver)).Error?.Status);
+
+        // Onboard gone: nobody manages, not even the last driver.
+        _connections.Disconnect(CarId);
+        Assert.Equal("OVL_API_NOT_DRIVER", (await service.GetDraftAsync(CarId, _guest)).Error?.Code);
+        // Viewer reads stay (D69/D70).
+        Assert.NotNull((await service.GetPublishedAsync(CarId)).Value);
     }
 
     [SkippableFact]
@@ -113,8 +147,7 @@ public abstract class OverlayServiceTests : IDisposable
     {
         Require();
         await SaveAsync(Doc());
-        _driver.ActiveVehicleId = null;
-        await _ctx.SaveChangesAsync();
+        _connections.Release(CarId);
         Assert.Equal("OVL_API_NOT_DRIVER", (await Service().SaveDraftAsync(CarId, _driver, Doc(), 1)).Error?.Code);
     }
 
@@ -160,7 +193,7 @@ public abstract class OverlayServiceTests : IDisposable
         await SaveAsync(doc);
         var draft = (await Service().GetDraftAsync(CarId, _driver)).Value!;
         Assert.Equal(JsonNode.Parse(doc)!.ToJsonString(), draft.Document.ToJsonString());
-        Assert.Equal(_driver.LoginName, draft.UpdatedBy);
+        Assert.Equal(_driver.Name, draft.UpdatedBy);
     }
 
     [SkippableFact]
@@ -262,7 +295,7 @@ public abstract class OverlayServiceTests : IDisposable
         var history = (await Service().ListPublicationsAsync(CarId, _driver)).Value!;
         Assert.Equal([2, 1], history.Select(h => h.Number));
         Assert.Equal("erste Version", history[1].Note);
-        Assert.Equal(_driver.LoginName, history[1].PublishedBy);
+        Assert.Equal(_driver.Name, history[1].PublishedBy);
         Assert.Equal([1, 2], _events.Publications.Select(p => p.Number));
     }
 
@@ -372,7 +405,7 @@ public abstract class OverlayServiceTests : IDisposable
     public async Task RealSanitizerStoresOnlyTheNormalizedAsset()
     {
         Require();
-        var service = new OverlayService(_ctx, new OverlayAccess(_ctx), new SvgAssetSanitizer(), _events, _time);
+        var service = new OverlayService(_ctx, new OverlayAccess(_ctx, _connections), new SvgAssetSanitizer(), _events, _time);
         var raw = """
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" onload="alert(1)">
               <script>alert(2)</script>
@@ -427,7 +460,8 @@ public abstract class OverlayServiceTests : IDisposable
     public async Task UploadRequiresAdminAndRespectsLimitsAndRejections()
     {
         Require();
-        Assert.Equal(401, (await Service().UploadAssetAsync(CarId, _guest, "<svg/>"u8.ToArray())).Error?.Status);
+        Assert.Equal(401, (await Service().UploadAssetAsync(CarId, null, "<svg/>"u8.ToArray())).Error?.Status);
+        Assert.Equal(403, (await Service().UploadAssetAsync(CarId, _guest, "<svg/>"u8.ToArray())).Error?.Status);
         Assert.Equal(413, (await Service().UploadAssetAsync(CarId, _driver, new byte[OverlayService.MaxAssetBytes + 1])).Error?.Status);
         _sanitizer.Reject = true;
         Assert.Equal("OVL_API_ASSET_REJECTED", (await Service().UploadAssetAsync(CarId, _driver, "<svg/>"u8.ToArray())).Error?.Code);
@@ -548,7 +582,7 @@ public abstract class OverlayServiceTests : IDisposable
         var results = await Task.WhenAll(Enumerable.Range(0, 8).Select(async _ =>
         {
             await using var ctx = _db.Create();
-            var service = new OverlayService(ctx, new OverlayAccess(ctx), _sanitizer, _events, _time);
+            var service = new OverlayService(ctx, new OverlayAccess(ctx, _connections), _sanitizer, _events, _time);
             var user = await ctx.Users.SingleAsync(u => u.Id == _driver.Id);
             return await service.SaveDraftAsync(CarId, user, Doc(), 1);
         }));
@@ -565,7 +599,7 @@ public abstract class OverlayServiceTests : IDisposable
         var results = await Task.WhenAll(Enumerable.Range(0, 8).Select(async _ =>
         {
             await using var ctx = _db.Create();
-            var service = new OverlayService(ctx, new OverlayAccess(ctx), _sanitizer, _events, _time);
+            var service = new OverlayService(ctx, new OverlayAccess(ctx, _connections), _sanitizer, _events, _time);
             var user = await ctx.Users.SingleAsync(u => u.Id == _driver.Id);
             return await service.SaveDraftAsync(CarId, user, Doc(), 0);
         }));
@@ -582,7 +616,7 @@ public abstract class OverlayServiceTests : IDisposable
         var results = await Task.WhenAll(Enumerable.Range(0, 4).Select(async _ =>
         {
             await using var ctx = _db.Create();
-            var service = new OverlayService(ctx, new OverlayAccess(ctx), _sanitizer, _events, _time);
+            var service = new OverlayService(ctx, new OverlayAccess(ctx, _connections), _sanitizer, _events, _time);
             var user = await ctx.Users.SingleAsync(u => u.Id == _driver.Id);
             return await service.PublishAsync(CarId, user, 1, null);
         }));

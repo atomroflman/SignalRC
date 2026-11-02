@@ -1,13 +1,13 @@
 // AP14 – cross-cutting acceptance against a locally started server (opt-in):
 //   SIGNALRC_LIVE_URL=http://127.0.0.1:<port> SIGNALRC_TEST_POSTGRES="Host=…;Username=…;Password=…;Database=…"
 // The server must use the same database. A fake onboard (JSON protocol)
-// registers a vehicle; users, channels and streams are created here and are
-// tagged; everything is removed in afterAll (overlay rows cascade with the car).
+// registers a vehicle; the driver is an anonymous session user who takes
+// control through it (D73). Users, channels and streams are created here and
+// are tagged; everything is removed in afterAll (overlay rows cascade with the car).
 // Covers what the module tests can only show against doubles: real HTTP,
 // headers, permissions, hub groups, reconnect, origin checks and resume.
 import fs from "node:fs";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as signalR from "@microsoft/signalr";
 import type { OverlayDocument } from "../document/types";
@@ -21,40 +21,7 @@ import { publishDraft, restorePublication } from "../integration/publish-model";
 import { PublishedOverlay, type FetchResponse } from "../integration/published-overlay";
 import { SourceHub, type HubLike } from "../sources/hub";
 import { contractsRoot } from "../testing/fixtures";
-
-const BASE = process.env.SIGNALRC_LIVE_URL;
-const PG = process.env.SIGNALRC_TEST_POSTGRES;
-const enabled = !!BASE && !!PG;
-
-function sql(query: string): string {
-  const kv = Object.fromEntries(PG!.split(";").filter(Boolean).map((p) => p.split("=").map((s) => s.trim()) as [string, string]));
-  return execFileSync("psql", ["-h", kv.Host, "-U", kv.Username, "-d", kv.Database, "-At", "-v", "ON_ERROR_STOP=1", "-c", query], {
-    env: { ...process.env, PGPASSWORD: kv.Password },
-  }).toString().trim();
-}
-
-const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
-async function until(cond: () => boolean, ms = 5000) {
-  const end = Date.now() + ms;
-  while (Date.now() < end) {
-    if (cond()) return true;
-    await wait(20);
-  }
-  return cond();
-}
-
-/** fetch with the cookie jar of one browser session. */
-function session() {
-  const jar = { cookie: "" };
-  const f: Fetch = async (input, init = {}) => {
-    const headers = new Headers(init.headers);
-    if (jar.cookie) headers.set("Cookie", jar.cookie);
-    const res = await fetch(input, { ...init, headers });
-    for (const c of res.headers.getSetCookie?.() ?? []) if (c.startsWith("SignalRCAuth=")) jar.cookie = c.split(";")[0];
-    return res;
-  };
-  return { jar, fetch: f };
-}
+import { acquireControl, browserSession, LIVE_BASE as BASE, liveEnabled as enabled, removeSessionUsers, removeVehicle, sql, until, wait } from "../testing/live";
 
 const svgFixture = (name: string) => fs.readFileSync(path.join(contractsRoot, "fixtures/svg/input", name), "utf8");
 
@@ -80,11 +47,12 @@ class CuttableHub implements HubLike {
 
 describe.skipIf(!enabled)("live acceptance (AP14)", () => {
   const tag = Math.random().toString(16).slice(2, 12);
-  const driver = session();
+  const driver = browserSession();
+  const other = browserSession();
   const conns: signalR.HubConnection[] = [];
   const disposables: { dispose(): void }[] = [];
   let carId = 0;
-  let userId: number | undefined;
+  let control: Awaited<ReturnType<typeof acquireControl>> | undefined;
   let onboard: signalR.HubConnection;
   let ids: Record<string, number> = {};
 
@@ -103,7 +71,12 @@ describe.skipIf(!enabled)("live acceptance (AP14)", () => {
   };
   const api = (rel: string) => `${BASE}/api/cars/${carId}/overlay/${rel}`;
   const anonFetch = (url: string) => fetch(`${BASE}${url}`) as Promise<FetchResponse>;
-  const setDriver = (active: boolean) => sql(`update "Users" set "ActiveVehicleId" = ${active ? carId : "null"} where "Id" = ${userId}`);
+  /** Takes or releases control through the fake onboard (AquireCarControl / ReleaseCarControl). */
+  const setDriver = async (active: boolean) => {
+    if (!active) return void (await control?.release());
+    control = await acquireControl(driver, carId);
+    conns.push(control.hub);
+  };
 
   const editorTab = async () => {
     const persistence = new HttpOverlayPersistence({ fetch: driver.fetch, baseUrl: BASE, hub: (await started(driver.jar.cookie)) as unknown as HubLike });
@@ -131,33 +104,25 @@ describe.skipIf(!enabled)("live acceptance (AP14)", () => {
     const rows = sql(`insert into "CarTelemetry" ("CarId","ChannelName","ReadIntervalTicks","TelemetryType","DataType","PinManager","OptionsJson") values
       (${carId},'odoSpeed',1,'x',2,'x',null),(${carId},'odoHeading',1,'x',2,'x',null) returning "Id", "ChannelName"`);
     ids = Object.fromEntries(rows.split("\n").map((r) => { const [id, name] = r.split("|"); return [name, Number(id)]; }));
-    const login = await driver.fetch(`${BASE}/api/user/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userName: `ovl-ap14-${tag}`, password: `pw-${tag}` }),
-    });
-    expect(login.status).toBe(200);
-    userId = (await login.json()).userId;
-    sql(`insert into "UserSetups" ("UserId","CarId") values (${userId}, ${carId})`);
-    setDriver(true);
+    await driver.open();
+    await other.open();
+    await setDriver(true);
   }, 30_000);
 
   afterAll(async () => {
     for (const d of disposables) d.dispose();
     for (const c of conns) await c.stop().catch(() => {});
-    if (userId) sql(`delete from "UserSetups" where "UserId" = ${userId}`);
-    if (carId) sql(`update "Users" set "ActiveVehicleId" = null where "ActiveVehicleId" = ${carId}`);
-    if (carId) sql(`delete from "UserSetups" where "CarId" = ${carId}; delete from "CarTelemetry" where "CarId" = ${carId}; delete from "CarChannels" where "CarId" = ${carId}; delete from "Cars" where "Id" = ${carId}`);
-    if (userId) sql(`delete from "Users" where "Id" = ${userId}`);
+    removeVehicle(carId);
+    removeSessionUsers(driver, other);
   });
 
-  it("permissions: anonymous viewers read only published state and published assets; management needs the regular active driver (D69, D70)", async () => {
+  it("permissions: anonymous viewers read only published state and published assets; management needs the session user holding control (D69, D70, D73)", async () => {
     // Before anything is published: 204, no draft for anonymous.
     expect((await fetch(api("published"))).status).toBe(204);
     for (const [method, rel] of [["GET", "draft"], ["GET", "publications"], ["GET", "dependencies?channel=odoSpeed"]] as const) {
       const r = await fetch(api(rel), { method });
       expect(r.status, rel).toBe(401);
-      expect((await r.json()).code).toBe("OVL_API_LOGIN_REQUIRED");
+      expect((await r.json()).code).toBe("OVL_API_SESSION_REQUIRED");
     }
     const anonPut = await fetch(api("draft"), { method: "PUT", headers: { "Content-Type": "application/json", "If-Match": '"0"' }, body: "{}" });
     expect(anonPut.status).toBe(401);
@@ -172,12 +137,18 @@ describe.skipIf(!enabled)("live acceptance (AP14)", () => {
     expect((await driver.fetch(api(`assets/${asset.assetId}`))).status).toBe(200);
     expect((await fetch(api(`assets/${asset.assetId}`))).status).toBe(404);
 
-    // Not the active driver any more: management is refused per request.
-    setDriver(false);
+    // Another anonymous session user without control: refused, also for the asset.
+    const foreign = await other.fetch(api("draft"));
+    expect(foreign.status).toBe(403);
+    expect((await foreign.json()).code).toBe("OVL_API_NOT_DRIVER");
+    expect((await other.fetch(api(`assets/${asset.assetId}`))).status).toBe(404);
+
+    // Control released: management is refused per request.
+    await setDriver(false);
     const r = await driver.fetch(api("draft"));
     expect(r.status).toBe(403);
     expect((await r.json()).code).toBe("OVL_API_NOT_DRIVER");
-    setDriver(true);
+    await setDriver(true);
     expect((await driver.fetch(api("draft"))).status).toBe(200);
   }, 30_000);
 
@@ -220,12 +191,12 @@ describe.skipIf(!enabled)("live acceptance (AP14)", () => {
     await b.save.loadServerState();
     expect(b.store.document.elements.e_box.props!.x).toBe(1);
 
-    setDriver(false);
+    await setDriver(false);
     a.store.dispatch({ type: "setProperty", element: "e_box", property: "x", value: 2 });
     expect(await until(() => a.save.getState().status === "localOnly")).toBe(true);
     expect(a.store.document.elements.e_box.props!.x).toBe(2);
     // Meanwhile another tab of a (new) driver saves; regaining control must not overwrite it.
-    setDriver(true);
+    await setDriver(true);
     b.store.dispatch({ type: "setProperty", element: "e_box", property: "x", value: 3 });
     await b.save.flush();
     a.save.setControl(true);
@@ -373,6 +344,6 @@ describe.skipIf(!enabled)("live acceptance (AP14)", () => {
     // After the release the session cannot be resumed.
     const third = await started(driver.jar.cookie);
     expect(await third.invoke<boolean>("ResumeCarControl", carId, sessionId)).toBe(false);
-    setDriver(true);
+    await setDriver(true);
   }, 30_000);
 });

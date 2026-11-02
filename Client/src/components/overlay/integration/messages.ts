@@ -1,5 +1,7 @@
 // Texts of the AP13 integration (HUD layer, channel warnings, HUD-Signal node);
 // merged into the shared translations (src/i18n/translations.ts → messages.overlay).
+import type { ControlReason } from "./editor-control";
+import type { NoControlHint } from "./publish-model";
 import type { PublicationProblem } from "./published-overlay";
 
 const de = {
@@ -33,8 +35,13 @@ const de = {
     back: "Zurück zur Fahransicht",
     vehicle: (id: number) => `Fahrzeug ${id}`,
     loading: "Laden…",
-    loginRequired: "Der HUD-Editor erfordert einen regulären Login.",
-    noControl: "Keine aktive Fahrzeugkontrolle: Entwurf, Verlauf und Speichern auf dem Server sind gesperrt. Lokal geladene Stände können weiterbearbeitet werden.",
+    /** D73: why the editor edits locally only (controlReason). */
+    localOnly: {
+      noSession: "Keine Benutzersitzung – Entwurf, Verlauf und Speichern auf dem Server sind gesperrt. Lokal geladene Stände können weiterbearbeitet werden.",
+      unknown: "Fahrzeugstatus noch unbekannt – der Editor bearbeitet vorerst nur lokal.",
+      offline: "Fahrzeug offline: Entwurf, Verlauf und Speichern auf dem Server sind gesperrt. Lokale Änderungen werden gespeichert, sobald du die Steuerung wieder hältst.",
+      notDriver: "Die Steuerung des Fahrzeugs liegt nicht bei dir: Entwurf, Verlauf und Speichern auf dem Server sind gesperrt. Lokale Änderungen werden gespeichert, sobald du die Steuerung übernimmst.",
+    } satisfies Record<Exclude<ControlReason, "control">, string>,
     sendPaused: "Steuerung pausiert – Steuerwerte und Wiederholungen werden nicht an das Fahrzeug gesendet.",
     sendPausedConfig: "Steuerung pausiert (Konfigurationsmodus).",
     sendLive: "LIVE-TEST: Steuerwerte werden an das Fahrzeug gesendet!",
@@ -54,13 +61,22 @@ const de = {
     publishing: "Veröffentliche…",
     hint: "Veröffentlicht den gespeicherten Entwurf als neuen Stand für alle Betrachter. Ungespeicherte Änderungen werden vorher gespeichert.",
     unavailable: {
-      noControl: "Nur mit aktiver Fahrzeugkontrolle möglich.",
+      noControl: "Nur mit aktiver Fahrzeugsteuerung möglich.",
       loading: "Entwurf wird geladen…",
       conflict: "Speicherkonflikt – zuerst den Serverstand laden.",
       error: "Der Entwurf konnte nicht gespeichert werden.",
       blocked: "Der Entwurf hat Fehler, die eine Veröffentlichung verhindern:",
       noteTooLong: "Die Notiz ist zu lang.",
     },
+    /** Reason under the disabled button when unavailable is noControl (noControlHint, D73). */
+    noControlHint: {
+      noSession: "Keine Benutzersitzung.",
+      unknown: "Fahrzeugstatus unbekannt.",
+      offline: "Fahrzeug offline.",
+      notDriver: "Steuerung nicht bei dir.",
+      denied: "Vom Server abgelehnt: Steuerung nicht bei dir.",
+      localOnly: "Entwurf nur lokal – nicht vom Server geladen.",
+    } satisfies Record<NoControlHint, string>,
     vehicleDisabled: "Das HUD ist im Entwurf für das Fahrzeug deaktiviert. Veröffentlichen blendet es für alle aus.",
     published: (n: number) => `Version ${n} ist veröffentlicht und aktiv.`,
     warnings: "Hinweise:",
@@ -130,8 +146,12 @@ const en: typeof de = {
     back: "Back to driving view",
     vehicle: (id: number) => `Vehicle ${id}`,
     loading: "Loading…",
-    loginRequired: "The HUD editor requires a regular login.",
-    noControl: "No active vehicle control: draft, history and saving on the server are locked. Locally loaded states can still be edited.",
+    localOnly: {
+      noSession: "No user session – draft, history and saving on the server are locked. Locally loaded states can still be edited.",
+      unknown: "Vehicle state not known yet – the editor works locally for now.",
+      offline: "Vehicle offline: draft, history and saving on the server are locked. Local changes are saved once you hold control again.",
+      notDriver: "You do not hold control of the vehicle: draft, history and saving on the server are locked. Local changes are saved once you take control.",
+    },
     sendPaused: "Control paused – control values and repeats are not sent to the vehicle.",
     sendPausedConfig: "Control paused (configuration mode).",
     sendLive: "LIVE TEST: control values are sent to the vehicle!",
@@ -157,6 +177,14 @@ const en: typeof de = {
       error: "The draft could not be saved.",
       blocked: "The draft has errors that prevent publishing:",
       noteTooLong: "The note is too long.",
+    },
+    noControlHint: {
+      noSession: "No user session.",
+      unknown: "Vehicle state unknown.",
+      offline: "Vehicle offline.",
+      notDriver: "You do not hold control.",
+      denied: "Refused by the server: you do not hold control.",
+      localOnly: "Draft local only – not loaded from the server.",
     },
     vehicleDisabled: "The HUD is disabled for the vehicle in the draft. Publishing hides it for everyone.",
     published: (n: number) => `Version ${n} is published and active.`,
