@@ -400,6 +400,12 @@ public abstract class OverlayServiceTests : IDisposable
         // Part ids from the metadata are what documents refer to.
         var element = "{\"e_s\":{\"type\":\"svgAsset\",\"assetId\":\"" + upload.AssetId + "\",\"parts\":{\"needle\":{\"props\":{\"rotation\":45}}}}}";
         await SaveAsync(Doc(element, """["e_s"]"""));
+
+        // The editor gets the metadata of the draft's assets with GET draft (AP13).
+        var draft = (await service.GetDraftAsync(CarId, _driver)).Value!;
+        Assert.Equal(upload.AssetId, Assert.Single(draft.Assets).Key);
+        Assert.Equal(upload.Metadata.ToJsonString(), draft.Assets[upload.AssetId]!.ToJsonString());
+
         var published = await service.PublishAsync(CarId, _driver, 1, null);
         Assert.True(published.Error == null, string.Join(", ", published.Error?.Diagnostics?.Select(d => d.Code + "@" + d.Location) ?? []));
 
@@ -448,6 +454,29 @@ public abstract class OverlayServiceTests : IDisposable
         long revision = 1;
         for (var i = 0; i < 55; i++) revision = await SaveAsync(Doc(), revision);
         Assert.Single(_ctx.OverlayAssets.AsNoTracking().Where(a => a.CarId == CarId));
+    }
+
+    [SkippableFact]
+    public async Task DraftCarriesMetadataOfReferencedAssetsOnly()
+    {
+        Require();
+        Assert.Empty((await Service().GetDraftAsync(CarId, _driver)).Value!.Assets);
+        var unused = (await Service().UploadAssetAsync(CarId, _driver, "<svg/>"u8.ToArray())).Value!;
+        _sanitizer.Next = "<svg id='2'/>";
+        var used = (await Service().UploadAssetAsync(CarId, _driver, "<svg/>"u8.ToArray())).Value!;
+        _sanitizer.Next = "<svg id='3'/>";
+        var broken = (await Service().UploadAssetAsync(CarId, _driver, "<svg/>"u8.ToArray())).Value!;
+        var missing = "sha256-" + new string('0', 64);
+        var element = $$$"""{"a":{"type":"svgAsset","assetId":"{{{used.AssetId}}}"},"b":{"type":"svgAsset","assetId":"{{{broken.AssetId}}}"},"c":{"type":"svgAsset","assetId":"{{{missing}}}"}}""";
+        await SaveAsync(Doc(element, """["a","b","c"]"""));
+        var row = _ctx.OverlayAssets.Single(a => a.CarId == CarId && a.AssetId == broken.AssetId);
+        row.MetadataJson = "{not json";
+        await _ctx.SaveChangesAsync();
+
+        var assets = (await Service().GetDraftAsync(CarId, _driver)).Value!.Assets;
+        Assert.Equal([used.AssetId], assets.Select(a => a.Key));
+        Assert.Equal(used.Metadata.ToJsonString(), assets[used.AssetId]!.ToJsonString());
+        Assert.NotEqual(unused.AssetId, used.AssetId);
     }
 
     [SkippableFact]

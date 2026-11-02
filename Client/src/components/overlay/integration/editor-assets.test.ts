@@ -3,7 +3,8 @@ import { validate } from "../document/validate";
 import type { OverlayDocument } from "../document/types";
 import { EditorStore } from "../editor/core/store";
 import { startDocument } from "../editor/testing/in-memory-persistence";
-import { EditorAssetLoader, editorResolveContext, previewStream, viewBoxMetadata } from "./editor-assets";
+import { InMemoryOverlayServer } from "../editor/testing/in-memory-persistence";
+import { EditorAssetLoader, editorResolveContext, previewStream, viewBoxMetadata, withDraftAssetMetadata } from "./editor-assets";
 import { insertAssetElement } from "./svg-import-dialog";
 
 const ID = `sha256-${"a".repeat(64)}`;
@@ -45,26 +46,41 @@ describe("asset metadata for the editor", () => {
 });
 
 describe("EditorAssetLoader", () => {
-  it("loads each referenced asset once and takes the server metadata from the idempotent upload", async () => {
+  it("loads each referenced asset once with the metadata of GET draft; nothing is uploaded", async () => {
+    const server = new InMemoryOverlayServer(1);
+    server.document = withAsset();
     const calls: string[] = [];
-    const loader = new EditorAssetLoader({
-      getAsset: async (id) => { calls.push(`get ${id}`); return SVG; },
-      upload: async (svg) => { calls.push("upload"); return { assetId: ID, metadata: META, svg, report: [] }; },
-    });
+    const loader = new EditorAssetLoader({ getAsset: async (id) => { calls.push(`get ${id}`); return SVG; } });
+    const base = server.client();
+    base.getDraft = async () => ({ revision: 0, document: withAsset(), assets: { [ID]: META } });
+    const persistence = withDraftAssetMetadata(base, (m) => loader.addMetadata(m));
+    await persistence.getDraft(1);
     let changes = 0;
     loader.subscribe(() => changes++);
     await Promise.all([loader.ensure(withAsset()), loader.ensure(withAsset())]);
     await loader.ensure(withAsset());
-    expect(calls).toEqual([`get ${ID}`, "upload"]);
+    expect(calls).toEqual([`get ${ID}`]);
     expect(loader.current[ID]).toEqual({ svg: SVG, metadata: META });
     expect(changes).toBe(1);
+    expect(server.log.some((l) => l.path === "assets")).toBe(false);
+    // Other port methods pass through unchanged.
+    expect(await persistence.listPublications(1)).toEqual([]);
   });
 
-  it("keeps the text when the upload is not possible (no control)", async () => {
-    const loader = new EditorAssetLoader({ getAsset: async () => SVG, upload: () => Promise.reject(new Error("no control")) });
+  it("attaches later draft metadata to a text-only asset; known metadata is kept", async () => {
+    const loader = new EditorAssetLoader({ getAsset: async () => SVG });
     await loader.ensure(withAsset());
     expect(loader.current[ID]).toEqual({ svg: SVG });
-    // A later known metadata replaces the text-only entry.
+    loader.addMetadata({ [ID]: META });
+    expect(loader.current[ID].metadata).toEqual(META);
+    loader.addMetadata({ [ID]: { ...META, width: 1 } });
+    expect(loader.current[ID].metadata).toEqual(META);
+    loader.addMetadata(undefined);
+  });
+
+  it("takes uploaded assets with their metadata", () => {
+    const loader = new EditorAssetLoader({ getAsset: async () => SVG });
+    loader.add({ [ID]: { svg: SVG } });
     loader.add({ [ID]: { svg: SVG, metadata: META } });
     expect(loader.current[ID].metadata).toEqual(META);
   });
