@@ -71,7 +71,9 @@ export interface VideoHudProps {
 }
 
 export default function VideoHud({ carId, config, assets, locale, visible, containerRef, videoRef, pausedText }: VideoHudProps) {
-  const frame = useVideoFrame(containerRef, videoRef);
+  // Without a displayed picture (no stream, connecting, stream lost) the HUD
+  // covers the workspace fitted into the player, so telemetry stays visible.
+  const frame = layerRect(useVideoGeometry(containerRef, videoRef), config.workspace);
   const [provider, setProvider] = useState<CarSourceProvider | undefined>(undefined);
   const [paused, setPaused] = useState(false);
   const pausedRef = useRef(false);
