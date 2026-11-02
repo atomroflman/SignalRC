@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using SignalRC.Shared.Telemetry;
 
 namespace SignalRC.Server.Telemetry;
@@ -28,8 +29,11 @@ public sealed class TelemetryRelay(
     ITelemetryTransport transport,
     ITelemetryChannelDirectory directory,
     TimeProvider time,
-    ILogger<TelemetryRelay> logger)
+    ILogger<TelemetryRelay> logger,
+    ILoggerFactory? loggers = null)
 {
+    private readonly TelemetryRelayLog _log = new(loggers?.CreateLogger(TelemetryRelayLog.Category) ?? NullLogger.Instance, time);
+
     private static readonly TimeSpan DemandInterval = TimeSpan.FromMilliseconds(200);
     private static readonly TimeSpan LegacyTouchInterval = TimeSpan.FromMilliseconds(250);
 
@@ -40,6 +44,12 @@ public sealed class TelemetryRelay(
         public int AgeMs;
         public long ReceivedAt;
         public long LastForwardedAt;
+    }
+
+    private sealed class Counter
+    {
+        public long Changes;
+        public long Touches;
     }
 
     private sealed class Car
@@ -57,6 +67,11 @@ public sealed class TelemetryRelay(
         public int[] SentDemand = [];
         public long DemandSentAt = long.MinValue;
         public bool DemandScheduled;
+        // Diagnostics only (Snapshot); never read by the forwarding.
+        public long? LastMessageAt;
+        public long AcceptedDeltas;
+        public long DroppedOldSeq;
+        public readonly Dictionary<int, Counter> Counters = [];
     }
 
     private readonly Dictionary<int, Car> _cars = [];
@@ -98,6 +113,9 @@ public sealed class TelemetryRelay(
             car.Cache.Clear();
             car.SentDemand = [];
             car.DemandSentAt = long.MinValue;
+            car.LastMessageAt = null;
+            car.AcceptedDeltas = car.DroppedOldSeq = 0;
+            car.Counters.Clear();
         }
         await UpdateDemandAsync(carId, car, force: true);
     }
@@ -123,24 +141,34 @@ public sealed class TelemetryRelay(
         bool unknownId;
         lock (car.Lock)
         {
+            car.LastMessageAt = now;
             if (delta.Epoch != car.Epoch)
             {
                 // A new onboard process: its samples replace everything cached.
+                _log.NewEpoch(carId, car.Epoch, delta.Epoch);
                 car.Epoch = delta.Epoch;
                 car.OnboardSeq = -1;
                 car.Cache.Clear();
             }
-            if (delta.Seq <= car.OnboardSeq) return;
+            if (delta.Seq <= car.OnboardSeq)
+            {
+                car.DroppedOldSeq++;
+                _log.DroppedOldSeq(carId, delta, car.OnboardSeq, car.Names);
+                return;
+            }
             car.OnboardSeq = delta.Seq;
+            car.AcceptedDeltas++;
             foreach (var c in delta.Changed)
             {
                 var entry = new Entry { Value = c.Value, State = c.State, AgeMs = c.AgeMs ?? delta.AgeMs, ReceivedAt = now, LastForwardedAt = now };
                 car.Cache[c.Id] = entry;
                 changed.Add((c.Id, entry));
+                Count(car, c.Id).Changes++;
             }
             foreach (var id in delta.Touched) Touch(car, id, delta.AgeMs, now);
             for (var i = 0; i + 1 < delta.TouchedAged.Length; i += 2) Touch(car, delta.TouchedAged[i], delta.TouchedAged[i + 1], now);
             unknownId = changed.Any(c => !car.Names.ContainsKey(c.Id));
+            _log.Delta(carId, delta, car.Names);
         }
         if (unknownId) await RefreshNamesAsync(carId, car);
         await ForwardAsync(carId, car, delta.AgeMs, changed, delta.Touched, delta.TouchedAged);
@@ -152,7 +180,17 @@ public sealed class TelemetryRelay(
         if (!car.Cache.TryGetValue(id, out var entry)) return;
         entry.AgeMs = ageMs;
         entry.ReceivedAt = now;
+        Count(car, id).Touches++;
     }
+
+    private static Counter Count(Car car, int id)
+    {
+        if (!car.Counters.TryGetValue(id, out var counter)) car.Counters[id] = counter = new Counter();
+        return counter;
+    }
+
+    /// <summary>A delta from a connection that is not a registered onboard (D56); only counted for the log.</summary>
+    public void RejectedDelta(string? claimedCarId) => _log.Rejected(int.TryParse(claimedCarId, out var id) ? id : 0);
 
     /// <summary>
     /// A value on the legacy path (old onboard). It has no quality, so it is
@@ -174,8 +212,11 @@ public sealed class TelemetryRelay(
         var touched = Array.Empty<int>();
         lock (car.Lock)
         {
+            car.LastMessageAt = now;
+            _log.LegacyValue(carId, car.Names);
             if (car.Cache.TryGetValue(id, out var entry) && entry.Value == value && entry.State == TelemetrySampleState.Unchecked)
             {
+                Count(car, id).Touches++;
                 entry.AgeMs = 0;
                 entry.ReceivedAt = now;
                 if (now - entry.LastForwardedAt < LegacyTouchInterval.TotalMilliseconds) return;
@@ -187,6 +228,7 @@ public sealed class TelemetryRelay(
                 entry = new Entry { Value = value, State = TelemetrySampleState.Unchecked, ReceivedAt = now, LastForwardedAt = now };
                 car.Cache[id] = entry;
                 changed.Add((id, entry));
+                Count(car, id).Changes++;
             }
         }
         await ForwardAsync(carId, car, 0, changed, touched, []);
@@ -296,6 +338,57 @@ public sealed class TelemetryRelay(
         foreach (var (name, value) in legacy) await transport.SendLegacyAsync(carId, name, value);
     }
 
+    // --- Diagnostics ---
+
+    /// <summary>
+    /// Read-only state of a vehicle for the diagnostics endpoint: cache, demand
+    /// and interest counts. Connection ids are not part of it.
+    /// </summary>
+    public TelemetryRelaySnapshot Snapshot(int carId)
+    {
+        Car? car;
+        lock (_carsLock) _cars.TryGetValue(carId, out car);
+        if (car == null) return new TelemetryRelaySnapshot(false, null, -1, null, 0, 0, [], null, 0, 0, []);
+        var now = Now;
+        lock (car.Lock)
+        {
+            var interested = new Dictionary<int, int>();
+            foreach (var ids in car.Interests.Values)
+            {
+                foreach (var id in ids) interested[id] = interested.GetValueOrDefault(id) + 1;
+            }
+            var channelIds = car.Cache.Keys.Concat(interested.Keys).Concat(car.SentDemand).Concat(car.Counters.Keys).Distinct().Order();
+            var channels = channelIds.Select(id =>
+            {
+                car.Cache.TryGetValue(id, out var e);
+                car.Counters.TryGetValue(id, out var c);
+                return new TelemetryRelayChannelSnapshot(
+                    id,
+                    car.Names.GetValueOrDefault(id),
+                    e?.Value,
+                    e?.State,
+                    e == null ? null : (int)Math.Min(int.MaxValue, e.AgeMs + (now - e.ReceivedAt)),
+                    e == null ? null : now - e.ReceivedAt,
+                    car.SentDemand.Contains(id),
+                    interested.GetValueOrDefault(id),
+                    c?.Changes ?? 0,
+                    c?.Touches ?? 0);
+            }).ToList();
+            return new TelemetryRelaySnapshot(
+                car.OnboardConnection != null,
+                car.Epoch,
+                car.OnboardSeq,
+                car.LastMessageAt == null ? null : now - car.LastMessageAt.Value,
+                car.AcceptedDeltas,
+                car.DroppedOldSeq,
+                [.. car.SentDemand],
+                car.DemandSentAt == long.MinValue ? null : now - car.DemandSentAt,
+                car.Interests.Count,
+                car.LegacyClients.Count,
+                channels);
+        }
+    }
+
     // --- Demand (D59) ---
 
     /// <summary>
@@ -306,6 +399,7 @@ public sealed class TelemetryRelay(
     {
         string? onboard;
         int[] demand;
+        int[] previous = [];
         TimeSpan wait;
         lock (car.Lock)
         {
@@ -324,6 +418,7 @@ public sealed class TelemetryRelay(
             }
             else
             {
+                previous = car.SentDemand;
                 car.SentDemand = demand;
                 car.DemandSentAt = Now;
             }
@@ -338,6 +433,7 @@ public sealed class TelemetryRelay(
             });
             return;
         }
+        if (force || !demand.SequenceEqual(previous)) _log.Demand(carId, previous, demand);
         try
         {
             await transport.SendDemandAsync(onboard, demand);
@@ -348,3 +444,28 @@ public sealed class TelemetryRelay(
         }
     }
 }
+
+public sealed record TelemetryRelayChannelSnapshot(
+    int Id,
+    string? Name,
+    string? Value,
+    TelemetrySampleState? State,
+    int? AgeMs,
+    long? ReceivedAgoMs,
+    bool InDemand,
+    int Interested,
+    long Changes,
+    long Touches);
+
+public sealed record TelemetryRelaySnapshot(
+    bool OnboardConnected,
+    string? Epoch,
+    long Seq,
+    long? LastMessageAgoMs,
+    long AcceptedDeltas,
+    long DroppedOldSeq,
+    int[] Demand,
+    long? DemandSentAgoMs,
+    int InterestedConnections,
+    int LegacyClients,
+    IReadOnlyList<TelemetryRelayChannelSnapshot> Channels);
