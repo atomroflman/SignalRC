@@ -1,5 +1,5 @@
 {
- "description": "Referenzfälle des Laufzeitvertrags (runtime/README.md). Jeder Fall ist eine eigene Anzeigesitzung, die beim ersten Frame beginnt. frames werden in Reihenfolge ausgewertet; condition/rate/input ist das Formelergebnis des Frames. Spur e_a.x interpoliert 0→10 über 1 s, base ist der Grundwert. value ist der angezeigte Eigenschaftswert; Zahlen mit Toleranz 1e-9.",
+ "description": "Referenzfälle des Laufzeitvertrags (runtime/README.md). Jeder Fall ist eine eigene Anzeigesitzung. Frame-Zeiten sind relativ zum Sitzungsbeginn bei t = 0; auto-Clips starten dort, auch wenn der erste Frame später liegt. frames werden in Reihenfolge ausgewertet; condition/rate/input ist das Formelergebnis des Frames. Spur e_a.x interpoliert 0→10 über 1 s, base ist der Grundwert. value ist der angezeigte Eigenschaftswert; Zahlen mit Toleranz 1e-9.",
  "cases": [
   {
    "id": "auto-repeat-base",
