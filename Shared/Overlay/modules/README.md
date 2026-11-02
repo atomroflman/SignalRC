@@ -136,13 +136,15 @@ Entwicklungswerkzeuge; Laufzeitabhängigkeiten kommen nicht hinzu:
 | Browser/Leistung | Playwright (Chromium) | `Client/e2e/` |
 | Fixture-Konformität | je ein Test in C# und TS, der alle `Shared/Overlay/fixtures/**/cases.json` ausführt | jeweils im Paket der getesteten Schnittstelle |
 
-**Erstes Teilpaket T0 von AP14**, Voraussetzung für M1:
+**T0 (D65):** AP01 legt als ersten Schritt das xUnit-Projekt und Vitest an
+(Skripte `dotnet test`, `npm test`). Playwright (`npm run e2e`) und CI folgen mit
+AP14. Kein weiteres Paket legt eigene Testinfrastruktur an.
 
-- die drei Testgerüste mit je einem Beispieltest anlegen,
-- Skripte `npm test` und `npm run e2e` sowie `dotnet test` bereitstellen.
+**Schemaprüfung (D64):** Ein JSON-Schema-Validator ist nur Testabhängigkeit:
+ajv als devDependency, JsonSchema.Net im Testprojekt. Die Laufzeitprüfung ist
+handgeschrieben.
 
-Bis T0 vorliegt, implementieren andere Pakete gegen die Fixtures, ohne eigene
-Testinfrastruktur anzulegen. CI wird erst nach gesonderter Abstimmung eingerichtet.
+CI wird erst nach gesonderter Abstimmung eingerichtet.
 
 ## 4. Leistungsprofil (D21, D42)
 

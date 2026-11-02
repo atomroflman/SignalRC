@@ -557,6 +557,22 @@ Arbeitspakete: [Overlay-Arbeitspakete.md](Overlay-Arbeitspakete.md).
 - Overlay-REST-Antworten werden mit Brotli/gzip komprimiert. Assets werden
   dauerhaft im Browser gecacht.
 
+### D64 – Schemaprüfung handgeschrieben, Schema-Validator nur im Test
+
+- Die Strukturprüfung wird in TS (Client) und C# (Server) ohne neue
+  Laufzeitbibliothek implementiert.
+- Ein JSON-Schema-Validator (ajv bzw. JsonSchema.Net) ist nur
+  Testabhängigkeit. Er weist nach, dass beide Implementierungen dieselben
+  Dokumente akzeptieren und ablehnen wie `overlay-document.schema.json`.
+
+### D65 – Schlankes T0 als erster Schritt von AP01
+
+- AP01 legt zu Beginn nur die benötigte Testinfrastruktur an:
+  - xUnit-Projekt `Tests/SignalRC.Overlay.Tests` in `SignalRC.sln`,
+  - Vitest im Client.
+- Playwright und CI folgen mit AP14. Weitere Pakete nutzen diese Gerüste
+  mit und legen keine eigenen an.
+
 ## Spezifikationsstand
 
 ### S01 – Dokumentmodell und Property-Katalog v1 (Entwurf)
@@ -678,6 +694,7 @@ Gerätelauf ([modules §4](Shared/Overlay/modules/README.md)).
 | Datum | Änderung | Betroffen |
 | --- | --- | --- |
 | 2026-11-01 | D59–D63: sparsame Übertragung. Telemetrievertrag v1.1, LiDAR-Drahtformat, API v1.1 (PATCH, Kompression), Schema-Mindestfrist 500 ms, Leistungsgrenzen für Datenmengen; neue Referenzfälle `fixtures/telemetry/`, LiDAR `wire`/`deadband` | AP02, AP03, AP04, AP05, AP08, AP09, AP14 |
+| 2026-11-02 | D64, D65; Diagnosecode `OVL_VARIANT_ORPHANED` (Warnung, D53) ergänzt | AP01, AP09, AP14 |
 
 ## Prüfpunkte nach Freigabe
 

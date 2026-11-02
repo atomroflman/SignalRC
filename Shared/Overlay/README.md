@@ -224,7 +224,9 @@ Bisher definierte Codes: `OVL_STRUCT_MULTIPLE_PARENTS`, `OVL_STRUCT_ORPHAN`,
 `OVL_ID_DUPLICATE`, `OVL_PROP_UNKNOWN`, `OVL_PROP_MODE_NOT_ALLOWED`,
 `OVL_PROP_LOCKED_ASPECT`, `OVL_PROP_OUT_OF_RANGE`, `OVL_PROP_INVALID_WRAP`,
 `OVL_CLIP_PROPERTY_CONFLICT`, `OVL_CLIP_KEYFRAME_ORDER`, `OVL_CLIP_KEYFRAME_RANGE`,
-`OVL_LIMIT_EXCEEDED` (D33). Die Formelcodes folgen mit dem Ausdrucksvertrag.
+`OVL_LIMIT_EXCEEDED` (D33), `OVL_VARIANT_ORPHANED` (Kategorie `warning`,
+Ort `{ variant }`: die `StreamId` ist dem Fahrzeug unbekannt, D53). Die
+Formelcodes stehen im Ausdrucksvertrag.
 
 ## 9. Grenzen (D33)
 
