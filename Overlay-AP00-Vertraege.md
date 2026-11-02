@@ -508,9 +508,10 @@ Arbeitspakete: [Overlay-Arbeitspakete.md](Overlay-Arbeitspakete.md).
 
 - Das Grundraster ist im Uhrzeigersinn (von oben) definiert, 0° = vorne.
 - Die tatsächliche Zählrichtung des Scanners wird in AP04 mit einer
-  Testaufnahme bestimmt und als Konstante im Rasterproduzenten festgelegt. Bis
-  dahin ist die Ausrichtung nicht abgenommen. Die Testaufnahme ist ein
-  gesondert zu vereinbarender Hardwaretest.
+  Testaufnahme bestimmt. Bis dahin ist die Ausrichtung nicht abgenommen. Die
+  Testaufnahme ist ein gesondert zu vereinbarender Hardwaretest.
+- Umgesetzt in AP04 als Quelloption `scannerClockwise` (Standard `true`) statt
+  als Konstante; die Testaufnahme legt den Standard endgültig fest.
 
 ### D59 – Übertragung nur bei Bedarf
 
@@ -595,6 +596,21 @@ Arbeitspakete: [Overlay-Arbeitspakete.md](Overlay-Arbeitspakete.md).
 - Beim Rollout wird deshalb immer zuerst der Server aktualisiert, dann das
   Fahrzeug. Ein neues Onboard an einem alten Server sendet keine Telemetrie.
 - Alte Onboards an einem neuen Server funktionieren weiter (Altpfad, D56).
+
+### D69 – Ausgangsnamen für Zuschauer über lesenden Endpunkt
+
+- `Ctl` überträgt Fahrzeugausgänge weiter per Kanal-ID.
+- Die Zuordnung ID → Name liefert `GET api/cars/{carId}/overlay/sources`
+  (`outputs`) mit derselben Berechtigung wie der Videostream
+  (`CanViewCarAsync`), ohne UserSetup.
+
+### D70 – HUD-Telemetrie lesbar wie der Videostream
+
+- Wer den Videostream sehen darf, darf auch die Kanal-Metadaten und
+  HUD-Telemetrie lesen, auch ohne Login (`overlay/sources`, Hub-Interessen).
+- Personenbezogene Felder (persönliche Kanalauswahl) bleiben angemeldeten
+  Benutzern vorbehalten; `/api/car/{id}/telemetry` ist unverändert.
+- Geprüft wird beim Anmelden von Interesse, nicht beim Zurückziehen.
 
 ## Spezifikationsstand
 
@@ -721,6 +737,8 @@ Gerätelauf ([modules §4](Shared/Overlay/modules/README.md)).
 | 2026-11-02 | AP01 präzisiert Diagnosen (README §8): Codes `OVL_SCHEMA_*`, `OVL_PROP_TYPE`, `OVL_STRUCT_NOT_A_GROUP`, `OVL_REF_UNKNOWN_CLIP/PART/ASSET`, Ortsfelder `path`/`field`/`limit`/`offset`, Abschwächungs- und Prüfreihenfolge; neue Fixture `fixtures/documents/resolution.json` | AP01, AP02, AP06, AP09 |
 | 2026-11-02 | AP02: D66, D67; Dokumente als `text` statt `jsonb`; Codes `OVL_API_INVALID_REQUEST`, `OVL_API_NOT_AVAILABLE`, Warnung `OVL_EXPR_UNCHECKED`; Veröffentlichungsantwort mit `warnings`; Abhängigkeitsauskunft folgt mit AP06 | AP02, AP06, AP07, AP09 |
 | 2026-11-02 | AP06 präzisiert die Analyse (Ausdrucksvertrag §7): Rangfolge der einen Diagnose, Typregeln für `if`/`fallback`/`==`, Bezeichner ohne Klammern, Tiefe von `pi()`, unbekannte Quellenlisten werden nicht geprüft | AP01, AP06, AP10 |
+| 2026-11-02 | AP04: Quelloption `scannerClockwise` (D58), Optionsprüfung und Zustandsregeln im LiDAR-Vertrag §1/§5/§7; Fixture `spatial-limit-inside` korrigiert (Zone 2); `TelemetryDataType.LidarGrid = 4`; Einrichtungsaktion `overlay/lidar-grid-source` | AP04, AP05, AP08, AP13 |
+| 2026-11-02 | AP05: D69, D70; Endpunkt `overlay/sources`, Metadaten um `readIntervalTicks`/`zoneLimitsMm` ergänzt (Telemetrievertrag §6/§7, API §3/§4) | AP03, AP05, AP08, AP13 |
 | 2026-11-02 | AP06 auf dem Server registriert: Veröffentlichen prüft Formeln, D66 greift nur noch ohne registrierte Prüfung; `LidarGrid`-Kanäle sind kein Formelwert; Abhängigkeitsauskunft (`dependencies`) umgesetzt | AP02, AP06, AP13 |
 
 ## Prüfpunkte nach Freigabe

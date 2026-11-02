@@ -2,8 +2,8 @@
 
 Stand: 2026-11-02.
 - AP00 ist freigegeben.
-- AP01, AP03 und AP06 sind umgesetzt; AP02 ist bis auf den SVG-Upload (wartet
-  auf AP07) umgesetzt.
+- AP01, AP03, AP04, AP05 und AP06 sind umgesetzt; AP02 ist bis auf den
+  SVG-Upload (wartet auf AP07) umgesetzt.
 - M0 ist erreicht (T0 mit AP01).
 
 „Umgesetzt“ heißt: implementiert, getestet und lokal committet. Die gemeinsame
@@ -54,8 +54,8 @@ nicht ein zusätzliches Verbot, vorher gegen deren vereinbarte Ports zu arbeiten
 | AP01 | ✅ umgesetzt | Variantenauflösung und strukturelle Dokumentprüfung | AP00-Verträge. |
 | AP02 | ◐ umgesetzt bis auf SVG-Upload | Serverpersistenz, Revisionen, Berechtigungen und Veröffentlichung | AP01, AP06, AP07. |
 | AP03 | ✅ umgesetzt | Telemetriequalität, Reader-Anbindung und Servertransport | AP00-Verträge; Anwendungsverdrahtung über AP13. |
-| AP04 | offen | LiDAR-Gruppen und kompaktes Winkel-/Distanzraster | AP03 für Qualität und Transport. |
-| AP05 | offen | Client-Telemetrie, Metadaten, Alterung und Verbraucher | AP03; LiDAR-Daten aus AP04. |
+| AP04 | ✅ umgesetzt (Ausrichtung D58 offen) | LiDAR-Gruppen und kompaktes Winkel-/Distanzraster | AP03 für Qualität und Transport. |
+| AP05 | ✅ umgesetzt | Client-Telemetrie, Metadaten, Alterung und Verbraucher | AP03; LiDAR-Daten aus AP04. |
 | AP06 | ✅ umgesetzt | Sicheres Ausdruckssystem in Client und Server | AP00-Verträge. |
 | AP07 | offen | SVG-Bereinigung, normalisierte Assets und Importvorschau | AP00-Verträge; Speicherung/HTTP-Anbindung über AP02/AP13. |
 | AP08 | offen | SVG-/Animationslaufzeit und LiDAR-Widget | AP01, AP05, AP06, AP07. |
@@ -197,8 +197,10 @@ erst nach erneutem Veröffentlichen. Integrationstests decken Kontrollwechsel ab
   neuem und altem Client, Fahrer, Zuschauer und Störer.
 - **Nicht ohne Hardware getestet:** die Lesepfade von CAN, LiDAR, BMS und
   CPU. Geprüft ist dort nur die reine Abbildung auf Zustände und Alter.
-- **Client-Seite:** folgt mit AP05. Bis dahin nutzt die bestehende
-  Telemetrieleiste den Altpfad, was den Bedarf auf „alle Kanäle“ setzt.
+- **Client-Seite:** mit AP05 umgesetzt; die Telemetrieleiste nutzt den
+  Altpfad nicht mehr.
+- **Nachträglich behoben (in AP04 gefunden):** `TelemetryDelta.IsEmpty` fehlte
+  `[IgnoreMember]`, MessagePack-Serialisierung schlug dadurch fehl.
 
 **Ziel:** Werte einschließlich ihrer tatsächlichen Quellaktualität transportieren,
 ohne die bisherige manuelle Telemetrie oder ältere Clients zu brechen.
@@ -225,7 +227,25 @@ LiDAR-Widget und keine neue fahrzeugseitige Sicherheitslogik.
 Quellfehler, unbekannte Qualität und Transportausfall bleiben unterscheidbar.
 Altclients/-Onboard werden gemäß Kompatibilitätsvertrag behandelt.
 
-## AP04 – LiDAR-Gruppen und kompaktes Grundraster
+## AP04 – LiDAR-Gruppen und kompaktes Grundraster ✅
+
+**Status (2026-11-02):** umgesetzt.
+- **Onboard** (`Onboard/Telemetry/LidarGrid/`): `LidarGridTelemetryReader`
+  rechnet aus dem Rohscan vor dem Mehrscanfilter, ohne dessen Fensterlatenz.
+  Gruppen über den ganzen Rundscan inklusive 0°/360°, Montagekorrektur,
+  96 × 5 Raster, Zentimeter-Kodierung dünn/dicht, Totband (D62).
+- **Server** (`Server/Overlay/Lidar/`): Einrichtungsaktion
+  `POST api/cars/{carId}/overlay/lidar-grid-source`, idempotent, ohne
+  Migration; Kanal wird sofort mit `ServerId` ans Onboard gemeldet.
+- **Client** (`Client/src/components/overlay/lidar-source/`): eigenständige
+  Konfigurationshilfe `LidarSourceSetup`; Einbindung über AP13.
+- **Tests:** xUnit ohne Hardware gegen alle LiDAR-Fixtures und
+  Abnahmefälle, echte Aufnahme `pico-scan-10rev.bin`, Transport über
+  MessagePack und JSON, Einrichtung gegen SQLite und PostgreSQL.
+- **Offen:** Zählrichtung (D58) als Option `scannerClockwise` (Standard
+  `true`); Bestätigung per Testaufnahme nur nach gesonderter Vereinbarung.
+- **Nebenbei behoben:** `ChannelsController.ToMapItem` sendete ohne
+  `ServerId` (Telemetriekanäle; Steuerkanäle haben dieselbe Lücke, offen).
 
 **Ziel:** Aus Rundscans kompakte Daten für die vereinbarte HUD-Draufsicht bilden,
 ohne Rohpunktwolken an den Browser zu übertragen.
@@ -252,7 +272,26 @@ Punktwolken oder Änderung bestehender Kollisions-/Sicherheitsfunktionen.
 Entfernungssprünge, Lücken, Rundscan-/Rastergrenzen, Montagekorrektur, Zonenränder,
 Teilscans und mehrere Gruppen pro Feld. Datenumfang entspricht dem AP00-Budget.
 
-## AP05 – Client-Telemetrie und Verbrauchertrennung
+## AP05 – Client-Telemetrie und Verbrauchertrennung ✅
+
+**Status (2026-11-02):** umgesetzt.
+- **Client** (`Client/src/components/overlay/sources/`): gemeinsamer,
+  typisierter Wertebestand je Fahrzeug auf einer Hub-Verbindung. Verbraucher
+  melden sich getrennt an; die Vereinigung geht als ein
+  `SetTelemetryInterest` hinaus (höchstens alle 200 ms).
+  - Qualität und Alter mit Gründen, Alterung per Timer, injizierbare Uhr.
+  - Reconnect/`seq` laut Vertrag; LiDAR-Raster dekodiert (`lidarGrid()`).
+  - Steuerungsanzeige: Zuschauerbestand und `ControlDisplayPublisher` als
+    Fahrer-Port (Verdrahtung AP13). Testdoubles unter `sources/testing/`.
+- **Manuelle Leiste** (`telemetry-store.ts`, `telemetry.tsx`): Verbraucher des
+  gemeinsamen Bestands, nur persönliche Auswahl, kein Altpfad mehr. Behoben:
+  Verlassen der Seite löschte gespeicherte Präferenzen.
+- **Server:** `GET api/cars/{carId}/overlay/sources` mit Metadaten und
+  Ausgangsnamen, lesbar wie der Videostream (D69, D70).
+- **Tests:** Vitest gegen `fixtures/telemetry` und `fixtures/lidar` (`wire`),
+  Verhaltenstests, xUnit für den Quellkatalog, Live-Test gegen lokalen Server.
+- **Offen für AP13:** Publisher an die Steuerverbindung anbinden;
+  `pages/car/[carId]/test.tsx` nutzt noch den Altpfad.
 
 **Ziel:** Typisierten, qualitätsbewussten Wertebestand für mehrere Verbraucher
 bereitstellen, ohne persönliche Auswahl zu verändern.
