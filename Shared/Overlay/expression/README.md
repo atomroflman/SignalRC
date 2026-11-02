@@ -192,8 +192,33 @@ Diagnose-Offsets: Syntaxfehler zeigen auf das unerwartete Token. Funktions-,
 Quell- und Arity-Fehler zeigen auf den Beginn des Aufrufs. Argumentfehler
 (Literal, Bereich, Typ) zeigen auf den Beginn des ersten unpassenden
 Operanden bzw. Arguments. Leer-, Ergebnistyp- und Grenzfehler haben Offset 0.
-Bei mehreren Fehlern meldet die Analyse den ersten in Quelltextreihenfolge;
-ein Syntaxfehler beendet die Analyse.
+Die Analyse meldet höchstens eine Diagnose. Bei mehreren Fehlern gilt diese
+Rangfolge:
+
+1. Länge,
+2. Syntax (der erste in Quelltextreihenfolge; beendet die Analyse),
+3. Tiefe,
+4. der inhaltliche Fehler mit dem kleinsten Offset (bei gleichem Offset der
+   zuerst gefundene),
+5. erst wenn sonst nichts vorliegt, `OVL_EXPR_RESULT_TYPE`.
+
+`OVL_EXPR_RESULT_TYPE` steht immer an Offset 0 und würde sonst jeden echten
+Fehler verdecken.
+
+Ergänzende Typregeln:
+
+- `if`: Die Bedingung muss `bool` sein. Der dritte Ausdruck muss den Typ des
+  zweiten haben; der Fehler sitzt am dritten.
+- `fallback`: Der zweite Ausdruck muss den Typ des ersten haben.
+- `==`/`!=`: Der rechte Operand muss den Typ des linken haben.
+- Ein Bezeichner ohne Klammern (z. B. `speed`) ist ein Syntaxfehler am
+  Bezeichner, weil es keine Variablen gibt.
+- Ein Funktionsaufruf ohne Argumente (`pi()`) hat Tiefe 1.
+
+**Unbekannte Quellenlisten:** Kennt der Aufrufer keine Telemetrie- bzw.
+Ausgangsliste, etwa weil eine Prüfung ohne Fahrzeugkontext läuft, werden
+`tel()`/`out()` nicht geprüft und erhalten den Typ `unknown`. Signale sind
+immer bekannt, da sie im Dokument definiert sind.
 
 `publish`-Fehler in deaktivierten Teilen sind Warnungen (Produktplan). Die
 AST-Tiefe zählt jede Operator- und Funktionsebene; ein einzelnes Literal hat

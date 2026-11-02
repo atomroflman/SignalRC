@@ -711,6 +711,7 @@ Gerätelauf ([modules §4](Shared/Overlay/modules/README.md)).
 | 2026-11-02 | D64, D65; Diagnosecode `OVL_VARIANT_ORPHANED` (Warnung, D53) ergänzt | AP01, AP09, AP14 |
 | 2026-11-02 | AP01 präzisiert Diagnosen (README §8): Codes `OVL_SCHEMA_*`, `OVL_PROP_TYPE`, `OVL_STRUCT_NOT_A_GROUP`, `OVL_REF_UNKNOWN_CLIP/PART/ASSET`, Ortsfelder `path`/`field`/`limit`/`offset`, Abschwächungs- und Prüfreihenfolge; neue Fixture `fixtures/documents/resolution.json` | AP01, AP02, AP06, AP09 |
 | 2026-11-02 | AP02: D66, D67; Dokumente als `text` statt `jsonb`; Codes `OVL_API_INVALID_REQUEST`, `OVL_API_NOT_AVAILABLE`, Warnung `OVL_EXPR_UNCHECKED`; Veröffentlichungsantwort mit `warnings`; Abhängigkeitsauskunft folgt mit AP06 | AP02, AP06, AP07, AP09 |
+| 2026-11-02 | AP06 präzisiert die Analyse (Ausdrucksvertrag §7): Rangfolge der einen Diagnose, Typregeln für `if`/`fallback`/`==`, Bezeichner ohne Klammern, Tiefe von `pi()`, unbekannte Quellenlisten werden nicht geprüft | AP01, AP06, AP10 |
 
 ## Prüfpunkte nach Freigabe
 
