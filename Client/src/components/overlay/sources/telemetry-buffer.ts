@@ -16,8 +16,30 @@ export interface TlmMessage {
   touchedAged: number[];
 }
 
+/** Diagnostics per channel; counted for accepted channels only and never read by the evaluation. */
+export interface ChannelCounters {
+  changes: number;
+  confirmations: number;
+  /** Client clock (ms) of the last change or confirmation. */
+  lastArrival: number;
+}
+
+/** Diagnostics of the message stream (cumulative over reconnects). */
+export interface StreamCounters {
+  messages: number;
+  /** Messages dropped because their seq was not above the last one. */
+  droppedOldSeq: number;
+  /** Changes for channels this client does not want (filtered by `accept`). */
+  ignoredChanges: number;
+  lastSeq?: number;
+  lastAgeMs?: number;
+  lastMessageAt?: number;
+}
+
 export class TelemetryBuffer {
   readonly samples = new Map<number, Sample>();
+  readonly counters = new Map<number, ChannelCounters>();
+  readonly stream: StreamCounters = { messages: 0, droppedOldSeq: 0, ignoredChanges: 0 };
   private lastSeq: number | undefined;
 
   /**
@@ -27,13 +49,27 @@ export class TelemetryBuffer {
    * when the message was dropped.
    */
   apply(msg: TlmMessage, now: number, accept: (id: number) => boolean): boolean {
-    if (this.lastSeq !== undefined && msg.seq <= this.lastSeq) return false;
+    if (this.lastSeq !== undefined && msg.seq <= this.lastSeq) {
+      this.stream.droppedOldSeq++;
+      return false;
+    }
     this.lastSeq = msg.seq;
+    this.stream.messages++;
+    this.stream.lastSeq = msg.seq;
+    this.stream.lastAgeMs = msg.ageMs;
+    this.stream.lastMessageAt = now;
     for (const c of msg.changed ?? []) {
-      if (!Array.isArray(c) || typeof c[0] !== "number" || !accept(c[0])) continue;
+      if (!Array.isArray(c) || typeof c[0] !== "number") continue;
+      if (!accept(c[0])) {
+        this.stream.ignoredChanges++;
+        continue;
+      }
       const state = (c.length >= 3 ? c[2] : SampleState.Valid) as SampleStateCode;
       const ageMs = c.length >= 4 ? (c[3] as number) : msg.ageMs;
       this.samples.set(c[0], { value: typeof c[1] === "string" ? c[1] : String(c[1] ?? ""), state, ageMs, receivedAt: now });
+      const counter = this.counter(c[0]);
+      counter.changes++;
+      counter.lastArrival = now;
     }
     for (const id of msg.touched ?? []) this.touch(id, msg.ageMs, now);
     const aged = msg.touchedAged ?? [];
@@ -46,6 +82,15 @@ export class TelemetryBuffer {
     if (!s) return;
     s.ageMs = ageMs;
     s.receivedAt = now;
+    const counter = this.counter(id);
+    counter.confirmations++;
+    counter.lastArrival = now;
+  }
+
+  private counter(id: number): ChannelCounters {
+    let c = this.counters.get(id);
+    if (!c) this.counters.set(id, (c = { changes: 0, confirmations: 0, lastArrival: 0 }));
+    return c;
   }
 
   /** New connection: the snapshot after the next interest replaces everything. */

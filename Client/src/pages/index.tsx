@@ -5,6 +5,7 @@ import VideoSettingsControl from "@/components/video-settings";
 import { useControlFlowStore } from "@/components/control-flow-store";
 import CarControl from "@/components/car-control";
 import Telemetry from "@/components/telemetry";
+import { TelemetryDiagnosticsPanel } from "@/components/overlay/integration/telemetry-diagnostics-panel";
 import Ping from "@/components/ping";
 import SessionTransfer from "@/components/session-transfer";
 import InstallDialog from "@/components/install-dialog";
@@ -155,6 +156,11 @@ export default function Home() {
               <div className="min-h-24 border border-white/8 bg-slate-900/70 shadow-sm">
                 <Telemetry carId={selectedCarId} />
               </div>
+              <TelemetryDiagnosticsPanel
+                carId={selectedCarId}
+                className="mt-2 border border-white/8 bg-slate-900/70 px-2 py-1"
+                summaryClassName="cursor-pointer select-none text-[11px] font-semibold uppercase tracking-wide text-slate-400"
+              />
             </div>
           )}
         </div>

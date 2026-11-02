@@ -3,6 +3,7 @@
 // editor preview) register what they need with separate lifecycles; the
 // union goes to the server as one SetTelemetryInterest. No simulation here.
 import { ControlDisplayBuffer, type CtlMessage, type LocalControlSource } from "./control-display";
+import { summarizeLidarGrid, type ChannelDiagnostics, type ProviderDiagnostics } from "./diagnostics";
 import { DEFAULT_ZONE_LIMITS_MM, decodeLidarGrid } from "./lidar-grid";
 import { evaluateSample, expiresAt, staleAfterMs, type Context } from "./quality";
 import { TelemetryBuffer, type TlmMessage } from "./telemetry-buffer";
@@ -430,6 +431,65 @@ export class CarSourceProvider implements OverlaySourceProvider {
 
   driverActiveValue(): QualifiedValue {
     return this.defaultView.driverActiveValue();
+  }
+
+  // --- Diagnostics ---
+
+  /**
+   * A read-only snapshot for the diagnostics panel: what is requested, by whom,
+   * and what arrived. Calling it changes nothing.
+   */
+  diagnostics(): ProviderDiagnostics {
+    const byChannel = new Map<string, string[]>();
+    const consumers = [...this.consumers].map(([id, c]) => {
+      for (const name of c.tel) byChannel.set(name, [...(byChannel.get(name) ?? []), id]);
+      return { id, channels: [...c.tel].sort(), control: c.control };
+    });
+    const ids = new Set<number>([
+      ...this.byId.keys(), ...this.telemetry.samples.keys(), ...this.telemetry.counters.keys(), ...this.wantedIds, ...(this.sentIds ?? []),
+    ]);
+    const channels = [...ids].sort((a, b) => a - b).map((id): ChannelDiagnostics => {
+      const meta = this.byId.get(id);
+      const sample = this.telemetry.samples.get(id);
+      const counter = this.telemetry.counters.get(id);
+      let value: ChannelDiagnostics["value"];
+      if (meta?.dataType === "LidarGrid") {
+        // The grid's quality includes its decoding (parse).
+        const { grid: _grid, zoneLimitsMm: _zones, ...v } = this.lidarValue(meta.name, {});
+        value = v;
+      } else if (meta) {
+        const { meta: _meta, ...v } = this.telemetryValue(meta.name, {});
+        value = v;
+      }
+      return {
+        id,
+        name: meta?.name,
+        dataType: meta?.dataType,
+        raw: sample?.value,
+        sampleState: sample?.state,
+        value,
+        changes: counter?.changes ?? 0,
+        confirmations: counter?.confirmations ?? 0,
+        lastArrival: counter?.lastArrival,
+        wanted: this.wantedIds.has(id),
+        sent: this.sentIds?.has(id) ?? false,
+        consumers: meta ? (byChannel.get(meta.name) ?? []) : [],
+        lidar: meta?.dataType === "LidarGrid" && sample ? summarizeLidarGrid(sample.value) : undefined,
+      };
+    });
+    return {
+      carId: this.carId,
+      connected: this.connected,
+      vehicleOnline: this.vehicleOnline,
+      metadata: this.metadataState,
+      stream: { ...this.telemetry.stream },
+      wanted: [...this.wantedIds].sort((a, b) => a - b),
+      sent: this.sentIds ? [...this.sentIds].sort((a, b) => a - b) : undefined,
+      controlInterest: this.sentControl ?? false,
+      consumers,
+      channels,
+      now: this.clock.now(),
+    };
   }
 
   // --- Change signal and aging ---
