@@ -88,9 +88,11 @@ function PreviewVideo({ carId, store, streams, hud, noVideo }: { carId: number; 
       </>
     );
   }
+  // Without a received frame (vehicle not sending, Janus down) the HUD stays on the fitted workspace.
+  const workspace = store.effective().workspace;
   return (
     <div className="absolute inset-0 flex bg-black">
-      <VideoStream key={stream.serverId} streamId={stream.serverId} streamName={stream.name} frameLayer={hud} />
+      <VideoStream key={stream.serverId} streamId={stream.serverId} streamName={stream.name} frameLayer={hud} frameLayerFallback={workspace} />
     </div>
   );
 }

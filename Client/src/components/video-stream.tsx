@@ -24,6 +24,7 @@ import { usePushToTalkStore } from './audio-store';
 import VideoHud, { VideoFrameLayer } from './overlay/integration/video-hud';
 import type { EffectiveConfig } from './overlay/document';
 import type { RuntimeAsset } from './overlay/runtime/types';
+import type { Size, VideoGeometry } from './overlay/integration/video-frame';
 
 /** The vehicle HUD over this stream (AP13); absent or config null = no HUD. */
 export interface VideoHudInput {
@@ -44,7 +45,9 @@ interface VideoStreamProps {
   onAudioTrack?: (track: MediaStreamTrack | null) => void;
   hud?: VideoHudInput;
   /** Content laid exactly over the displayed frame instead of the published HUD (editor preview, AP13). */
-  frameLayer?: ReactNode;
+  frameLayer?: ReactNode | ((geometry: VideoGeometry) => ReactNode);
+  /** Without a displayed frame the frame layer covers this size fitted into the player (editor preview). */
+  frameLayerFallback?: Size;
 }
 
 const NO_DATA_THRESHOLD_MS = 5000;
@@ -653,6 +656,7 @@ export default function VideoStream({
   onAudioTrack,
   hud,
   frameLayer,
+  frameLayerFallback,
 }: VideoStreamProps) {
   const { messages, locale } = useI18n();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -760,7 +764,7 @@ export default function VideoStream({
         />
       )}
       {frameLayer && (
-        <VideoFrameLayer containerRef={containerRef} videoRef={videoRef}>
+        <VideoFrameLayer containerRef={containerRef} videoRef={videoRef} fallback={frameLayerFallback}>
           {frameLayer}
         </VideoFrameLayer>
       )}
