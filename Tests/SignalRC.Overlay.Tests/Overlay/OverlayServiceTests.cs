@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using SignalRC.Server.Data;
 using SignalRC.Server.Overlay;
+using SignalRC.Server.Overlay.Assets;
 using SignalRC.Server.Overlay.Expressions;
 using SignalRC.Shared.Channels;
 
@@ -361,9 +362,48 @@ public abstract class OverlayServiceTests : IDisposable
     public async Task UploadsAreRefusedWithoutSanitizer()
     {
         Require();
-        var service = new OverlayService(_ctx, new OverlayAccess(_ctx), new UnavailableSvgAssetSanitizer(), _events, _time);
-        Assert.Equal("OVL_API_NOT_AVAILABLE", (await service.UploadAssetAsync(CarId, _driver, "<svg/>"u8.ToArray())).Error?.Code);
+        _sanitizer.Available = false;
+        Assert.Equal("OVL_API_NOT_AVAILABLE", (await Service().UploadAssetAsync(CarId, _driver, "<svg/>"u8.ToArray())).Error?.Code);
         Assert.Empty(_ctx.OverlayAssets.Where(a => a.CarId == CarId));
+    }
+
+    [SkippableFact]
+    public async Task RealSanitizerStoresOnlyTheNormalizedAsset()
+    {
+        Require();
+        var service = new OverlayService(_ctx, new OverlayAccess(_ctx), new SvgAssetSanitizer(), _events, _time);
+        var raw = """
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" onload="alert(1)">
+              <script>alert(2)</script>
+              <g id="needle"><rect width="2" height="10" fill="red"/></g>
+            </svg>
+            """u8.ToArray();
+        var upload = (await service.UploadAssetAsync(CarId, _driver, raw)).Value!;
+        Assert.DoesNotContain("script", upload.Svg);
+        Assert.Contains(upload.Report, e => e!["code"]!.GetValue<string>() == SvgReportCodes.RemovedElement);
+        var stored = _ctx.OverlayAssets.AsNoTracking().Single(a => a.CarId == CarId);
+        Assert.Equal(upload.Svg, stored.Svg);
+        Assert.Equal(upload.AssetId, stored.AssetId);
+        Assert.Equal(upload.Svg, (await service.GetAssetAsync(CarId, upload.AssetId, _driver)).Value);
+
+        // Same file again: same asset, no second row.
+        Assert.Equal(upload.AssetId, (await service.UploadAssetAsync(CarId, _driver, raw)).Value!.AssetId);
+        Assert.Single(_ctx.OverlayAssets.AsNoTracking().Where(a => a.CarId == CarId));
+
+        // Rejected files leave nothing behind and carry the report.
+        var rejected = await service.UploadAssetAsync(CarId, _driver, """<!DOCTYPE x [<!ENTITY e SYSTEM "file:///etc/passwd">]><svg>&e;</svg>"""u8.ToArray());
+        Assert.Equal("OVL_API_ASSET_REJECTED", rejected.Error?.Code);
+        Assert.Contains(rejected.Error!.Report!, e => e!["code"]!.GetValue<string>() == SvgReportCodes.RejectedDoctype);
+        Assert.Single(_ctx.OverlayAssets.AsNoTracking().Where(a => a.CarId == CarId));
+
+        // Part ids from the metadata are what documents refer to.
+        var element = "{\"e_s\":{\"type\":\"svgAsset\",\"assetId\":\"" + upload.AssetId + "\",\"parts\":{\"needle\":{\"props\":{\"rotation\":45}}}}}";
+        await SaveAsync(Doc(element, """["e_s"]"""));
+        var published = await service.PublishAsync(CarId, _driver, 1, null);
+        Assert.True(published.Error == null, string.Join(", ", published.Error?.Diagnostics?.Select(d => d.Code + "@" + d.Location) ?? []));
+        var unknown = element.Replace("needle", "other");
+        var refused = await service.SaveDraftAsync(CarId, _driver, Doc(unknown, """["e_s"]"""), 1);
+        Assert.Contains(refused.Error!.Diagnostics!, d => d.Code == "OVL_REF_UNKNOWN_PART");
     }
 
     [SkippableFact]
@@ -516,8 +556,9 @@ public abstract class OverlayServiceTests : IDisposable
     private sealed class FakeSanitizer : ISvgAssetSanitizer
     {
         public bool Reject;
+        public bool Available = true;
         public string Next = "<svg/>";
-        public bool IsAvailable => true;
+        public bool IsAvailable => Available;
 
         public SvgSanitizeResult Sanitize(ReadOnlySpan<byte> raw)
         {

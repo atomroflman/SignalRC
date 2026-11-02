@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">
+  <style>
+    @keyframes spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }
+    .spin { animation: spin 1s infinite; transition: fill 1s; fill: blue; }
+    rect:hover { fill: red; }
+    @media (prefers-color-scheme: dark) { rect { fill: white } }
+  </style>
+  <rect class="spin" width="10" height="10">
+    <animate attributeName="width" from="10" to="0" dur="1s" repeatCount="indefinite"/>
+    <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="2s"/>
+    <animateMotion path="M0 0L10 10" dur="1s"/>
+    <animateColor attributeName="fill" from="red" to="blue" dur="1s"/>
+    <set attributeName="fill" to="url(https://evil.example/x)" begin="1s"/>
+    <discard begin="2s"/>
+  </rect>
+  <circle cx="5" cy="5" r="3" style="animation-name: spin; animation-duration: 2s"/>
+</svg>

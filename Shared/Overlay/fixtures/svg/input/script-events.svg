@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 10 10" onload="alert(1)">
+  <script type="text/javascript">alert(document.cookie)</script>
+  <script xlink:href="https://evil.example/x.js"/>
+  <rect id="r" width="10" height="10" fill="red" onclick="alert(2)" ONMOUSEOVER="alert(3)" onfocusin="x()"/>
+  <a xlink:href="javascript:alert(4)"><circle cx="5" cy="5" r="2"/></a>
+  <g><script>alert(5)</script></g>
+  <handler type="application/ecmascript">alert(6)</handler>
+  <iframe src="https://evil.example/"/>
+</svg>

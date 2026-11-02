@@ -26,8 +26,8 @@ public static partial class OverlayRegistration
         // AP06: formulas are checked on publish (replaces the D66 fallback warning).
         services.AddSingleton<IExpressionAnalyzer>(ExpressionAnalyzer.Instance);
         services.AddSingleton<IOverlayNotifier, HubOverlayNotifier>();
-        // D67: refuses uploads until AP07 registers the real sanitizer.
-        services.AddSingleton<ISvgAssetSanitizer, UnavailableSvgAssetSanitizer>();
+        // AP07: allowlist sanitizer; replaces the D67 placeholder.
+        services.AddSingleton<ISvgAssetSanitizer, Assets.SvgAssetSanitizer>();
         services.TryAddSingleton(TimeProvider.System);
         services.AddHostedService<OverlayAssetCleanupService>();
 

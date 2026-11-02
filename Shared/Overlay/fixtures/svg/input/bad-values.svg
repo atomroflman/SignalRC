@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">
+  <rect width="10" height="10" fill="expression(alert(1))" stroke="javascript:alert(1)" stroke-width="-1" opacity="2" transform="rotate(45) evil(1)"/>
+  <rect width="1e7" height="10" fill="#12"/>
+  <path d="M0 0 L 10 10 X 5 5" stroke="black"/>
+  <path d="L5 5" stroke="black"/>
+  <path d="M0 0 L1e9 0" stroke="black"/>
+  <circle cx="5" cy="5" r="NaN"/>
+  <circle cx="5" cy="5" r="Infinity"/>
+  <polygon points="0,0 5,5 10" fill="&quot;&gt;&lt;script&gt;"/>
+  <text x="1" y="9">&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt; &amp; ok</text>
+</svg>
