@@ -192,6 +192,51 @@ Gründe: `source-error`, `stale`, `no-data`, `transport`, `vehicle-offline`,
   Anmelden von Interesse (`SetTelemetryInterest` mit nichtleerer Liste,
   `SetControlDisplayInterest(true)`); das Zurückziehen wird nie geprüft (D70).
 
+### Diagnose
+
+- **Log-Kategorie** `SignalRC.Server.Telemetry.TelemetryRelay.Diagnostics`
+  (Klasse `TelemetryRelayLog`), ratenbegrenzt je Fahrzeug:
+  - `Information`: höchstens alle 5 s je Fahrzeug eine Zusammenfassung
+    (Anzahl Deltas, changed/touched, Altpfad-Werte, wegen alter `seq`
+    verworfene und wegen fremder Herkunft abgewiesene Deltas, Epoche und
+    letzte `seq`, längster Wert in Zeichen – bei LiDAR die Rasterlänge). Die
+    Zusammenfassung entsteht beim ersten Ereignis nach Ablauf der 5 s; das
+    erste Ereignis wird sofort zusammengefasst. Außerdem sofort: neuer
+    gemeldeter Bedarf ans Fahrzeug (nur bei Änderung und nach
+    `OpenCarConnection`) und neue Onboard-Epoche.
+  - `Debug`: im selben Takt die Kanal-IDs mit Namen und größter Wertlänge der
+    geänderten sowie die IDs der bestätigten Kanäle.
+  - `Trace`: jedes einzelne Delta und jedes verworfene Delta.
+  - Abgewiesene Deltas ohne registrierte Verbindung laufen unter der
+    beanspruchten `carId` (beim neuen Pfad `0`). Die bisherige Warnung des Hubs
+    (jede 100. Abweisung) bleibt.
+- **Einschalten** über die normale Log-Konfiguration, z. B. in
+  `Server/appSettings.json` (oder per Umgebungsvariable
+  `Logging__LogLevel__SignalRC.Server.Telemetry.TelemetryRelay.Diagnostics`):
+
+  ```json
+  "Logging": {
+    "LogLevel": {
+      "SignalRC.Server.Telemetry.TelemetryRelay.Diagnostics": "Debug"
+    }
+  }
+  ```
+
+  `Information` zeigt nur die Zusammenfassungen, `Warning` (oder höher)
+  schaltet die Diagnose ab. Ohne eigenen Eintrag gilt `Default`.
+- **Statusendpunkt** `GET /api/cars/{carId}/overlay/telemetry-debug` für den
+  Verwalter (D73): Cache, Bedarf und Interessenten je Kanal (API-Vertrag §3).
+- **Client:** Die aufklappbare „Telemetrie-Diagnose“ (Fahransicht unter der
+  Telemetrieleiste, HUD-Editor in der Seitenleiste) liest den gemeinsamen
+  Bestand (`CarSourceProvider.diagnostics()`): je Kanal Rohwert, Zustand mit
+  Grund, Alter, letzte Ankunft, Zähler der Änderungen/Bestätigungen, ob
+  gewünscht bzw. an den Server gesendet und welche Verbraucher ihn anfordern;
+  bei LidarGrid zusätzlich belegte Felder, vollständig, Qualität, Scanalter und
+  Dekodierfehler. Sie meldet keinen eigenen Bedarf; nur der Knopf „Alle Kanäle
+  anfordern“ registriert den Verbraucher `telemetry-diagnostics:all`, bis er
+  wieder ausgeschaltet oder das Panel zugeklappt wird. „Serverstand laden“
+  zeigt den Stand von `telemetry-debug` daneben.
+
 ## 6. Client (AP05)
 
 - Ein gemeinsamer, typisierter Bestand je Fahrzeug, unabhängig vom Mounten der

@@ -69,6 +69,34 @@ gehaltenen Revisionen oder einer Veröffentlichung, werden gelöscht.
 | GET | `dependencies?channel=<name>` | Verwalter | `200 { draft: [{ kind, location }], published: [{ kind, location }] }` für Warnungen der Kanalverwaltung. `kind`: `telemetry` (`tel()`, LiDAR-Quelle, Fristüberschreibung) oder `output` (`out()`); `location` wie bei Diagnosen. Deaktivierte Teile zählen mit; historische Veröffentlichungen nicht. |
 | GET | `sources` | Betrachter | `200 { telemetry: [{ id, channelName, dataType, unit, decimals, readIntervalTicks, zoneLimitsMm }], outputs: [{ id, channelName }] }`, sonst `404`. Quellkatalog für das Live-HUD (D69, D70): ohne Login und ohne `UserSetup`, ohne personenbezogene Felder. `dataType` wie in `GET /api/car/{id}/telemetry` (Enum-Name klein); `zoneLimitsMm` nur, wenn in den Kanaloptionen fünf positive Werte stehen, sonst `null`. `outputs` ordnet die `CarChannel.Id` aus `Ctl` den `out()`-Namen zu. |
 | POST | `lidar-grid-source` | Verwalter | richtet den LiDAR-Rasterkanal ein (LiDAR-Vertrag §7): `200 { created: bool }`; Umsetzung in AP04 |
+| GET | `telemetry-debug` | Verwalter | Diagnose des Telemetrie-Relays (Telemetrie-Vertrag §5 „Diagnose“): `200 { carId, onboardConnected, epoch, seq, lastMessageAgoMs, acceptedDeltas, droppedOldSeq, demand, demandSentAgoMs, interestedConnections, legacyClients, channels }`, `Cache-Control: no-store`; ohne Sitzung `401`, ohne Steuerung `403` (D73), unbekanntes Fahrzeug `404` (siehe unten) |
+
+**Telemetrie-Diagnose (`GET telemetry-debug`):** zeigt, was der Server vom
+Fahrzeug hat, damit sich „kommt nicht am Server an“ von „kommt nicht im Client
+an“ trennen lässt. Nur lesend; der Aufruf ändert weder Bedarf noch Interessen.
+
+- `onboardConnected`: Das Relay kennt eine Onboard-Verbindung des Fahrzeugs.
+  `epoch`/`seq`: Epoche und letzte angenommene `seq` des Onboards (`seq: null`
+  vor dem ersten Delta). `lastMessageAgoMs`: Zeit seit der letzten
+  Onboard-Nachricht (Delta, auch verworfenes, oder Altpfad-Wert), sonst `null`.
+- `acceptedDeltas`, `droppedOldSeq`: Zähler seit der letzten Onboard-Verbindung.
+- `demand`: zuletzt per `SetTelemetryDemand` gemeldete Kanal-IDs,
+  `demandSentAgoMs` Zeit seit dieser Meldung. `interestedConnections`: Anzahl
+  Verbindungen mit Interesse, `legacyClients`: Anzahl Altclients. Keine
+  Verbindungs-IDs, keine Benutzer.
+- `channels`: je Kanal (Vereinigung aus `CarTelemetry` und Relay-Cache)
+  `{ id, name, dataType, value, valueLength, state, ageMs, receivedAgoMs,
+  inDemand, interested, changes, touches, lidar }`. `value` ist auf 64 Zeichen
+  gekürzt (mit `…`), `valueLength` die volle Länge; `state` als Name
+  (`Valid`, `Unchecked`, `Stale`, `Error`, `NoData`); `ageMs` = Messalter plus
+  Verweildauer im Server; `interested` = Anzahl Verbindungen, die den Kanal
+  wollen; `changes`/`touches` = empfangene Änderungen/Bestätigungen. Ohne Wert
+  im Cache sind `value`, `state`, `ageMs` `null`.
+- `lidar` nur bei `dataType: "LidarGrid"` mit Wert:
+  `{ length, complete, encoding: "dense"|"sparse", occupied, error }`;
+  `occupied` = belegte Felder (≠ `0xFFFF`) von 480, `error` die erste verletzte
+  Regel des LiDAR-Vertrags §4/§5 (`format`, `base64`, `length`, `index`) oder
+  `null`. Der Client dekodiert mit denselben Regeln.
 
 **Asset-Metadaten in Veröffentlichungen:** `assets` enthält für jedes Asset der
 Veröffentlichung die gespeicherten normalisierten Metadaten (`OverlayAsset.MetadataJson`,
