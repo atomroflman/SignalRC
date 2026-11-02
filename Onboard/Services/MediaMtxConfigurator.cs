@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Text.RegularExpressions;
 using System.Text;
 using SignalRC.Shared.Channels;
@@ -133,13 +134,25 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator
             var cameraDevice = string.IsNullOrWhiteSpace(stream.Value.CameraDevice) ? "/dev/video0" : stream.Value.CameraDevice;
 
             generatedPaths.AppendLine($"  {stream.Key}:");
+            var forwardToServer = $"ffmpeg -t 2147483647 -i rtsp://localhost:8554/{stream.Key} -c copy -f rtp rtp://{sourceHost}:{stream.Value.Port}?pkt_size=1300";
+
+            if (IsV4l2Camera(stream.Value))
+            {
+                // A USB webcam has no native mediamtx source: ffmpeg encodes it and publishes the path
+                // itself, the RTP forward to the server starts once that publisher is ready.
+                generatedPaths.AppendLine($"    runOnInit: {BuildV4l2Command(stream.Value, cameraDevice)}");
+                generatedPaths.AppendLine($"    runOnInitRestart: yes");
+                generatedPaths.AppendLine($"    runOnReady: {forwardToServer}");
+                generatedPaths.AppendLine($"    runOnReadyRestart: yes");
+                continue;
+            }
+
             generatedPaths.AppendLine($"    source: rpiCamera");
             generatedPaths.AppendLine($"    runOnInitRestart: yes");
             // TODO: Make it configurable in gui (advanced options)
             generatedPaths.AppendLine($"    rpiCameraDenoise: \"cdn_hq\"");
-            generatedPaths.AppendLine($"    runOnInit: ffmpeg -t 2147483647 -i rtsp://localhost:8554/{stream.Key} -c copy -f rtp rtp://{sourceHost}:{stream.Value.Port}?pkt_size=1300");
-            //generatedPaths.AppendLine($"    runOnInit: ffmpeg -f v4l2 -framerate {stream.Value.Framerate} -video_size {stream.Value.Width}x{stream.Value.Height} -i rtsp://localhost:8554/{stream.Key} -c:v libx264 -preset veryfast -tune zerolatency -b:v {stream.Value.Bitrate} -f rtp rtp://{sourceHost}:{stream.Value.Port}?pkt_size=1300");
-            
+            generatedPaths.AppendLine($"    runOnInit: {forwardToServer}");
+
             foreach (var prop in stream.Value.GetType().GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
                 .Select(e => new {
                     e, 
@@ -158,6 +171,45 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator
         // template = ReplacePathsSection(template, generatedPaths.ToString().TrimEnd());
 
         await File.WriteAllTextAsync(_configPath, generatedPaths.ToString());
+    }
+
+    private static readonly string[] V4l2Types = ["v4l2", "webcam", "usb"];
+
+    /// <summary>
+    /// The stream's <c>Type</c> picks the capture path: "v4l2"/"webcam"/"usb" is a plain V4L2 device
+    /// (<c>CameraDevice</c>), anything else stays the Raspberry Pi camera (<c>RpiCamId</c>).
+    /// </summary>
+    private static bool IsV4l2Camera(VideoStreamMapItem stream) =>
+        V4l2Types.Contains(stream.Type?.Trim(), StringComparer.OrdinalIgnoreCase);
+
+    private static string BuildV4l2Command(VideoStreamMapItem stream, string cameraDevice)
+    {
+        var inv = CultureInfo.InvariantCulture;
+        var cmd = new StringBuilder("ffmpeg -f v4l2");
+        // Optional capture format, e.g. {"inputFormat":"mjpeg"}: many webcams only reach higher
+        // resolutions/framerates in MJPEG.
+        if (stream.Options.TryGetValue("inputFormat", out var inputFormat) && !string.IsNullOrWhiteSpace(inputFormat?.ToString()))
+            cmd.Append($" -input_format {inputFormat}");
+        if (stream.Framerate is { } fps)
+            cmd.Append($" -framerate {fps}");
+        if (stream.Width is { } w && stream.Height is { } h)
+            cmd.Append($" -video_size {w}x{h}");
+        cmd.Append($" -i {cameraDevice}");
+
+        // Same value ranges as rpiCameraBrightness (-1..1, 0 = neutral) and rpiCameraContrast (1 = neutral).
+        var brightness = stream.Brightness ?? 0f;
+        var contrast = stream.Contrast ?? 1f;
+        if (brightness != 0f || contrast != 1f)
+            cmd.Append(string.Format(inv, " -vf eq=brightness={0}:contrast={1}", brightness, contrast));
+
+        cmd.Append(" -c:v libx264 -pix_fmt yuv420p -preset ultrafast -tune zerolatency");
+        if (stream.Bitrate is { } bitrate)
+            cmd.Append($" -b:v {bitrate}");
+        // Keyframe every second so viewers joining mid-stream get a picture quickly.
+        if (stream.Framerate is { } gop)
+            cmd.Append($" -g {gop}");
+        cmd.Append(" -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH");
+        return cmd.ToString();
     }
 
     private string ReplaceOrAddLine(string content, string key, string newValue)

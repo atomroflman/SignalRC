@@ -227,9 +227,11 @@ function VideoEditor({
     <div className="grid grid-cols-2 gap-2 p-2 border border-zinc-700 rounded bg-zinc-950">
       <Field label="Stream ID"><input className={inputClass} value={v.streamId} onChange={e => update({ streamId: e.target.value })} disabled={!isNew} /></Field>
       <Field label="Name"><input className={inputClass} value={v.name ?? ""} onChange={e => update({ name: e.target.value })} /></Field>
-      <Field label="Type"><input className={inputClass} value={v.type ?? ""} onChange={e => update({ type: e.target.value })} /></Field>
+      <Field label="Type" hint="v4l2 = USB webcam (Camera device), otherwise Raspberry Pi camera (RpiCamId)">
+        <input className={inputClass} value={v.type ?? ""} onChange={e => update({ type: e.target.value })} list="video-type-options" />
+      </Field>
       <Field label="Location"><input className={inputClass} value={v.location ?? ""} onChange={e => update({ location: e.target.value })} /></Field>
-      <Field label="Camera device"><input className={inputClass} value={v.cameraDevice ?? ""} onChange={e => update({ cameraDevice: e.target.value })} /></Field>
+      <Field label="Camera device"><input className={inputClass} value={v.cameraDevice ?? ""} onChange={e => update({ cameraDevice: e.target.value })} placeholder="/dev/video0" /></Field>
       <Field label="RpiCamId"><input className={inputClass} type="number" value={v.rpiCamId ?? ""} onChange={e => update({ rpiCamId: e.target.value === "" ? null : Number(e.target.value) })} /></Field>
       <Field label="Priority"><input className={inputClass} type="number" value={v.priority ?? ""} onChange={e => update({ priority: e.target.value === "" ? null : Number(e.target.value) })} /></Field>
       <Field label="Enabled"><input type="checkbox" checked={v.enabled} onChange={e => update({ enabled: e.target.checked })} /></Field>
@@ -241,7 +243,7 @@ function VideoEditor({
         <input className={inputClass + " font-mono"} value={v.audioDevice ?? ""} onChange={e => update({ audioDevice: e.target.value })} list="audio-input-options" placeholder="e.g. plughw:CARD=Device,DEV=0" />
       </Field>
       <Field label="Noise filter"><input type="checkbox" checked={v.audioDenoise ?? false} disabled={!v.audioDevice} onChange={e => update({ audioDenoise: e.target.checked })} /></Field>
-      <Field label="Options (JSON)" hint='e.g. {"codec":"h264"}' className="col-span-2">
+      <Field label="Options (JSON)" hint='e.g. {"inputFormat":"mjpeg"} for a v4l2 webcam' className="col-span-2">
         <textarea className={inputClass + " font-mono w-full"} rows={2} value={v.optionsJson} onChange={e => update({ optionsJson: e.target.value })} />
       </Field>
       <div className="col-span-2 flex gap-2 justify-end">
@@ -710,6 +712,10 @@ export default function ChannelsPage() {
         </datalist>
         <datalist id="audio-output-options">
           {audioOutputs.map(d => <option key={d.name} value={d.name}>{d.description ?? ""}</option>)}
+        </datalist>
+        <datalist id="video-type-options">
+          <option value="camera">Raspberry Pi camera</option>
+          <option value="v4l2">USB webcam (V4L2)</option>
         </datalist>
         <datalist id="control-type-options">
           {availableControlTypes.map(t => <option key={t} value={t} />)}
