@@ -100,7 +100,7 @@ public class SetupTemplateController : ControllerBase
                     JanusId = s.JanusId,
                     Height = s.Height,
                     Width = s.Width,
-                    BitrateKbps = s.Bitrate,
+                    BitrateKbps = s.Bitrate / 1000,
                     Framerate = s.Framerate,
                     Brightness = s.Brightness,
                     ProcessArguments = s.ProcessArguments,

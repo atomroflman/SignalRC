@@ -167,7 +167,7 @@ public static class ChannelMapMapper
                 Width = kv.Value.Width ?? 1280,
                 Height = kv.Value.Height ?? 720,
                 Framerate = kv.Value.Framerate ?? 30,
-                Bitrate = kv.Value.Bitrate ?? 1500,
+                Bitrate = kv.Value.Bitrate ?? 1_000_000,
                 Brightness = kv.Value.Brightness ?? 0.5f,
                 Gain = kv.Value.Gain,
                 Shutter = kv.Value.Shutter,
