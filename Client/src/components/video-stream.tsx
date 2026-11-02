@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import type {
   Janus,
   JanusPluginHandle,
@@ -21,7 +21,7 @@ import {
 import { useI18n } from '@/i18n/provider';
 import type { Messages } from '@/i18n/translations';
 import { usePushToTalkStore } from './audio-store';
-import VideoHud from './overlay/integration/video-hud';
+import VideoHud, { VideoFrameLayer } from './overlay/integration/video-hud';
 import type { EffectiveConfig } from './overlay/document';
 import type { RuntimeAsset } from './overlay/runtime/types';
 
@@ -43,6 +43,8 @@ interface VideoStreamProps {
   audioInputDeviceId?: string;
   onAudioTrack?: (track: MediaStreamTrack | null) => void;
   hud?: VideoHudInput;
+  /** Content laid exactly over the displayed frame instead of the published HUD (editor preview, AP13). */
+  frameLayer?: ReactNode;
 }
 
 const NO_DATA_THRESHOLD_MS = 5000;
@@ -650,6 +652,7 @@ export default function VideoStream({
   audioEnabled = false,
   onAudioTrack,
   hud,
+  frameLayer,
 }: VideoStreamProps) {
   const { messages, locale } = useI18n();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -755,6 +758,11 @@ export default function VideoStream({
           videoRef={videoRef}
           pausedText={hudMessages.controlPaused}
         />
+      )}
+      {frameLayer && (
+        <VideoFrameLayer containerRef={containerRef} videoRef={videoRef}>
+          {frameLayer}
+        </VideoFrameLayer>
       )}
       {hud?.problem && !hud.hidden && (
         <div className="pointer-events-none absolute bottom-10 right-2 z-10 max-w-xs rounded bg-amber-900/85 px-2 py-1 text-xs text-amber-100" role="status">

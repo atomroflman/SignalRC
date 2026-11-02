@@ -1,6 +1,11 @@
 import { integrationMessages } from '@/components/overlay/integration/messages';
 import { lidarSourceMessages } from '@/components/overlay/lidar-source/messages';
 import { assetMessages } from '@/components/overlay/assets/messages';
+import { editorMessages } from '@/components/overlay/editor/canvas/messages';
+import { dynamicsMessages } from '@/components/overlay/editor/inspector/messages';
+import { previewMessages } from '@/components/overlay/preview/messages';
+import { exchangeMessages } from '@/components/overlay/exchange/messages';
+import { templateMessages } from '@/components/overlay/templates/messages';
 
 export type Locale = 'de' | 'en';
 
@@ -9,6 +14,11 @@ const overlayMessages = (locale: Locale) => ({
   ...integrationMessages[locale],
   lidarSource: lidarSourceMessages[locale],
   assets: assetMessages[locale],
+  editor: editorMessages[locale],
+  dynamics: dynamicsMessages[locale],
+  preview: previewMessages[locale],
+  exchange: exchangeMessages[locale],
+  templates: templateMessages[locale],
 });
 
 const deMessages = {

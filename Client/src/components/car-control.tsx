@@ -227,6 +227,13 @@ export default function CarControl() {
             >
               🧭
             </button>
+            <button
+              className="px-2 py-1 text-xs rounded bg-zinc-700 hover:bg-zinc-600 text-zinc-100"
+              title={messages.overlay.editorPage.open}
+              onClick={() => router.push(`/car/${flowControl.carId}/overlay`)}
+            >
+              HUD
+            </button>
           </div>
         </>
       ) : (

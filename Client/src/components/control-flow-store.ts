@@ -75,6 +75,9 @@ export type ControlFlowState = {
   updatesEnabled: boolean;
   setConfigMode: (isConfig: boolean) => void;
   setUpdatesEnabled: (enabled: boolean) => void;
+  /** Sending was paused by opening the overlay editor; only an explicit enable lifts it (api/README.md §6). */
+  editorPaused: boolean;
+  pauseForOverlayEditor: () => void;
   // Authentication tracking
   hasAuthenticatedWithCar: (carId: number) => boolean;
   markCarAsAuthenticated: (carId: number) => void;
@@ -120,6 +123,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
   // Update control
   isInConfigMode: false,
   updatesEnabled: true,
+  editorPaused: false,
   async load(carId: number) {
     set({ isLoading: true, error: null });
     try {
@@ -965,19 +969,28 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
       });
       console.log("Config mode: ON, Updates disabled by default");
     } else {
-      // Leaving config mode: restore previous state or enable by default
+      // Leaving config mode: restore previous state or enable by default.
+      // A pause from the overlay editor is never lifted here (api/README.md §6).
+      const keepPaused = state.editorPaused;
       set({ 
         isInConfigMode: false,
-        updatesEnabled: true // Re-enable when leaving config mode
+        updatesEnabled: !keepPaused // Re-enable when leaving config mode
       });
-      console.log("Config mode: OFF, Updates enabled");
+      console.log(keepPaused ? "Config mode: OFF, Updates stay paused (overlay editor)" : "Config mode: OFF, Updates enabled");
     }
   },
 
   setUpdatesEnabled: (enabled: boolean) => {
     if (!enabled) clearAllResendTimers();
-    set({ updatesEnabled: enabled });
+    // An explicit enable is the deliberate release that ends an editor pause.
+    set(enabled ? { updatesEnabled: true, editorPaused: false } : { updatesEnabled: false });
     console.log("Updates enabled:", enabled);
+  },
+
+  pauseForOverlayEditor: () => {
+    clearAllResendTimers();
+    set({ updatesEnabled: false, editorPaused: true });
+    console.log("Updates paused: overlay editor opened");
   },
 
   // Authentication tracking functions
