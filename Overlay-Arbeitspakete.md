@@ -2,8 +2,8 @@
 
 Stand: 2026-11-02.
 - AP00 ist freigegeben.
-- AP01 bis AP14 sind umgesetzt; offen sind der Live-Lauf der Abnahmetests,
-  die manuelle Browser-Checkliste und Hardwaretests (siehe `Overlay-Abnahme.md`).
+- AP01 bis AP14 sind umgesetzt; offen sind die manuelle Browser-Checkliste
+  und Hardwaretests (siehe `Overlay-Abnahme.md`).
 - M0 ist erreicht (T0 mit AP01).
 
 „Umgesetzt“ heißt: implementiert, getestet und lokal committet. Die gemeinsame
@@ -64,7 +64,7 @@ nicht ein zusätzliches Verbot, vorher gegen deren vereinbarte Ports zu arbeiten
 | AP11 | ✅ umgesetzt | Lokale Simulation und dynamische Vorschau | AP05, AP08, AP09. |
 | AP12 | ✅ umgesetzt | Startvorlagen, Paket-Import/-Export und Zuordnung | AP01, AP02, AP07, AP09. |
 | AP13 | ✅ umgesetzt | Video-, UI-, Steuerungs- und Anwendungsintegration | Verbindet AP01 bis AP12 schrittweise. |
-| AP14 | ◐ umgesetzt ohne Browser; Live-Lauf offen | Browser-, Sicherheits-, Reconnect- und Leistungsabnahme | Gemeinsame Referenzfälle und integrierbare Funktionspfade. |
+| AP14 | ◐ umgesetzt ohne Browser; Browser/Hardware manuell offen | Browser-, Sicherheits-, Reconnect- und Leistungsabnahme | Gemeinsame Referenzfälle und integrierbare Funktionspfade. |
 
 ## AP00 – Vertragsfundament und Freigabe-Gate ✅
 
@@ -713,8 +713,8 @@ des Auftraggebers); Bericht in [Overlay-Abnahme.md](Overlay-Abnahme.md).
   gepusht).
 - **Behoben:** unlesbare Asset-Metadaten blockierten Speichern und
   Veröffentlichen.
-- **Offen:** Live-Lauf `acceptance/live-acceptance.test.ts`, manuelle
-  Browser-Checkliste (Abnahme §6), Hardware (D58, Sensorpfade), Update der
+- **Live-Lauf** am 2026-11-02 bestanden (alle Live-Tests, 742/742).
+- **Offen:** manuelle Browser-Checkliste (Abnahme §6), Hardware (D58, Sensorpfade), Update der
   MessagePack-/SignalR-Pakete (NuGet-Warnungen).
 
 **Ziel:** Die Produktregeln über Modulgrenzen hinweg absichern und Regressionen

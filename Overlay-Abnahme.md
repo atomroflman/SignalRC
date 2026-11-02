@@ -84,7 +84,7 @@ Einstieg: `scripts/overlay-check.sh`.
 | Veröffentlichung unveränderlich; Restore nur als Entwurf; historische Assets bleiben | automatisiert (PG) | `OverlayServiceTests` (Revisionen, Asset-Aufräumen); `scenarios` › „a published state reaches an open viewer as a whole …“ |
 | Veröffentlichungsprüfung: aktive Teile streng, deaktivierte mit Warnung, Struktur/Limits immer | automatisiert (PG) | `AbusiveFormulasBlockPublishingOnlyInActiveParts`, `FormulaLimitsApplyEvenToDisabledPartsAndBlockSaving`; AP01/AP02-Tests |
 | Kanaländerung: Abhängigkeitswarnung, historische Stände unberührt | automatisiert | `OverlayServiceTests` (dependencies); UI-Einbindung manuell (§6) |
-| Dieselben Regeln über echtes HTTP/SignalR | live, offen | `live-acceptance.test.ts` (Berechtigungen, zwei Tabs) |
+| Dieselben Regeln über echtes HTTP/SignalR | live | `live-acceptance.test.ts` (Berechtigungen, zwei Tabs) |
 
 ### 3.2 Darstellung und Laufzeit
 
@@ -93,7 +93,7 @@ Einstieg: `scripts/overlay-check.sh`.
 | Einpassen in den tatsächlichen Videoframe, Letterbox frei, Resize/Seitenverhältnis | automatisiert (Rechnung) / manuell offen (Browser) | `integration/video-frame.test.ts`; Browser: §6 Nr. 1–3 |
 | Persönliches Ausblenden je Fahrzeug, unabhängiger Stream-Status | automatisiert (Logik) / manuell offen | `integration/integration-ui.test.ts`; §6 Nr. 4 |
 | Neue Veröffentlichung ohne Video-Neuverbindung, konsistenter Gesamtstand | automatisiert | `scenarios` (kein Mischstand aus Dokument und Assets); `published-overlay.test.ts`; Video selbst: §6 Nr. 5 |
-| Reconnect gleicht verpasste Veröffentlichung ab | automatisiert / live, offen | `scenarios` › „missed publication during a SignalR outage …“; live: `live-acceptance` |
+| Reconnect gleicht verpasste Veröffentlichung ab | automatisiert / live | `scenarios` › „missed publication during a SignalR outage …“; live: `live-acceptance` |
 | Unbrauchbare Konfiguration wird nicht aktiviert; bisheriger Stand läuft weiter; ohne Stand kein HUD | automatisiert | `scenarios` › „an unusable newer publication …“ (unbekanntes Schema, Zyklus, fehlendes Asset) |
 | Unbekannte Schemaversion wird nicht interpretiert und nicht gespeichert | automatisiert | `scenarios` › „the editor does not save … unknown schema version“; `SchemaTests` |
 | Formeltypen, Einheiten, nicht endliche Ergebnisse, Client = Server | automatisiert | AP06 (400 000 Vergleiche); `security-expressions` (Korpus mit gleichen Diagnosen auf beiden Seiten) |
@@ -112,8 +112,8 @@ Einstieg: `scripts/overlay-check.sh`.
 | Transportausfall unterscheidbar, Reconnect ohne Nachholen | automatisiert | `scenarios-sources` › „transport loss …“ |
 | Simulation nur lokal: kein Bedarf, keine Schreibaufrufe, keine Präferenzänderung, keine Fahrzeugbefehle, nicht im Livebestand | automatisiert | `simulation.test.ts`: Editor mit Autosave, Vorschau, echter AP05-Bestand, zweiter Live-Verbraucher, pausierter Flow-Store; nur lesende Hub-Aufrufe, 0 Steueraufrufe, 0 Persistenzaufrufe; `preview/safety.test.ts` |
 | Editor pausiert Steuerung, bewusste Freigabe, keine automatische Reaktivierung, Tastaturtrennung | automatisiert (Logik) / manuell offen | `integration/editor-control.test.ts`; `simulation.test.ts`; Browser: §6 Nr. 9 |
-| Steuerungsanzeige nur von der Verbindung mit Kontrolle (D57), Resume nach Reconnect | automatisiert / live, offen | `SecurityHubOriginTests.OnlyTheConnectionThatAcquiredControl…`; `Relay/ControlDisplayResumeTests.cs`; `integration/control-display-binding.test.ts`; live: `live-acceptance` › „driver resume …“ |
-| Alt-Client und Alt-Onboard kompatibel (Altpfad, D56/D68) | automatisiert / live, offen | `Relay/TelemetryRelayTests.cs`; `SecurityHubOriginTests.LegacyUpdateTelemetryChecksTheClaimedVehicle`; live: `live-acceptance` › „Alt-Onboard text path …“ |
+| Steuerungsanzeige nur von der Verbindung mit Kontrolle (D57), Resume nach Reconnect | automatisiert / live | `SecurityHubOriginTests.OnlyTheConnectionThatAcquiredControl…`; `Relay/ControlDisplayResumeTests.cs`; `integration/control-display-binding.test.ts`; live: `live-acceptance` › „driver resume …“ |
+| Alt-Client und Alt-Onboard kompatibel (Altpfad, D56/D68) | automatisiert / live | `Relay/TelemetryRelayTests.cs`; `SecurityHubOriginTests.LegacyUpdateTelemetryChecksTheClaimedVehicle`; live: `live-acceptance` › „Alt-Onboard text path …“ |
 
 ### 3.4 LiDAR
 
@@ -130,7 +130,7 @@ Einstieg: `scripts/overlay-check.sh`.
 | --- | --- | --- |
 | Formeln: kein Code, Missbrauch kontrolliert abgewiesen, Limits | automatisiert (PG) | `security-expressions` + `SecurityExpressionTests` (§5.2) |
 | SVG: Positivliste, keine Skripte, Handler, externen Ressourcen, `foreignObject`, SMIL/CSS-Animation; Limits; nichts ungeprüft gespeichert | automatisiert (PG) | `SecurityServiceTests.MaliciousSvgIsRejectedOrStoredOnlyInSanitizedForm` (23 Dateien), `OversizedSvgIsRefusedBeforeSanitizingAndNothingIsStored`; AP07-Fixtures |
-| Asset-Antworten inert (CSP, `nosniff`, `immutable`) | automatisiert (Controller in-process) / live, offen | `AssetResponsesCarryCspNosniffAndImmutableCaching`; über HTTP: `live-acceptance` |
+| Asset-Antworten inert (CSP, `nosniff`, `immutable`) | automatisiert (Controller in-process) / live | `AssetResponsesCarryCspNosniffAndImmutableCaching`; über HTTP: `live-acceptance` |
 | Vorschau führt das Original nie aus | automatisiert (Logik) / manuell offen | AP07 (die Vorschau zeigt nur die bereinigte Ausgabe als Bild); Browser: §6 Nr. 8 |
 | Paketimport: Grenzen, `__proto__`, fremde Referenzen, erneute Serverbereinigung, Sperre ungelöster Referenzen | automatisiert (PG) | `security-import.test.ts`, `ForeignVehicleReferencesCannotBePublishedOrRestored`; AP12 `exchange.test.ts` |
 | Export ohne Livewerte, Präferenzen, Zugangsdaten; Rundlauf erhält Assets | automatisiert | AP12 `exchange.test.ts`, `PackageExchangeTests.cs` |
@@ -219,10 +219,14 @@ SignalR ab:
 Die Datei legt einen eigenen getaggten Benutzer und ein eigenes Fahrzeug an
 und räumt sie danach wieder auf.
 
-**Diese Live-Tests wurden in AP14 nicht ausgeführt.** Den lokalen Server
-gegen die gemeinsame Testdatenbank zu starten, hat das Berechtigungssystem
-dieser Sitzung abgelehnt. Die Datei ist nur tsc-geprüft und folgt den Mustern
-der bereits gelaufenen Live-Tests aus AP05, AP09 und AP13.
+**Live-Lauf am 2026-11-02 bestanden** mit `scripts/overlay-check.sh
+--start-server` gegen die PostgreSQL-Testdatenbank: alle 6 Szenarien grün,
+zusammen mit den Live-Tests aus AP05 (3), AP09 (5) und AP13 (1); Vitest
+gesamt 742/742, alle Schritte des Skripts ok.
+
+Nach dem Lauf waren vier anonyme Sitzungsbenutzer (`User_<n>`) aus früheren
+Live-Läufen der Pakete übrig. Sie wurden entfernt. Anonyme Hub-/HTTP-Zugriffe
+legen solche Benutzer an; die Live-Tests räumen sie bisher nicht auf.
 
 Beim ersten Lauf sind diese Annahmen zu bestätigen:
 
@@ -306,7 +310,7 @@ Ein Bildschirm-Reader-Test ist nicht Teil der Abnahme.
 | B3 | niedrig | Eine Formel mit mehr als 1000 Zeichen wird beim Speichern mit `OVL_SCHEMA_INVALID` (Schema `maxLength`) abgelehnt, die Analyse meldet dagegen `OVL_LIMIT_EXCEEDED`. Blockiert ist beides; nur der Code unterscheidet sich. | offen; betrifft die Editoranzeige. |
 | B4 | niedrig | Ein dichtes LiDAR-Raster (mehr als 239 Felder) braucht bei Fahrt etwa 7 kB/s, gesamt etwa 9 kB/s je Zuschauer. Das entspricht der Rechnung in T01; das S09-Budget ist für etwa 60 Felder definiert. | bekannte Grenze, kein Fix. |
 | B5 | Info | Ctl kostet bei 10 Hz etwa 107 B je Nachricht, weil die Fahrer-Epoche jedes Mal mitreist. Das liegt im Budget. | Optimierung optional. |
-| B6 | Prozess | Die Live-Tests (§5.1) wurden nicht ausgeführt, weil der Serverstart gegen die gemeinsame Testdatenbank in dieser Sitzung nicht erlaubt war. | offen; vor M5 einmal ausführen. |
+| B6 | Prozess | Die Live-Tests (§5.1) waren in AP14 zunächst nicht ausgeführt. Bei anonymen Zugriffen legt der Server Sitzungsbenutzer an, die die Live-Tests nicht aufräumen. | Lauf am 2026-11-02 bestanden; Aufräumen anonymer Benutzer offen (niedrig). |
 | B7 | hoch (Abhängigkeiten) | NuGet-Warnungen im Server-Build: `MessagePack` 2.5.187 (NU1902/NU1903, u. a. GHSA-hv8m-jj95-wg3x, GHSA-vh6j-jc39-fggf), `Microsoft.AspNetCore.SignalR.Protocols.MessagePack` 9.0.3 und `Microsoft.AspNetCore.SignalR.Common` 9.0.3 (NU1903), dazu NU1510 (überflüssige Paketreferenzen). | Bestand vor dem Overlay, nicht in AP14 geändert; Update als eigenes Paket mit Onboard-Kompatibilitätstest empfohlen. |
 | E1 | – | D58: Zählrichtung der LiDAR-Indizes (`scannerClockwise`, Standard `true`) | Hardwaretest nach gesonderter Vereinbarung. |
 | E2 | – | Lesepfade CAN, LiDAR, BMS und CPU nur über die Zustandsabbildung getestet (AP03) | Hardwaretest. |
@@ -331,6 +335,5 @@ Ein Rollout ist nicht Bestandteil dieser Abnahme.
   ohne Browser messbar sind.
 - Ein mittlerer Fehler (B1) ist behoben.
 - Für M5 fehlen noch:
-  - der Live-Lauf (B6);
   - die manuelle Browser-Checkliste (§6);
   - die Hardwaretests (E1, E2).
