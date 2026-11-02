@@ -199,6 +199,9 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator
         if (stream.Width is { } w && stream.Height is { } h)
             cmd.Append($" -video_size {w}x{h}");
         cmd.Append($" -i {cameraDevice}");
+        // Send the frames the camera delivers. The RTP muxer would otherwise pad up to -framerate with
+        // duplicates, which the encoder then has to encode as well.
+        cmd.Append(" -fps_mode passthrough");
 
         // Same value ranges as rpiCameraBrightness (-1..1, 0 = neutral) and rpiCameraContrast (1 = neutral).
         var brightness = stream.Brightness ?? 0f;
@@ -206,12 +209,21 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator
         if (brightness != 0f || contrast != 1f)
             cmd.Append(string.Format(inv, " -vf eq=brightness={0}:contrast={1}", brightness, contrast));
 
-        cmd.Append(" -c:v libx264 -pix_fmt yuv420p -preset ultrafast -tune zerolatency");
+        // {"hwEncoder":true}: the SoC's H.264 block (Raspberry Pi: /dev/video11) instead of libx264,
+        // which takes most of a Pi 3's CPU at 720p and above.
+        var hwEncoder = stream.Options.TryGetValue("hwEncoder", out var hw)
+            && (hw is true || string.Equals(hw?.ToString(), "true", StringComparison.OrdinalIgnoreCase));
+        cmd.Append(hwEncoder
+            ? " -c:v h264_v4l2m2m -pix_fmt yuv420p"
+            : " -c:v libx264 -pix_fmt yuv420p -preset ultrafast -tune zerolatency");
         if (stream.Bitrate is { } bitrate)
             cmd.Append($" -b:v {bitrate}");
         // Keyframe every second so viewers joining mid-stream get a picture quickly.
         if (stream.Framerate is { } gop)
             cmd.Append($" -g {gop}");
+        // Janus needs SPS/PPS in-band; repeat them on every keyframe whatever the encoder does.
+        if (hwEncoder)
+            cmd.Append(" -bsf:v dump_extra");
         cmd.Append($" -f rtp {target}");
         return cmd.ToString();
     }

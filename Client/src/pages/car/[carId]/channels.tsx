@@ -243,7 +243,7 @@ function VideoEditor({
         <input className={inputClass + " font-mono"} value={v.audioDevice ?? ""} onChange={e => update({ audioDevice: e.target.value })} list="audio-input-options" placeholder="e.g. plughw:CARD=Device,DEV=0" />
       </Field>
       <Field label="Noise filter"><input type="checkbox" checked={v.audioDenoise ?? false} disabled={!v.audioDevice} onChange={e => update({ audioDenoise: e.target.checked })} /></Field>
-      <Field label="Options (JSON)" hint='e.g. {"inputFormat":"mjpeg"} for a v4l2 webcam' className="col-span-2">
+      <Field label="Options (JSON)" hint='v4l2 webcam: {"inputFormat":"mjpeg","hwEncoder":true}' className="col-span-2">
         <textarea className={inputClass + " font-mono w-full"} rows={2} value={v.optionsJson} onChange={e => update({ optionsJson: e.target.value })} />
       </Field>
       <div className="col-span-2 flex gap-2 justify-end">
