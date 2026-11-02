@@ -85,8 +85,35 @@ namespace SignalRC.Server.Controllers
                 dataType = c.DataType.ToString().ToLowerInvariant(),
                 unit = c.Unit,
                 decimals = c.Decimals,
+                readIntervalTicks = c.ReadIntervalTicks,
+                zoneLimitsMm = ZoneLimits(c.OptionsJson),
                 subscribed = subscribedIds.Contains(c.Id),
             }));
+        }
+
+        // LiDAR grid zone limits from the channel options (Shared/Overlay/lidar/README.md §1);
+        // null when not configured, the client then uses the defaults.
+        private static int[]? ZoneLimits(string? optionsJson)
+        {
+            if (string.IsNullOrEmpty(optionsJson)) return null;
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(optionsJson);
+                if (doc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object
+                    || !doc.RootElement.TryGetProperty("zoneLimitsMm", out var v)) return null;
+                var parts = v.ValueKind switch
+                {
+                    System.Text.Json.JsonValueKind.Array => v.EnumerateArray().Select(e => e.ToString()).ToArray(),
+                    System.Text.Json.JsonValueKind.String => v.GetString()!.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries),
+                    _ => [],
+                };
+                var limits = parts.Select(p => int.TryParse(p, out var n) ? n : -1).ToArray();
+                return limits.Length == 5 && limits.All(n => n > 0) ? limits : null;
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                return null;
+            }
         }
 
         [HttpGet("{carid}/setup")]
