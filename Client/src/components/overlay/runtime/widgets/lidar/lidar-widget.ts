@@ -131,8 +131,9 @@ export class LidarWidgetState {
     const fields: LidarFieldFrame[] = [];
     for (let i = 0; i < cm.length; i++) {
       const f = this.fields[i];
+      // Shown fields keep pulsing; a new occupation appears at once at full opacity.
+      if (f.distanceM !== undefined) f.phase = (f.phase + blinkHz(f.distanceM, o) * dt) % 1;
       if (cm[i] !== LIDAR_EMPTY) {
-        // New occupation appears at once at full opacity.
         if (f.distanceM === undefined) f.phase = 0;
         f.distanceM = cm[i] / 100;
         f.glowUntil = undefined;
@@ -147,9 +148,7 @@ export class LidarWidgetState {
         fields.push({ color: o.idleColor, opacity: 1 });
         continue;
       }
-      const shown = { distanceM: f.distanceM, color: distanceColor(f.distanceM, o), opacity: pulseOpacity(f.phase, o.minPulseOpacity) };
-      f.phase = (f.phase + blinkHz(f.distanceM, o) * dt) % 1;
-      fields.push(shown);
+      fields.push({ distanceM: f.distanceM, color: distanceColor(f.distanceM, o), opacity: pulseOpacity(f.phase, o.minPulseOpacity) });
     }
     this.held = fields.map((f) => ({ ...f, opacity: 1 }));
     const frame: LidarFrame = { sectors: o.sectors, fields, zoneLimitsMm };
