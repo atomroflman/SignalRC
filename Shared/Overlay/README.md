@@ -284,7 +284,9 @@ ordinal kleineren ID; gemeldet wird jede weitere Spur.
 | `OVL_LIMIT_EXCEEDED` | structure | Grenze nach D33, mit `limit` |
 | `OVL_VARIANT_ORPHANED` | warning | `StreamId` dem Fahrzeug unbekannt (D53) |
 
-Die Formelcodes stehen im Ausdrucksvertrag. Die erwarteten Auflösungen stehen
+Die Formelcodes stehen im Ausdrucksvertrag. Laufzeitdiagnosen des Renderers
+(`OVL_RUNTIME_*`, `OVL_REF_UNKNOWN_ASSET` als Laufzeitwarnung) stehen in
+[runtime/README.md §8](runtime/README.md). Die erwarteten Auflösungen stehen
 in `fixtures/documents/resolution.json`.
 
 ## 9. Grenzen (D33)

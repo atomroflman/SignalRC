@@ -3,7 +3,6 @@
 import type { AssetUploadResult, SvgImportState, SvgReportEntry } from "./types";
 
 const PROLOGUE = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ';
-const ELEMENT_ID = /^[A-Za-z0-9_-]{1,64}$/;
 const ASSET_ID = /^sha256-[0-9a-f]{64}$/;
 
 /** True for the canonical form the server writes; anything else is not displayed. */
@@ -11,26 +10,8 @@ export function isNormalizedAssetSvg(svg: unknown): svg is string {
   return typeof svg === "string" && svg.startsWith(PROLOGUE) && svg.endsWith("</svg>") && !/<!|<\?/.test(svg);
 }
 
-/**
- * Renderer rule (§5, AP08): before embedding an asset as an inline fragment,
- * every internal id `r<n>` and every `url(#r<n>)` gets the prefix
- * `ovl-<elementId>-`, so several instances of the same asset never collide.
- * Part markers (`data-part`) stay unchanged; select parts with
- * `[data-part="<id>"]` inside the element's own container.
- */
-export function scopeAssetSvg(svg: string, elementId: string): string {
-  if (!ELEMENT_ID.test(elementId)) throw new Error(`invalid element id: ${elementId}`);
-  if (!isNormalizedAssetSvg(svg)) throw new Error("not a normalized asset");
-  const prefix = `ovl-${elementId}-`;
-  return svg
-    .replace(/ id="(r[1-9][0-9]*)"/g, (_, id: string) => ` id="${prefix}${id}"`)
-    .replace(/url\(#(r[1-9][0-9]*)\)/g, (_, id: string) => `url(#${prefix}${id})`);
-}
-
-/** Scoped id of an internal reference, e.g. for tests or DOM lookups. */
-export function scopedRefId(elementId: string, refId: string): string {
-  return `ovl-${elementId}-${refId}`;
-}
+// ID scoping for inline display (§5) is part of the renderer: runtime/svg-asset.ts
+// (scopeIds). Previews here use an <img> data URL and need no scoping.
 
 /**
  * Image URL for previews. An SVG loaded as an image runs no script and loads

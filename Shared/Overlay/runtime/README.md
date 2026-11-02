@@ -60,6 +60,9 @@ Für jede Bindung, Rate und Clip-Bedingung gilt der Zustand des Formelergebnisse
 | `unchecked` | Wert anwenden, gelbes Warndreieck | **anhalten**, Warndreieck | **wie ungültig** (abhängige Bewegung gestoppt), Warndreieck |
 | `invalid` | letzten gültigen Wert halten, Ungültig-Markierung | anhalten, Ungültig-Markierung | Clip anhalten, Ungültig-Markierung |
 
+Bei `unchecked` folgen also direkte Bindungen dem Wert mit Warndreieck; nur
+Raten und bedingungsabhängige Clips halten an (D71).
+
 `paused` setzt nur die Pausenmarkierung (D09) und hält nichts an.
 
 Liefert eine Bindung seit Sitzungsbeginn noch keinen gültigen oder ungeprüften
@@ -175,3 +178,24 @@ erneutem `true`.
   zeigen den Wert bei `τ`, alle anderen Eigenschaften ihre Grundwerte.
 - Der Vorschau-Modus nutzt dieselbe Laufzeit wie die Fahreransicht (neue
   Sitzung beim Eintritt).
+
+## 8. Laufzeitdiagnosen
+
+Der Renderer meldet Laufzeitdiagnosen in der Form `{ code, severity, location,
+message }` mit `location` wie im Dokumentmodell §8. Er meldet nur bei einer
+Änderung der Menge, nicht pro Frame. Sie sind keine Dokumentdiagnosen und
+blockieren weder Speichern noch Veröffentlichen.
+
+| Code | Schwere | Bedeutung |
+| --- | --- | --- |
+| `OVL_EXPR_*`, `OVL_REF_UNKNOWN_SOURCE` | error | Formel nicht auswertbar (statische Analyse) |
+| `OVL_EXPR_DIV_ZERO`, `OVL_EXPR_DOMAIN`, `OVL_EXPR_NOT_FINITE`, `OVL_EXPR_SOURCE_PARSE` | warning | Formel liefert in diesem Frame keinen gültigen Wert |
+| `OVL_CLIP_PROPERTY_CONFLICT` | error | Spur auf bereits gesteuerter Eigenschaft wird nicht angewendet |
+| `OVL_REF_UNKNOWN_ASSET` | warning | Asset zur Laufzeit nicht vorhanden; Element ungültig markiert |
+| `OVL_RUNTIME_ASSET_INVALID` | warning | Asset ist nicht in normalisierter Form lesbar; Element ungültig markiert |
+| `OVL_RUNTIME_INVALID_VALUE` | warning | Formelwert für die Eigenschaft nicht darstellbar (Typ, Farbtext, außerhalb der Katalog-Grenzen; `opacity` wird geklemmt) |
+| `OVL_RUNTIME_INVALID_GRAPHIC` | warning | ungültiger Grafikzustand, z. B. Anzeige mit `max ≤ min` |
+| `OVL_RUNTIME_ELEMENT_ERROR` | warning | Fehler beim Darstellen eines Elements; die letzte Darstellung bleibt, andere Elemente sind nicht betroffen |
+| `OVL_RUNTIME_ERROR` | error | Frame nicht berechenbar; das letzte Bild bleibt stehen |
+
+Bei `invalid` gelten die Markierungsregeln aus §3.
