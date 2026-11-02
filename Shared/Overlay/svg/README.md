@@ -13,11 +13,13 @@ AP12 (Austausch).
    - Processing Instructions und Kommentare werden entfernt.
 3. **CSS-Auflösung (D52):**
    - Was aufgelöst wird:
-     - `<style>`-Regeln mit Typ-, Klassen- und ID-Selektoren sowie Selektorlisten,
+     - `<style>`-Regeln mit Typ-, Klassen- und ID-Selektoren sowie Selektorlisten;
+       zusammengesetzte Selektoren ohne Kombinatoren (z. B. `rect.st0`, `.a.b`)
+       zählen dazu,
      - `style="…"`-Attribute.
      - Nur erlaubte Eigenschaften (§2) werden in Präsentationsattribute
        umgerechnet.
-   - Kaskade: Spezifität, bei Gleichstand die spätere Regel; `style` vor Regel
+   - Kaskade: Spezifität (IDs vor Klassen vor Typ), bei Gleichstand die spätere Regel; `style` vor Regel
      vor Attribut. `!important` wird ignoriert und gemeldet.
    - Danach werden `class`, `style` und `<style>` entfernt.
 4. **Auflösung von Referenzen:**
@@ -28,11 +30,25 @@ AP12 (Austausch).
 5. **Bereinigung** nach Positivliste (§2):
    - Alles andere wird entfernt und im Bericht gezählt.
    - `display="none"`-Elemente werden entfernt.
-   - `<a>` und `<switch>` werden zu `<g>` bzw. entfernt.
+   - `<a>` wird zu `<g>` (ohne `href`).
+   - `<switch>` wird zu `<g>` mit nur dem ersten Kind ohne Testattribute
+     (`requiredFeatures`, `requiredExtensions`, `systemLanguage`), wie ein
+     Browser ohne Erweiterungen es darstellt. Die übrigen Alternativen werden
+     entfernt und gemeldet.
 6. **Normalisierung:**
    - Wurzel `<svg xmlns viewBox="0 0 W H">` ohne `width`/`height`, `x`/`y` oder
      `preserveAspectRatio`. Deren Wirkung wird in eine Wurzel-`<g transform>`
-     eingerechnet.
+     eingerechnet. Präsentationsattribute der Wurzel wandern ebenfalls in diese
+     Gruppe. Sie wird nur geschrieben, wenn sie nicht leer ist.
+   - `x`/`y` der Wurzel haben an einem äußersten `svg` keine Wirkung und
+     entfallen.
+   - Größe: Mit `viewBox` ergibt sich `W × H` aus `width`/`height`. Fehlt eines
+     davon, wird es über das Seitenverhältnis der ViewBox ergänzt. Fehlen
+     beide, gilt die ViewBox-Größe. Ohne `viewBox` gelten `width × height`.
+   - Größenrückfall: Fehlt die ViewBox und ist nicht sowohl `width` als auch
+     `height` gegeben, wird der Inhalt auf seine `bbox`
+     eingepasst (`W × H` = Größe der Hülle, verschoben auf den Ursprung).
+     `%`-Längen werden dann gegen 300 × 150 aufgelöst.
    - Einheiten: `mm`/`cm`/`in`/`pt`/`pc` werden nach px umgerechnet (96 dpi).
      `%`-Längen werden gegen die ViewBox aufgelöst. `em`/`ex` führen zur
      Entfernung des Attributs.
@@ -94,6 +110,28 @@ erlaubt.
 | Textzeichen gesamt | 5000 |
 | normalisierte Ausgabe | 256 kB |
 
+Zählweise:
+
+- Elemente: alle Elemente der Ausgabe einschließlich der Wurzel `svg`.
+- Tiefe: Die Wurzel `svg` hat Tiefe 1.
+- Koordinaten: Punkte, nicht Einzelzahlen:
+  - je 1 für `M`/`L`, 3 für `C`, 2 für `Q`, 2 für `A`,
+  - je Punkt von `polyline`/`polygon`,
+  - die Hälfte der Zahlen in `x`/`y`/`dx`/`dy` von `text`/`tspan`.
+
+Zusätzliche Arbeitsgrenzen begrenzen den Aufwand vor der eigentlichen Prüfung.
+Auch sie führen zu `SVG_REJECTED_LIMIT`:
+
+| Arbeitsgrenze | Wert |
+| --- | --- |
+| Verschachtelungstiefe der Rohdatei (auch durch `use`) | 128 |
+| Elemente der Rohdatei | 40 000 |
+| Elemente während der `use`-/Verlaufsexpansion | 8000 |
+| Attribute je Element | 256 |
+| Länge einer Verlaufs-`href`-Kette | 64 |
+| CSS-Regeln (je Selektor) / Deklarationen | 1024 / 4096 |
+| Zusammengesetzte Transformationen (`use`, Wurzel), Größe | `\|v\| ≤ 1e6` |
+
 ## 4. Unterelemente (Parts)
 
 - Auswählbare Teile sind:
@@ -103,7 +141,15 @@ erlaubt.
     `part-<n>` in Dokumentreihenfolge.
 - Part-IDs werden auf `[A-Za-z0-9_-]{1,64}` bereinigt. Kollisionen bekommen
   `-2`, `-3` … in Dokumentreihenfolge. Bei unveränderter Quelle bleiben die IDs
-  über Re-Importe stabil.
+  über Re-Importe stabil. Eine leere `id` gilt als fehlend.
+- Ein `<use>` wird zu einem `<g>` mit der `id` des `use` um die Kopie. Kopien
+  verlieren ihre IDs und sind nie eigene Teile.
+- Re-Import einer normalisierten Ausgabe (Austauschpaket, §7): `data-part`
+  gilt als Quell-`id`. Die Wurzel-`<g>`, die die Normalisierung geschrieben hat,
+  wird erkannt und aufgelöst, damit sie kein Teil wird. Sie ist das einzige
+  Kind der Wurzel, ohne `data-part`, und alle ihre dargestellten Kinder tragen
+  `data-part`. Erneutes Bereinigen ergibt dieselbe Ausgabe, `assetId` und
+  dieselben Teile.
 - In der normalisierten Ausgabe tragen Teile `data-part="<id>"`. Interne
   Referenz-IDs (Verläufe, `clipPath`) werden zu `r<n>` umbenannt.
 - Asset-Metadaten:
@@ -115,6 +161,10 @@ erlaubt.
 
   `bbox` ist eine konservative Hülle aus Kontrollpunkten im Koordinatensystem
   des Elternelements des Teils. Sie dient als Standard-Pivot (Mitte).
+  - Für direkte Kinder der Wurzel ist das Elternsystem das der ursprünglichen
+    ViewBox, also vor der Wurzel-`<g transform>`.
+  - Strichbreiten zählen nicht mit.
+  - Text wird geschätzt: 0,6 em je Zeichen, Oberlänge 1 em, Unterlänge 0,25 em.
 
 ## 5. Darstellung (AP08)
 
