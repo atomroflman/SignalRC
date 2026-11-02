@@ -68,3 +68,31 @@ export function analysisEnv(dir: ChannelDirectory, signals: Record<string, Signa
 export function channelInfo(dir: ChannelDirectory, name: string): ChannelMetadata | undefined {
   return dir.telemetry?.find((c) => c.name === name);
 }
+
+export interface BindableSource {
+  kind: "tel" | "out" | "sig";
+  name: string;
+  unit?: string | null;
+  decimals?: number | null;
+  dataType?: string;
+}
+
+/**
+ * Sources offered by the channel picker for a result kind (expression §3):
+ * numbers for numeric kinds, Boolean for bool, String for text/color; out()
+ * and sig() are numbers. LiDAR grids are no formula values.
+ */
+export function bindableSources(dir: ChannelDirectory, signals: Record<string, SignalDefinition> | undefined, expected: string): BindableSource[] {
+  const required = expected === "bool" ? "bool" : expected === "text" || expected === "color" ? "text" : expected === "any" ? "any" : "number";
+  const fits = (t: string) => required === "any" ? t !== "LidarGrid"
+    : required === "number" ? t === "Number" || t === "Integer" : required === "bool" ? t === "Boolean" : t === "String";
+  const out: BindableSource[] = (dir.telemetry ?? []).filter((c) => fits(c.dataType))
+    .map((c) => ({ kind: "tel" as const, name: c.name, unit: c.unit, decimals: c.decimals, dataType: c.dataType }));
+  if (required === "number" || required === "any") {
+    for (const name of dir.outputs ?? []) out.push({ kind: "out", name });
+    for (const [name, s] of Object.entries(signals ?? {}).sort(([a], [b]) => (a < b ? -1 : 1))) {
+      out.push({ kind: "sig", name, unit: s.unit, decimals: s.decimals });
+    }
+  }
+  return out;
+}

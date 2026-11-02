@@ -6,7 +6,7 @@ import type { OverlayDocument } from "../../document/types";
 import { FakeValueSource } from "../../sources/testing/fake-value-source";
 import { readContractJson } from "../../testing/fixtures";
 import { EditorStore } from "../core/store";
-import { analysisEnv, channelDirectory, parseSourcesResponse, sourceCatalog } from "./channels";
+import { analysisEnv, bindableSources, channelDirectory, parseSourcesResponse, sourceCatalog } from "./channels";
 import { checkFormula, liveValue, simpleSource, sourceExpr } from "./formula";
 import {
   applyMode, baseLiteral, bindingCommand, exprCommand, inspectElement, inspectProperty, lidarChannels, modeCommands, parseLiteral,
@@ -127,6 +127,20 @@ describe("one controlling mode", () => {
     expect(store.document.elements.e_steer.props!.value).toBe(0);
     expect(store.document.clips!.c_hint_pulse.tracks.at(-1)).toEqual({ element: "e_steer", property: "value", keyframes: [{ t: 0, value: 0 }] });
     expect(structure(store)).toEqual([]);
+  });
+
+  it("in a variant the switch only changes the variant and leaves no effective conflict", () => {
+    const store = storeOf();
+    store.setActiveVariant("front-wide");
+    const row = inspectProperty(store, { element: "e_warning", property: "opacity" })!;
+    expect(applyMode(store, row, "binding", { expr: "1" }).ok).toBe(true);
+    expect(store.document.clips!.c_low_battery.tracks).toHaveLength(1);
+    expect(store.document.elements.e_warning.props!.opacity).toBe(0);
+    const v = store.document.variants!["front-wide"];
+    expect(v.clips!.c_low_battery.tracks).toEqual([]);
+    expect(v.elements!.e_warning.props!.opacity).toEqual({ base: 0, binding: { expr: "1" } });
+    expect(store.diagnostics().filter((d) => d.code === "OVL_CLIP_PROPERTY_CONFLICT" || d.category === "structure")).toEqual([]);
+    expect(inspectProperty(store, { element: "e_warning", property: "opacity" })).toMatchObject({ mode: "binding", clips: [], overridden: true });
   });
 
   it("clip mode without a clip creates one", () => {
@@ -284,5 +298,9 @@ describe("channel directory", () => {
     const fromCatalog = channelDirectory({ sources: { telemetry: { b: "Boolean", a: "Number" }, outputs: ["o"] } });
     expect(fromCatalog.telemetry!.map((c) => c.name)).toEqual(["a", "b"]);
     expect(channelDirectory({}).telemetry).toBeUndefined();
+    const sig = { steeringRaw: { label: "L", unit: "%" } };
+    expect(bindableSources(dir, sig, "length").map((s) => `${s.kind}:${s.name}`)).toEqual(["tel:batteryVoltage", "tel:gear", "tel:odoSpeed", "tel:speed", "out:steering", "sig:steeringRaw"]);
+    expect(bindableSources(dir, sig, "bool")).toEqual([]);
+    expect(bindableSources(dir, sig, "any").map((s) => s.name)).not.toContain("lidarGrid");
   });
 });
