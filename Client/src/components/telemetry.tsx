@@ -79,12 +79,19 @@ const Telemetry: React.FC<TelemetryProps> = ({ carId }) => {
             <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
               {ch.channelName}
             </span>
-            {isActive && entry && (
-              <span className="text-sm font-mono font-semibold text-gray-900 dark:text-gray-100">
+            {isActive && entry && entry.state !== "invalid" && (
+              <span
+                className={`text-sm font-mono font-semibold ${
+                  entry.state === "unchecked" ? "text-amber-700 dark:text-amber-300" : "text-gray-900 dark:text-gray-100"
+                }`}
+              >
                 {entry.value}
               </span>
             )}
-            {isActive && !entry && (
+            {isActive && entry && entry.state === "invalid" && entry.reason !== "waiting" && (
+              <span className="text-sm font-mono text-gray-400 dark:text-gray-500">—</span>
+            )}
+            {isActive && (!entry || entry.reason === "waiting") && (
               <span className="text-xs text-gray-400 dark:text-gray-500">…</span>
             )}
           </button>

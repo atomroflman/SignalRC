@@ -1,16 +1,25 @@
 import { create } from "zustand";
-import type { HubConnection } from "@microsoft/signalr";
+import { sharedSourceHub, type CarSourceProvider, type InvalidReason, type Requirement, type ValueState } from "./overlay/sources";
+
+// The manual telemetry bar is one consumer of the shared live sources
+// (Shared/Overlay/telemetry/README.md §6): it asks only for the personally
+// selected channels and shows only those. The hub connection belongs to the
+// shared sources, not to this bar. The saved selection changes only by an
+// explicit toggle (SubscribeToChannel/UnsubscribeFromChannel).
 
 export interface TelemetryChannel {
   id: number;
   channelName: string;
   subscribed: boolean;
+  unit?: string | null;
+  decimals?: number | null;
 }
 
 export interface TelemetryEntry {
   name: string;
-  value: string;
-  updatedAt: number;
+  state: ValueState;
+  value?: string;
+  reason?: InvalidReason;
 }
 
 export interface TelemetryState {
@@ -25,131 +34,97 @@ export interface TelemetryState {
   unsubscribeChannel: (channelName: string) => Promise<void>;
 }
 
-let _connection: HubConnection | null = null;
-let _carIdStr: string | null = null;
+const CONSUMER = "manual-telemetry-bar";
 
-function upsertEntry(entries: TelemetryEntry[], entry: TelemetryEntry): TelemetryEntry[] {
-  const idx = entries.findIndex((e) => e.name === entry.name);
-  if (idx !== -1) {
-    const updated = [...entries];
-    updated[idx] = entry;
-    return updated;
-  }
-  return [...entries, entry];
+let _car: { provider: CarSourceProvider; release(): void } | null = null;
+let _requirement: Requirement | null = null;
+let _unsubscribe: (() => void) | null = null;
+let _selectionLoaded = false;
+
+function sameEntries(a: TelemetryEntry[], b: TelemetryEntry[]) {
+  return a.length === b.length && a.every((e, i) => e.name === b[i].name && e.state === b[i].state && e.value === b[i].value && e.reason === b[i].reason);
 }
 
-export const useTelemetryStore = create<TelemetryState>((set, get) => ({
-  availableChannels: [],
-  subscribedChannels: new Set<string>(),
-  entries: [],
-  isConnected: false,
-  carId: undefined,
+export const useTelemetryStore = create<TelemetryState>((set, get) => {
+  const requireSelection = () => {
+    if (!_car) return;
+    const deps = [...get().subscribedChannels].map((name) => ({ kind: "tel" as const, name }));
+    _requirement = _car.provider.require(CONSUMER, deps);
+  };
 
-  async connect(carId: number) {
-    const state = get();
-    if (state.carId === carId && _connection) return;
+  const refresh = () => {
+    const provider = _car?.provider;
+    if (!provider) return;
+    const patch: Partial<TelemetryState> = {};
+    const channels = provider.channels();
+    const available = get().availableChannels;
+    if (channels.length !== available.length || channels.some((c, i) => c.id !== available[i].id || c.name !== available[i].channelName)) {
+      patch.availableChannels = channels.map((c) => ({ id: c.id, channelName: c.name, subscribed: c.subscribed, unit: c.unit, decimals: c.decimals }));
+    }
+    if (provider.metadataLoaded && !_selectionLoaded) {
+      // The saved personal selection, read once per vehicle.
+      _selectionLoaded = true;
+      set({ ...patch, subscribedChannels: new Set(channels.filter((c) => c.subscribed).map((c) => c.name)) });
+      requireSelection();
+      return;
+    }
+    const entries = [...get().subscribedChannels].map((name): TelemetryEntry => {
+      const v = provider.get("tel", name);
+      return { name, state: v.state, value: v.state === "invalid" ? undefined : String(v.value), reason: v.reason };
+    });
+    if (!sameEntries(entries, get().entries)) patch.entries = entries;
+    if (provider.isConnected !== get().isConnected) patch.isConnected = provider.isConnected;
+    if (Object.keys(patch).length > 0) set(patch);
+  };
 
-    if (_connection) {
+  return {
+    availableChannels: [],
+    subscribedChannels: new Set<string>(),
+    entries: [],
+    isConnected: false,
+    carId: undefined,
+
+    async connect(carId: number) {
+      if (get().carId === carId && _car) return;
       await get().disconnect();
-    }
+      _car = sharedSourceHub().acquire(carId);
+      _selectionLoaded = false;
+      set({ carId, availableChannels: [], subscribedChannels: new Set(), entries: [], isConnected: _car.provider.isConnected });
+      _unsubscribe = _car.provider.subscribe(refresh);
+      refresh();
+    },
 
-    const carIdStr = carId.toString();
-    _carIdStr = carIdStr;
+    async disconnect() {
+      // Leaving the bar ends only this consumer; the saved selection stays.
+      _unsubscribe?.();
+      _unsubscribe = null;
+      _requirement?.release();
+      _requirement = null;
+      _car?.release();
+      _car = null;
+      set({ availableChannels: [], subscribedChannels: new Set<string>(), entries: [], isConnected: false, carId: undefined });
+    },
 
-    const [channelsRes, signalR] = await Promise.all([
-      fetch(`/api/car/${carId}/telemetry`),
-      import("@microsoft/signalr"),
-    ]);
+    async subscribeChannel(channelName: string) {
+      const { subscribedChannels, carId } = get();
+      if (!_car || carId === undefined || subscribedChannels.has(channelName)) return;
+      const next = new Set(subscribedChannels);
+      next.add(channelName);
+      set({ subscribedChannels: next });
+      requireSelection();
+      refresh();
+      await _car.provider.invokeHub("SubscribeToChannel", carId.toString(), channelName).catch((e) => console.warn("SubscribeToChannel failed", e));
+    },
 
-    const channels: TelemetryChannel[] = channelsRes.ok ? await channelsRes.json() : [];
-    const savedSubscriptions = channels.filter((c) => c.subscribed).map((c) => c.channelName);
-
-    const connection = new signalR.HubConnectionBuilder()
-      .withUrl("/hubs/connection")
-      .withAutomaticReconnect()
-      .build();
-
-    connection.on("UpdateTelemetry", (valueName: string, value: string) => {
-      const { subscribedChannels } = get();
-      if (!subscribedChannels.has(valueName)) return;
-      set({ entries: upsertEntry(get().entries, { name: valueName, value, updatedAt: Date.now() }) });
-    });
-
-    connection.onclose(() => set({ isConnected: false }));
-
-    connection.onreconnected(async () => {
-      set({ isConnected: true });
-      if (_carIdStr) {
-        await connection.invoke("SubscribeToCarTelemetry", _carIdStr);
-        for (const ch of get().subscribedChannels) {
-          await connection.invoke("SubscribeToChannel", _carIdStr, ch);
-        }
-      }
-    });
-
-    await connection.start();
-    _connection = connection;
-
-    await connection.invoke("SubscribeToCarTelemetry", carIdStr);
-
-    const subscribedSet = new Set<string>(savedSubscriptions);
-    set({
-      availableChannels: channels,
-      subscribedChannels: subscribedSet,
-      entries: [],
-      isConnected: true,
-      carId,
-    });
-
-    for (const ch of savedSubscriptions) {
-      await connection.invoke("SubscribeToChannel", carIdStr, ch);
-    }
-  },
-
-  async disconnect() {
-    const { subscribedChannels } = get();
-    if (_connection && _carIdStr) {
-      for (const ch of subscribedChannels) {
-        await _connection.invoke("UnsubscribeFromChannel", _carIdStr, ch).catch(() => {});
-      }
-      await _connection.invoke("UnsubscribeFromCarTelemetry", _carIdStr).catch(() => {});
-    }
-    if (_connection) {
-      await _connection.stop().catch(() => {});
-      _connection = null;
-    }
-    _carIdStr = null;
-    set({
-      availableChannels: [],
-      subscribedChannels: new Set<string>(),
-      entries: [],
-      isConnected: false,
-      carId: undefined,
-    });
-  },
-
-  async subscribeChannel(channelName: string) {
-    if (!_connection || !_carIdStr) return;
-    const { subscribedChannels, carId } = get();
-    if (subscribedChannels.has(channelName)) return;
-
-    await _connection.invoke("SubscribeToChannel", _carIdStr, channelName);
-    const next = new Set(subscribedChannels);
-    next.add(channelName);
-    set({ subscribedChannels: next });
-  },
-
-  async unsubscribeChannel(channelName: string) {
-    if (!_connection || !_carIdStr) return;
-    const { subscribedChannels, carId } = get();
-    if (!subscribedChannels.has(channelName)) return;
-
-    await _connection.invoke("UnsubscribeFromChannel", _carIdStr, channelName);
-    const next = new Set(subscribedChannels);
-    next.delete(channelName);
-    set({
-      subscribedChannels: next,
-      entries: get().entries.filter((e) => e.name !== channelName),
-    });
-  },
-}));
+    async unsubscribeChannel(channelName: string) {
+      const { subscribedChannels, carId } = get();
+      if (!_car || carId === undefined || !subscribedChannels.has(channelName)) return;
+      const next = new Set(subscribedChannels);
+      next.delete(channelName);
+      set({ subscribedChannels: next });
+      requireSelection();
+      refresh();
+      await _car.provider.invokeHub("UnsubscribeFromChannel", carId.toString(), channelName).catch((e) => console.warn("UnsubscribeFromChannel failed", e));
+    },
+  };
+});
