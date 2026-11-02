@@ -138,12 +138,10 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator
 
             if (IsV4l2Camera(stream.Value))
             {
-                // A USB webcam has no native mediamtx source: ffmpeg encodes it and publishes the path
-                // itself, the RTP forward to the server starts once that publisher is ready.
-                generatedPaths.AppendLine($"    runOnInit: {BuildV4l2Command(stream.Value, cameraDevice)}");
+                // A USB webcam has no native mediamtx source: ffmpeg encodes it and sends RTP straight
+                // to the server, mediamtx only keeps the process alive.
+                generatedPaths.AppendLine($"    runOnInit: {BuildV4l2Command(stream.Value, cameraDevice, $"rtp://{sourceHost}:{stream.Value.Port}?pkt_size=1300")}");
                 generatedPaths.AppendLine($"    runOnInitRestart: yes");
-                generatedPaths.AppendLine($"    runOnReady: {forwardToServer}");
-                generatedPaths.AppendLine($"    runOnReadyRestart: yes");
                 continue;
             }
 
@@ -182,7 +180,7 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator
     private static bool IsV4l2Camera(VideoStreamMapItem stream) =>
         V4l2Types.Contains(stream.Type?.Trim(), StringComparer.OrdinalIgnoreCase);
 
-    private static string BuildV4l2Command(VideoStreamMapItem stream, string cameraDevice)
+    private static string BuildV4l2Command(VideoStreamMapItem stream, string cameraDevice, string target)
     {
         var inv = CultureInfo.InvariantCulture;
         var cmd = new StringBuilder("ffmpeg -f v4l2");
@@ -208,7 +206,7 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator
         // Keyframe every second so viewers joining mid-stream get a picture quickly.
         if (stream.Framerate is { } gop)
             cmd.Append($" -g {gop}");
-        cmd.Append(" -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH");
+        cmd.Append($" -f rtp {target}");
         return cmd.ToString();
     }
 
