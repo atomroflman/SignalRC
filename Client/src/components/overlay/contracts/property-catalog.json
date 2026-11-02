@@ -137,6 +137,7 @@
     "lidarWidget": {
       "props": {
         "radius":          { "kind": "length", "default": 120, "min": 0 },
+        "display":         { "kind": "enum",   "default": "sectors", "values": ["sectors", "contour"] },
         "sectors":         { "kind": "config", "default": 8, "values": [4, 6, 8, 12, 16, 24] },
         "nearDistanceM":   { "kind": "config", "default": 0.5, "min": 0 },
         "farDistanceM":    { "kind": "config", "default": 5, "min": 0 },
@@ -152,7 +153,11 @@
         "labelColor":      { "kind": "color",  "default": "#ffffffcc", "modes": ["static"] },
         "sweepEnabled":    { "kind": "bool",   "default": false, "modes": ["static"] },
         "sweepPeriodS":    { "kind": "config", "default": 2, "min": 0.2, "max": 60 },
-        "sweepColor":      { "kind": "color",  "default": "#00ff0066", "modes": ["static"] }
+        "sweepColor":      { "kind": "color",  "default": "#00ff0066", "modes": ["static"] },
+        "contourJoinMm":   { "kind": "config", "default": 300, "min": 10, "max": 5000 },
+        "contourWidth":    { "kind": "length", "default": 3, "min": 0, "max": 50, "modes": ["static"] },
+        "contourShadow":   { "kind": "bool",   "default": true, "modes": ["static"] },
+        "contourShadowOpacity": { "kind": "config", "default": 0.25, "min": 0, "max": 1 }
       }
     }
   }

@@ -53,10 +53,30 @@ export interface LidarFieldFrame {
   opacity: number;
 }
 
+/** One displayed cell of the contour (lidar §6.2); stable while the display does not change. */
+export interface LidarContourCell {
+  cell: number;
+  distanceM: number;
+  zone: number;
+  color: string;
+  /** Joined to the cell before / after (mod 96). */
+  joinPrev: boolean;
+  joinNext: boolean;
+}
+
+export interface LidarContourFrame {
+  /** Displayed cells in ascending cell order; the same array while nothing but the pulse changes. */
+  cells: readonly LidarContourCell[];
+  /** Pulse opacity per entry of `cells`. */
+  opacity: number[];
+}
+
 export interface LidarFrame {
   sectors: number;
-  /** `sectors × 5` fields at index `sector * 5 + zone`. */
+  /** `sectors × 5` fields at index `sector * 5 + zone`; empty in contour mode. */
   fields: LidarFieldFrame[];
+  /** Present in contour mode only. */
+  contour?: LidarContourFrame;
   zoneLimitsMm: number[];
   /** Sweep angle in degrees, absent when no sweep is shown. */
   sweepDeg?: number;

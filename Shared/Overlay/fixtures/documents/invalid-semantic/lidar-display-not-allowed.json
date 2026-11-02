@@ -1,0 +1,5 @@
+{
+  "schemaVersion": 1, "workspace": { "width": 1280, "height": 720 },
+  "elements": { "e_l": { "type": "lidarWidget", "source": "lidarGrid", "props": { "display": "dots" } } },
+  "children": ["e_l"]
+}

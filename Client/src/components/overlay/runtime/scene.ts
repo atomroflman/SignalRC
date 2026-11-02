@@ -287,6 +287,10 @@ export class SceneBuilder {
           labelColor: color(p.labelColor),
           sweepEnabled: p.sweepEnabled === true,
           sweepColor: color(p.sweepColor),
+          idleColor: color(p.idleColor),
+          contourWidth: n(p.contourWidth),
+          contourShadow: p.contourShadow !== false,
+          contourShadowOpacity: n(p.contourShadowOpacity),
         }, f.lidar, this.options.locale) : [];
       default:
         return [];

@@ -41,6 +41,14 @@ describe("rows from the catalog", () => {
     expect(lidar.map((s) => s.key)).toEqual(["transform", "appearance", "widget"]);
     expect(lidar[2].names).toEqual(expect.arrayContaining(["sectors", "nearDistanceM", "blinkNearHz", "afterglowS", "nearColor", "sweepEnabled"]));
     expect(lidar[2].names).not.toContain("radius");
+    expect(lidar[2].names[0]).toBe("display");
+    expect(lidar[2].names).not.toContain("contourJoinMm");
+    store.dispatch(staticCommand(inspectProperty(store, { element: "e_lidar", property: "display" })!, "contour"));
+    const contour = sections(store.effective().elements.e_lidar)[2].names;
+    expect(contour).toEqual(expect.arrayContaining(["display", "contourJoinMm", "contourWidth", "contourShadow", "contourShadowOpacity", "afterglowS"]));
+    expect(contour).not.toContain("sectors");
+    expect(parseLiteral(propDef("lidarWidget", "contourJoinMm")!, "5")).toEqual({ ok: false, problem: "range" });
+    expect(inspectProperty(store, { element: "e_lidar", property: "display" })!.modes).toEqual(["static"]);
   });
 
   it("shows the controlling mode and the allowed modes", () => {

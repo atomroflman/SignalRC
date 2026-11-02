@@ -648,6 +648,24 @@ Arbeitspakete: [Overlay-Arbeitspakete.md](Overlay-Arbeitspakete.md).
   (`EnsureDriverCanManageStreamAsync`) nutzt dieselbe Prüfung.
 - Ersetzt die Login-Regel aus D57 und API §1.
 
+### D74 – LiDAR-Kontur aus dem vorhandenen Raster, nur im Client
+
+- Neben den Sektoren gibt es den Kontur-Modus: je Grundraster-Zelle der
+  nächste Punkt, benachbarte Zellen als Linienzug verbunden. So werden
+  zusammenhängende Objekte sichtbar statt flächig gefärbter Sektoren.
+- Grundlage ist das bestehende Raster; Drahtformat, Onboard und Server bleiben
+  unverändert. Gruppen-IDs werden weiterhin nicht übertragen.
+- Verbindung räumlich: Abstand der beiden Punkte höchstens
+  `contourJoinMm + 2·sin(1,875°)·min(r1, r2)`. Der Sehnenanteil hält gleich
+  weit entfernte Flächen in jeder Entfernung zusammen; `contourJoinMm`
+  (Standard 300 mm) trennt Objekte mit größerem Tiefensprung. Algorithmus
+  exakt in LiDAR-Vertrag §6.2.
+- Widget-Eigenschaft `display` (`sectors` | `contour`), Standard `sectors`:
+  veröffentlichte HUDs sehen unverändert aus. Neue Katalogeigenschaften
+  `contourJoinMm`, `contourWidth`, `contourShadow`, `contourShadowOpacity`.
+  Das Dokumentschema bleibt unverändert (Eigenschaften prüft der Katalog).
+- Zusätzliche Startvorlage „LiDAR-Kontur“; „LiDAR-Raster“ bleibt unverändert.
+
 ## Spezifikationsstand
 
 ### S01 – Dokumentmodell und Property-Katalog v1 (Entwurf)
@@ -780,6 +798,7 @@ Gerätelauf ([modules §4](Shared/Overlay/modules/README.md)).
 | 2026-11-02 | AP13 Teil 1: `GET published`/`publications/{id}` liefern `assets` (Metadaten je Asset, API §3); `ResumeCarControl` bindet die Fahrerverbindung nach Reconnect neu (Telemetrievertrag §7) | AP02, AP03, AP08, AP13 |
 | 2026-11-02 | AP06 auf dem Server registriert: Veröffentlichen prüft Formeln, D66 greift nur noch ohne registrierte Prüfung; `LidarGrid`-Kanäle sind kein Formelwert; Abhängigkeitsauskunft (`dependencies`) umgesetzt | AP02, AP06, AP13 |
 | 2026-11-02 | D73: Verwalter ist der Sitzungsbenutzer, der die Steuerung des verbundenen Fahrzeugs hält (ersetzt Login-Regel aus D57, API §1); Codes `OVL_API_SESSION_REQUIRED` statt `OVL_API_LOGIN_REQUIRED`, `OVL_API_NO_CAR_ACCESS` entfällt; Stream-Freigabe folgt derselben Regel | AP02, AP04, AP09, AP13, AP14 |
+| 2026-11-02 | D74: LiDAR-Kontur-Modus (LiDAR-Vertrag §6 neu gegliedert, §6.2 Kontur); Katalog `lidarWidget` um `display`, `contourJoinMm`, `contourWidth`, `contourShadow`, `contourShadowOpacity`; Referenzfälle `contour` in `fixtures/lidar/cases.json`, Dokument-Fixtures `valid/lidar-contour.json`, `invalid-semantic/lidar-display-not-allowed.json`; Vorlage `lidarContour` | AP01, AP08, AP10, AP12 |
 
 ## Prüfpunkte nach Freigabe
 
