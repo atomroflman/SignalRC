@@ -822,6 +822,9 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
     {
         Logger.LogInformation("Connection {ConnectionId} deactivated stream {StreamId}.", Context.ConnectionId, streamId);
         var stream = await GetStreamAsync(streamId);
+        // Forget the viewers too, otherwise the next ActivateStream isn't the "first viewer" and never
+        // reaches the car.
+        _viewerRegistry.ClearStream(streamId);
         await StopStreamForViewersAsync(stream);
     }
 
