@@ -3,7 +3,7 @@
 // the `object-contain` video (received size, element box, resize, fullscreen)
 // and places the AP08 renderer exactly there; the letterbox bars stay free.
 // Never intercepts pointer input; video and audio are not touched.
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import type { EffectiveConfig } from "../document";
 import { OverlayRenderer } from "../runtime/overlay-renderer";
 import type { FrameResult, Locale, RuntimeAsset } from "../runtime/types";
@@ -47,6 +47,22 @@ export function useVideoFrame(containerRef: RefObject<HTMLElement | null>, video
     };
   }, [containerRef, videoRef]);
   return frame;
+}
+
+/** Content placed exactly on the displayed video frame (editor preview, AP11 `videoLayer`); no pointer input. */
+export function VideoFrameLayer({ containerRef, videoRef, children }: { containerRef: RefObject<HTMLElement | null>; videoRef: RefObject<HTMLVideoElement | null>; children: ReactNode }) {
+  const frame = useVideoFrame(containerRef, videoRef);
+  return (
+    <div
+      className="pointer-events-none absolute"
+      style={frame
+        ? { left: frame.left, top: frame.top, width: frame.width, height: frame.height }
+        : { left: 0, top: 0, width: 0, height: 0, visibility: "hidden" }}
+      data-ovl-frame-layer=""
+    >
+      {children}
+    </div>
+  );
 }
 
 export interface VideoHudProps {

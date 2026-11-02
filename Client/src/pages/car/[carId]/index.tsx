@@ -118,6 +118,9 @@ export default function CarControlFlowPage() {
               <Link href={`/car/${carIdNum}/test`} className="text-blue-400 hover:underline block">
                 Test inputs / telemetry / video / audio
               </Link>
+              <Link href={`/car/${carIdNum}/overlay`} className="text-blue-400 hover:underline block">
+                {messages.overlay.editorPage.open}
+              </Link>
             </div>
           )}
           {carIdNum && <SetupTemplatePanel carId={carIdNum} />}
