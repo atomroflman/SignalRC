@@ -2,7 +2,7 @@
 
 Stand: 2026-11-02.
 - AP00 ist freigegeben.
-- AP01 bis AP09 sind umgesetzt; AP13 ist zur Hälfte umgesetzt (Anzeigeseite).
+- AP01 bis AP09 und AP11 sind umgesetzt; AP13 ist zur Hälfte umgesetzt (Anzeigeseite).
 - M0 ist erreicht (T0 mit AP01).
 
 „Umgesetzt“ heißt: implementiert, getestet und lokal committet. Die gemeinsame
@@ -60,7 +60,7 @@ nicht ein zusätzliches Verbot, vorher gegen deren vereinbarte Ports zu arbeiten
 | AP08 | ✅ umgesetzt | SVG-/Animationslaufzeit und LiDAR-Widget | AP01, AP05, AP06, AP07. |
 | AP09 | ✅ umgesetzt | Editorzustand, Gestaltungsfläche, Undo/Redo und Autosave | AP01, AP02, AP08. |
 | AP10 | offen | Eigenschaften, Bindungen und Keyframe-Zeitachse | AP06, AP08, AP09. |
-| AP11 | offen | Lokale Simulation und dynamische Vorschau | AP05, AP08, AP09. |
+| AP11 | ✅ umgesetzt | Lokale Simulation und dynamische Vorschau | AP05, AP08, AP09. |
 | AP12 | offen | Startvorlagen, Paket-Import/-Export und Zuordnung | AP01, AP02, AP07, AP09. |
 | AP13 | ◐ Teil 1 (Anzeigeseite) umgesetzt | Video-, UI-, Steuerungs- und Anwendungsintegration | Verbindet AP01 bis AP12 schrittweise. |
 | AP14 | offen (T0 mit AP01 erledigt) | Browser-, Sicherheits-, Reconnect- und Leistungsabnahme | Gemeinsame Referenzfälle und integrierbare Funktionspfade. |
@@ -510,7 +510,25 @@ sind getestet. Produktive Integration nutzt AP02 und AP08.
 Keine verdeckten Animationskonflikte, keine zweite Formelengine und keine eigene
 Speicherung. Einfache Bindungen benötigen keine selbst geschriebene Formel.
 
-## AP11 – Lokale Simulation und Vorschau
+## AP11 – Lokale Simulation und Vorschau ✅
+
+**Status (2026-11-02):** umgesetzt in `Client/src/components/overlay/preview/`.
+- **Vorschau-Modus:** `PreviewSession` schaltet zwischen Gestaltung und
+  laufender Vorschau um; jeder Eintritt beginnt bei t = 0, Drag-and-drop ist
+  in der Vorschau gesperrt. Gleiche AP08-Laufzeit im Modus `preview`.
+- **Vorschau-Anbieter:** `PreviewSourceProvider` legt Overrides je Wert
+  (`tel`/`out`/`sig`, `driverActive()`) über die Live-Quelle; Testmodus
+  „Alle Werte simulieren“.
+- **Generatoren:** fester Wert, Regler, Rampe, Sinus, synthetisches
+  LiDAR-Raster im Drahtformat; Fehler fehlend/ungeprüft/ungültig/veraltet,
+  bewertet über dieselbe Funktion wie echte Werte.
+- **Zeit:** `PreviewClock` mit Pause, Schritt, 0,1×–4× und Neustart.
+- **Trennung:** Simulierte Werte erzeugen keinen Bedarf, keine Schreibaufrufe,
+  keine Präferenzänderung und keine Fahrzeugbefehle; Einstellungen sind kein
+  Dokumentinhalt. Nachgewiesen gegen den echten AP05-Anbieter mit
+  protokollierendem Hub und einer statischen Prüfung der Importe.
+- **Für AP13 Teil 2:** Seite mit `OverlayEditorWithPreview`, Video im
+  `videoLayer`, Texte. Browser- und Leistungstest in AP14.
 
 **Ziel:** Alle dynamischen Funktionen ohne bewegtes Fahrzeug oder wechselnde
 Sensorwerte prüfen können.
