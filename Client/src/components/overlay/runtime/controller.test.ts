@@ -48,7 +48,7 @@ function setup(doc: OverlayDocument = blinkDoc, mode: "live" | "preview" | "desi
   const host = dom.createElementNS("", "g");
   const clock = new TestClock();
   const source = new RecordingProvider();
-  source.meta.speed = { id: 1, name: "speed", dataType: "Number", unit: "km/h", decimals: 0, subscribed: false };
+  source.meta.speed = { id: 1, name: "speed", dataType: "Number", unit: "km/h", decimals: 0 };
   const diagnostics: RuntimeDiagnostic[][] = [];
   const controller = new OverlayController(host, dom, {
     config: effectiveConfig(doc, null), source, clock, mode, locale: "de",

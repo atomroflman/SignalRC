@@ -47,7 +47,7 @@ describe("performance (coarse)", () => {
     const meta = { dataType: "Number" as const };
     const provider = Object.assign(source, {
       require: () => ({ source, release() {} }),
-      metadata: (n: string) => (n === "lidarGrid" ? { id: 99, name: n, dataType: "LidarGrid" as const, subscribed: false } : { id: 1, name: n, ...meta, subscribed: false }),
+      metadata: (n: string) => (n === "lidarGrid" ? { id: 99, name: n, dataType: "LidarGrid" as const } : { id: 1, name: n, ...meta }),
     });
     const ctl = new OverlayController(host, dom, { config: effectiveConfig(doc, null), assets, source: provider, clock, mode: "live", locale: "de" });
     const frames = 120;
