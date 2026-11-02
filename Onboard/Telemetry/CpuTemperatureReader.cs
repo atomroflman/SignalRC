@@ -13,7 +13,7 @@ namespace SignalRC.Onboard.Telemetry
     {
         private readonly string? _vcgencmdPath;
 
-        public CpuTemperatureReader(ILogger logger) : base(logger)
+        public CpuTemperatureReader(ILogger<CpuTemperatureReader> logger) : base(logger)
         {
             _vcgencmdPath = FindVcgencmd();
 

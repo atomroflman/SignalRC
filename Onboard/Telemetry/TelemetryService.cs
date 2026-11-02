@@ -16,6 +16,9 @@ namespace SignalRC.Onboard.Telemetry;
 public class TelemetryService : IHubConnectionObserver, ITelemetryClient
 {
     private readonly HashSet<string> _groupKeyWarnings = new(StringComparer.Ordinal);
+    // channel|type pairs whose reader failed to build; EnsureReaders runs every
+    // tick and would otherwise retry and log the same failure each time.
+    private readonly HashSet<string> _readerFailures = new(StringComparer.Ordinal);
 
     private int _tick = 0;
     private IConnectionHubServer? _server;
@@ -405,6 +408,9 @@ public TelemetryService(ChannelMap channelMap, ServerConnectionService serverCon
 
     private TelemetryReaderBase? CreateReader(string channelName, TelemetryChannelMapItem definition)
     {
+        var failureKey = channelName + "|" + definition.TelemetryType;
+        if (_readerFailures.Contains(failureKey)) return null;
+
         var resolvedReaderType = Type.GetType(definition.TelemetryType);
         if (resolvedReaderType == null)
         {
@@ -412,7 +418,22 @@ public TelemetryService(ChannelMap channelMap, ServerConnectionService serverCon
             return null;
         }
 
-        var reader = ServiceProvider.GetRequiredService(resolvedReaderType) as TelemetryReaderBase;
+        // A reader that cannot be built is one missing telemetry channel, not a
+        // reason to take the whole vehicle down: Tick runs on the main loop, and
+        // an exception here once ended the process at the first channel whose
+        // constructor DI could not satisfy.
+        TelemetryReaderBase? reader;
+        try
+        {
+            reader = ServiceProvider.GetRequiredService(resolvedReaderType) as TelemetryReaderBase;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Telemetry reader {Reader} for channel {Channel} could not be created.",
+                resolvedReaderType, channelName);
+            _readerFailures.Add(failureKey);
+            return null;
+        }
         if (reader == null)
         {
             Logger.LogError("Telemetry reader type {Reader} is not a TelemetryReaderBase.", resolvedReaderType);
