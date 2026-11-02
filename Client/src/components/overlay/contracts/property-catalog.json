@@ -1,0 +1,159 @@
+{
+  "catalogVersion": 1,
+  "kinds": {
+    "number":  { "valueType": "number", "interpolation": "linear", "modes": ["static", "binding", "rate", "clip"] },
+    "length":  { "valueType": "number", "unit": "logicalPx", "interpolation": "linear", "modes": ["static", "binding", "rate", "clip"] },
+    "angle":   { "valueType": "number", "unit": "deg", "interpolation": "linear", "smoothing": "shortestAngle", "modes": ["static", "binding", "rate", "clip"] },
+    "factor":  { "valueType": "number", "interpolation": "linear", "modes": ["static", "binding", "rate", "clip"] },
+    "opacity": { "valueType": "number", "min": 0, "max": 1, "clamp": true, "interpolation": "linear", "modes": ["static", "binding", "rate", "clip"] },
+    "integer": { "valueType": "number", "integer": true, "interpolation": "step", "modes": ["static", "binding", "clip"] },
+    "bool":    { "valueType": "boolean", "interpolation": "step", "modes": ["static", "binding", "clip"] },
+    "text":    { "valueType": "string", "maxLength": 1000, "interpolation": "step", "modes": ["static", "binding", "clip"] },
+    "color":   { "valueType": "string", "format": "color", "interpolation": "linearRgba", "modes": ["static", "binding", "clip"] },
+    "any":     { "valueType": "any", "interpolation": "step", "modes": ["static", "binding"] },
+    "enum":    { "valueType": "string", "interpolation": "step", "modes": ["static"] },
+    "config":  { "valueType": "number", "interpolation": "step", "modes": ["static"] }
+  },
+  "common": {
+    "x":        { "kind": "length",  "default": 0 },
+    "y":        { "kind": "length",  "default": 0 },
+    "rotation": { "kind": "angle",   "default": 0 },
+    "scaleX":   { "kind": "factor",  "default": 1, "min": -100, "max": 100 },
+    "scaleY":   { "kind": "factor",  "default": 1, "min": -100, "max": 100, "absentWhen": "lockAspect" },
+    "pivotX":   { "kind": "length",  "default": "center", "modes": ["static"] },
+    "pivotY":   { "kind": "length",  "default": "center", "modes": ["static"] },
+    "opacity":  { "kind": "opacity", "default": 1 },
+    "visible":  { "kind": "bool",    "default": true }
+  },
+  "types": {
+    "group": {
+      "props": {}
+    },
+    "rect": {
+      "props": {
+        "width":        { "kind": "length", "default": 100, "min": 0 },
+        "height":       { "kind": "length", "default": 100, "min": 0 },
+        "cornerRadius": { "kind": "length", "default": 0, "min": 0 },
+        "fill":         { "kind": "color",  "default": "#ffffff" },
+        "stroke":       { "kind": "color",  "default": "none" },
+        "strokeWidth":  { "kind": "length", "default": 1, "min": 0 }
+      }
+    },
+    "ellipse": {
+      "props": {
+        "width":       { "kind": "length", "default": 100, "min": 0 },
+        "height":      { "kind": "length", "default": 100, "min": 0 },
+        "fill":        { "kind": "color",  "default": "#ffffff" },
+        "stroke":      { "kind": "color",  "default": "none" },
+        "strokeWidth": { "kind": "length", "default": 1, "min": 0 }
+      }
+    },
+    "line": {
+      "props": {
+        "x2":          { "kind": "length", "default": 100 },
+        "y2":          { "kind": "length", "default": 0 },
+        "stroke":      { "kind": "color",  "default": "#ffffff" },
+        "strokeWidth": { "kind": "length", "default": 2, "min": 0 },
+        "lineCap":     { "kind": "enum",   "default": "butt", "values": ["butt", "round", "square"] }
+      }
+    },
+    "arc": {
+      "props": {
+        "radius":      { "kind": "length", "default": 50, "min": 0 },
+        "startAngle":  { "kind": "angle",  "default": -120 },
+        "endAngle":    { "kind": "angle",  "default": 120 },
+        "stroke":      { "kind": "color",  "default": "#ffffff" },
+        "strokeWidth": { "kind": "length", "default": 6, "min": 0 },
+        "lineCap":     { "kind": "enum",   "default": "butt", "values": ["butt", "round", "square"] }
+      }
+    },
+    "text": {
+      "props": {
+        "text":        { "kind": "text",   "default": "Text" },
+        "fontFamily":  { "kind": "enum",   "default": "sans-serif", "values": ["sans-serif", "serif", "monospace", "condensed"] },
+        "fontSize":    { "kind": "length", "default": 24, "min": 1, "max": 1000 },
+        "fontWeight":  { "kind": "enum",   "default": "normal", "values": ["normal", "bold"] },
+        "align":       { "kind": "enum",   "default": "start", "values": ["start", "middle", "end"] },
+        "fill":        { "kind": "color",  "default": "#ffffff" },
+        "stroke":      { "kind": "color",  "default": "none" },
+        "strokeWidth": { "kind": "length", "default": 0, "min": 0 }
+      }
+    },
+    "valueText": {
+      "props": {
+        "value":       { "kind": "any",     "default": null },
+        "decimals":    { "kind": "config",  "default": "fromSource", "min": 0, "max": 6, "integer": true },
+        "prefix":      { "kind": "text",    "default": "" },
+        "unit":        { "kind": "text",    "default": "fromSource" },
+        "fontFamily":  { "kind": "enum",    "default": "monospace", "values": ["sans-serif", "serif", "monospace", "condensed"] },
+        "fontSize":    { "kind": "length",  "default": 24, "min": 1, "max": 1000 },
+        "fontWeight":  { "kind": "enum",    "default": "normal", "values": ["normal", "bold"] },
+        "align":       { "kind": "enum",    "default": "start", "values": ["start", "middle", "end"] },
+        "fill":        { "kind": "color",   "default": "#ffffff" },
+        "stroke":      { "kind": "color",   "default": "none" },
+        "strokeWidth": { "kind": "length",  "default": 0, "min": 0 }
+      }
+    },
+    "linearGauge": {
+      "props": {
+        "width":       { "kind": "length",  "default": 200, "min": 0 },
+        "height":      { "kind": "length",  "default": 20, "min": 0 },
+        "value":       { "kind": "number",  "default": 0 },
+        "min":         { "kind": "number",  "default": 0, "modes": ["static", "binding"] },
+        "max":         { "kind": "number",  "default": 100, "modes": ["static", "binding"] },
+        "orientation": { "kind": "enum",    "default": "horizontal", "values": ["horizontal", "vertical"] },
+        "barColor":    { "kind": "color",   "default": "#ffffff" },
+        "trackColor":  { "kind": "color",   "default": "#ffffff33" },
+        "borderColor": { "kind": "color",   "default": "none" },
+        "borderWidth": { "kind": "length",  "default": 0, "min": 0 },
+        "tickCount":   { "kind": "config",  "default": 0, "min": 0, "max": 50, "integer": true }
+      }
+    },
+    "radialGauge": {
+      "props": {
+        "radius":      { "kind": "length",  "default": 60, "min": 0 },
+        "value":       { "kind": "number",  "default": 0 },
+        "min":         { "kind": "number",  "default": 0, "modes": ["static", "binding"] },
+        "max":         { "kind": "number",  "default": 100, "modes": ["static", "binding"] },
+        "startAngle":  { "kind": "angle",   "default": -120, "modes": ["static"] },
+        "endAngle":    { "kind": "angle",   "default": 120, "modes": ["static"] },
+        "strokeWidth": { "kind": "length",  "default": 10, "min": 0 },
+        "barColor":    { "kind": "color",   "default": "#ffffff" },
+        "trackColor":  { "kind": "color",   "default": "#ffffff33" },
+        "tickCount":   { "kind": "config",  "default": 0, "min": 0, "max": 50, "integer": true },
+        "needle":      { "kind": "bool",    "default": false, "modes": ["static"] },
+        "needleColor": { "kind": "color",   "default": "#ff0000" }
+      }
+    },
+    "svgAsset": {
+      "props": {},
+      "partProps": ["x", "y", "rotation", "scaleX", "scaleY", "pivotX", "pivotY", "opacity", "visible", "fill", "stroke", "strokeWidth"],
+      "partPropDefs": {
+        "fill":        { "kind": "color",  "default": "fromAsset" },
+        "stroke":      { "kind": "color",  "default": "fromAsset" },
+        "strokeWidth": { "kind": "length", "default": "fromAsset", "min": 0 }
+      }
+    },
+    "lidarWidget": {
+      "props": {
+        "radius":          { "kind": "length", "default": 120, "min": 0 },
+        "sectors":         { "kind": "config", "default": 8, "values": [4, 6, 8, 12, 16, 24] },
+        "nearDistanceM":   { "kind": "config", "default": 0.5, "min": 0 },
+        "farDistanceM":    { "kind": "config", "default": 5, "min": 0 },
+        "nearColor":       { "kind": "color",  "default": "#ff0000", "modes": ["static"] },
+        "midColor":        { "kind": "color",  "default": "#ff8000", "modes": ["static"] },
+        "farColor":        { "kind": "color",  "default": "#ffff00", "modes": ["static"] },
+        "idleColor":       { "kind": "color",  "default": "#ffffff26", "modes": ["static"] },
+        "blinkNearHz":     { "kind": "config", "default": 2, "min": 0, "max": 10 },
+        "blinkFarHz":      { "kind": "config", "default": 0.5, "min": 0, "max": 10 },
+        "minPulseOpacity": { "kind": "config", "default": 0.35, "min": 0.05, "max": 1 },
+        "afterglowS":      { "kind": "config", "default": 0.5, "min": 0, "max": 10 },
+        "showLabels":      { "kind": "bool",   "default": true, "modes": ["static"] },
+        "labelColor":      { "kind": "color",  "default": "#ffffffcc", "modes": ["static"] },
+        "sweepEnabled":    { "kind": "bool",   "default": false, "modes": ["static"] },
+        "sweepPeriodS":    { "kind": "config", "default": 2, "min": 0.2, "max": 60 },
+        "sweepColor":      { "kind": "color",  "default": "#00ff0066", "modes": ["static"] }
+      }
+    }
+  }
+}
