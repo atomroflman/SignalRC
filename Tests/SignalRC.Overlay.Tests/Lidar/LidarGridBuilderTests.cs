@@ -173,18 +173,20 @@ public class LidarGridBuilderTests
         new LidarFramer().Push(File.ReadAllBytes(path), scans.Add);
         Assert.NotEmpty(scans);
 
-        var watch = System.Diagnostics.Stopwatch.StartNew();
+        // Time only building and encoding; the checks below cost more than both.
+        var watch = new System.Diagnostics.Stopwatch();
         foreach (var scan in scans)
         {
+            watch.Start();
             var grid = LidarGridBuilder.Build(scan, Defaults);
             var value = LidarGridWire.Encode(grid);
+            watch.Stop();
             Assert.True(value.Length <= 4 + 1280, $"{value.Length} chars");
             Assert.True(LidarGridWire.TryDecode(value, out _, out var complete));
             Assert.Equal(scan.Complete, complete);
             // Every occupied field comes from a usable raw point.
             Assert.All(Fields(grid), f => Assert.Contains(f.Mm, scan.DistanceMm));
         }
-        watch.Stop();
         // One build is well below the 200 ms scan period; generous bound for CI.
         Assert.True(watch.Elapsed.TotalMilliseconds / scans.Count < 20, $"{watch.Elapsed.TotalMilliseconds / scans.Count:0.0} ms per scan");
     }
