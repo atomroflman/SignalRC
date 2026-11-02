@@ -1,0 +1,29 @@
+# Overlay check (AP14) without live tests: no database, no server, no secrets.
+# Live and Postgres tests are skipped because their environment variables are unset.
+name: overlay-check
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: Client/package-lock.json
+      - name: Install client dependencies
+        working-directory: Client
+        run: npm ci
+      - name: Overlay check
+        run: scripts/overlay-check.sh

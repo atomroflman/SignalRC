@@ -479,6 +479,32 @@ public abstract class OverlayServiceTests : IDisposable
         Assert.NotEqual(unused.AssetId, used.AssetId);
     }
 
+    /// <summary>AP14: an unreadable stored metadata row must not make saving/publishing throw for the whole vehicle.</summary>
+    [SkippableFact]
+    public async Task UnreadableAssetMetadataDoesNotBlockSavingOrOtherPublications()
+    {
+        Require();
+        var broken = (await Service().UploadAssetAsync(CarId, _driver, "<svg/>"u8.ToArray())).Value!;
+        _sanitizer.Next = "<svg id='w'/>";
+        var wrongType = (await Service().UploadAssetAsync(CarId, _driver, "<svg/>"u8.ToArray())).Value!;
+        foreach (var (id, json) in new[] { (broken.AssetId, "{not json"), (wrongType.AssetId, """{"width":"wide","parts":[]}""") })
+        {
+            _ctx.OverlayAssets.Single(a => a.CarId == CarId && a.AssetId == id).MetadataJson = json;
+        }
+        await _ctx.SaveChangesAsync();
+
+        // An unrelated draft saves and publishes.
+        var revision = await SaveAsync(Doc(Speed, """["e_v"]"""));
+        Assert.Null((await Service().PublishAsync(CarId, _driver, revision, null)).Error);
+
+        // Referencing the broken asset: the draft still saves, publishing is blocked with a diagnostic.
+        var element = $$$$$$"""{"e_s":{"type":"svgAsset","assetId":"{{{{{{broken.AssetId}}}}}}","parts":{"p_1":{"props":{"opacity":0.5}}}}}""";
+        revision = await SaveAsync(Doc(element, """["e_s"]"""), revision);
+        var blocked = await Service().PublishAsync(CarId, _driver, revision, null);
+        Assert.Equal("OVL_API_PUBLISH_BLOCKED", blocked.Error?.Code);
+        Assert.Contains(blocked.Error!.Diagnostics!, d => d.Code == "OVL_REF_UNKNOWN_ASSET");
+    }
+
     [SkippableFact]
     public async Task UnreferencedAssetsAreCollected()
     {

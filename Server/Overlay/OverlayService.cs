@@ -415,7 +415,9 @@ public sealed class OverlayService(
             Sources = new SourceCatalog(
                 telemetry.GroupBy(t => t.ChannelName).ToDictionary(g => g.Key, g => DataType(g.First().DataType)),
                 outputs),
-            Assets = assets.ToDictionary(a => a.AssetId, a => Metadata(a.MetadataJson, Encoding.UTF8.GetByteCount(a.Svg))),
+            // Unreadable metadata is skipped like in AssetMetadataAsync: the asset then counts as missing (publish diagnostic), saving still works.
+            Assets = assets.Select(a => (a.AssetId, Meta: Metadata(a.MetadataJson, Encoding.UTF8.GetByteCount(a.Svg))))
+                .Where(a => a.Meta != null).ToDictionary(a => a.AssetId, a => a.Meta!),
             Expressions = expressions,
         };
     }
@@ -429,9 +431,15 @@ public sealed class OverlayService(
         _ => Documents.TelemetryDataType.String,
     };
 
-    private static AssetMetadata Metadata(string json, long size)
+    private static AssetMetadata? Metadata(string json, long size)
     {
-        var node = JsonNode.Parse(json) as JsonObject ?? new JsonObject();
+        try { return ParseMetadata(json, size); }
+        catch (Exception e) when (e is System.Text.Json.JsonException or InvalidOperationException or FormatException or ArgumentException) { return null; }
+    }
+
+    private static AssetMetadata? ParseMetadata(string json, long size)
+    {
+        if (string.IsNullOrEmpty(json) || JsonNode.Parse(json) is not JsonObject node) return null;
         var parts = new Dictionary<string, AssetPart>();
         if (node["parts"] is JsonObject p)
         {
