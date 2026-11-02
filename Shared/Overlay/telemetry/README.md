@@ -124,6 +124,9 @@ Gründe: `source-error`, `stale`, `no-data`, `transport`, `vehicle-offline`,
   nichts gesendet; das Alter wächst weiter.
 - Nach einer Wiederverbindung gilt eine neue Basis: Alle angeforderten Werte
   werden erneut vollständig gesendet.
+- Es gibt keinen Rückfall auf den Altpfad: Ohne Bedarfsmeldung vom Server
+  sendet ein neues Onboard keine Telemetrie. Rollout-Reihenfolge: erst Server,
+  dann Fahrzeug (D68).
 
 ## 5. Server (AP03)
 

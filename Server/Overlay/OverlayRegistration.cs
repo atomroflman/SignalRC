@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using System.IO.Compression;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.ResponseCompression;
@@ -27,7 +28,7 @@ public static partial class OverlayRegistration
         services.AddSingleton<IOverlayNotifier, HubOverlayNotifier>();
         // D67: refuses uploads until AP07 registers the real sanitizer.
         services.AddSingleton<ISvgAssetSanitizer, UnavailableSvgAssetSanitizer>();
-        services.AddSingleton(TimeProvider.System);
+        services.TryAddSingleton(TimeProvider.System);
         services.AddHostedService<OverlayAssetCleanupService>();
 
         // D63: compressed overlay responses; gzip request bodies accepted.

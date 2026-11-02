@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
+using SignalRC.Shared.Telemetry;
 
 namespace SignalRC.Onboard.Telemetry;
 
@@ -81,6 +82,45 @@ public class JbdBmsTelemetryReader : TelemetryReaderBase
 
         Cache[Channel] = new CacheEntry(DateTime.UtcNow, parsed);
         return parsed;
+    }
+
+    /// <summary>
+    /// Values with quality. The jbdtool output is cached for <see cref="CacheTtl"/>,
+    /// so a value is as old as its cache entry (same device, so the wall clock
+    /// difference is fine). If the current read failed but an older result is
+    /// still cached, that result goes out as Error with its real age; without
+    /// any result there is nothing to send (the channels stay "waiting").
+    /// </summary>
+    public override async Task<IReadOnlyDictionary<string, TelemetrySample>?> ReadAllSamplesAsync(string channelKey)
+    {
+        var values = await ReadAllTelemetryAsync(channelKey);
+        Cache.TryGetValue(Channel, out var entry);
+        return BuildSamples(values, entry?.Values, entry?.FetchedAtUtc, DateTime.UtcNow);
+    }
+
+    /// <summary>
+    /// <paramref name="values"/>: this read's result (null = failed);
+    /// <paramref name="cached"/>/<paramref name="fetchedAtUtc"/>: the cache
+    /// entry after the read, if any.
+    /// </summary>
+    public static IReadOnlyDictionary<string, TelemetrySample>? BuildSamples(
+        IReadOnlyDictionary<string, string>? values,
+        IReadOnlyDictionary<string, string>? cached,
+        DateTime? fetchedAtUtc,
+        DateTime nowUtc)
+    {
+        if (values != null)
+        {
+            // A fresh or cached result: valid, as old as its fetch. Values
+            // without a cache entry cannot occur today; treat them as fresh.
+            var age = fetchedAtUtc.HasValue ? TelemetrySample.AgeFromUtc(fetchedAtUtc.Value, nowUtc) : 0;
+            return WrapAll(values, TelemetrySampleState.Valid, age);
+        }
+        if (cached != null && fetchedAtUtc.HasValue)
+        {
+            return WrapAll(cached, TelemetrySampleState.Error, TelemetrySample.AgeFromUtc(fetchedAtUtc.Value, nowUtc));
+        }
+        return null;
     }
 
     private string BuildCommand(bool json)

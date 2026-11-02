@@ -38,6 +38,15 @@ public class CarConnectionStore : ConcurrentDictionary<string, CarConnectionInfo
         return TryRemove(mappedCarId, out connectionInfo);
     }
 
+    /// <summary>The vehicle whose current onboard connection this is; false for stale or foreign connections.</summary>
+    public bool TryGetCarId(string connectionId, out int carId)
+    {
+        carId = 0;
+        return _connectionToCarMap.TryGetValue(connectionId, out var mapped)
+            && TryGetValue(mapped, out var info) && info.ConnectionId == connectionId
+            && int.TryParse(mapped, out carId);
+    }
+
     public bool TrySetOnboardVersion(string carId, string branch, string? commit)
     {
         if (!TryGetValue(carId, out var info))

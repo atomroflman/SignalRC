@@ -1,6 +1,7 @@
 using SignalRC.Shared.Channels;
 using SignalRC.Shared.HubClients;
 using SignalRC.Shared.Hubs;
+using SignalRC.Shared.Telemetry;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -31,6 +32,15 @@ public class TelemetryService : IHubConnectionObserver, ITelemetryClient
 
     // groupKey -> list of channel names that belong to this source.
     private readonly Dictionary<string, List<string>> _sourceChannels = new(StringComparer.Ordinal);
+
+    // What goes to the server (telemetry/README.md §4). Guarded by
+    // _trackerLock: SetTelemetryDemand arrives on a SignalR thread, Tick runs
+    // on the telemetry loop, the reset on connection events.
+    private readonly object _trackerLock = new();
+    private readonly TelemetryDeltaTracker _tracker = new(TelemetryDeltaTracker.NewEpoch());
+
+    // Channels without a ServerId cannot be addressed on the wire; logged once.
+    private readonly HashSet<string> _channelsWithoutServerId = new(StringComparer.Ordinal);
 
     public IConfiguration Configuration { get; set; }
     public ILogger<TelemetryService> Logger { get; }
@@ -80,6 +90,10 @@ public TelemetryService(ChannelMap channelMap, ServerConnectionService serverCon
         connection.Reconnecting += error =>
         {
             Logger.LogWarning(error, "Telemetry connection reconnecting.");
+            // New baseline. Done here rather than in Reconnected: the server
+            // sends SetTelemetryDemand right after OpenCarConnection, which may
+            // overtake a Reconnected handler and would then be wiped again.
+            ResetTelemetryBaseline();
             return Task.CompletedTask;
         };
 
@@ -92,6 +106,7 @@ public TelemetryService(ChannelMap channelMap, ServerConnectionService serverCon
         connection.Closed += async error =>
         {
             Logger.LogError(error, "Telemetry connection closed.");
+            ResetTelemetryBaseline();
             // Closed is terminal for the SignalR client; the next call will
             // start a fresh HubConnection via ConnectToServer.
             await Task.CompletedTask;
@@ -173,6 +188,12 @@ public TelemetryService(ChannelMap channelMap, ServerConnectionService serverCon
         await _server.UpdateTelemetry(_carId, valueName, value);
     }
 
+    /// <summary>
+    /// Reads every due reader and sends one <see cref="TelemetryDelta"/> for
+    /// all of them (D61). Readers are read regardless of demand; sending only
+    /// happens once the server has told us what it needs (D59, D68: there is
+    /// no fallback to the legacy per-value UpdateTelemetry).
+    /// </summary>
     public async Task Tick()
     {
         _tick++;
@@ -181,6 +202,7 @@ public TelemetryService(ChannelMap channelMap, ServerConnectionService serverCon
             _tick = 1;
         }
         EnsureReaders();
+        var read = new Dictionary<int, TelemetrySample>();
         foreach (var (sourceKey, reader) in _sourceReaders.ToList())
         {
             var interval = Math.Max(1, reader.ReadIntervalTicks);
@@ -189,17 +211,17 @@ public TelemetryService(ChannelMap channelMap, ServerConnectionService serverCon
                 continue;
             }
 
-            IReadOnlyDictionary<string, string>? values;
+            IReadOnlyDictionary<string, TelemetrySample>? samples;
             try
             {
-                values = await reader.ReadAllTelemetryAsync(sourceKey);
+                samples = await reader.ReadAllSamplesAsync(sourceKey);
             }
             catch (Exception ex)
             {
                 Logger.LogError(ex, "Error reading telemetry from source {Source}", sourceKey);
                 continue;
             }
-            if (values == null || values.Count == 0)
+            if (samples == null || samples.Count == 0)
             {
                 continue;
             }
@@ -211,20 +233,86 @@ public TelemetryService(ChannelMap channelMap, ServerConnectionService serverCon
 
             foreach (var channelName in channels)
             {
-                if (!TryResolveValue(channelName, values, out var value))
+                if (!TryResolveValue(channelName, samples, out var sample))
                 {
                     continue;
                 }
-                Logger.LogDebug("Telemetry {Channel}: {Value}", channelName, value);
-                try
+                if (!TryGetServerId(channelName, out var serverId))
                 {
-                    await UpdateTelemetry(channelName, value);
+                    continue;
                 }
-                catch (Exception ex)
-                {
-                    Logger.LogError(ex, "Failed to send telemetry update for {Channel}", channelName);
-                }
+                Logger.LogDebug("Telemetry {Channel}: {Value} ({State}, {AgeMs} ms)", channelName, sample.Value, sample.State, sample.AgeMs);
+                read[serverId] = sample;
             }
+        }
+
+        await SendDeltaAsync(read);
+    }
+
+    private async Task SendDeltaAsync(IReadOnlyDictionary<int, TelemetrySample> read)
+    {
+        var server = _server;
+        if (server == null || !ServerConnectionService.IsConnected)
+        {
+            return;
+        }
+
+        TelemetryDelta? delta;
+        lock (_trackerLock)
+        {
+            delta = _tracker.Tick(read, Environment.TickCount64);
+        }
+        if (delta == null)
+        {
+            return;
+        }
+
+        try
+        {
+            await server.UpdateTelemetrySamples(delta);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to send telemetry delta {Seq}.", delta.Seq);
+            // The server may have missed changes; send everything in full again.
+            lock (_trackerLock)
+            {
+                _tracker.ForgetSent();
+            }
+        }
+    }
+
+    private bool TryGetServerId(string channelName, out int serverId)
+    {
+        if (ChannelMap.TelemetryChannels.TryGetValue(channelName, out var definition) && definition.ServerId is { } id)
+        {
+            serverId = id;
+            return true;
+        }
+        serverId = 0;
+        if (_channelsWithoutServerId.Add(channelName))
+        {
+            Logger.LogWarning("Telemetry channel {Channel} has no ServerId and cannot be sent.", channelName);
+        }
+        return false;
+    }
+
+    /// <summary>Server → onboard: the channels any client needs right now (D59).</summary>
+    public Task SetTelemetryDemand(int[] channelIds)
+    {
+        lock (_trackerLock)
+        {
+            _tracker.SetDemand(channelIds ?? []);
+        }
+        Logger.LogDebug("Telemetry demand set to {Count} channel(s).", channelIds?.Length ?? 0);
+        return Task.CompletedTask;
+    }
+
+    private void ResetTelemetryBaseline()
+    {
+        lock (_trackerLock)
+        {
+            _tracker.Reset();
         }
     }
 
@@ -272,7 +360,7 @@ public TelemetryService(ChannelMap channelMap, ServerConnectionService serverCon
         }
     }
 
-    private static bool TryResolveValue(string channelName, IReadOnlyDictionary<string, string> values, out string value)
+    private static bool TryResolveValue<T>(string channelName, IReadOnlyDictionary<string, T> values, out T value)
     {
         if (values.TryGetValue(channelName, out value!))
         {
@@ -287,7 +375,7 @@ public TelemetryService(ChannelMap channelMap, ServerConnectionService serverCon
                 return true;
             }
         }
-        value = string.Empty;
+        value = default!;
         return false;
     }
 
@@ -403,6 +491,7 @@ public TelemetryService(ChannelMap channelMap, ServerConnectionService serverCon
 
     public Task OnClosed(Exception? exception)
     {
+        ResetTelemetryBaseline();
         if (exception == null)
         {
             Logger.LogError("Telemetry connection closed.");
@@ -426,6 +515,7 @@ public TelemetryService(ChannelMap channelMap, ServerConnectionService serverCon
 
     public Task OnReconnecting(Exception? exception)
     {
+        ResetTelemetryBaseline();
         Logger.LogWarning(exception, "Reconnecting telemetry connection.");
         return Task.CompletedTask;
     }

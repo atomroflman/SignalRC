@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Server\SignalRC.Server.csproj" />
+    <ProjectReference Include="..\..\Onboard\SignalRC.Onboard.csproj" />
   </ItemGroup>
 
   <ItemGroup>

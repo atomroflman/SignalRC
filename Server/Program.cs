@@ -1,3 +1,4 @@
+using SignalRC.Server.Telemetry;
 using SignalRC.Server.Overlay;
 using SignalRC.Server;
 using SignalRC.Server.Configuration;
@@ -61,6 +62,7 @@ builder.Services.AddSingleton<IServerBuildInfoService, ServerBuildInfoService>()
 builder.Services.AddSingleton<IOnboardInstallScriptService, OnboardInstallScriptService>();
 builder.Services.AddSingleton<ChannelTemplateService>();
 builder.Services.AddOverlay();
+builder.Services.AddTelemetryRelay();
 builder.Services.AddDbContext<SignalRCContext>((serviceProvider, options) =>
 {
     var configService = serviceProvider.GetRequiredService<IConfigurationService>();

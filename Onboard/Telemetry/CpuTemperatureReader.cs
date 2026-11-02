@@ -28,6 +28,22 @@ namespace SignalRC.Onboard.Telemetry
             }
         }
 
+        /// <summary>
+        /// Reads the sensor directly, so the value is as old as the read:
+        /// <c>Valid</c> with the read duration as age. The two failure strings
+        /// <see cref="ReadTelemetry"/> returns are source errors.
+        /// </summary>
+        public override async Task<IReadOnlyDictionary<string, TelemetrySample>?> ReadAllSamplesAsync(string channelKey)
+        {
+            var started = Stopwatch.GetTimestamp();
+            var value = await ReadTelemetry();
+            var ageMs = (int)Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+            var state = value is "error" or "parse error"
+                ? SignalRC.Shared.Telemetry.TelemetrySampleState.Error
+                : SignalRC.Shared.Telemetry.TelemetrySampleState.Valid;
+            return new Dictionary<string, TelemetrySample> { [channelKey] = new(value, state, ageMs) };
+        }
+
         public override async Task<string> ReadTelemetry()
         {
             try

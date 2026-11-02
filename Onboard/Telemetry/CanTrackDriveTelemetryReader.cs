@@ -1,6 +1,7 @@
 using System.Globalization;
 using SignalRC.Onboard.Hardware.Can;
 using Microsoft.Extensions.Logging;
+using SignalRC.Shared.Telemetry;
 
 namespace SignalRC.Onboard.Telemetry;
 
@@ -44,7 +45,23 @@ public class CanTrackDriveTelemetryReader : TelemetryReaderBase
             return Task.FromResult<IReadOnlyDictionary<string, string>?>(null);
         }
 
-        var snapshot = manager.GetSnapshot();
+        return Task.FromResult<IReadOnlyDictionary<string, string>?>(BuildValues(manager.GetSnapshot()));
+    }
+
+    public override Task<IReadOnlyDictionary<string, TelemetrySample>?> ReadAllSamplesAsync(string channelKey)
+    {
+        var manager = Resolve();
+        if (manager == null)
+        {
+            return Task.FromResult<IReadOnlyDictionary<string, TelemetrySample>?>(null);
+        }
+        var samples = BuildSamples(manager.GetSnapshot(), manager.NodeTimeoutMs / 1000.0);
+        return Task.FromResult<IReadOnlyDictionary<string, TelemetrySample>?>(samples);
+    }
+
+    /// <summary>The plain values of one snapshot (legacy view).</summary>
+    public static Dictionary<string, string> BuildValues(TrackDriveSnapshot snapshot)
+    {
         var values = new Dictionary<string, string>(StringComparer.Ordinal);
 
         AddNode(values, "left", snapshot.Left);
@@ -94,7 +111,103 @@ public class CanTrackDriveTelemetryReader : TelemetryReaderBase
         values["txDropped"] = snapshot.TxDropped.ToString(CultureInfo.InvariantCulture);
         values["txPackets"] = snapshot.TxPackets.ToString(CultureInfo.InvariantCulture);
 
-        return Task.FromResult<IReadOnlyDictionary<string, string>?>(values);
+        return values;
+    }
+
+    /// <summary>
+    /// The values of one snapshot with their quality (telemetry/README.md §3):
+    /// <list type="bullet">
+    /// <item>Node values (<c>left*</c>/<c>right*</c>) are as old as the node's
+    /// last frame: NoData before its first frame, Error while the bus is off,
+    /// Stale once older than the manager's node timeout, else Valid. An empty
+    /// temperature (thermistor open/shorted) is an Error of its own.
+    /// <c>*Present</c> is judged now and therefore Valid.</item>
+    /// <item>Odometry depends on both nodes and takes the worse of the two;
+    /// the metric fields are NoData while uncalibrated.</item>
+    /// <item><c>controlAge</c> is NoData before the first control input.</item>
+    /// <item>Everything else (bus state, counters, commanded values, mode,
+    /// inhibit) is the manager's own state at snapshot time: Valid, age 0.</item>
+    /// </list>
+    /// </summary>
+    public static Dictionary<string, TelemetrySample> BuildSamples(TrackDriveSnapshot snapshot, double nodeTimeoutSeconds)
+    {
+        var values = BuildValues(snapshot);
+        var samples = new Dictionary<string, TelemetrySample>(values.Count, StringComparer.Ordinal);
+        foreach (var (key, value) in values)
+        {
+            samples[key] = TelemetrySample.Valid(value);
+        }
+
+        var left = NodeQuality(snapshot.Left, snapshot.BusOff, nodeTimeoutSeconds);
+        var right = NodeQuality(snapshot.Right, snapshot.BusOff, nodeTimeoutSeconds);
+        ApplyNode(samples, "left", left);
+        ApplyNode(samples, "right", right);
+
+        var odo = Worse(left, right);
+        foreach (var key in OdometryTravelKeys) Set(samples, key, odo);
+        foreach (var key in OdometryMetricKeys)
+        {
+            Set(samples, key, snapshot.Odometry.Calibrated ? odo : (TelemetrySampleState.NoData, 0));
+        }
+
+        if (double.IsInfinity(snapshot.ControlAgeSeconds))
+        {
+            Set(samples, "controlAge", (TelemetrySampleState.NoData, 0));
+        }
+        return samples;
+    }
+
+    private static readonly string[] OdometryTravelKeys = ["odoLeftTravel", "odoRightTravel", "odoTravelDiff"];
+    private static readonly string[] OdometryMetricKeys = ["odoSpeed", "odoYawRate", "odoHeading", "odoDistance", "odoX", "odoY"];
+
+    private static (TelemetrySampleState State, int AgeMs) NodeQuality(TrackNodeState node, bool busOff, double timeoutSeconds)
+    {
+        if (!node.Seen || double.IsInfinity(node.AgeSeconds)) return (TelemetrySampleState.NoData, 0);
+        var age = TelemetrySample.AgeFromSeconds(node.AgeSeconds);
+        if (busOff) return (TelemetrySampleState.Error, age);
+        if (node.AgeSeconds > timeoutSeconds) return (TelemetrySampleState.Stale, age);
+        return (TelemetrySampleState.Valid, age);
+    }
+
+    // Error beats NoData beats Stale beats Valid; the age is the older one.
+    private static (TelemetrySampleState State, int AgeMs) Worse(
+        (TelemetrySampleState State, int AgeMs) a, (TelemetrySampleState State, int AgeMs) b)
+    {
+        static int Rank(TelemetrySampleState s) => s switch
+        {
+            TelemetrySampleState.Error => 3,
+            TelemetrySampleState.NoData => 2,
+            TelemetrySampleState.Stale => 1,
+            _ => 0,
+        };
+        var state = Rank(a.State) >= Rank(b.State) ? a.State : b.State;
+        return (state, Math.Max(a.AgeMs, b.AgeMs));
+    }
+
+    private static void ApplyNode(Dictionary<string, TelemetrySample> samples, string prefix,
+        (TelemetrySampleState State, int AgeMs) quality)
+    {
+        var present = $"{prefix}Present";
+        var temperature = $"{prefix}Temperature";
+        foreach (var key in samples.Keys.Where(k => k.StartsWith(prefix, StringComparison.Ordinal)).ToList())
+        {
+            if (key == present) continue;
+            Set(samples, key, quality);
+        }
+        // The node reported, but not a usable temperature: a sensor fault.
+        if (quality.State == TelemetrySampleState.Valid && samples[temperature].Value.Length == 0)
+        {
+            Set(samples, temperature, (TelemetrySampleState.Error, quality.AgeMs));
+        }
+    }
+
+    private static void Set(Dictionary<string, TelemetrySample> samples, string key,
+        (TelemetrySampleState State, int AgeMs) quality)
+    {
+        if (samples.TryGetValue(key, out var sample))
+        {
+            samples[key] = sample with { State = quality.State, AgeMs = quality.AgeMs };
+        }
     }
 
     private CanTrackDriveManager? Resolve()

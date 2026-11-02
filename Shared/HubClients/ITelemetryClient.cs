@@ -9,4 +9,6 @@ public interface ITelemetryClient
     Task SubscribeToTelemetryChannel(string channelName);
     Task UnsubscribeFromTelemetryChannel(string channelName);
     Task UpdateTelemetry(string channelName, string value);
+    /// <summary>Channels any client needs right now; the onboard sends only these (D59).</summary>
+    Task SetTelemetryDemand(int[] channelIds);
 }

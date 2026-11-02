@@ -1,6 +1,7 @@
 using SignalRC.Shared;
 using SignalRC.Shared.Channels;
 using SignalRC.Shared.FileTransfer;
+using SignalRC.Shared.Telemetry;
 using SignalRC.Shared.Video;
 
 
@@ -30,6 +31,8 @@ public interface IConnectionHubServer
 
     // Telemetry (onboard → server, browser → server; formerly ITelemetryServer)
     Task UpdateTelemetry(string carId, string valueName, string value);
+    // Telemetry v1.1 (overlay): the car follows from the calling onboard connection.
+    Task UpdateTelemetrySamples(TelemetryDelta delta);
     Task SubscribeToCarTelemetry(string carId);
     Task UnsubscribeFromCarTelemetry(string carId);
     Task RegisterAsOnboard(string carId);

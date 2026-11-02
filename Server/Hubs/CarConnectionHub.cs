@@ -5,6 +5,7 @@ using System.Diagnostics;
 using SignalRC.Server.Configuration;
 using SignalRC.Server.Data;
 using SignalRC.Server.Services;
+using SignalRC.Server.Telemetry;
 using SignalRC.Shared;
 using SignalRC.Shared.Channels;
 using SignalRC.Shared.FileTransfer;
@@ -148,6 +149,7 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
         
         var connectionInfo = _connectionStore.RegisterConnection(car.Id.ToString(), Context.ConnectionId);
         connectionInfo.CarConfiguration = carConfig;
+        await Service<TelemetryRelay>().OnboardConnectedAsync(car.Id, Context.ConnectionId);
 
         await Clients.All.CarStateUpdated(new CarStateModel() {
             Id = car.Id.ToString(),
@@ -194,6 +196,8 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
         Logger.LogWarning($"Client disconnected: {exception}");
+        await Service<TelemetryRelay>().ConnectionClosedAsync(Context.ConnectionId);
+        await Service<ControlDisplayRelay>().ConnectionClosedAsync(Context.ConnectionId);
         if (_connectionStore.TryRemoveConnection(Context.ConnectionId, out var carId, out var connectionInfo) && carId != null)
         {
             await Clients.All.CarStateUpdated(new CarStateModel()
@@ -335,6 +339,7 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
             await MarkUserAsActiveVehicle(carId);
             await MarkUserAsHasControlledCar(carId);
             await UpdateCarUiDriverStateAsync(carId);
+            await Service<ControlDisplayRelay>().ControlAcquiredAsync(carId, Context.ConnectionId);
         }
         return session;
     }
@@ -347,6 +352,7 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
         await Clients.Client(connectionInfo.ConnectionId!).ReleaseCarControl(sessionId);
         await ClearUserActiveVehicle(carId);
         await UpdateCarUiDriverStateAsync(carId);
+        await Service<ControlDisplayRelay>().ControlEndedAsync(carId);
     }
 
     public async Task UpdateChannel(int carId, string sessionId, int channelId, decimal value)
@@ -549,19 +555,37 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
 
     // -- Telemetry (formerly TelemetryHub) ------------------------------------------
 
-    public Task UpdateTelemetry(string carId, string valueName, string value)
+    // Legacy path of old onboards. Only the registered onboard of that car may
+    // send (D56); values reach new and old clients through the relay.
+    public async Task UpdateTelemetry(string carId, string valueName, string value)
     {
-        return Clients.Group($"car:{carId}").UpdateTelemetry(valueName, value);
+        if (!_connectionStore.TryGetCarId(Context.ConnectionId, out var registered) || registered.ToString() != carId)
+        {
+            LogRejectedTelemetry(carId);
+            return;
+        }
+        await Service<TelemetryRelay>().OnLegacyValueAsync(registered, valueName, value);
     }
 
-    public Task SubscribeToCarTelemetry(string carId)
+    // Old clients: "car:" is shared with video, the legacy group carries telemetry.
+    public async Task SubscribeToCarTelemetry(string carId)
     {
-        return Groups.AddToGroupAsync(Context.ConnectionId, $"car:{carId}");
+        await Groups.AddToGroupAsync(Context.ConnectionId, $"car:{carId}");
+        if (int.TryParse(carId, out var id))
+        {
+            await Groups.AddToGroupAsync(Context.ConnectionId, TelemetryGroups.Legacy(id));
+            await Service<TelemetryRelay>().AddLegacyClientAsync(Context.ConnectionId, id);
+        }
     }
 
-    public Task UnsubscribeFromCarTelemetry(string carId)
+    public async Task UnsubscribeFromCarTelemetry(string carId)
     {
-        return Groups.RemoveFromGroupAsync(Context.ConnectionId, $"car:{carId}");
+        await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"car:{carId}");
+        if (int.TryParse(carId, out var id))
+        {
+            await Groups.RemoveFromGroupAsync(Context.ConnectionId, TelemetryGroups.Legacy(id));
+            await Service<TelemetryRelay>().RemoveLegacyClientAsync(Context.ConnectionId, id);
+        }
     }
 
     public Task RegisterAsOnboard(string carId)

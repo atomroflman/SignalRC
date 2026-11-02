@@ -587,6 +587,15 @@ Arbeitspakete: [Overlay-Arbeitspakete.md](Overlay-Arbeitspakete.md).
   OVL_API_NOT_AVAILABLE` ab, bis AP07 die Bereinigung registriert.
 - Ungeprüftes SVG gelangt nie in die Datenbank.
 
+### D68 – Server vor Fahrzeug aktualisieren, kein Rückfall
+
+- Ein neues Onboard sendet Telemetrie nur über den neuen Pfad und erst, wenn
+  der Server Bedarf meldet. Einen automatischen Rückfall auf den alten Pfad
+  gibt es nicht.
+- Beim Rollout wird deshalb immer zuerst der Server aktualisiert, dann das
+  Fahrzeug. Ein neues Onboard an einem alten Server sendet keine Telemetrie.
+- Alte Onboards an einem neuen Server funktionieren weiter (Altpfad, D56).
+
 ## Spezifikationsstand
 
 ### S01 – Dokumentmodell und Property-Katalog v1 (Entwurf)

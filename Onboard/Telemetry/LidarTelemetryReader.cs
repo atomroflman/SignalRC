@@ -3,6 +3,7 @@ using System.Text;
 using Microsoft.Extensions.Logging;
 using SignalRC.Onboard.Hardware;
 using SignalRC.Onboard.Hardware.Lidar;
+using SignalRC.Shared.Telemetry;
 
 namespace SignalRC.Onboard.Telemetry;
 
@@ -49,8 +50,74 @@ public class LidarTelemetryReader : TelemetryReaderBase
     {
         var source = Resolve();
         if (source == null) return Task.FromResult<IReadOnlyDictionary<string, string>?>(null);
+        var values = BuildValues(source.Health, source.LatestScan);
+        return Task.FromResult<IReadOnlyDictionary<string, string>?>(values);
+    }
 
-        var h = source.Health;
+    public override Task<IReadOnlyDictionary<string, TelemetrySample>?> ReadAllSamplesAsync(string channelKey)
+    {
+        var source = Resolve();
+        if (source == null) return Task.FromResult<IReadOnlyDictionary<string, TelemetrySample>?>(null);
+        var health = source.Health;
+        var scan = source.LatestScan;
+        var samples = BuildSamples(BuildValues(health, scan), health, scan != null);
+        return Task.FromResult<IReadOnlyDictionary<string, TelemetrySample>?>(samples);
+    }
+
+    // Values computed from the latest revolution. Everything else is the
+    // manager's (or the Pico's) diagnostic state.
+    private static readonly HashSet<string> ScanKeys = new(StringComparer.Ordinal)
+    {
+        "lidarRpm", "lidarGaps", "lidarFrames", "lidarMissingFrames", "lidarComplete",
+        "lidarSectors", "lidarNearest", "lidarNearestAngle", "lidarFront",
+    };
+
+    // From the Pico's last status frame, which carries no receive time.
+    private static readonly HashSet<string> PicoKeys = new(StringComparer.Ordinal)
+    {
+        "lidarState", "lidarPicoDropped", "lidarPicoFramesBad", "lidarPicoOverruns", "lidarPowerOn",
+    };
+
+    /// <summary>
+    /// Quality of the lidar values (telemetry/README.md §3):
+    /// <list type="bullet">
+    /// <item>Scan values: Error while the port is closed or the manager reports
+    /// a problem, NoData before the first revolution, Stale when the sensor no
+    /// longer spins (a standstill no deadline can heal), else Valid. The age is
+    /// <see cref="LidarHealth.ScanAgeSeconds"/> in every case.</item>
+    /// <item>Pico counters: Unchecked, the status frame has no timestamp.</item>
+    /// <item><c>lidarAge</c>: NoData before the first revolution.</item>
+    /// <item>Health and counters (<c>lidarOk</c>, <c>lidarProblem</c>, ...):
+    /// judged now, Valid with age 0.</item>
+    /// </list>
+    /// </summary>
+    public static Dictionary<string, TelemetrySample> BuildSamples(
+        IReadOnlyDictionary<string, string> values, LidarHealth health, bool hasScan)
+    {
+        var noScan = !hasScan || double.IsInfinity(health.ScanAgeSeconds);
+        var scanAge = noScan ? 0 : TelemetrySample.AgeFromSeconds(health.ScanAgeSeconds);
+        var scanState =
+            !health.PortOpen || health.Problem != null ? TelemetrySampleState.Error
+            : noScan ? TelemetrySampleState.NoData
+            : !health.Spinning ? TelemetrySampleState.Stale
+            : TelemetrySampleState.Valid;
+
+        var samples = new Dictionary<string, TelemetrySample>(values.Count, StringComparer.Ordinal);
+        foreach (var (key, value) in values)
+        {
+            samples[key] =
+                ScanKeys.Contains(key) ? new TelemetrySample(value, scanState, scanAge)
+                : PicoKeys.Contains(key) ? new TelemetrySample(value, TelemetrySampleState.Unchecked, 0)
+                : key == "lidarAge" && double.IsInfinity(health.ScanAgeSeconds)
+                    ? new TelemetrySample(value, TelemetrySampleState.NoData, 0)
+                : TelemetrySample.Valid(value);
+        }
+        return samples;
+    }
+
+    /// <summary>The plain values (legacy view).</summary>
+    public Dictionary<string, string> BuildValues(LidarHealth h, LidarScan? scan)
+    {
         var values = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["lidarOk"] = h is { PortOpen: true, Spinning: true } ? "1" : "0",
@@ -83,14 +150,13 @@ public class LidarTelemetryReader : TelemetryReaderBase
             values["lidarPowerOn"] = p.PowerOn ? "1" : "0";
         }
 
-        var scan = source.LatestScan;
         if (scan == null)
         {
             values["lidarSectors"] = string.Empty;
             values["lidarNearest"] = string.Empty;
             values["lidarNearestAngle"] = string.Empty;
             values["lidarFront"] = string.Empty;
-            return Task.FromResult<IReadOnlyDictionary<string, string>?>(values);
+            return values;
         }
 
         values["lidarFrames"] = scan.Frames.ToString(CultureInfo.InvariantCulture);
@@ -132,7 +198,7 @@ public class LidarTelemetryReader : TelemetryReaderBase
         values["lidarFront"] = front == int.MaxValue
             ? string.Empty : (front / 10).ToString(CultureInfo.InvariantCulture);
 
-        return Task.FromResult<IReadOnlyDictionary<string, string>?>(values);
+        return values;
     }
 
     private ILidarSource? Resolve()
