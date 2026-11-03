@@ -23,6 +23,22 @@ Located in the config directory (see [Config Directory](#config-directory) below
 
 Optional feature-flag keys (`webSetup`, `bashTool`, `channelTester`, `audio`, `video`) can also be set here — see [Feature Flags](#feature-flags) for which of them actually do anything.
 
+#### `AutoUpdate` (self-update from the server)
+
+```json
+"AutoUpdate": {
+  "Enabled": false,
+  "ConfirmTimeoutMinutes": 10
+}
+```
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `Enabled` | `false` (also when the section is missing) | Install newer server builds automatically while no driver holds the control session. A driver can update from the GUI regardless. |
+| `ConfirmTimeoutMinutes` | `10` | A freshly installed release that does not reach the server within this time exits; after three such starts it is rolled back. |
+
+`install.sh` asks for `Enabled`; the shipped `Onboard/appSettings.json` leaves the section out so that `git pull` on vehicles with a locally edited file does not conflict. Changes take effect after restarting `signalrc-onboard.service`. Only installations in the release layout (`Onboard/current`) update themselves; `dotnet run` reports the self-update as disabled. See [OnboardAutoUpdate.md](OnboardAutoUpdate.md).
+
 Audio devices are not configured here but in the web UI (per video stream and per vehicle) — see [FEATURES.md](FEATURES.md#audio-chat).
 
 ### channelMap.json (Onboard)
@@ -182,7 +198,8 @@ There is no `LTE_USE_NEW_CONNECTION_MODEL` variable in the current code — it d
 | `WebRtc__Username` / `WebRtc__Credential` | TURN credentials handed out by `/api/webrtc/ice-servers` |
 | `COTURN_EXTERNAL_IP` / `COTURN_USERNAME` / `COTURN_CREDENTIAL` | Compose-level TURN setup — feeds both the `server` and `turn` (coturn) containers; falls back to an Azure IMDS public-IP lookup if `COTURN_EXTERNAL_IP` is unset |
 | `JANUS_NAT_1_1` | Public IP Janus advertises for WebRTC NAT traversal (Compose); also falls back to Azure IMDS if unset, and the container hard-fails to start if neither resolves |
-| `GIT_BRANCH` / `GIT_COMMIT` | Baked into the server image at build time; surfaced back out via the onboard-install-command endpoint |
+| `GIT_BRANCH` / `GIT_COMMIT` | Baked into the server image and its onboard packages at build time; surfaced back out via `/api/version`, the onboard-install-command endpoint and the self-update manifest. Set by `scripts/build-images.sh` from the checkout (never a fixed value: the commit is the version the onboards compare) |
+| `OnboardPackages__Path` | Folder with the onboard packages `<rid>.zip`; default `onboard-packages` next to the server (`/app/onboard-packages` in the image) |
 
 There is no `RunJanusServer` variable — the server never runs Janus in-process; it's always a separate process/container.
 

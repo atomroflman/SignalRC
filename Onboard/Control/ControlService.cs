@@ -47,6 +47,34 @@ public class ControlService : IControlClient, IHubConnectionObserver
     public bool IsActiveSession(string? sessionId) => _sessionId != null && _sessionId == sessionId;
 
     /// <summary>
+    /// A driver holds the session and was active recently, by the same rule that keeps
+    /// another driver from taking it over. The automatic update waits while this is true.
+    /// </summary>
+    public bool HasLiveSession => _sessionId != null && _lastControlUpdate.AddSeconds(30) > DateTime.Now;
+
+    // Set while a self-update installs and restarts: controls stay neutral, no new session.
+    private volatile bool _lockedForUpdate;
+
+    public bool IsLockedForUpdate => _lockedForUpdate;
+
+    /// <summary>Puts all controls to neutral and ignores further control input until the restart.</summary>
+    public void LockForUpdate()
+    {
+        _lockedForUpdate = true;
+        Control.ReleaseControl();
+        Logger.LogWarning("Controls locked for the onboard update.");
+    }
+
+    /// <summary>The update failed before switching releases: controls work again, the driver has to take over anew.</summary>
+    public async Task UnlockAfterFailedUpdateAsync()
+    {
+        _lockedForUpdate = false;
+        if (_sessionId != null)
+            await ReleaseCarControl(_sessionId);
+        Logger.LogWarning("Controls unlocked after the failed onboard update.");
+    }
+
+    /// <summary>
     /// Counts non-channel activity (e.g. push-to-talk) as driver activity so the
     /// session isn't considered idle and taken over while the driver is talking.
     /// </summary>
@@ -145,6 +173,10 @@ public class ControlService : IControlClient, IHubConnectionObserver
     
     public async Task<string?> AquireCarControl(SshAuthenticationRequest authRequest)
     {
+        if (_lockedForUpdate) {
+            Logger.LogError("Cannot aquire control: the onboard is updating.");
+            return null;
+        }
         if (_sessionId != null && _lastControlUpdate.AddSeconds(30) > DateTime.Now) {
             Logger.LogError("Cannot aquire control: Already connected to driver session.");
             return null;
@@ -187,7 +219,7 @@ public class ControlService : IControlClient, IHubConnectionObserver
 
     public Task UpdateChannel(string sessionId, string channelId, decimal value)
     {
-        if (_sessionId != sessionId)
+        if (_sessionId != sessionId || _lockedForUpdate)
             return Task.CompletedTask;
         Logger.LogDebug($"Update channel {channelId} to {value}");
         Control.SetControl(channelId, value);

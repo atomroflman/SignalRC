@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using SignalRC.Shared;
 using SignalRC.Shared.Channels;
+using SignalRC.Shared.Update;
 
 namespace SignalRC.Server;
 
@@ -91,6 +92,8 @@ public class CarConnectionInfo
     public string? OnboardCommit { get; set; }
     /// <summary>Latest channel health the onboard sent; null for onboard builds that don't report it.</summary>
     public ChannelHealthReport? ChannelHealth { get; set; }
+    /// <summary>Latest self-update status the onboard sent; null for onboard builds that don't report it.</summary>
+    public OnboardUpdateStatus? UpdateStatus { get; set; }
     /// <summary>SHA-256 of the current control session, null without one.</summary>
     public byte[]? ControlSessionHash { get; set; }
 

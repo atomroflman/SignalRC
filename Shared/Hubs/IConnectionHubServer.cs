@@ -3,6 +3,7 @@ using SignalRC.Shared.Channels;
 using SignalRC.Shared.FileTransfer;
 using SignalRC.Shared.Logs;
 using SignalRC.Shared.Telemetry;
+using SignalRC.Shared.Update;
 using SignalRC.Shared.Video;
 
 
@@ -59,4 +60,10 @@ public interface IConnectionHubServer
     // Diagnostics (browser → server → onboard)
     Task<OnboardDiagnosticsReport> GetOnboardDiagnostics(int carId);
     Task<OnboardDiagnosticsReport> RunOnboardStartupTest(int carId);
+
+    // Self-update (Docs/OnboardAutoUpdate.md)
+    // The car follows from the calling onboard connection.
+    Task ReportOnboardUpdateStatus(OnboardUpdateStatus status);
+    // Browser → server → onboard. Requires the control session id.
+    Task<OnboardUpdateRequestResult> RequestOnboardUpdate(int carId, string sessionId);
 }

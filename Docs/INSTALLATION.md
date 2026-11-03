@@ -126,11 +126,30 @@ For a Raspberry Pi, `install.sh` automatically:
 1. Installs `git`, `curl`, `ffmpeg`, `i2c-tools`, `python3`, and whichever camera runtime packages (`rpicam-apps`/`libcamera-tools`/`libcameraN`) are available for your distro.
 2. Installs `mediamtx` (from the package manager if available, otherwise downloads the upstream release tarball into `Onboard/Extern/`).
 3. Installs the .NET SDK via `dotnet-install.sh` (channel 10.0) into `~/.dotnet` — no `apt` `dotnet-sdk` package or Microsoft package feed needed.
-4. Prompts for the server URL and writes it into `Onboard/appSettings.json`.
-5. Publishes the Onboard client (`dotnet publish -c Release`).
-6. Optionally installs and enables `signalrc-onboard.service` (+ `signalrc-mediamtx.service`) via systemd.
+4. Prompts for the server URL and whether the onboard should update itself from the server, and writes both into `Onboard/appSettings.json`.
+5. Publishes the Onboard client as a release into `Onboard/releases/<commit>/` and points the symlink `Onboard/current` at it (`scripts/onboard-publish-release.sh`).
+6. Optionally installs and enables `signalrc-onboard.service` (+ `signalrc-mediamtx.service`) via systemd. The onboard unit starts `Onboard/current/SignalRC.Onboard.dll` and runs `scripts/onboard-prestart.sh` before every start (rollback guard, see below).
 
 Hardware connections: PCA9685 PWM controller via I2C (SDA/SCL), plain GPIO outputs, a Raspberry Pi Camera Module, and an optional JBD BMS via UART for battery telemetry. GPIO/I2C access goes through the .NET `System.Device.Gpio`/`System.Device.I2c` libraries directly — no `pigpio` daemon is required or installed.
+
+### Updating the onboard
+
+There are two ways, both use the same release layout:
+
+- **Self-update from the server.** The server image carries onboard packages for `linux-arm64` and `linux-x64` built from its own commit. After connecting, the onboard compares its branch and commit with the server's. With `AutoUpdate.Enabled` it installs the package by itself while no driver holds the control session; a driver with an SSH-authenticated session can always start it from the version banner ("Update now"), even with the switch off. Details: [OnboardAutoUpdate.md](OnboardAutoUpdate.md).
+- **By hand on the vehicle:** `sudo ./update.sh` pulls the repo, builds a new release next to the running one, switches `Onboard/current` and restarts the service.
+
+The first `update.sh` after this change migrates an older installation: it rewrites `signalrc-onboard.service` for the release layout and keeps the old unit as `signalrc-onboard.service.bak`.
+
+If a self-updated release does not reach the server within three starts, `onboard-prestart.sh` switches back to the previous release and blocks that commit until the server offers another one. To switch by hand:
+
+```bash
+cd ~/SignalRC/Onboard
+ls releases/                                   # installed releases, named after their commit
+ln -sfn releases/<commit> current.new && mv -Tf current.new current
+rm -f releases/.state/pending
+sudo systemctl restart signalrc-onboard.service
+```
 
 ### Start Onboard Software manually
 

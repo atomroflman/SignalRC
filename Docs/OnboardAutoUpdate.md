@@ -1,6 +1,7 @@
 # Onboard-Auto-Update: Implementierungsplan
 
-Stand: 2026-11-03. Status: Plan abgestimmt, noch nicht umgesetzt.
+Stand: 2026-11-03. Status: U1–U7 und U2b umgesetzt und lokal getestet, nicht ausgerollt.
+Abweichungen vom Plan und der Teststand stehen unter [Umsetzung](#umsetzung).
 Branch: `feature/onboard-auto-update` (abgezweigt von `feature/overlay-ap01`).
 
 Dieses Dokument legt fest, wie die Onboard Units ihre Software künftig vom
@@ -452,6 +453,75 @@ automatischer Rollout):
 5. Absichtlich defektes Paket (z. B. Exception im Start) → nach 3 Fehlstarts
    Rollback, Status `RolledBack`, kein erneuter Versuch für diesen Commit.
 6. Paket mit falschem SHA256 → `Failed`, alte Version läuft weiter.
+
+## Umsetzung
+
+### Abweichungen vom Plan
+
+- **Eigener Hub-Vertrag:** `StartOnboardUpdate` und der Browser-Push
+  `OnboardUpdateStatusChanged` liegen in `Shared/HubClients/IOnboardUpdateClient.cs`,
+  nicht in `IControlClient`. Das Onboard registriert dafür `OnboardUpdateService`.
+- **Zusätzlicher Status `available`:** Ein neuer Stand ist da, aber
+  `AutoUpdate.Enabled` ist aus. Nur ein Fahrer kann ihn installieren.
+- **„Fahrer aktiv“** heißt: Steuersitzung vorhanden und letzter Steuerbefehl
+  jünger als 30 s. Das ist dieselbe Regel, nach der eine Sitzung übernommen werden
+  darf (`ControlService.HasLiveSession`). Läuft eine Sitzung ab, prüft der Dienst
+  alle 30 s neu. Kurz vor dem Umschalten prüft er ein zweites Mal, falls während
+  des Downloads ein Fahrer dazugekommen ist.
+- **Kein Absturz ohne Server bei unbestätigtem Release:** Bisher beendet sich das
+  Onboard, wenn der Server beim Start nicht erreichbar ist, und systemd startet es
+  neu. Bei einem unbestätigten Release würde jeder dieser Neustarts als Fehlstart
+  zählen, ein LTE-Ausfall würde also binnen Sekunden zurückrollen. Ein
+  unbestätigtes Release versucht es deshalb weiter, bis `ConfirmTimeoutMinutes`
+  greift. Ohne unbestätigtes Release bleibt das Verhalten wie bisher.
+- **`Onboard/appSettings.json` bleibt unverändert:** Die Datei ist versioniert, wird
+  auf den Fahrzeugen aber lokal angepasst. Eine Änderung upstream würde `git pull`
+  in `update.sh` blockieren. Fehlt der Abschnitt, gilt `Enabled = false`.
+  `install.sh` schreibt ihn in die lokale Datei.
+- **Kleinere Releases:**
+  - `mediamtx` wird nicht mehr mitpubliziert (`CopyToPublishDirectory=Never`). Das
+    Onboard findet es ohnehin über `./Extern` im Arbeitsverzeichnis.
+  - Der lokale Build in `update.sh` nutzt `--use-current-runtime`.
+  - Ein Release ist damit 5,5 MB statt 34 MB groß, ein Server-Paket rund 2,4 MB.
+- **`releases/` und `current/` sind vom MSBuild-Globbing ausgenommen**
+  (`DefaultItemExcludes` im Onboard-csproj). Sie liegen im Projektordner.
+- **Restore im Dockerfile einmal pro RID:** Ein `RuntimeIdentifiers`-Wert mit
+  Semikolon lässt sich per Kommandozeile nicht an das referenzierte Shared-Projekt
+  übergeben.
+- **Gemeinsame Skripte:** `install.sh` und `update.sh` nutzen
+  `scripts/onboard-publish-release.sh` (Release bauen, `current` setzen,
+  aufräumen) und `scripts/onboard-write-service.sh` (systemd-Unit). Beide setzen
+  den Branch bei detached HEAD wie `scripts/build-images.sh` auf `detached`.
+- **Tests im bestehenden Projekt:** `Tests/SignalRC.Overlay.Tests/Update/` statt
+  eines neuen Testprojekts. Das bestehende referenziert Server und Onboard bereits.
+- **Download und Entpacken** liegen in `ReleaseInstaller`, damit sie sich gegen
+  einen echten HTTP-Server testen lassen.
+
+### Teststand (2026-11-03, lokal)
+
+- Unit- und Integrationstests (`Update/`, 22 Fälle): Entscheidungsregeln,
+  Runtime-Roll-Forward, `pending`-Format, Symlink-Umschaltung, Aufräumen,
+  Server-Manifest. Dazu Download gegen einen HTTP-Server mit Range-Fortsetzung,
+  falsche Prüfsumme und Paket ohne `SignalRC.Onboard.dll`.
+- `scripts/test-onboard-prestart.sh` (12 Prüfungen): Zählen, Rollback beim
+  4. Start, Sperre, `last-rollback`, fehlendes Vorgänger-Release, kaputtes
+  `pending`, immer Exit 0.
+- Docker-Build des Server-Images: Beide ZIPs entstehen. Der eingebettete Commit
+  stimmt mit `HEAD` überein, die nativen Bibliotheken im arm64-Paket sind
+  aarch64, und Konfiguration ist nicht enthalten.
+- Durchlauf mit Server-Image und Postgres:
+  1. Ein Onboard mit altem Commit lädt das Paket, installiert es, schaltet um und
+     beendet sich mit Exit 0.
+  2. Das Prestart-Skript zählt Start 1/3.
+  3. Das neue Release verbindet sich und bestätigt sich.
+  4. Der Server empfängt alle Statusmeldungen.
+- Watchdog: Ein unbestätigtes Release ohne Server beendet sich nach
+  `ConfirmTimeoutMinutes` mit Exit 1 und versucht es bis dahin weiter.
+- Client: `tsc --noEmit` und alle Vitest-Tests grün.
+
+**Offen:** manuelles Update über die GUI mit echter SSH-Sitzung, Lauf auf einem
+Fahrzeug (arm64) und die Migration einer bestehenden Installation per `update.sh`.
+Das ist die Integrations-Checkliste unter [Tests](#tests).
 
 ## Nicht im Umfang
 

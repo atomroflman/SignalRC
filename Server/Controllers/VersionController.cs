@@ -35,6 +35,6 @@ public class VersionController : Microsoft.AspNetCore.Mvc.ControllerBase
             : new { branch = onboardBranch, commit = onboardCommit };
         var mismatch = onboard != null
             && (onboardBranch != server.Branch || onboardCommit != server.Commit);
-        return Ok(new { server = new { branch = server.Branch, commit = server.Commit }, onboard, mismatch });
+        return Ok(new { server = new { branch = server.Branch, commit = server.Commit }, onboard, mismatch, update = info?.UpdateStatus });
     }
 }

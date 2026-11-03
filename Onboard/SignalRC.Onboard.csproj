@@ -9,6 +9,9 @@
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
         <NoWarn>$(NoWarn);CS1591;CS1572;CS1573;CS1574;CS1584;CS1658;CS1570;CS1587;CS1734</NoWarn>
       <UserSecretsId>a4995393-a0b4-4060-8810-10aedec03387</UserSecretsId>
+        <!-- Installed releases of the self-update live inside the project folder on the vehicle
+             (Docs/OnboardAutoUpdate.md); they must not become items of the next build. -->
+        <DefaultItemExcludes>$(DefaultItemExcludes);releases/**;current/**</DefaultItemExcludes>
   </PropertyGroup>
 
     <ItemGroup>
@@ -45,9 +48,11 @@
       <None Update="Extern/mediamtx.yml">
         <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       </None>
+      <!-- Not published: the onboard finds mediamtx via ./Extern of its working directory, so a
+           copy in every release folder would only fill the SD card. -->
       <None Update="Extern/mediamtx">
         <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-        <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+        <CopyToPublishDirectory>Never</CopyToPublishDirectory>
         <UnixFileMode>Executable</UnixFileMode>
       </None>
     </ItemGroup>

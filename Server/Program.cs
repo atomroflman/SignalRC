@@ -60,6 +60,7 @@ builder.Services.AddSingleton<CarConnectionStore>();
 builder.Services.AddSingleton<OnboardLogStore>();
 builder.Services.AddSingleton<AvailableTypesRegistry>();
 builder.Services.AddSingleton<IServerBuildInfoService, ServerBuildInfoService>();
+builder.Services.AddSingleton<OnboardPackageService>();
 builder.Services.AddSingleton<IOnboardInstallScriptService, OnboardInstallScriptService>();
 builder.Services.AddSingleton<ChannelTemplateService>();
 builder.Services.AddOverlay();

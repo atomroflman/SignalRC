@@ -77,6 +77,9 @@ export type ControlFlowState = {
   setUpdatesEnabled: (enabled: boolean) => void;
   /** Sending was paused by opening the overlay editor; only an explicit enable lifts it (api/README.md §6). */
   editorPaused: boolean;
+  /** The driver started the onboard update: nothing is sent until the vehicle is back (Docs/OnboardAutoUpdate.md). */
+  onboardUpdating: boolean;
+  setOnboardUpdating: (updating: boolean) => void;
   pauseForOverlayEditor: () => void;
   // Authentication tracking
   hasAuthenticatedWithCar: (carId: number) => boolean;
@@ -124,6 +127,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
   isInConfigMode: false,
   updatesEnabled: true,
   editorPaused: false,
+  onboardUpdating: false,
   async load(carId: number) {
     set({ isLoading: true, error: null });
     try {
@@ -519,10 +523,10 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
     }));
   },
   async sendOutput(channelId: number, value: number) {
-    const { carId, carSession, connection, updatesEnabled, isInConfigMode } = get();
+    const { carId, carSession, connection, updatesEnabled, isInConfigMode, onboardUpdating } = get();
     console.log("send out", carId, carSession, connection?.state, "updatesEnabled:", updatesEnabled, "isInConfigMode:", isInConfigMode);
     
-    if (connection && carId && carSession && updatesEnabled) {
+    if (connection && carId && carSession && updatesEnabled && !onboardUpdating) {
       await connection.invoke("UpdateChannel", carId, carSession, channelId, value);
       _lastSentValues.set(channelId, value);
 
@@ -530,9 +534,9 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
       if (resendMs && !_resendTimers.has(channelId)) {
         const interval = Math.floor(resendMs / 2);
         _resendTimers.set(channelId, setInterval(() => {
-          const { connection: conn, carId: cId, carSession: sess, updatesEnabled: enabled } = get();
+          const { connection: conn, carId: cId, carSession: sess, updatesEnabled: enabled, onboardUpdating: updating } = get();
           const lastVal = _lastSentValues.get(channelId);
-          if (conn && cId && sess && enabled && lastVal !== undefined) {
+          if (conn && cId && sess && enabled && !updating && lastVal !== undefined) {
             conn.invoke("UpdateChannel", cId, sess, channelId, lastVal)
               .catch((err: any) => console.error("Resend failed:", err));
           }
@@ -991,6 +995,23 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
     clearAllResendTimers();
     set({ updatesEnabled: false, editorPaused: true });
     console.log("Updates paused: overlay editor opened");
+  },
+
+  setOnboardUpdating: (updating: boolean) => {
+    if (updating) {
+      clearAllResendTimers();
+      set({ onboardUpdating: true });
+    } else {
+      // The onboard ends the session with the update (restart or failure); control has to be taken anew.
+      // Tell the server too, so it drops the session and the driver display.
+      const { connection, carId, carSession } = get();
+      if (connection && carId && carSession) {
+        connection.invoke("ReleaseCarControl", carId, carSession)
+          .catch((err: any) => console.error("Failed to release the session after the update:", err));
+      }
+      set({ onboardUpdating: false, carSession: undefined });
+    }
+    console.log("Onboard update in progress:", updating);
   },
 
   // Authentication tracking functions

@@ -101,10 +101,25 @@ elif [ "$DEPLOY_TYPE" = "onboard" ]; then
         exit 1
     fi
 
+    # Release-Layout (Docs/OnboardAutoUpdate.md): baut nach Onboard/releases/<commit>/
+    # und setzt Onboard/current um. Der laufende Dienst behält seine Dateien.
     run_as_user \
         DOTNET_ROOT="$(dirname "$DOTNET_BIN")" \
         PATH="$(dirname "$DOTNET_BIN"):$(dirname "$DOTNET_BIN")/tools:$PATH" \
-        "$DOTNET_BIN" publish "$SCRIPT_DIR/Onboard/SignalRC.Onboard.csproj" -c Release
+        bash "$SCRIPT_DIR/scripts/onboard-publish-release.sh" "$SCRIPT_DIR" "$DOTNET_BIN"
+
+    # Migration: Eine Unit aus der Zeit vor dem Release-Layout startet noch
+    # bin/Release/.../publish und kennt den Rollback-Wächter nicht.
+    if ! grep -q '^ExecStart=.*/Onboard/current/SignalRC.Onboard.dll' "$ONBOARD_SERVICE" \
+        || ! grep -q '^ExecStartPre=.*onboard-prestart.sh' "$ONBOARD_SERVICE"; then
+        echo "Migriere $ONBOARD_SERVICE auf das Release-Layout ..."
+        LOG_DIR="$(grep -oP '^StandardOutput=append:\K.*(?=/onboard.log)' "$ONBOARD_SERVICE" | head -1 || true)"
+        [ -n "$LOG_DIR" ] || LOG_DIR="/var/log/signalrc"
+        cp "$ONBOARD_SERVICE" "$ONBOARD_SERVICE.bak"
+        bash "$SCRIPT_DIR/scripts/onboard-write-service.sh" "$SCRIPT_DIR" "$(dirname "$DOTNET_BIN")" "$RUN_USER" "$LOG_DIR"
+        systemctl daemon-reload
+        echo "Alte Unit gesichert unter $ONBOARD_SERVICE.bak"
+    fi
 fi
 
 # ── 3. Service stoppen ───────────────────────────────────────────────
