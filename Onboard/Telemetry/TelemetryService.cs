@@ -1,4 +1,5 @@
 using SignalRC.Onboard.Control;
+using SignalRC.Onboard.Services;
 using SignalRC.Shared.Channels;
 using SignalRC.Shared.HubClients;
 using SignalRC.Shared.Hubs;
@@ -7,6 +8,7 @@ using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using System.Collections.Concurrent;
 using System.Reflection;
 using System.Text.Json;
 using TypedSignalR.Client;
@@ -19,6 +21,14 @@ public class TelemetryService : IHubConnectionObserver, ITelemetryClient
     // channel|type pairs whose reader failed to build; EnsureReaders runs every
     // tick and would otherwise retry and log the same failure each time.
     private readonly HashSet<string> _readerFailures = new(StringComparer.Ordinal);
+    // Option warnings per channel from the last reader build, restored once a read error clears.
+    private readonly Dictionary<string, List<string>> _readerProblems = new(StringComparer.Ordinal);
+    // Sources whose last read threw; their channels carry a read error in the health report.
+    private readonly HashSet<string> _readFailedSources = new(StringComparer.Ordinal);
+    // Channels to rebuild, null for all. Queued from the SignalR thread, taken by the
+    // telemetry loop: only Tick touches the reader tables.
+    private readonly ConcurrentQueue<string?> _reloadRequests = new();
+    private readonly ChannelHealthService? _health;
 
     private int _tick = 0;
     private IConnectionHubServer? _server;
@@ -49,8 +59,9 @@ public class TelemetryService : IHubConnectionObserver, ITelemetryClient
     public ChannelMap ChannelMap { get; }
     public ServerCarConfigurationService CarConfigurationService { get; }
 
-public TelemetryService(ChannelMap channelMap, ServerConnectionService serverConnectionService, IConfiguration configuration, ILogger<TelemetryService> logger, IServiceProvider serviceProvider, ServerCarConfigurationService carConfigurationService)
+public TelemetryService(ChannelMap channelMap, ServerConnectionService serverConnectionService, IConfiguration configuration, ILogger<TelemetryService> logger, IServiceProvider serviceProvider, ServerCarConfigurationService carConfigurationService, ChannelHealthService? health = null)
     {
+        _health = health;
         ServiceProvider = serviceProvider;
         ChannelMap = channelMap;
         ServerConnectionService = serverConnectionService;
@@ -218,9 +229,16 @@ public TelemetryService(ChannelMap channelMap, ServerConnectionService serverCon
             }
             catch (Exception ex)
             {
-                Logger.LogError(ex, "Error reading telemetry from source {Source}", sourceKey);
+                // Logged by the health service when the error changes, not every tick.
+                if (_health == null)
+                    Logger.LogError(ex, "Error reading telemetry from source {Source}", sourceKey);
+                _readFailedSources.Add(sourceKey);
+                foreach (var channelName in _sourceChannels.GetValueOrDefault(sourceKey) ?? [])
+                    _health?.Error(ChannelTypeSchema.Telemetry, channelName, $"Read failed: {ChannelHealthService.Describe(ex)}");
                 continue;
             }
+            if (_readFailedSources.Remove(sourceKey))
+                RestoreBuildHealth(_sourceChannels.GetValueOrDefault(sourceKey) ?? []);
             if (samples == null || samples.Count == 0)
             {
                 continue;
@@ -316,18 +334,71 @@ public TelemetryService(ChannelMap channelMap, ServerConnectionService serverCon
         }
     }
 
+    /// <summary>Rebuilds the channel's reader on the next tick (and the reader of its source).</summary>
+    public void RequestReload(string channelName) => _reloadRequests.Enqueue(channelName);
+
+    /// <summary>Rebuilds every reader on the next tick, e.g. after pin managers were replaced.</summary>
+    public void RequestReloadAll() => _reloadRequests.Enqueue(null);
+
+    private void ApplyReloadRequests()
+    {
+        while (_reloadRequests.TryDequeue(out var channelName))
+        {
+            var groups = channelName == null
+                ? _sourceChannels.Keys.ToList()
+                : _sourceChannels.Where(kv => kv.Value.Contains(channelName)).Select(kv => kv.Key).ToList();
+            foreach (var groupKey in groups)
+            {
+                DropSource(groupKey);
+            }
+            if (channelName == null)
+            {
+                _readerFailures.Clear();
+                continue;
+            }
+            _readerFailures.RemoveWhere(k => k.StartsWith(channelName + "|", StringComparison.Ordinal));
+            _groupKeyWarnings.Remove(channelName);
+            _channelsWithoutServerId.Remove(channelName);
+            if (!ChannelMap.TelemetryChannels.ContainsKey(channelName))
+                ForgetChannel(channelName);
+        }
+    }
+
+    /// <summary>Disposes the source's reader; its channels get a new one in this EnsureReaders pass.</summary>
+    private void DropSource(string groupKey)
+    {
+        _sourceChannels.Remove(groupKey);
+        _readFailedSources.Remove(groupKey);
+        if (_sourceReaders.Remove(groupKey, out var dropped))
+        {
+            try { dropped.Dispose(); }
+            catch (Exception ex) { Logger.LogWarning(ex, "Disposing telemetry reader for source {Source} failed.", groupKey); }
+        }
+    }
+
+    private void ForgetChannel(string channelName)
+    {
+        _readerProblems.Remove(channelName);
+        _health?.Ok(ChannelTypeSchema.Telemetry, channelName);
+    }
+
+    private void RestoreBuildHealth(IEnumerable<string> channels)
+    {
+        foreach (var channelName in channels)
+            _health?.Problems(ChannelTypeSchema.Telemetry, channelName, _readerProblems.GetValueOrDefault(channelName) ?? []);
+    }
+
     internal void EnsureReaders()
     {
+        ApplyReloadRequests();
         foreach (var (groupKey, channels) in _sourceChannels.ToList())
         {
             var stillPresent = channels.Where(c => ChannelMap.TelemetryChannels.ContainsKey(c)).ToList();
+            foreach (var gone in channels.Except(stillPresent))
+                ForgetChannel(gone);
             if (stillPresent.Count == 0)
             {
-                _sourceChannels.Remove(groupKey);
-                if (_sourceReaders.Remove(groupKey, out var dropped))
-                {
-                    try { dropped.Dispose(); } catch { }
-                }
+                DropSource(groupKey);
             }
             else if (stillPresent.Count != channels.Count)
             {
@@ -335,7 +406,8 @@ public TelemetryService(ChannelMap channelMap, ServerConnectionService serverCon
             }
         }
 
-        foreach (var (channelName, definition) in ChannelMap.TelemetryChannels)
+        // Snapshot: the SignalR thread edits the map while this runs on the telemetry loop.
+        foreach (var (channelName, definition) in ChannelMap.TelemetryChannels.ToList())
         {
             var groupKey = ResolveGroupKey(channelName, definition);
             if (!_sourceChannels.TryGetValue(groupKey, out var channels))
@@ -415,6 +487,8 @@ public TelemetryService(ChannelMap channelMap, ServerConnectionService serverCon
         if (resolvedReaderType == null)
         {
             Logger.LogError("Telemetry reader type {Reader} could not be resolved.", definition.TelemetryType);
+            _readerFailures.Add(failureKey);
+            _health?.Error(ChannelTypeSchema.Telemetry, channelName, $"Telemetry type '{definition.TelemetryType}' not found");
             return null;
         }
 
@@ -432,16 +506,21 @@ public TelemetryService(ChannelMap channelMap, ServerConnectionService serverCon
             Logger.LogError(ex, "Telemetry reader {Reader} for channel {Channel} could not be created.",
                 resolvedReaderType, channelName);
             _readerFailures.Add(failureKey);
+            _health?.Error(ChannelTypeSchema.Telemetry, channelName, ex);
             return null;
         }
         if (reader == null)
         {
             Logger.LogError("Telemetry reader type {Reader} is not a TelemetryReaderBase.", resolvedReaderType);
+            _readerFailures.Add(failureKey);
+            _health?.Error(ChannelTypeSchema.Telemetry, channelName, $"'{definition.TelemetryType}' is not a telemetry reader");
             return null;
         }
         reader.ReadIntervalTicks = Math.Max(1, definition.ReadIntervalTicks);
 
-        ChannelOptionBinder.Apply(reader, definition.Options, Logger, $"channel {channelName}");
+        var problems = ChannelOptionBinder.Apply(reader, definition.Options, Logger, $"channel {channelName}");
+        _readerProblems[channelName] = problems;
+        _health?.Problems(ChannelTypeSchema.Telemetry, channelName, problems);
 
         return reader;
     }

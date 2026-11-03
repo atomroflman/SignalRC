@@ -100,6 +100,7 @@ serviceCollection.AddSingleton<ControlService>();
 serviceCollection.AddSingleton<TelemetryService>();
 serviceCollection.AddSingleton<BashToolService>();
 serviceCollection.AddSingleton<OnboardDiagnosticsService>();
+serviceCollection.AddSingleton<ChannelHealthService>();
 serviceCollection.AddSingleton<AudioService>();
 
 serviceCollection.AddSingleton<SshKeyService>();
@@ -428,7 +429,16 @@ await Task.Run(async () =>
 {
     while (true)
     {
-        await Task.WhenAll(telemetryService.Tick(), Task.Delay(100));
+        try
+        {
+            await Task.WhenAll(telemetryService.Tick(), Task.Delay(100));
+        }
+        catch (Exception ex)
+        {
+            // The loop is the process: whatever a tick throws must not end it.
+            logger.LogError(ex, "Telemetry tick failed.");
+            await Task.Delay(100);
+        }
     }
 });
 

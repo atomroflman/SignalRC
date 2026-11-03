@@ -12,6 +12,8 @@ public interface IConnectionHubServer
     Task<CarConfiguration> OpenCarConnection(string carIdentityKey, string channelMapHash);
     Task ReportOnboardVersion(string branch, string? commit);
     Task RegisterAvailableChannelTypes(int carId, AvailableChannelTypes types);
+    // The car follows from the calling onboard connection.
+    Task ReportChannelHealth(ChannelHealthReport report);
     Task UpdateChannelMap(int carId, ChannelMap channelMap);
     Task<ChannelMapSyncResponse> SyncChannelMap(ChannelMapSyncRequest request);
     Task ReportFileTransferStatus(FileTransferStatusUpdate update);

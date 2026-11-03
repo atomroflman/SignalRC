@@ -186,6 +186,8 @@ public class ServerConnectionService
             }
 
             await RegisterAvailableTypesAsync();
+            // The server forgets the report with the connection.
+            await ServiceProvider.GetRequiredService<ChannelHealthService>().PublishAsync();
         }
         catch (Exception ex)
         {

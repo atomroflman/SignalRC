@@ -21,6 +21,7 @@ public class ChannelsController : ControllerBase
 {
     private readonly IHubContext<CarConnectionHub, IConnectionHubClient> _controlHub;
     private readonly AvailableTypesRegistry _availableTypes;
+    private readonly CarConnectionStore _connections;
     private readonly VideoStreamReceiverService _streamService;
     private readonly VideoStreamActivationService _streamActivation;
     private readonly ILogger<ChannelsController> _logger;
@@ -29,12 +30,14 @@ public class ChannelsController : ControllerBase
         SignalRCContext context,
         IHubContext<CarConnectionHub, IConnectionHubClient> controlHub,
         AvailableTypesRegistry availableTypes,
+        CarConnectionStore connections,
         VideoStreamReceiverService streamService,
         VideoStreamActivationService streamActivation,
         ILogger<ChannelsController> logger) : base(context)
     {
         _controlHub = controlHub;
         _availableTypes = availableTypes;
+        _connections = connections;
         _streamService = streamService;
         _streamActivation = streamActivation;
         _logger = logger;
@@ -403,6 +406,24 @@ public class ChannelsController : ControllerBase
             control = controls.ToDictionary(c => c.ChannelName, c => c.Id),
             telemetry = telemetries.ToDictionary(t => t.ChannelName, t => t.Id),
             video = videos.ToDictionary(v => v.StreamId, v => v.Id),
+        });
+    }
+
+    // What the connected onboard made of the config: channels that failed to build or
+    // run, or run without some of their options. Null entries for an onboard build that
+    // does not report them yet.
+    [HttpGet("health")]
+    public async Task<IActionResult> GetHealth(int carId)
+    {
+        var user = await GetCurrentUserAsync();
+        if (user == null) return Unauthorized();
+        var connected = _connections.TryGetValue(carId.ToString(), out var info);
+        var report = connected ? info!.ChannelHealth : null;
+        return Ok(new
+        {
+            connected,
+            reportedAtUtc = report?.GeneratedAtUtc,
+            entries = report?.Entries,
         });
     }
 

@@ -21,9 +21,13 @@ public static class ChannelOptionBinder
     /// <summary>Options consumed by the onboard services, not by the target type.</summary>
     private static readonly HashSet<string> ServiceOptions = new(StringComparer.OrdinalIgnoreCase) { GroupKeyOption };
 
-    /// <summary>Applies every option to a writable property of the same name (case-insensitive).</summary>
-    public static void Apply(object target, IReadOnlyDictionary<string, object> options, ILogger logger, string owner, bool warnUnknown = true)
+    /// <summary>
+    /// Applies every option to a writable property of the same name (case-insensitive).
+    /// Returns what was not applied, for the channel health report; each is logged too.
+    /// </summary>
+    public static List<string> Apply(object target, IReadOnlyDictionary<string, object> options, ILogger logger, string owner, bool warnUnknown = true)
     {
+        var problems = new List<string>();
         var type = target.GetType();
         foreach (var option in options)
         {
@@ -34,7 +38,10 @@ public static class ChannelOptionBinder
             if (property == null || !property.CanWrite)
             {
                 if (warnUnknown)
+                {
                     logger.LogWarning("Option {Option} not found or not writable on {Type} for {Owner}", option.Key, type.Name, owner);
+                    problems.Add($"Unknown option '{option.Key}'");
+                }
                 continue;
             }
             try
@@ -46,12 +53,15 @@ public static class ChannelOptionBinder
             catch (ChannelOptionException ex)
             {
                 logger.LogError("Option {Option} for {Owner} not applied: {Reason}", option.Key, owner, ex.Message);
+                problems.Add($"Option '{option.Key}' not applied: {ex.Message}");
             }
             catch (Exception ex)
             {
                 logger.LogError(ex, "Failed to set option {Option} for {Owner} with value {Value}", option.Key, owner, Describe(option.Value));
+                problems.Add($"Option '{option.Key}' not applied: {(ex.InnerException ?? ex).Message}");
             }
         }
+        return problems;
     }
 
     /// <summary>

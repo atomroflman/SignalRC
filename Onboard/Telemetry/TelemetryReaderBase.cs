@@ -59,7 +59,14 @@ public abstract class TelemetryReaderBase : IDisposable
         return samples;
     }
 
+    /// <summary>Called when the reader is dropped, e.g. its channel was changed or deleted.</summary>
     public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
     {
     }
 }

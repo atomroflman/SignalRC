@@ -65,6 +65,12 @@ type VideoStream = {
 
 type AudioDevice = { name: string; description?: string | null };
 
+/** One problem the onboard reported (Shared/Channels/ChannelHealth.cs); OK channels have none. */
+type HealthEntry = { kind: "pinManager" | "control" | "telemetry" | "video"; name: string; state: "warning" | "error"; message: string; sinceUtc: string };
+/** entries is null while the vehicle is offline or its onboard build does not report health. */
+type Health = { connected: boolean; entries: HealthEntry[] | null };
+const HEALTH_POLL_MS = 3000;
+
 type Template = {
   id: number;
   key: string;
@@ -115,6 +121,40 @@ function ReadIntervalInput({ ticks, onChange }: { ticks: number; onChange: (tick
 const btnPrimary = "px-2 py-1 bg-green-900 hover:bg-green-800 text-green-100 rounded text-xs border border-green-800";
 const btnDanger = "px-2 py-1 bg-red-900 hover:bg-red-800 text-red-100 rounded text-xs border border-red-800";
 const btnGhost = "px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded text-xs border border-zinc-700";
+
+/** The onboard's verdict on one config row: nothing when OK, else state and message. */
+function HealthLine({ entry }: { entry?: HealthEntry }) {
+  if (!entry) return null;
+  const error = entry.state === "error";
+  return (
+    <div className={`mt-1 text-[11px] font-mono break-words ${error ? "text-red-300" : "text-amber-300"}`}>
+      <span className={`inline-block px-1 mr-2 rounded border ${error ? "border-red-800 bg-red-950" : "border-amber-800 bg-amber-950"}`}>
+        {error ? "error" : "warning"}
+      </span>
+      {entry.message}
+    </div>
+  );
+}
+
+/** Summary above the sections: offline, no report, or how many rows have problems. */
+function HealthSummary({ health }: { health: Health | null }) {
+  if (!health) return null;
+  if (!health.connected)
+    return <div className="mb-3 text-xs text-zinc-400 border border-zinc-800 rounded p-2">Vehicle offline: no channel status. Changes are applied when it connects.</div>;
+  if (!health.entries)
+    return <div className="mb-3 text-xs text-zinc-400 border border-zinc-800 rounded p-2">The onboard does not report channel status (older build).</div>;
+  const errors = health.entries.filter(e => e.state === "error").length;
+  const warnings = health.entries.length - errors;
+  if (health.entries.length === 0)
+    return <div className="mb-3 text-xs text-green-300 border border-green-900 rounded p-2">All channels running on the vehicle.</div>;
+  return (
+    <div className={`mb-3 text-xs rounded p-2 border ${errors > 0 ? "text-red-200 border-red-800 bg-red-950/40" : "text-amber-200 border-amber-800 bg-amber-950/40"}`}>
+      {errors > 0 && <span className="mr-3">{errors} channel{errors === 1 ? "" : "s"} not running</span>}
+      {warnings > 0 && <span>{warnings} warning{warnings === 1 ? "" : "s"}</span>}
+      <span className="text-zinc-400 ml-3">Details at the affected entries below.</span>
+    </div>
+  );
+}
 
 /** Option schemas reported by the vehicle and the configured pin manager names, for the options fields. */
 const OptionsInfo = React.createContext<{ schemas: ChannelTypeSchema[]; pinManagers: string[] }>({ schemas: [], pinManagers: [] });
@@ -288,6 +328,7 @@ export default function ChannelsPage() {
   const [audioOutputDevice, setAudioOutputDevice] = useState("");
   const [savedAudioOutputDevice, setSavedAudioOutputDevice] = useState("");
   const [loading, setLoading] = useState(true);
+  const [health, setHealth] = useState<Health | null>(null);
   const [editingPinManager, setEditingPinManager] = useState<{ key: string; pinManager: PinManager; isNew: boolean } | null>(null);
   const [editingControl, setEditingControl] = useState<{ key: string; channel: ControlChannel; isNew: boolean } | null>(null);
   const [editingTelemetry, setEditingTelemetry] = useState<{ key: string; channel: TelemetryChannel; isNew: boolean } | null>(null);
@@ -369,6 +410,25 @@ export default function ChannelsPage() {
   const reloadQuietly = useCallback(() => { void load(false); }, [load]);
 
   useEffect(() => { reload(); }, [reload]);
+
+  // The onboard applies a change within a tick and reports the outcome; poll while the page is open.
+  useEffect(() => {
+    if (!carIdNum) return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const r = await fetch(`/api/cars/${carIdNum}/channels/health`);
+        if (!r.ok || cancelled) return;
+        const h = await r.json();
+        setHealth({ connected: !!h.connected, entries: Array.isArray(h.entries) ? h.entries : null });
+      } catch { /* keep the last status */ }
+    };
+    void poll();
+    const timer = setInterval(poll, HEALTH_POLL_MS);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [carIdNum]);
+  const healthOf = useCallback((kind: HealthEntry["kind"], name: string) =>
+    health?.entries?.find(e => e.kind === kind && e.name === name), [health]);
 
   useEffect(() => {
     if (!carIdNum) return;
@@ -568,6 +628,8 @@ export default function ChannelsPage() {
           </div>
         </div>
 
+        <HealthSummary health={health} />
+
         <CollapsibleSection title="Templates" defaultCollapsed={false}>
           <div className="flex items-end gap-2 mb-2">
             <Field label="Template">
@@ -619,6 +681,7 @@ export default function ChannelsPage() {
                     </div>
                   </div>
                 )}
+                <HealthLine entry={healthOf("pinManager", p.name)} />
               </div>
             ))}
             {editingPinManager?.isNew && (
@@ -647,6 +710,7 @@ export default function ChannelsPage() {
                     </div>
                   </div>
                 )}
+                <HealthLine entry={healthOf("control", c.channelName)} />
               </div>
             ))}
             {editingControl?.isNew && (
@@ -674,6 +738,7 @@ export default function ChannelsPage() {
                     </div>
                   </div>
                 )}
+                <HealthLine entry={healthOf("telemetry", t.channelName)} />
               </div>
             ))}
             {editingTelemetry?.isNew && (
@@ -705,6 +770,7 @@ export default function ChannelsPage() {
                     </div>
                   </div>
                 )}
+                <HealthLine entry={healthOf("video", v.streamId)} />
               </div>
             ))}
             {editingVideo?.isNew && (

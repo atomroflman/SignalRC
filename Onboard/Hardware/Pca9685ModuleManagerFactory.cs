@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using System.Text.Json;
 using SignalRC.Onboard.Control;
+using SignalRC.Onboard.Services;
 using SignalRC.Shared.Channels;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -18,6 +19,10 @@ namespace SignalRC.Onboard.Hardware
         private readonly IServiceProvider _serviceProvider;
         private readonly ChannelMap _channelMap;
         private readonly Dictionary<string, IModuleManager> _instances = new();
+        // Pin managers that could not be built: Create would otherwise retry, and log,
+        // on every telemetry tick of a reader that resolves it lazily.
+        private readonly Dictionary<string, Exception> _failures = new();
+        private readonly object _lock = new();
 
         /// <summary>
         /// Constructor. All dependencies are injected via DI.
@@ -35,12 +40,49 @@ namespace SignalRC.Onboard.Hardware
         /// </summary>
         public IModuleManager Create(string name)
         {
-            var logger = _loggerFactory.CreateLogger<ModuleManagerFactory>();
-            if (_instances.ContainsKey(name))
+            // Controls are rebuilt on the SignalR thread while telemetry readers resolve
+            // their pin manager on the telemetry loop.
+            lock (_lock)
             {
-                // Return existing instance if already created
-                return _instances[name];
+                if (_instances.TryGetValue(name, out var existing))
+                    return existing;
+                if (_failures.TryGetValue(name, out var failure))
+                    throw new InvalidOperationException($"Pin manager '{name}' failed: {failure.Message}", failure);
+                try
+                {
+                    return Build(name);
+                }
+                catch (Exception ex)
+                {
+                    _failures[name] = ex;
+                    _serviceProvider.GetService<ChannelHealthService>()?.Error(ChannelTypeSchema.PinManager, name, ex);
+                    throw;
+                }
             }
+        }
+
+        public void Invalidate(string name)
+        {
+            IModuleManager? dropped;
+            lock (_lock)
+            {
+                _failures.Remove(name);
+                if (name == "default" || !_instances.Remove(name, out dropped))
+                    return;
+            }
+            try
+            {
+                (dropped as IDisposable)?.Dispose();
+            }
+            catch (Exception ex)
+            {
+                _loggerFactory.CreateLogger<ModuleManagerFactory>().LogWarning(ex, "Disposing pin manager {Name} failed.", name);
+            }
+        }
+
+        private IModuleManager Build(string name)
+        {
+            var logger = _loggerFactory.CreateLogger<ModuleManagerFactory>();
             // Find pin manager config by name
             if (!_channelMap.PinManagers.TryGetValue(name, out var managerConfig))
             {
@@ -50,10 +92,7 @@ namespace SignalRC.Onboard.Hardware
 
             var typeName = managerConfig.Type;
             if (string.IsNullOrWhiteSpace(typeName))
-            {
-                logger.LogError($"No type defined for pinManager '{name}'.");
-                return new NullModuleManager(logger);
-            }
+                throw new InvalidOperationException($"No type defined for pinManager '{name}'.");
 
             // Find all types matching the type name (without namespace)
             var matchingTypes = Assembly.GetExecutingAssembly().GetTypes();
@@ -84,9 +123,10 @@ namespace SignalRC.Onboard.Hardware
             }
 
             // Set properties from options dictionary; unknown keys are ignored as before.
-            ChannelOptionBinder.Apply(instance!, managerConfig.Options, logger, $"pinManager {name}", warnUnknown: false);
+            var problems = ChannelOptionBinder.Apply(instance!, managerConfig.Options, logger, $"pinManager {name}", warnUnknown: false);
             var res = instance as IModuleManager ?? throw new InvalidCastException($"{typeName} does not implement IModuleManager");
             _instances.Add(name, res);
+            _serviceProvider.GetService<ChannelHealthService>()?.Problems(ChannelTypeSchema.PinManager, name, problems);
             return res;
         }
 

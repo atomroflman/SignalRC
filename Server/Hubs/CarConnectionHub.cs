@@ -174,6 +174,19 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
         return Task.CompletedTask;
     }
 
+    public Task ReportChannelHealth(ChannelHealthReport report)
+    {
+        var connection = _connectionStore.FirstOrDefault(kv => kv.Value.ConnectionId == Context.ConnectionId);
+        if (connection.Key == null)
+        {
+            Logger.LogWarning("ReportChannelHealth received without an active car connection");
+            return Task.CompletedTask;
+        }
+        connection.Value.ChannelHealth = report;
+        Logger.LogInformation("Car {CarId} reports {Count} channel health entries", connection.Key, report.Entries.Length);
+        return Task.CompletedTask;
+    }
+
     public Task RegisterAvailableChannelTypes(int carId, AvailableChannelTypes types)
     {
         _availableTypes.Set(carId, types);
