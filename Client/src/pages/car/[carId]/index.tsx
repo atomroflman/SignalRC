@@ -50,6 +50,8 @@ export default function CarControlFlowPage() {
 
   useEffect(() => {
     if (carIdNum) {
+      // Opened directly or reloaded: the main page that normally connects is skipped.
+      flowControl.startConnection(carIdNum, undefined).catch(err => console.error("Connecting to the server failed:", err));
       flowControl.load(carIdNum);
       flowControl.startUserChannelConnection();
       flowControl.subscribeToInputNodes();
@@ -140,6 +142,8 @@ export default function CarControlFlowPage() {
               onConnect={onConnect}
               onEdgeClick={onEdgeClick}
               nodeTypes={nodeTypes}
+              connectionLineStyle={{ stroke: "#38bdf8", strokeWidth: 2 }}
+              connectionRadius={30}
               draggable
             >
               <MiniMap />

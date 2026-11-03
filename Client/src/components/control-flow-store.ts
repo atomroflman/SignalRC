@@ -103,6 +103,28 @@ const _resendTimers = new Map<number, ReturnType<typeof setInterval>>();
 const _lastSentValues = new Map<number, number>();
 const _channelResendIntervals = new Map<number, number>();
 
+// The control session outlives the SignalR connection (commands carry the session id),
+// so it is kept per tab and resumed after a reload or a lost connection.
+const sessionStorageKey = (carId: number) => `car_session_${carId}`;
+
+function rememberCarSession(carId: number | undefined, carSession: string | undefined) {
+  if (!carId) return;
+  try {
+    if (carSession) sessionStorage.setItem(sessionStorageKey(carId), carSession);
+    else sessionStorage.removeItem(sessionStorageKey(carId));
+  } catch {}
+}
+
+function storedCarSession(carId: number): string | null {
+  try {
+    return sessionStorage.getItem(sessionStorageKey(carId));
+  } catch {
+    return null;
+  }
+}
+
+let _connecting: Promise<void> | undefined;
+
 function clearAllResendTimers() {
   for (const timer of _resendTimers.values()) {
     clearInterval(timer);
@@ -423,7 +445,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
             representingId: dbId,
             type: 'input',
             data: { ...input },
-            position: { x: input.positionX, y: input.positionY },
+            position: input.position,
             nodeTypeName: input.nodeTypeName,
             metadata: undefined,
             label: input.label,
@@ -462,7 +484,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
             representingId: dbId,
             type: 'output',
             data: { ...output },
-            position: { x: output.positionX, y: output.positionY },
+            position: output.position,
             nodeTypeName: output.nodeTypeName,
             metadata: undefined,
             label: output.label,
@@ -499,7 +521,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
           representingId: undefined,
           type: 'default',
           data: { ...fnNode },
-          position: { x: fnNode.positionX, y: fnNode.positionY },
+          position: fnNode.position,
           nodeTypeName: fnNode.nodeTypeName,
           metadata: fnNode.metadata,
           label: fnNode.label,
@@ -549,22 +571,47 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
     }
   },
   async startConnection(carId: number, carKey: string | undefined) {
+    // Several pages call this on mount; share one connection attempt.
+    while (_connecting) await _connecting.catch(() => {});
     const signalR = await import("@microsoft/signalr");
-    var { connection } = get();
-    if (!get().connection) {
-        connection = new signalR.HubConnectionBuilder()
+    const existing = get().connection;
+    if (existing && existing.state !== signalR.HubConnectionState.Disconnected) {
+      set({ carId });
+      return;
+    }
+    _connecting = (async () => {
+      const connection = new signalR.HubConnectionBuilder()
         .withUrl(`/hubs/connection`)
         .withAutomaticReconnect()
         .build();
-        await connection.start();
-        // ponytail: only wipe carSession when the connection is brand-new.
-        // On a remount (page nav, / → /car/[id] → /) the zustand store
-        // survives but this useEffect re-runs and would clobber the
-        // already-authenticated session, flipping UpdateControl to
-        // "Disconnected" while the Onboard still has _sessionId.
-        set({ connection, carId, carSession: undefined });
-    } else {
-        set({ carId });
+      // Reconnect attempts exhausted: drop the dead connection so the next
+      // startConnection builds a new one and resumes the stored session.
+      connection.onclose(() => {
+        if (get().connection === connection) set({ connection: undefined, carSession: undefined });
+      });
+      await connection.start();
+      // ponytail: only replace carSession when the connection is brand-new.
+      // On a remount (page nav, / → /car/[id] → /) the zustand store
+      // survives but this useEffect re-runs and would clobber the
+      // already-authenticated session, flipping UpdateControl to
+      // "Disconnected" while the Onboard still has _sessionId.
+      // A new connection (reload, connection lost) resumes the tab's session if the vehicle still holds it.
+      const stored = get().carSession ?? storedCarSession(carId);
+      let carSession: string | undefined;
+      if (stored) {
+        try {
+          if (await connection.invoke("ResumeCarControl", carId, stored) === true) carSession = stored;
+        } catch (err) {
+          console.warn("ResumeCarControl failed:", err);
+        }
+      }
+      rememberCarSession(carId, carSession);
+      set({ connection, carId, carSession });
+    })();
+    try {
+      await _connecting;
+    } finally {
+      _connecting = undefined;
     }
   },
   async downloadSshKey(carId: number, vehicleIp: string, saveToStorage: boolean = true): Promise<{ success: boolean; key?: string; error?: string }> {
@@ -680,6 +727,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
       // Try to authenticate
       const carSession = await connection.invoke("AquireCarControl", carId, sshAuthRequest);
       if (carSession) {
+        rememberCarSession(carId, carSession);
         set({ carSession });
         // Mark car as authenticated for config access
         get().markCarAsAuthenticated(carId);
@@ -821,6 +869,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
     } catch (err) {
       console.error("Failed to notify vehicle about session release:", err);
     } finally {
+      rememberCarSession(carId, undefined);
       try { if (connection) await connection.stop(); } catch {}
       set({ connection: undefined, carSession: undefined });
     }
@@ -858,7 +907,10 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
   carSession: undefined,
   setConnection: (connection: any) => set({ connection }),
   setCarId: (carId: number | undefined) => set({ carId }),
-  setCarSession: (carSession: string) => set({ carSession }),
+  setCarSession: (carSession: string) => {
+    rememberCarSession(get().carId, carSession);
+    set({ carSession });
+  },
   
   async startUserChannelConnection() {
     const signalR = await import("@microsoft/signalr");
@@ -1009,6 +1061,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
         connection.invoke("ReleaseCarControl", carId, carSession)
           .catch((err: any) => console.error("Failed to release the session after the update:", err));
       }
+      rememberCarSession(carId, undefined);
       set({ onboardUpdating: false, carSession: undefined });
     }
     console.log("Onboard update in progress:", updating);

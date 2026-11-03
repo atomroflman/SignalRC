@@ -32,3 +32,19 @@ input,
 textarea {
   font: inherit;
 }
+
+/* Flow editor: show which connector is active and that a target was found. */
+.react-flow .react-flow__handle.connectionindicator:hover {
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.6);
+}
+
+/* Start connector after a click (click-to-connect) and the snapped target while dragging. */
+.react-flow .react-flow__handle.connecting {
+  background: #f59e0b;
+  box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.5);
+}
+
+.react-flow .react-flow__handle.connecting.valid {
+  background: #22c55e;
+  box-shadow: 0 0 0 5px rgba(34, 197, 94, 0.6);
+}
