@@ -189,6 +189,31 @@ public partial class FlowController : ControllerBase
         return Ok();
     }
 
+    // Auto layout: all positions in one request; only nodes of the user's own setups.
+    [HttpPost("movenodes")]
+    public async Task<IActionResult> MoveNodes([FromBody] List<MoveNodeRequest> req)
+    {
+        var user = await GetCurrentUserAsync();
+        if (user == null)
+            return Unauthorized("User not found");
+        var ids = req.Select(r => r.NodeId).Distinct().ToList();
+        // The UserSetup navigation is not mapped; match the user's setups by id.
+        var setupIds = _context.UserSetups.Where(s => s.UserId == user.Id).Select(s => s.Id);
+        var nodes = await _context.Set<UserSetupFlowNodeBase>()
+            .Where(n => ids.Contains(n.Id) && setupIds.Contains(n.UserSetupId))
+            .ToListAsync();
+        if (nodes.Count != ids.Count)
+            return NotFound("Node(s) not found");
+        foreach (var r in req)
+        {
+            var node = nodes.First(n => n.Id == r.NodeId);
+            node.PositionX = r.PositionX;
+            node.PositionY = r.PositionY;
+        }
+        await _context.SaveChangesAsync();
+        return Ok();
+    }
+
     [HttpPost("link")]
     public async Task<IActionResult> LinkNode([FromBody] LinkNodeRequest req)
     {

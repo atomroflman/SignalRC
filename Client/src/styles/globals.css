@@ -113,3 +113,8 @@ textarea {
   stroke: #fafafa;
   stroke-width: 3;
 }
+
+/* Flow editor: cluster frames of the auto arrangement are background only. */
+.react-flow .react-flow__node-clusterFrame {
+  pointer-events: none !important;
+}

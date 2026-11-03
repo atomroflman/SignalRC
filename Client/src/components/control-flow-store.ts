@@ -46,6 +46,8 @@ export type ControlFlowState = {
   setNodes: (nodes: ControlFlowNode[]) => void;
   setEdges: (edges: ControlFlowEdge[]) => void;
   updateNode: (node: ControlFlowNode) => void;
+  /** Moves several nodes at once and saves all positions in one request (auto layout). */
+  setNodePositions: (positions: Record<number, { x: number; y: number }>) => Promise<void>;
   updateNodeParams(nodeId: number, params: Record<string, any>): Promise<void>;
   recalculateNode: (nodeId: number) => void;
   triggerNodeOutput: (nodeId: number, outputValues?: number[]) => void;
@@ -236,6 +238,18 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
   async updateNode(node) {
     set(state => ({
       nodes: state.nodes.map(n => n.nodeId === node.nodeId ? { ...n, ...node, params: { ...node.params ?? n.params } } : n),
+    }));
+  },
+  async setNodePositions(positions) {
+    const res = await fetch("/api/flow/movenodes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(Object.entries(positions).map(([id, p]) => ({ NodeId: Number(id), PositionX: p.x, PositionY: p.y }))),
+    });
+    if (!res.ok)
+      throw new Error(`Saving node positions failed: ${res.status}`);
+    set(state => ({
+      nodes: state.nodes.map(n => positions[n.nodeId] ? { ...n, position: positions[n.nodeId] } : n),
     }));
   },
   async updateNodeParams(nodeId: number, params: Record<string, any>) {

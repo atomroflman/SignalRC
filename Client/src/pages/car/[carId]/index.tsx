@@ -10,13 +10,15 @@ import { ControlFlowEdge, ControlFlowNode, useControlFlowStore } from "@/compone
 import FunctionNodesView from "@/components/function-nodes-view";
 import CustomFlowNode from "@/components/custom-flow-node";
 import FlowEdge from "@/components/flow-edge";
+import { clusterFrame } from "@/components/flow-layout";
+import { ArrangedClusters, ClusterFrameNode, FlowLayoutPanel } from "@/components/flow-layout-panel";
 import ConfigGuard from "@/components/config-guard";
 import UpdateControl from "@/components/update-control";
 import LanguageSwitcher from "@/components/language-switcher";
 import SetupTemplatePanel from "@/components/setup-template-panel";
 import { useI18n } from "@/i18n/provider";
 
-const nodeTypes = { custom: CustomFlowNode };
+const nodeTypes = { custom: CustomFlowNode, clusterFrame: ClusterFrameNode };
 const edgeTypes = { flow: FlowEdge };
 
 export default function CarControlFlowPage() {
@@ -27,6 +29,8 @@ export default function CarControlFlowPage() {
   const carIdNum = carId ? parseInt(carId) : undefined;
   // Clicking a connection selects it; its trash button or the Delete key removes it.
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+  // Cluster frames of the last auto arrangement; they follow dragged nodes.
+  const [arranged, setArranged] = useState<ArrangedClusters | null>(null);
 
   function controlNodeToReact(input: ControlFlowNode): Node<any, string | undefined> {
     return {
@@ -38,6 +42,26 @@ export default function CarControlFlowPage() {
       position: input.position,
       type: "custom"
     };
+  }
+
+  function clusterFrameNodes(): Node[] {
+    if (!arranged) return [];
+    const positions = Object.fromEntries(flowControl.nodes.map(n => [n.nodeId, n.position]));
+    return arranged.clusters.flatMap((cluster, i) => {
+      const frame = clusterFrame(cluster, positions, arranged.sizes);
+      if (!frame) return [];
+      return [{
+        id: `cluster-${i}`,
+        type: "clusterFrame",
+        position: { x: frame.x, y: frame.y },
+        data: { title: cluster.title },
+        style: { width: frame.width, height: frame.height },
+        draggable: false,
+        selectable: false,
+        connectable: false,
+        zIndex: -1,
+      }];
+    });
   }
 
   function controlEdgeToReact(input: ControlFlowEdge): Edge<any> {
@@ -144,7 +168,7 @@ export default function CarControlFlowPage() {
         <div className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg p-2 min-h-[600px]">
           <ReactFlowProvider>
             <ReactFlow
-              nodes={flowControl.nodes.map(controlNodeToReact)}
+              nodes={[...clusterFrameNodes(), ...flowControl.nodes.map(controlNodeToReact)]}
               edges={flowControl.edges.map(controlEdgeToReact)}
               fitView
               onNodeDrag={onNodeDrag}
@@ -160,7 +184,12 @@ export default function CarControlFlowPage() {
               connectionRadius={30}
               draggable
             >
-              <MiniMap nodeColor="#52525b" nodeStrokeColor="#a1a1aa" maskColor="rgba(9, 9, 11, 0.6)" />
+              <MiniMap
+                nodeColor={n => n.type === "clusterFrame" ? "transparent" : "#52525b"}
+                nodeStrokeColor={n => n.type === "clusterFrame" ? "#3f3f46" : "#a1a1aa"}
+                maskColor="rgba(9, 9, 11, 0.6)"
+              />
+              <FlowLayoutPanel onArranged={setArranged} />
               <Controls />
               <Background color="#3f3f46" gap={20} />
             </ReactFlow>
