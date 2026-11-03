@@ -4,12 +4,13 @@ import { filterFunctionRegistry } from "./filters/filter-function-registry";
 import { useControlFlowStore } from "./control-flow-store";
 import { CustomFlowNodeProps } from "./custom-flow-node";
 import { useI18n } from "@/i18n/provider";
+import { flowNodeStyles, handleOffset } from "./flow-node-styles";
 
 export default function IifFlowNode(props: CustomFlowNodeProps) {
   const { messages } = useI18n();
   // Umfassender Null-Check für props und props.data
   if (!props || !props.data) {
-    return <div className="bg-zinc-800 border border-zinc-700 rounded p-2">{messages.flowNode.loading}</div>;
+    return <div className={flowNodeStyles.card}>{messages.flowNode.loading}</div>;
   }
 
   const id = props.data.nodeId;
@@ -116,13 +117,9 @@ export default function IifFlowNode(props: CustomFlowNodeProps) {
       type="target"
       position={Position.Top}
       id={`${label}`}
-      className="bg-orange-500"
-      style={{ left: `${100 / (inputs.length + 1) * (index + 1)}%`, top: "-4px" }}
+      style={handleOffset(index, inputs.length)}
     >
-      <span className="text-[8px] pt-1 text-center text-orange-300 font-mono block" style={{
-        marginLeft: -50 / (inputs.length + 1), 
-        width: 100 / (inputs.length + 1)
-      }}>
+      <span className={flowNodeStyles.inputLabel}>
         {label}
       </span>
     </Handle>
@@ -134,25 +131,20 @@ export default function IifFlowNode(props: CustomFlowNodeProps) {
       type="source"
       position={Position.Bottom}
       id={`${label}`}
-      className="bg-blue-500"
-      style={{ left: `${100 / (outputs.length + 1) * (index + 1)}%`, bottom: "-4px" }}
-    >  
-      <span className="text-[8px] pb-1 text-center text-blue-300 font-mono block" style={{
-        marginLeft: -50 / (outputs.length + 1), 
-        width: 100 / (outputs.length + 1),
-        marginTop: -16
-      }}>
+      style={handleOffset(index, outputs.length)}
+    >
+      <span className={flowNodeStyles.outputLabel}>
         {label}: {Number(currentResult).toFixed(3)}
       </span>
     </Handle>
   ));
 
   return (
-    <div className="bg-zinc-800 border border-zinc-700 rounded p-2 pt-3 pb-6 flex flex-col min-w-[200px] relative">
-      <div className="flex items-center justify-between mb-2">
-        <span className="truncate text-xs font-mono font-bold text-purple-300">🔀 IIF (If-Then-Else)</span>
+    <div className={`${flowNodeStyles.card} min-w-[220px]`}>
+      <div className={flowNodeStyles.header}>
+        <span className={flowNodeStyles.title}>IIF (If-Then-Else)</span>
         <button
-          className="ml-2 px-1 py-0.5 bg-red-900 hover:bg-red-800 text-red-100 rounded text-[10px] border border-red-800 transition-colors duration-150"
+          className={flowNodeStyles.deleteButton}
           onClick={() => flowControl.deleteNode(Number(id))}
           title={messages.flowNode.deleteNode}
         >
@@ -161,14 +153,14 @@ export default function IifFlowNode(props: CustomFlowNodeProps) {
       </div>
 
       {/* Current Result Display */}
-      <div className="bg-zinc-900 border border-zinc-600 rounded p-2 mb-2 text-center">
-        <div className="text-xs text-zinc-400 mb-1">Result</div>
-        <div className="text-lg font-bold text-purple-300">{Number(currentResult).toFixed(3)}</div>
+      <div className={`${flowNodeStyles.panel} text-center`}>
+        <div className={flowNodeStyles.label}>Result</div>
+        <div className={flowNodeStyles.primaryValue}>{Number(currentResult).toFixed(3)}</div>
       </div>
 
       {/* Operator Selection */}
       <div className="mb-2">
-        <label className="text-xs text-zinc-400 block mb-1">Operator:</label>
+        <label className={`${flowNodeStyles.label} block mb-1`}>Operator</label>
         <select
           value={operator}
           onChange={(e) => {
@@ -184,10 +176,10 @@ export default function IifFlowNode(props: CustomFlowNodeProps) {
           onClick={(e) => e.stopPropagation()}
           onFocus={(e) => e.stopPropagation()}
           onBlur={(e) => e.stopPropagation()}
-          className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-200 focus:border-purple-500 focus:outline-none"
+          className={`${flowNodeStyles.input} w-full py-1`}
         >
           {operators.map((op) => (
-            <option key={op.value} value={op.value} className="bg-zinc-900 text-zinc-200">
+            <option key={op.value} value={op.value} className="bg-zinc-900 text-zinc-100">
               {op.label}
             </option>
           ))}
@@ -195,19 +187,19 @@ export default function IifFlowNode(props: CustomFlowNodeProps) {
       </div>
 
       {/* Logic Display */}
-      <div className="bg-zinc-900 border border-zinc-600 rounded p-2 text-xs text-zinc-300 font-mono text-center">
+      <div className={`${flowNodeStyles.panel} text-xs text-zinc-200 font-mono text-center`}>
         <div className="mb-1">
           if ({aValue.toFixed(2)} {operator} {bValue.toFixed(2)}) 
           <span className={`ml-2 px-1 rounded text-[10px] font-bold ${
-            conditionResult ? 'bg-green-800 text-green-200' : 'bg-red-800 text-red-200'
+            conditionResult ? 'bg-zinc-100 text-zinc-900' : 'bg-zinc-700 text-zinc-200'
           }`}>
             {conditionResult ? 'TRUE' : 'FALSE'}
           </span>
         </div>
-        <div className={`${conditionResult ? 'text-green-400 font-bold' : 'text-zinc-500'}`}>
+        <div className={`${conditionResult ? 'text-zinc-50 font-semibold' : 'text-zinc-400'}`}>
           → trueValue ({trueValue.toFixed(2)})
         </div>
-        <div className={`${!conditionResult ? 'text-red-400 font-bold' : 'text-zinc-500'}`}>
+        <div className={`${!conditionResult ? 'text-zinc-50 font-semibold' : 'text-zinc-400'}`}>
           → falseValue ({falseValue.toFixed(2)})
         </div>
       </div>

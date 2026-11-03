@@ -7,6 +7,7 @@ import GearboxFlowNode from "./gearbox-flow-node";
 import IifFlowNode from "./iif-flow-node";
 import SmoothFlowNode from "./smooth-flow-node";
 import { ParamInput } from "./param-input";
+import { flowNodeStyles, handleOffset } from "./flow-node-styles";
 import { useI18n } from "@/i18n/provider";
 import { HUD_SIGNAL_FUNCTION, hudSignalName } from "./overlay/integration/control-display-binding";
 
@@ -28,7 +29,7 @@ export default function CustomFlowNode(props: NodeProps) {
   const { messages } = useI18n();
   if (!props || !props.data) {
     console.warn('CustomFlowNode: props oder props.data ist null/undefined', { props });
-    return <div className="bg-zinc-800 border border-zinc-700 rounded p-2">{messages.flowNode.loading}</div>;
+    return <div className={flowNodeStyles.card}>{messages.flowNode.loading}</div>;
   }
 
   const id = props.data.nodeId;
@@ -55,7 +56,7 @@ export default function CustomFlowNode(props: NodeProps) {
   function removeButton() {
     return (
     <button
-          className="ml-2 px-1 py-0.5 bg-red-900 hover:bg-red-800 text-red-100 rounded text-[10px] border border-red-800 transition-colors duration-150"
+          className={flowNodeStyles.deleteButton}
           onClick={() => flowControl.deleteNode(Number(id))}
           title={messages.flowNode.deleteNode}
         >
@@ -114,21 +115,20 @@ export default function CustomFlowNode(props: NodeProps) {
       type="target"
       position={Position.Top}
       id={`${label}`}
-      style={{ left: `${100 / (inputs.length + 1) * (index + 1)}%`, top: "-4px" }}
-      className="bg-green-500"
+      style={handleOffset(index, inputs.length)}
     >
-      <span className="text-[8px] pt-1 text-center text-green-300 font-mono block" style={{marginLeft: -50 / (inputs.length + 1), width: 100 / (inputs.length + 1)}}>{label}</span>
+      <span className={flowNodeStyles.inputLabel}>{label}</span>
     </Handle>
   ));
   const outputHandles = outputs.map((label, index) => (
       <Handle
+        key={`${label}`}
         type="source"
         position={Position.Bottom}
         id={`${label}`}
-        className="bg-blue-500"
-        style={{ left: `${100 / (outputs.length + 1) * (index + 1)}%`, bottom: "-4px" }}
-      >  
-        <span className="text-[8px] text-blue-300 font-mono block" style={{ marginTop: -24, marginLeft: -4 }}>
+        style={handleOffset(index, outputs.length)}
+      >
+        <span className={flowNodeStyles.outputLabel}>
           {label}: {outputValues[index] !== undefined ? Number(outputValues[index]).toFixed(3) : ''}
         </span>
       </Handle>
@@ -143,10 +143,10 @@ export default function CustomFlowNode(props: NodeProps) {
   }
 
   return (
-    <div className="bg-zinc-800 border border-zinc-700 rounded p-2 pt-3 pb-6 flex flex-col min-w-[140px] relative">
-      <div className="flex items-center justify-between">
-        <span className="truncate text-xs font-mono">{data?.label}</span>
-        <span className="truncate text-xs font-mono">
+    <div className={`${flowNodeStyles.card} min-w-[160px]`}>
+      <div className={params.length || hudSignalProblem ? flowNodeStyles.header : flowNodeStyles.headerBare}>
+        <span className={flowNodeStyles.title}>{data?.label}</span>
+        <span className={`${flowNodeStyles.headerValue} ml-auto`}>
           {Array.isArray(data?.latestValue)
             ? data.latestValue.map((v: number) => Number(v).toFixed(3)).join(", ")
             : Number(data?.latestValue ?? '').toFixed(3)}
@@ -154,8 +154,8 @@ export default function CustomFlowNode(props: NodeProps) {
         {removeButton()}
       </div>
       
-      {params && (
-        <div className="flex flex-col gap-1 mt-1">
+      {params.length > 0 && (
+        <div className="flex flex-col gap-1.5">
           {params.map((e) => (
             <ParamInput 
               key={e.name} 
@@ -167,7 +167,7 @@ export default function CustomFlowNode(props: NodeProps) {
         </div>
       )} 
 
-      {hudSignalProblem && <div className="mt-1 text-[10px] text-red-300">{hudSignalProblem}</div>}
+      {hudSignalProblem && <div className="mt-2 text-[11px] text-red-300">{hudSignalProblem}</div>}
 
       {inputHandles}
       {outputHandles}

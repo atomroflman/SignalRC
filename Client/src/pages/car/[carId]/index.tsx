@@ -131,7 +131,7 @@ export default function CarControlFlowPage() {
           )}
           {carIdNum && <SetupTemplatePanel carId={carIdNum} />}
         </div>
-        <div className="flex-1 bg-zinc-900 rounded-lg p-2 min-h-[600px]">
+        <div className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg p-2 min-h-[600px]">
           <ReactFlowProvider>
             <ReactFlow
               nodes={flowControl.nodes.map(controlNodeToReact)}
@@ -142,13 +142,13 @@ export default function CarControlFlowPage() {
               onConnect={onConnect}
               onEdgeClick={onEdgeClick}
               nodeTypes={nodeTypes}
-              connectionLineStyle={{ stroke: "#38bdf8", strokeWidth: 2 }}
+              connectionLineStyle={{ stroke: "#e4e4e7", strokeWidth: 2 }}
               connectionRadius={30}
               draggable
             >
-              <MiniMap />
+              <MiniMap nodeColor="#52525b" nodeStrokeColor="#a1a1aa" maskColor="rgba(9, 9, 11, 0.6)" />
               <Controls />
-              <Background />
+              <Background color="#3f3f46" gap={20} />
             </ReactFlow>
           </ReactFlowProvider>
         </div>

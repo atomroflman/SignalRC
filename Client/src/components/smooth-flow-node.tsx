@@ -5,11 +5,12 @@ import { useControlFlowStore } from "./control-flow-store";
 import { CustomFlowNodeProps } from "./custom-flow-node";
 import { ParamInputField } from "./param-input";
 import { useI18n } from "@/i18n/provider";
+import { flowNodeStyles, handleOffset } from "./flow-node-styles";
 
 export default function SmoothFlowNode(props: CustomFlowNodeProps) {
   const { messages } = useI18n();
   if (!props || !props.data) {
-    return <div className="bg-zinc-800 border border-zinc-700 rounded p-2">{messages.flowNode.loading}</div>;
+    return <div className={flowNodeStyles.card}>{messages.flowNode.loading}</div>;
   }
 
   const id = props.data.nodeId;
@@ -110,13 +111,9 @@ export default function SmoothFlowNode(props: CustomFlowNodeProps) {
       type="target"
       position={Position.Top}
       id={`${label}`}
-      className="bg-orange-500"
-      style={{ left: `${100 / (inputs.length + 1) * (index + 1)}%`, top: "-4px" }}
+      style={handleOffset(index, inputs.length)}
     >
-      <span className="text-[8px] pt-1 text-center text-orange-300 font-mono block" style={{
-        marginLeft: -50 / (inputs.length + 1), 
-        width: 100 / (inputs.length + 1)
-      }}>
+      <span className={flowNodeStyles.inputLabel}>
         {label}
       </span>
     </Handle>
@@ -128,25 +125,20 @@ export default function SmoothFlowNode(props: CustomFlowNodeProps) {
       type="source"
       position={Position.Bottom}
       id={`${label}`}
-      className="bg-blue-500"
-      style={{ left: `${100 / (outputs.length + 1) * (index + 1)}%`, bottom: "-4px" }}
-    >  
-      <span className="text-[8px] pb-1 text-center text-blue-300 font-mono block" style={{
-        marginLeft: -50 / (outputs.length + 1), 
-        width: 100 / (outputs.length + 1),
-        marginTop: -16
-      }}>
+      style={handleOffset(index, outputs.length)}
+    >
+      <span className={flowNodeStyles.outputLabel}>
         {label}: {Number(currentResult).toFixed(3)}
       </span>
     </Handle>
   ));
 
   return (
-    <div className="bg-zinc-800 border border-zinc-700 rounded p-2 pt-3 pb-6 flex flex-col min-w-[220px] relative">
-      <div className="flex items-center justify-between mb-2">
-        <span className="truncate text-xs font-mono font-bold text-cyan-300">🌊 Smooth</span>
+    <div className={`${flowNodeStyles.card} min-w-[230px]`}>
+      <div className={flowNodeStyles.header}>
+        <span className={flowNodeStyles.title}>Smooth</span>
         <button
-          className="ml-2 px-1 py-0.5 bg-red-900 hover:bg-red-800 text-red-100 rounded text-[10px] border border-red-800 transition-colors duration-150"
+          className={flowNodeStyles.deleteButton}
           onClick={(e) => {
             e.stopPropagation();
             flowControl.deleteNode(Number(id));
@@ -158,40 +150,40 @@ export default function SmoothFlowNode(props: CustomFlowNodeProps) {
       </div>
 
       {/* Current Values Display */}
-      <div className="bg-zinc-900 border border-zinc-600 rounded p-2 mb-2">
-        <div className="text-xs text-zinc-400 mb-1">Current → Target</div>
-        <div className="text-sm font-mono text-cyan-300">
+      <div className={flowNodeStyles.panel}>
+        <div className={flowNodeStyles.label}>Current → Target</div>
+        <div className={flowNodeStyles.secondaryValue}>
           {Number(currentValue).toFixed(3)} → {Number(inputValue).toFixed(3)}
         </div>
-        <div className="text-xs text-zinc-500 mt-1">
+        <div className={`${flowNodeStyles.hint} mt-0.5`}>
           Δ: {Number(Math.abs(inputValue - currentValue)).toFixed(3)}
         </div>
       </div>
 
       {/* Transition Time Display */}
-      <div className="bg-zinc-900 border border-zinc-600 rounded p-2 mb-2">
-        <div className="text-xs text-zinc-400 mb-1">Transition Time</div>
-        <div className="text-lg font-bold text-green-300">
+      <div className={flowNodeStyles.panel}>
+        <div className={flowNodeStyles.label}>Transition Time</div>
+        <div className={flowNodeStyles.primaryValue}>
           {formatTime(transitionTime)}
         </div>
-        <div className="text-xs text-zinc-500">
+        <div className={flowNodeStyles.hint}>
           ~{transitionFrames} frames @ {fps}fps
         </div>
       </div>
 
       {/* Max Duration Info */}
-      <div className="bg-zinc-900 border border-zinc-600 rounded p-2 mb-2">
-        <div className="text-xs text-zinc-400 mb-1">Max Duration (0→1)</div>
-        <div className="text-sm font-bold text-yellow-300">
+      <div className={flowNodeStyles.panel}>
+        <div className={flowNodeStyles.label}>Max Duration (0→1)</div>
+        <div className={flowNodeStyles.secondaryValue}>
           {formatTime(maxTransitionTime)}
         </div>
-        <div className="text-xs text-zinc-500">
+        <div className={flowNodeStyles.hint}>
           ~{maxTransitionFrames} frames @ {fps}fps
         </div>
       </div>
 
       {/* Parameters */}
-      <div className="space-y-2">
+      <div className="space-y-2 pt-2 border-t border-zinc-700">
         {params.map((param) => (
           <div key={param.name} className="flex flex-col gap-1"
             onMouseDown={(e) => e.stopPropagation()}
@@ -206,21 +198,21 @@ export default function SmoothFlowNode(props: CustomFlowNodeProps) {
             onKeyDown={(e) => e.stopPropagation()}
             onKeyUp={(e) => e.stopPropagation()}
           >
-            <label className="text-xs text-zinc-400">{param.name}:</label>
+            <label className="text-xs text-zinc-300">{param.name}</label>
             <ParamInputField
               name={param.name}
               value={param.value}
               onBlur={handleParamChange}
-              className="bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-200 focus:border-cyan-500 focus:outline-none"
+              className={`${flowNodeStyles.input} py-1 font-mono`}
               placeholder={definition.params.find(p => p.name === param.name)?.default?.toString()}
             />
             {param.name === 'speed' && (
-              <div className="text-[10px] text-zinc-500">
+              <div className={flowNodeStyles.hint}>
                 Range: 0.01 (slow) - 1.0 (instant)
               </div>
             )}
             {param.name === 'threshold' && (
-              <div className="text-[10px] text-zinc-500">
+              <div className={flowNodeStyles.hint}>
                 Precision: smaller = more precise
               </div>
             )}
