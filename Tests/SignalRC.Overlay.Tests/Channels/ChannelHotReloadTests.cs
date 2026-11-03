@@ -99,6 +99,47 @@ public class ChannelHotReloadTests
     }
 
     [Fact]
+    public void FailedBackgroundWriteIsReportedUntilAWriteSucceeds()
+    {
+        var (map, services) = Setup();
+        map.ControlChannels["steer"] = Control("Steering");
+        var factory = (FakeFactory)services.GetRequiredService<IModuleManagerFactory>();
+        var controls = services.GetRequiredService<ControlExecutionService>();
+        var health = services.GetRequiredService<ChannelHealthService>();
+        controls.Initialize();
+
+        // The servo write is not awaited by the control; Observe must still see it fail.
+        factory.Pwm.Fail = new IOException("i2c nack");
+        controls.SetControl("steer", 1);
+        var entry = Assert.Single(health.Snapshot().Entries);
+        Assert.Equal(ChannelHealthEntry.Error, entry.State);
+        Assert.Contains("i2c nack", entry.Message);
+
+        factory.Pwm.Fail = null;
+        controls.SetControl("steer", 0);
+        Assert.Empty(health.Snapshot().Entries);
+    }
+
+    [Fact]
+    public void BackgroundErrorOfAReplacedControlIsIgnored()
+    {
+        var (map, services) = Setup();
+        map.ControlChannels["steer"] = Control("Steering");
+        var factory = (FakeFactory)services.GetRequiredService<IModuleManagerFactory>();
+        var controls = services.GetRequiredService<ControlExecutionService>();
+        var health = services.GetRequiredService<ChannelHealthService>();
+        controls.Initialize();
+
+        var pending = new TaskCompletionSource();
+        factory.Pwm.Next = pending.Task;
+        controls.SetControl("steer", 1);
+        controls.Reload("steer");
+        pending.SetException(new IOException("late"));
+
+        Assert.Empty(health.Snapshot().Entries);
+    }
+
+    [Fact]
     public async Task TelemetryReaderErrorsAreReportedAndReloadRetries()
     {
         var (map, services) = Setup();
@@ -178,6 +219,7 @@ public class ChannelHotReloadTests
             .AddTransient<FlakyReader>()
             .AddTransient<LoggingOnlyControl>()
             .AddTransient<TrackThrottleControl>()
+            .AddTransient<SteeringControl>()
             .AddSingleton(sp => new TelemetryService(map, null!, sp.GetRequiredService<IConfiguration>(),
                 sp.GetRequiredService<ILogger<TelemetryService>>(), sp, new ServerCarConfigurationService(),
                 sp.GetRequiredService<ChannelHealthService>()))
@@ -189,10 +231,29 @@ public class ChannelHotReloadTests
     {
         public bool Broken { get; set; }
         public FakeInput Input { get; } = new();
+        public FakePwm Pwm { get; } = new();
         public IModuleManager Create(string name) => this;
 
         public T GetModule<T>(int address) where T : class, IModule =>
-            Broken ? throw new InvalidOperationException("no bus") : (T)(object)Input;
+            Broken ? throw new InvalidOperationException("no bus")
+            : typeof(T) == typeof(IPwmModule) ? (T)(object)Pwm : (T)(object)Input;
+    }
+
+    /// <summary>Asynchronous like the Raspberry Pi pins: errors only show in the returned task.</summary>
+    private sealed class FakePwm : IPwmModule
+    {
+        public Exception? Fail { get; set; }
+        public Task? Next { get; set; }
+
+        public Task SetServoPosition(float position)
+        {
+            if (Next is { } next) { Next = null; return next; }
+            return Fail != null ? Task.FromException(Fail) : Task.CompletedTask;
+        }
+
+        public Task SetPwmCyclePercentage(float value) => SetServoPosition(value);
+        public Task SetPulseWidthMilliseconds(float pulseWidthMs) => SetServoPosition(pulseWidthMs);
+        public Task<float> GetPwmValue() => Task.FromResult(0f);
     }
 
     private sealed class FakeInput : ITrackDriveInput

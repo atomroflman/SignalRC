@@ -41,7 +41,7 @@ public class PwmLight : ControlTypeBase
         Logger.LogDebug($"PwmLight rec: {target}");
         _fadeCts?.Cancel();
         _fadeCts = new CancellationTokenSource();
-        _ = FadeToAsync(target, _fadeCts.Token);
+        Observe(FadeToAsync(target, _fadeCts.Token));
     }
 
     private async Task FadeToAsync(float target, CancellationToken token)

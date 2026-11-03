@@ -26,7 +26,7 @@ public class PwmBlinker : PwmLight
         if (newValue > 0)
         {
             _blinkCts = new CancellationTokenSource();
-            _ = BlinkAsync(_blinkCts.Token);
+            Observe(BlinkAsync(_blinkCts.Token));
         }
         else
         {

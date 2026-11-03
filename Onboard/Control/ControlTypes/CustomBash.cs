@@ -33,7 +33,7 @@ public class CustomBash : ControlTypeBase
         {
             if (!string.IsNullOrWhiteSpace(Command))
             {
-                _ = ExecuteCommandAsync(Command);
+                Observe(ExecuteCommandAsync(Command));
             }
             else
             {
@@ -65,10 +65,7 @@ public class CustomBash : ControlTypeBase
 
             using var proc = Process.Start(psi);
             if (proc == null)
-            {
-                _logger?.LogError("Failed to start process for command: {Command}", command);
-                return;
-            }
+                throw new InvalidOperationException($"Failed to start process for command: {command}");
 
             var stdoutTask = proc.StandardOutput.ReadToEndAsync();
             var stderrTask = proc.StandardError.ReadToEndAsync();
@@ -82,10 +79,15 @@ public class CustomBash : ControlTypeBase
                 _logger?.LogInformation("Command stdout: {Output}", stdout.Trim());
             if (!string.IsNullOrWhiteSpace(stderr))
                 _logger?.LogWarning("Command stderr: {Error}", stderr.Trim());
+            // Observed by the caller: a failing command shows at the channel.
+            if (proc.ExitCode != 0)
+                throw new InvalidOperationException($"Command exited with {proc.ExitCode}" +
+                    (string.IsNullOrWhiteSpace(stderr) ? "" : $": {stderr.Trim()}"));
         }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Exception while executing command");
+            throw;
         }
     }
 

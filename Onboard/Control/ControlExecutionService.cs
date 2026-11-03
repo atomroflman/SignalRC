@@ -31,6 +31,8 @@ public class ControlExecutionService
     // Option warnings from the last build, restored once a runtime error clears.
     private readonly Dictionary<string, List<string>> _buildProblems = new();
     private readonly HashSet<string> _runtimeFailed = new();
+    // Channels whose last observed background task (fade, PWM write, command) failed.
+    private readonly HashSet<string> _backgroundFailed = new();
     private readonly ChannelMap _channelMap;
     private readonly ChannelHealthService _health;
     private bool _initialized;
@@ -104,6 +106,7 @@ public class ControlExecutionService
         var channel = _channelMap.ControlChannels[name];
         var problems = new List<string>();
         _runtimeFailed.Remove(name);
+        _backgroundFailed.Remove(name);
         _buildProblems.Remove(name);
         ControlTypeBase? baseControl = null;
         try
@@ -128,6 +131,9 @@ public class ControlExecutionService
             baseControl.Name = name;
             baseControl.Options = channel.Options;
             problems.AddRange(ChannelOptionBinder.Apply(baseControl, channel.Options, Logger, $"channel {name}"));
+            var inner = baseControl;
+            baseControl.BackgroundFailed = ex => OnBackgroundFailed(name, inner, ex);
+            baseControl.BackgroundSucceeded = () => OnBackgroundSucceeded(name, inner);
             baseControl.TestDisabled = channel.TestDisabled;
             baseControl.Address = channel.Address;
             IControlType control = baseControl;
@@ -135,15 +141,20 @@ public class ControlExecutionService
             {
                 control = new ResendRequiredContolDecorator(baseControl, TimeSpan.FromMilliseconds(resendMs), TimeSpan.FromMilliseconds(resendMs) / 3);
             }
-            control.Initialize();
+            // Registered before Initialize: a write it starts in the background must
+            // find its control current when it fails.
             _controls.Add(name, new ControlEntry(control, baseControl));
             _buildProblems[name] = problems;
             _health.Problems(ChannelTypeSchema.Control, name, problems);
+            control.Initialize();
             Logger.LogInformation($"Initialized Channel: {name} - {channel.ControlType}@{pinManagerName}:{channel.Address}");
         }
         catch (Exception ex)
         {
             Logger.LogError(ex, "Control channel {Channel} could not be initialized.", name);
+            if (_controls.Remove(name, out var built))
+                (built.Control as IDisposable)?.Dispose();
+            _buildProblems.Remove(name);
             (baseControl as IDisposable)?.Dispose();
             _health.Error(ChannelTypeSchema.Control, name, ex);
         }
@@ -228,7 +239,7 @@ public class ControlExecutionService
             {
                 control.OnControlRecived(value);
                 if (_runtimeFailed.Remove(channel))
-                    _health.Problems(ChannelTypeSchema.Control, channel, _buildProblems.GetValueOrDefault(channel) ?? []);
+                    RestoreHealth(channel);
             }
             catch (Exception ex)
             {
@@ -236,6 +247,38 @@ public class ControlExecutionService
                 _health.Error(ChannelTypeSchema.Control, channel, ex);
             }
         }
+    }
+
+    // Background tasks may finish after their control was replaced: only the current one counts.
+    private bool IsCurrent(string name, ControlTypeBase inner) =>
+        _controls.TryGetValue(name, out var entry) && ReferenceEquals(entry.Inner, inner);
+
+    private void OnBackgroundFailed(string name, ControlTypeBase inner, Exception ex)
+    {
+        lock (_lock)
+        {
+            if (!IsCurrent(name, inner)) return;
+            if (_backgroundFailed.Add(name))
+                Logger.LogError(ex, "Background task of control channel {Channel} failed.", name);
+            _health.Error(ChannelTypeSchema.Control, name, ex);
+        }
+    }
+
+    private void OnBackgroundSucceeded(string name, ControlTypeBase inner)
+    {
+        lock (_lock)
+        {
+            if (_backgroundFailed.Count == 0 || !IsCurrent(name, inner)) return;
+            if (_backgroundFailed.Remove(name))
+                RestoreHealth(name);
+        }
+    }
+
+    /// <summary>Back to the build's option warnings once no runtime or background error is left.</summary>
+    private void RestoreHealth(string name)
+    {
+        if (_runtimeFailed.Contains(name) || _backgroundFailed.Contains(name)) return;
+        _health.Problems(ChannelTypeSchema.Control, name, _buildProblems.GetValueOrDefault(name) ?? []);
     }
 
     public void ReleaseControl()
