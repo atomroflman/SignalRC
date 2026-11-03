@@ -188,6 +188,8 @@ public class OnboardUpdateService : IOnboardUpdateClient
     // Browser broadcast; nothing to do on the onboard.
     public Task OnboardUpdateStatusChanged(int carId, OnboardUpdateStatus status) => Task.CompletedTask;
 
+    public Task OnboardVersionChanged(int carId) => Task.CompletedTask;
+
     /// <summary>Gathers the inputs and decides; null when the server's manifest could not be read.</summary>
     private async Task<UpdateVerdict?> EvaluateAsync()
     {

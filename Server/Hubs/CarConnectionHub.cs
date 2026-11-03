@@ -162,17 +162,19 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
         Logger.LogInformation("Test Invoked");
     }
 
-    public Task ReportOnboardVersion(string branch, string? commit)
+    public async Task ReportOnboardVersion(string branch, string? commit)
     {
         var carId = _connectionStore.FirstOrDefault(kv => kv.Value.ConnectionId == Context.ConnectionId).Key;
         if (carId == null)
         {
             Logger.LogWarning("ReportOnboardVersion received without an active car connection");
-            return Task.CompletedTask;
+            return;
         }
         _connectionStore.TrySetOnboardVersion(carId, branch, commit);
         Logger.LogInformation("Car {CarId} reports onboard version {Branch}@{Commit}", carId, branch, commit);
-        return Task.CompletedTask;
+        // Browsers reload version-sync right away instead of waiting for their poll.
+        if (int.TryParse(carId, out var id))
+            await Clients.All.OnboardVersionChanged(id);
     }
 
     public Task ReportChannelHealth(ChannelHealthReport report)
@@ -224,6 +226,9 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
                 DriverId = connectionInfo?.DriverId,
                 DriverName = connectionInfo?.DriverName
             });
+            // The onboard version is forgotten with the connection.
+            if (int.TryParse(carId, out var id))
+                await Clients.All.OnboardVersionChanged(id);
         }
 
         await CleanupAudioForConnectionAsync(Context.ConnectionId);

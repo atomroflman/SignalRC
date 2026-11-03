@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useI18n } from "@/i18n/provider";
+import { useCarUiStore } from "./car-ui-store";
 import { useVersionBannerReopen, type VersionSync } from "./version-banner";
 
 // States of OnboardUpdateStatus in which the update runs (Docs/OnboardAutoUpdate.md).
@@ -20,6 +21,12 @@ export default function VersionBadge({ carId }: { carId: number }) {
   const t = messages.versionBanner;
   const [data, setData] = useState<VersionSync | null>(null);
   const reopenBanner = useVersionBannerReopen((s) => s.reopen);
+  // Pushed by the server when the onboard reports its version; the poll is only the fallback.
+  const versionEpoch = useCarUiStore((s) => s.versionEpoch);
+  const connectCarUi = useCarUiStore((s) => s.connect);
+  useEffect(() => { void connectCarUi(); }, [connectCarUi]);
+
+  useEffect(() => setData(null), [carId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -33,14 +40,13 @@ export default function VersionBadge({ carId }: { carId: number }) {
         // keep the last good state
       }
     };
-    setData(null);
     void load();
     const id = setInterval(load, 30_000);
     return () => {
       cancelled = true;
       clearInterval(id);
     };
-  }, [carId]);
+  }, [carId, versionEpoch]);
 
   if (!data) return null;
 

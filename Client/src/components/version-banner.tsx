@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { create } from "zustand";
 import { useI18n } from "@/i18n/provider";
+import { useCarUiStore } from "./car-ui-store";
 import { useControlFlowStore } from "./control-flow-store";
 
 // Lets the version badge bring a dismissed banner back: every request counts up.
@@ -61,6 +62,10 @@ export default function VersionBanner({ carId }: { carId: number }) {
   const sessionCarId = useControlFlowStore((s) => s.carId);
   const onboardUpdating = useControlFlowStore((s) => s.onboardUpdating);
   const setOnboardUpdating = useControlFlowStore((s) => s.setOnboardUpdating);
+  // Pushed by the server when the onboard reports its version; the poll is only the fallback.
+  const versionEpoch = useCarUiStore((s) => s.versionEpoch);
+  const connectCarUi = useCarUiStore((s) => s.connect);
+  useEffect(() => { void connectCarUi(); }, [connectCarUi]);
 
   useEffect(() => {
     let cancelled = false;
@@ -85,7 +90,7 @@ export default function VersionBanner({ carId }: { carId: number }) {
       cancelled = true;
       clearInterval(id);
     };
-  }, [carId]);
+  }, [carId, versionEpoch]);
 
   // Live status from the onboard, pushed by the server to every browser.
   useEffect(() => {
