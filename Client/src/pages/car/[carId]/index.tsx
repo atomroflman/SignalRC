@@ -9,6 +9,7 @@ import "reactflow/dist/style.css";
 import { ControlFlowEdge, ControlFlowNode, useControlFlowStore } from "@/components/control-flow-store";
 import FunctionNodesView from "@/components/function-nodes-view";
 import CustomFlowNode from "@/components/custom-flow-node";
+import FlowEdge from "@/components/flow-edge";
 import ConfigGuard from "@/components/config-guard";
 import UpdateControl from "@/components/update-control";
 import LanguageSwitcher from "@/components/language-switcher";
@@ -16,6 +17,7 @@ import SetupTemplatePanel from "@/components/setup-template-panel";
 import { useI18n } from "@/i18n/provider";
 
 const nodeTypes = { custom: CustomFlowNode };
+const edgeTypes = { flow: FlowEdge };
 
 export default function CarControlFlowPage() {
   const { messages } = useI18n();
@@ -23,6 +25,8 @@ export default function CarControlFlowPage() {
   const flowControl = useControlFlowStore();
   const carId = router.query.carId as string;
   const carIdNum = carId ? parseInt(carId) : undefined;
+  // Clicking a connection selects it; its trash button or the Delete key removes it.
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
 
   function controlNodeToReact(input: ControlFlowNode): Node<any, string | undefined> {
     return {
@@ -41,8 +45,9 @@ export default function CarControlFlowPage() {
       id: input.id.toString(),
       source: input.source.toString(),
       target: input.target.toString(),
-      type: "smoothstep",
+      type: "flow",
       animated: true,
+      selected: input.id.toString() === selectedEdgeId,
       sourceHandle: input.sourcePort,
       targetHandle: input.targetPort,
     };
@@ -76,7 +81,12 @@ export default function CarControlFlowPage() {
   }, [flowControl]);
 
   const onEdgeClick = useCallback((event: any, edge: Edge<any>) => {
-    flowControl.removeEdge(Number(edge.id));
+    setSelectedEdgeId(id => id === edge.id ? null : edge.id);
+  }, []);
+
+  const onEdgesDelete: OnEdgesDelete = useCallback((edges) => {
+    edges.forEach(edge => flowControl.removeEdge(Number(edge.id)));
+    setSelectedEdgeId(null);
   }, [flowControl]);
 
   const onNodeDragStop: NodeDragHandler = async (event, node) => {
@@ -141,6 +151,10 @@ export default function CarControlFlowPage() {
               onNodeDragStop={onNodeDragStop}
               onConnect={onConnect}
               onEdgeClick={onEdgeClick}
+              onEdgesDelete={onEdgesDelete}
+              onPaneClick={() => setSelectedEdgeId(null)}
+              edgeTypes={edgeTypes}
+              deleteKeyCode={["Delete", "Backspace"]}
               nodeTypes={nodeTypes}
               connectionLineStyle={{ stroke: "#e4e4e7", strokeWidth: 2 }}
               connectionRadius={30}

@@ -360,6 +360,7 @@ const deMessages = {
     deleteNode: 'Knoten löschen',
     functionNotFound: 'Funktion nicht gefunden.',
     info: 'Beschreibung',
+    deleteEdge: 'Verbindung löschen',
     example: 'Beispiel',
   },
   updateControl: {
@@ -785,6 +786,7 @@ const enMessages: Messages = {
     deleteNode: 'Delete node',
     functionNotFound: 'Function not found.',
     info: 'Description',
+    deleteEdge: 'Delete connection',
     example: 'Example',
   },
   updateControl: {

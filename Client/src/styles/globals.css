@@ -52,10 +52,6 @@ textarea {
   stroke-width: 1.5;
 }
 
-.react-flow .react-flow__edge:hover .react-flow__edge-path {
-  stroke: #e4e4e7;
-}
-
 .react-flow .react-flow__controls {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
@@ -95,4 +91,25 @@ textarea {
 /* Flow editor: a hovered node (info popover) is drawn above its neighbours. */
 .react-flow .react-flow__node:hover {
   z-index: 1000 !important;
+}
+
+/* Flow editor: plain arrow on the canvas (grab only while panning), so moving
+   onto a connection is a single visible change; hovered and selected
+   connections are thicker and brighter. */
+.react-flow .react-flow__pane {
+  cursor: default;
+}
+
+.react-flow .react-flow__pane.dragging {
+  cursor: grabbing;
+}
+
+.react-flow .react-flow__edge:hover .react-flow__edge-path {
+  stroke: #e4e4e7;
+  stroke-width: 2.5;
+}
+
+.react-flow .react-flow__edge.selected .react-flow__edge-path {
+  stroke: #fafafa;
+  stroke-width: 3;
 }
