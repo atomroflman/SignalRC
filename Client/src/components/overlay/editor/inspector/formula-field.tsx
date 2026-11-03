@@ -164,20 +164,22 @@ export interface ChannelPickerProps {
   signals?: Record<string, SignalDefinition>;
   m: DynamicsMessages;
   onPick(expr: string): void;
+  /** Declares a flow signal in the document before it is picked; without it flow signals are not offered. */
+  onDeclareSignal?(name: string): void;
 }
 
 /** Simple binding without a hand-written formula: pick a source, get `tel("…")`. */
-export function ChannelPicker({ expr, expected, dir, signals, m, onPick }: ChannelPickerProps) {
-  const options = bindableSources(dir, signals, expected);
+export function ChannelPicker({ expr, expected, dir, signals, m, onPick, onDeclareSignal }: ChannelPickerProps) {
+  const options = bindableSources(dir, signals, expected).filter((o) => !o.undeclared || onDeclareSignal);
   const current = simpleSource(expr);
   const key = current ? `${current.kind}:${current.name}` : "";
-  const group = (kind: "tel" | "out" | "sig", label: string) => {
-    const list = options.filter((o) => o.kind === kind);
+  const group = (kind: "tel" | "out" | "sig", label: string, undeclared = false) => {
+    const list = options.filter((o) => o.kind === kind && !!o.undeclared === undeclared);
     if (list.length === 0) return null;
     return (
       <optgroup label={label}>
         {list.map((o) => (
-          <option key={`${o.kind}:${o.name}`} value={`${o.kind}:${o.name}`}>
+          <option key={`${o.kind}:${o.name}`} value={`${undeclared ? "flow" : o.kind}:${o.name}`}>
             {o.name}{o.unit ? ` [${o.unit}]` : ""}{o.decimals !== undefined && o.decimals !== null ? ` · ${o.decimals}` : ""}
           </option>
         ))}
@@ -192,7 +194,12 @@ export function ChannelPicker({ expr, expected, dir, signals, m, onPick }: Chann
       onChange={(e) => {
         const v = e.target.value;
         const i = v.indexOf(":");
-        if (i > 0) onPick(sourceExpr(v.slice(0, i) as "tel" | "out" | "sig", v.slice(i + 1)));
+        if (i <= 0) return;
+        const kind = v.slice(0, i);
+        const name = v.slice(i + 1);
+        // A flow signal is declared in the document first, then bound like any signal.
+        if (kind === "flow") onDeclareSignal?.(name);
+        onPick(sourceExpr(kind === "flow" ? "sig" : kind as "tel" | "out" | "sig", name));
       }}
     >
       <option value="">{options.length ? m.pickChannel : m.noChannels}</option>
@@ -200,6 +207,7 @@ export function ChannelPicker({ expr, expected, dir, signals, m, onPick }: Chann
       {group("tel", m.telemetry)}
       {group("out", m.outputs)}
       {group("sig", m.signals)}
+      {onDeclareSignal && group("sig", m.flowSignals, true)}
     </select>
   );
 }

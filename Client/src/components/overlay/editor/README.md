@@ -124,6 +124,12 @@ sind Befehle des Kerns (`setProperty`, `resetOverride`, `setAttribute`,
   zum Ergebnistyp (`bindableSources`). `valueText` übernimmt Einheit und
   Dezimalstellen wie die Laufzeit aus der ersten Abhängigkeit
   (`valueTextSourceDefaults`); Überschreiben über `unit`/`decimals`.
+- Flow-Signale: `OverlayEditor.flowSignals` sind die Namen der HUD-Signal-Knoten
+  im Flow des Fahrers (`integration/flow-signals.ts`). Noch nicht im Dokument
+  angemeldete Namen bietet der `ChannelPicker` in einer eigenen Gruppe an; die
+  Auswahl meldet das Signal per `setSignals` an (`declareSignal`, Label = Name)
+  und bindet es. `SignalsPanel` pflegt `signals` (Label, Einheit,
+  Nachkommastellen, Entfernen) und zeigt, ob der Name im Flow vorkommt.
 - Formelfeld: Live-Analyse des getippten Textes über AP06 `analyze` (eine
   Diagnose mit Offset), Übernahme bei Blur/Enter, Entwurf darf unvollständig
   sein. Live-Wert über AP06 `evaluate` gegen die Editor-Quelle (`source` des

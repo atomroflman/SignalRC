@@ -40,6 +40,8 @@ export interface OverlayEditorProps {
   source?: RendererSource;
   /** Channels with unit/decimals for bindings (AP10); default: the source provider's channels or resolveContext.sources. */
   channels?: ChannelDirectory;
+  /** Signal names of the driver's HUD-Signal flow nodes (D37), offered for bindings. */
+  flowSignals?: string[];
   packageSource?: () => PackageSource;
   /** Gives the host (AP10–AP13) access to the store and the save controller. */
   onReady?: (api: { store: EditorStore; save: SaveController }) => void;
@@ -70,10 +72,13 @@ export function OverlayEditor(props: OverlayEditorProps) {
     return source.subscribe(() => setChannelCount(source.channels!().length));
   }, [props.channels, source]);
   const channels = useMemo(
-    () => props.channels ?? channelDirectory({ channels: source?.channels?.(), sources: props.resolveContext?.sources }),
+    () => ({
+      ...(props.channels ?? channelDirectory({ channels: source?.channels?.(), sources: props.resolveContext?.sources })),
+      ...(props.flowSignals ? { flowSignals: props.flowSignals } : {}),
+    }),
     // channelCount re-reads the provider after its metadata arrived.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [props.channels, source, props.resolveContext, channelCount],
+    [props.channels, source, props.resolveContext, channelCount, props.flowSignals],
   );
 
   useEffect(() => {

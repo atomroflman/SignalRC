@@ -7,7 +7,9 @@ type Json = unknown;
 type Report = (path: string, message: string) => void;
 
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
-const SIGNAL = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
+/** Name of a document signal, sig("name") (D36). */
+export const SIGNAL_NAME = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
+const SIGNAL = SIGNAL_NAME;
 const PROP = /^[A-Za-z][A-Za-z0-9]{0,39}$/;
 const ASSET = /^sha256-[0-9a-f]{64}$/;
 const SHAPES = ["rect", "ellipse", "line", "arc", "text", "valueText", "linearGauge", "radialGauge"];

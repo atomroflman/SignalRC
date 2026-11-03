@@ -1,6 +1,7 @@
 // AP10 – channel directory for the binding editor: telemetry channels with
 // type/unit/decimals (AP05 metadata, GET api/cars/{carId}/overlay/sources),
 // output names and the document's signals.
+import { SIGNAL_NAME } from "../../document/schema";
 import type { SignalDefinition, SourceCatalog } from "../../document/types";
 import type { AnalysisEnv } from "../../expression";
 import { parseChannelMetadata } from "../../sources/provider";
@@ -11,6 +12,8 @@ export interface ChannelDirectory {
   telemetry?: ChannelMetadata[];
   /** Output names for out(); undefined = not known here. */
   outputs?: string[];
+  /** Signal names of the driver's HUD-Signal flow nodes (D37); offered for binding before the document declares them. */
+  flowSignals?: string[];
 }
 
 export interface ChannelDirectoryInput {
@@ -75,6 +78,18 @@ export interface BindableSource {
   unit?: string | null;
   decimals?: number | null;
   dataType?: string;
+  /** A flow signal the document does not declare yet; picking it declares it. */
+  undeclared?: boolean;
+}
+
+/** The document's signals with `name` declared (label = name) if it is missing. */
+export function declareSignal(signals: Record<string, SignalDefinition> | undefined, name: string): Record<string, SignalDefinition> {
+  return signals?.[name] ? signals : { ...signals, [name]: { label: name } };
+}
+
+/** Flow signals that can become document signals: valid names not declared yet. */
+export function undeclaredFlowSignals(dir: ChannelDirectory, signals: Record<string, SignalDefinition> | undefined): string[] {
+  return [...new Set(dir.flowSignals ?? [])].filter((n) => SIGNAL_NAME.test(n) && !signals?.[n]).sort();
 }
 
 /**
@@ -93,6 +108,7 @@ export function bindableSources(dir: ChannelDirectory, signals: Record<string, S
     for (const [name, s] of Object.entries(signals ?? {}).sort(([a], [b]) => (a < b ? -1 : 1))) {
       out.push({ kind: "sig", name, unit: s.unit, decimals: s.decimals });
     }
+    for (const name of undeclaredFlowSignals(dir, signals)) out.push({ kind: "sig", name, undeclared: true });
   }
   return out;
 }

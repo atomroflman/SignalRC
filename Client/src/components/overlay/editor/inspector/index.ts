@@ -6,4 +6,6 @@ export { dynamicsMessages } from "./messages";
 export type { DynamicsMessages } from "./messages";
 export { FormulaField, ChannelPicker, LiveBadge, useLiveValue } from "./formula-field";
 export { PropertyInspector } from "./property-inspector";
+export { SignalsPanel } from "./signals-panel";
+export type { SignalsPanelProps } from "./signals-panel";
 export type { PropertyInspectorProps } from "./property-inspector";

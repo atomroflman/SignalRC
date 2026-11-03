@@ -23,6 +23,20 @@ export type DynamicsMessages = {
   telemetry: string;
   outputs: string;
   signals: string;
+  flowSignals: string;
+  signalPanel: string;
+  signalPanelHint: string;
+  signalName: string;
+  signalLabel: string;
+  signalUnit: string;
+  signalDecimals: string;
+  addSignal: string;
+  removeSignal: string;
+  signalInFlow: string;
+  signalNotInFlow: string;
+  signalNameInvalid: string;
+  signalExists: string;
+  addFromFlow: string;
   formula: string;
   editFormula: string;
   simpleBinding: string;
@@ -113,6 +127,20 @@ const de: DynamicsMessages = {
   telemetry: "Telemetrie",
   outputs: "Steuerausgänge",
   signals: "Signale",
+  flowSignals: "Signale aus dem Flow (neu)",
+  signalPanel: "HUD-Signale",
+  signalPanelHint: "Werte aus HUD-Signal-Knoten im Flow, in Formeln als sig(\"Name\")",
+  signalName: "Name",
+  signalLabel: "Bezeichnung",
+  signalUnit: "Einheit",
+  signalDecimals: "Nachkommastellen",
+  addSignal: "Signal anlegen",
+  removeSignal: "Signal entfernen",
+  signalInFlow: "im Flow vorhanden",
+  signalNotInFlow: "kein HUD-Signal-Knoten mit diesem Namen im Flow",
+  signalNameInvalid: "Name: Buchstabe am Anfang, dann Buchstaben, Ziffern oder _ (max. 64)",
+  signalExists: "Signal existiert bereits",
+  addFromFlow: "Aus dem Flow übernehmen",
   formula: "Formel",
   editFormula: "Als Formel bearbeiten",
   simpleBinding: "Einfache Kanalbindung",
@@ -202,6 +230,20 @@ const en: DynamicsMessages = {
   telemetry: "Telemetry",
   outputs: "Control outputs",
   signals: "Signals",
+  flowSignals: "Signals from the flow (new)",
+  signalPanel: "HUD signals",
+  signalPanelHint: "Values of HUD-Signal nodes in the flow, used in formulas as sig(\"name\")",
+  signalName: "Name",
+  signalLabel: "Label",
+  signalUnit: "Unit",
+  signalDecimals: "Decimals",
+  addSignal: "Add signal",
+  removeSignal: "Remove signal",
+  signalInFlow: "present in the flow",
+  signalNotInFlow: "no HUD-Signal node with this name in the flow",
+  signalNameInvalid: "Name: a letter first, then letters, digits or _ (max. 64)",
+  signalExists: "Signal already exists",
+  addFromFlow: "Take over from the flow",
   formula: "Formula",
   editFormula: "Edit as formula",
   simpleBinding: "Simple channel binding",

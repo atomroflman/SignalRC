@@ -12,7 +12,7 @@ import type { RendererSource } from "../../runtime/controller";
 import type { Locale } from "../../runtime/types";
 import { useEditorState } from "../canvas/hooks";
 import type { EditorStore } from "../core/store";
-import { analysisEnv, channelInfo, type ChannelDirectory } from "./channels";
+import { analysisEnv, channelInfo, declareSignal, type ChannelDirectory } from "./channels";
 import { ChannelPicker, FormulaField, LiveBadge, btn, input, useLiveValue } from "./formula-field";
 import { checkFormula, simpleSource } from "./formula";
 import { dynamicsMessages, type DynamicsMessages } from "./messages";
@@ -272,13 +272,14 @@ function BindingEditor({ row, ctx }: { row: PropertyRow; ctx: RowContext }) {
     if (cmd) store.dispatch(cmd, { mergeKey: mergeKey(row, "expr") });
   };
   const tau = row.binding?.smoothing?.timeConstantS;
-  const hasChannels = !!ctx.dir.telemetry || !!ctx.dir.outputs || Object.keys(ctx.signals).length > 0;
+  const hasChannels = !!ctx.dir.telemetry || !!ctx.dir.outputs || Object.keys(ctx.signals).length > 0 || !!ctx.dir.flowSignals?.length;
+  const onDeclareSignal = (name: string) => store.dispatch({ type: "setSignals", signals: declareSignal(store.document.signals, name) });
   const showFormula = formula || !hasChannels;
   return (
     <div className="flex flex-col gap-0.5">
       {!showFormula && (
         <div className="flex items-center gap-1">
-          <ChannelPicker expr={expr} expected={row.def.kind} dir={ctx.dir} signals={ctx.signals} m={m} onPick={commit} />
+          <ChannelPicker expr={expr} expected={row.def.kind} dir={ctx.dir} signals={ctx.signals} m={m} onPick={commit} onDeclareSignal={onDeclareSignal} />
           <button className={btn} title={m.editFormula} onClick={() => setFormula(true)}>ƒ</button>
         </div>
       )}

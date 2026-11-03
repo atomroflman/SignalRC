@@ -6,7 +6,7 @@ import type { OverlayDocument } from "../../document/types";
 import { FakeValueSource } from "../../sources/testing/fake-value-source";
 import { readContractJson } from "../../testing/fixtures";
 import { EditorStore } from "../core/store";
-import { analysisEnv, bindableSources, channelDirectory, parseSourcesResponse, sourceCatalog } from "./channels";
+import { analysisEnv, bindableSources, channelDirectory, declareSignal, parseSourcesResponse, sourceCatalog, undeclaredFlowSignals } from "./channels";
 import { checkFormula, liveValue, simpleSource, sourceExpr } from "./formula";
 import {
   applyMode, baseLiteral, bindingCommand, exprCommand, inspectElement, inspectProperty, lidarChannels, modeCommands, parseLiteral,
@@ -310,5 +310,30 @@ describe("channel directory", () => {
     expect(bindableSources(dir, sig, "length").map((s) => `${s.kind}:${s.name}`)).toEqual(["tel:batteryVoltage", "tel:gear", "tel:odoSpeed", "tel:speed", "out:steering", "sig:steeringRaw"]);
     expect(bindableSources(dir, sig, "bool")).toEqual([]);
     expect(bindableSources(dir, sig, "any").map((s) => s.name)).not.toContain("lidarGrid");
+  });
+
+  it("offers undeclared flow signals after the declared ones and declares them on demand", () => {
+    const sig = { steeringRaw: { label: "L", unit: "%" } };
+    const withFlow = { ...dir, flowSignals: ["throttle", "steeringRaw", "bad-name", "throttle"] };
+    expect(undeclaredFlowSignals(withFlow, sig)).toEqual(["throttle"]);
+    const sigs = bindableSources(withFlow, sig, "number").filter((s) => s.kind === "sig");
+    expect(sigs).toEqual([
+      { kind: "sig", name: "steeringRaw", unit: "%", decimals: undefined },
+      { kind: "sig", name: "throttle", undeclared: true },
+    ]);
+    expect(bindableSources(withFlow, sig, "bool")).toEqual([]);
+    expect(declareSignal(sig, "throttle")).toEqual({ steeringRaw: { label: "L", unit: "%" }, throttle: { label: "throttle" } });
+    expect(declareSignal(sig, "steeringRaw")).toBe(sig);
+    expect(declareSignal(undefined, "x")).toEqual({ x: { label: "x" } });
+  });
+
+  it("a declared flow signal is valid in formulas and undoable", () => {
+    const store = storeOf();
+    const before = store.document.signals;
+    store.dispatch({ type: "setSignals", signals: declareSignal(before, "throttle") });
+    expect(store.document.signals?.throttle).toEqual({ label: "throttle" });
+    expect(checkFormula('sig("throttle")', analysisEnv(dir, store.document.signals), "number").diagnostic).toBeUndefined();
+    store.undo();
+    expect(store.document.signals).toEqual(before);
   });
 });

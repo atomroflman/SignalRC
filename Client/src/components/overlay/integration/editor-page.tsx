@@ -10,6 +10,8 @@ import VideoStream from "../../video-stream";
 import { useI18n } from "@/i18n/provider";
 import type { VideoStreamInfo } from "@/types/video-stream";
 import { useEditorState } from "../editor/canvas/hooks";
+import { dynamicsMessages } from "../editor/inspector/messages";
+import { SignalsPanel } from "../editor/inspector/signals-panel";
 import type { StreamInfo } from "../editor/canvas/variant-bar";
 import type { EditorStore } from "../editor/core/store";
 import type { SaveController } from "../editor/persistence/autosave";
@@ -24,6 +26,7 @@ import type { CarSourceProvider, HubLike } from "../sources";
 import { sharedSourceHub } from "../sources";
 import { TemplateInserter } from "../templates/template-inserter";
 import { EditorAssetLoader, editorResolveContext, previewStream, withDraftAssetMetadata } from "./editor-assets";
+import { loadFlowSignalNames } from "./flow-signals";
 import {
   controlReason, endLiveTest, installEditorKeyboardGuard, pauseOnEditorOpen, releaseForLiveTest, sendState,
   type MeLike, type PauseStoreLike,
@@ -201,6 +204,18 @@ export function OverlayEditorPage({ carId }: { carId: number }) {
     return () => { cancelled = true; };
   }, [carId, streams]);
 
+  // Signal names of the own flow's HUD-Signal nodes; undefined until loaded (or when loading failed).
+  const [flowSignals, setFlowSignals] = useState<string[] | undefined>(undefined);
+  useEffect(() => {
+    let cancelled = false;
+    const fetchJson = (url: string) => fetch(url, { credentials: "same-origin" }).then((r) => (r.ok ? r.json() : null));
+    loadFlowSignalNames(carId, fetchJson)
+      .then((names) => { if (!cancelled) setFlowSignals(names); })
+      .catch((e) => console.warn("Overlay editor: flow signals", e));
+    return () => { cancelled = true; };
+  }, [carId]);
+  const signalChannels = useMemo(() => ({ flowSignals }), [flowSignals]);
+
   const [live, setLive] = useState<CarSourceProvider | undefined>(undefined);
   useEffect(() => {
     const car = sharedSourceHub().acquire(carId);
@@ -272,6 +287,7 @@ export function OverlayEditorPage({ carId }: { carId: number }) {
           streams={streams}
           assets={assets}
           resolveContext={resolveContext}
+          flowSignals={flowSignals}
           liveSource={live}
           packageSource={packageSource}
           videoLayer={videoLayer}
@@ -282,6 +298,9 @@ export function OverlayEditorPage({ carId }: { carId: number }) {
             <>
               <Section title={m.publish.title} open>
                 <PublishPanel carId={carId} store={api.store} save={api.save} persistence={persistence!} locale={locale} m={m.publish} reason={reason} />
+              </Section>
+              <Section title={(dynamicsMessages[locale] ?? dynamicsMessages.de).signalPanel}>
+                <SignalsPanel store={api.store} locale={locale} channels={signalChannels} />
               </Section>
               <Section title={m.templates.title}>
                 <TemplateInserter store={api.store} locale={locale} channels={vehicle?.telemetry ?? []} />
