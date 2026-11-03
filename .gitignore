@@ -41,3 +41,9 @@ Onboard/current
 
 # Build script config (registry is never committed)
 scripts/build-images.env
+
+# Server local overrides per environment (e.g. dev database host)
+Server/appSettings.*.json
+
+# Claude Code agent worktrees
+.claude/worktrees/

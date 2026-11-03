@@ -32,6 +32,9 @@
     <None Update="appSettings.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+    <None Update="appSettings.*.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <EmbeddedResource Include="Generated/server-build-info.txt" LogicalName="SignalRC.Server.Generated.server-build-info.txt" />
     <EmbeddedResource Include="../Shared/Overlay/catalog/property-catalog.json" LogicalName="SignalRC.Overlay.property-catalog.json" Link="Overlay/Documents/property-catalog.json" />
   </ItemGroup>

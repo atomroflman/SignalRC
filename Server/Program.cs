@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.DataProtection;
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration
     .AddJsonFile("appSettings.json")
+    .AddJsonFile($"appSettings.{builder.Environment.EnvironmentName}.json", optional: true)
     .AddEnvironmentVariables()
     .AddCommandLine(args)
     .AddUserSecrets<Program>();
