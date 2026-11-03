@@ -9,7 +9,7 @@ import SmoothFlowNode from "./smooth-flow-node";
 import { ParamInput } from "./param-input";
 import { flowNodeStyles, handleOffset } from "./flow-node-styles";
 import { useI18n } from "@/i18n/provider";
-import { HUD_SIGNAL_FUNCTION, hudSignalName } from "./overlay/integration/control-display-binding";
+import { hudSignalProblem as findHudSignalProblem } from "./overlay/integration/control-display-binding";
 
 export type CustomFlowNodeProps = NodeProps & {
   data: any;
@@ -135,12 +135,12 @@ export default function CustomFlowNode(props: NodeProps) {
   ));
 
   // HUD-Signal (D37): one node per signal; a missing or doubled mapping makes it unavailable.
-  let hudSignalProblem: string | undefined;
-  if (data?.metadata?.functionName === HUD_SIGNAL_FUNCTION) {
-    const name = hudSignalName(data);
-    if (name === undefined) hudSignalProblem = messages.overlay.flowNode.hudSignalMissing;
-    else if (flowControl.nodes.filter(n => hudSignalName(n) === name).length > 1) hudSignalProblem = messages.overlay.flowNode.hudSignalDuplicate;
-  }
+  const problem = data ? findHudSignalProblem(data, flowControl.nodes) : undefined;
+  const hudSignalProblem = problem && {
+    missing: messages.overlay.flowNode.hudSignalMissing,
+    invalid: messages.overlay.flowNode.hudSignalInvalid,
+    duplicate: messages.overlay.flowNode.hudSignalDuplicate,
+  }[problem];
 
   return (
     <div className={`${flowNodeStyles.card} min-w-[160px]`}>

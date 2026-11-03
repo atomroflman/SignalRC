@@ -212,6 +212,7 @@ const de = {
   },
   flowNode: {
     hudSignalMissing: "Kein Signalname – nicht verfügbar",
+    hudSignalInvalid: "Ungültiger Name: Buchstabe am Anfang, dann Buchstaben, Ziffern oder _ (max. 64) – nicht verfügbar",
     hudSignalDuplicate: "Signal mehrfach zugeordnet – nicht verfügbar",
   },
 };
@@ -420,6 +421,7 @@ const en: typeof de = {
   },
   flowNode: {
     hudSignalMissing: "No signal name – not available",
+    hudSignalInvalid: "Invalid name: a letter first, then letters, digits or _ (max. 64) – not available",
     hudSignalDuplicate: "Signal mapped more than once – not available",
   },
 };

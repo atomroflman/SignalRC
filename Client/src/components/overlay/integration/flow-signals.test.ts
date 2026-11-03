@@ -4,9 +4,9 @@ import { flowSignalNames, loadFlowSignalNames } from "./flow-signals";
 const hud = (nodeId: number, signal: unknown) => ({ nodeId, nodeTypeName: "UserSetupFunctionNode", metadata: { functionName: "HudSignal" }, params: { signal } });
 
 describe("flow signals for the overlay editor", () => {
-  it("collects the names of HUD-Signal nodes once, sorted", () => {
+  it("collects the valid names of HUD-Signal nodes once, sorted", () => {
     const nodes = [
-      hud(1, "throttle"), hud(2, " gear "), hud(3, ""), hud(4, "throttle"),
+      hud(1, "throttle"), hud(2, " gear "), hud(3, ""), hud(4, "throttle"), hud(7, "gas-pedal"),
       { nodeId: 5, nodeTypeName: "UserSetupFunctionNode", metadata: { functionName: "Smooth" }, params: { signal: "x" } },
       { nodeId: 6, nodeTypeName: "UserSetupCarChannelNode", representingId: 9 },
     ];

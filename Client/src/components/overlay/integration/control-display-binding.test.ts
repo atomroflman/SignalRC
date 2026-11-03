@@ -10,6 +10,8 @@ import {
   HUD_SIGNAL_FUNCTION,
   bindControlDisplay,
   collectControlDisplay,
+  hudSignalName,
+  hudSignalProblem,
   type ControlKey,
   type FlowEdgeLike,
   type FlowNodeLike,
@@ -50,6 +52,20 @@ describe("collect control display values (telemetry §7, D36, D37)", () => {
     }));
     expect(v.signals.size).toBe(0);
     expect(v.duplicateSignals).toEqual(["gear"]);
+  });
+
+  it("only names the HUD accepts count; the node says why it provides no signal", () => {
+    const nodes = [input(1, 100), signal(4, "gas-pedal"), signal(5, "1st"), signal(6, "speed_target"), signal(7, ""), signal(8, "gear"), signal(9, " gear ")];
+    const v = collectControlDisplay(snapshot({
+      nodes,
+      edges: [edge(1, 4, "value"), edge(1, 5, "value"), edge(1, 6, "value")],
+      nodeLatestValues: { 1: 2, 4: 2, 5: 2, 6: 2 },
+    }));
+    expect([...v.signals]).toEqual([["speed_target", 2]]);
+    expect(nodes.map((n) => hudSignalProblem(n, nodes))).toEqual([undefined, "invalid", "invalid", undefined, "missing", "duplicate", "duplicate"]);
+    expect(hudSignalName(signal(4, "gas-pedal"))).toBeUndefined();
+    expect(hudSignalName(signal(4, "x".repeat(65)))).toBeUndefined();
+    expect(hudSignalName(signal(4, " Gas_2 "))).toBe("Gas_2");
   });
 
   it("drops non-finite values", () => {

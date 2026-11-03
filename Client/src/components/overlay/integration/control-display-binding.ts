@@ -2,6 +2,7 @@
 // (Shared/Overlay/telemetry/README.md §7, D07–D09, D36, D37, D57). Only reads
 // the flow store: it never recalculates a node, never calls sendOutput and
 // never changes updatesEnabled / config mode.
+import { SIGNAL_NAME } from "../document/schema";
 import type { ControlDisplayPort, LocalControlSource } from "../sources/control-display";
 import type { HubLike } from "../sources/hub";
 
@@ -45,11 +46,34 @@ export interface ControlDisplayValues {
 /** `paused = !updatesEnabled || isInConfigMode` (§7). */
 export const isPaused = (s: Pick<FlowSnapshot, "updatesEnabled" | "isInConfigMode">) => !s.updatesEnabled || s.isInConfigMode;
 
-/** The signal name a HUD-Signal node is mapped to, or undefined. */
-export function hudSignalName(node: FlowNodeLike): string | undefined {
-  if (node.nodeTypeName !== "UserSetupFunctionNode" || node.metadata?.functionName !== HUD_SIGNAL_FUNCTION) return undefined;
+const isHudSignalNode = (node: FlowNodeLike) => node.nodeTypeName === "UserSetupFunctionNode" && node.metadata?.functionName === HUD_SIGNAL_FUNCTION;
+
+/** The entered name of a HUD-Signal node (trimmed), valid or not. */
+function enteredSignalName(node: FlowNodeLike): string | undefined {
+  if (!isHudSignalNode(node)) return undefined;
   const name = node.params?.signal;
   return typeof name === "string" && name.trim() !== "" ? name.trim() : undefined;
+}
+
+/**
+ * The signal name a HUD-Signal node is mapped to, or undefined. Only names the
+ * overlay document accepts for sig("…") count (SIGNAL_NAME, the same rule as
+ * the document schema and the server), so flow and HUD never disagree.
+ */
+export function hudSignalName(node: FlowNodeLike): string | undefined {
+  const name = enteredSignalName(node);
+  return name !== undefined && SIGNAL_NAME.test(name) ? name : undefined;
+}
+
+export type HudSignalProblem = "missing" | "invalid" | "duplicate";
+
+/** Why a HUD-Signal node provides no signal (D37), or undefined when it does; undefined for other nodes. */
+export function hudSignalProblem(node: FlowNodeLike, nodes: readonly FlowNodeLike[]): HudSignalProblem | undefined {
+  if (!isHudSignalNode(node)) return undefined;
+  const entered = enteredSignalName(node);
+  if (entered === undefined) return "missing";
+  if (!SIGNAL_NAME.test(entered)) return "invalid";
+  return nodes.filter((n) => hudSignalName(n) === entered).length > 1 ? "duplicate" : undefined;
 }
 
 /**
