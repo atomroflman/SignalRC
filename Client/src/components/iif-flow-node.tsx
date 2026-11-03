@@ -1,7 +1,7 @@
 import React from "react";
 import { Handle, Position, NodeProps } from "reactflow";
 import { filterFunctionRegistry } from "./filters/filter-function-registry";
-import { useControlFlowStore } from "./control-flow-store";
+import { edgeValue, useControlFlowStore } from "./control-flow-store";
 import { CustomFlowNodeProps } from "./custom-flow-node";
 import { useI18n } from "@/i18n/provider";
 import { flowNodeStyles, handleOffset } from "./flow-node-styles";
@@ -62,11 +62,7 @@ export default function IifFlowNode(props: CustomFlowNodeProps) {
   // Get current input values by checking edges and nodeLatestValues
   const getInputValue = (inputLabel: string): number => {
     const incomingEdge = flowControl.edges.find(e => e.target === id && e.targetPort === inputLabel);
-    if (incomingEdge) {
-      const sourceValue = flowControl.nodeLatestValues[incomingEdge.source];
-      return typeof sourceValue === 'number' ? sourceValue : 0;
-    }
-    return 0;
+    return incomingEdge ? edgeValue(flowControl, incomingEdge) : 0;
   };
   
   const aValue = getInputValue('a');

@@ -36,7 +36,9 @@ export class GearboxFunction implements FilterFunctionDef<readonly ["shiftUp", "
 
     const shiftUp = Math.round(inputs.shiftUp ?? 0);
     const shiftDown = Math.round(inputs.shiftDown ?? 0);
-    const initialGear = typeof params?.initialGear === 'number' ? params.initialGear : 1;
+    // Parameters arrive as text from the server.
+    const parsedGear = Number(params?.initialGear);
+    const initialGear = params?.initialGear !== undefined && params.initialGear !== '' && Number.isFinite(parsedGear) ? Math.round(parsedGear) : 1;
     const gearNamesStr = typeof params?.gearNames === 'string' ? params.gearNames : 'R,N,1,2,3,4,5';
     const gearNames = gearNamesStr.split(',').map(name => name.trim());
     const maxGear = gearNames.length - 1; // maxGear ergibt sich aus der Anzahl der Gänge
@@ -81,7 +83,9 @@ export class GearboxFunction implements FilterFunctionDef<readonly ["shiftUp", "
 
     const gearName = s.gearNames[s.currentGear] || `Gear${s.currentGear}`;
 
-    return [s.currentGear, gearName];
+    // One value per output: currentGear, gearValue (0 … 1 over the gears), gearName.
+    const gearValue = maxGear > 0 ? s.currentGear / maxGear : 0;
+    return [s.currentGear, gearValue, gearName];
   }
 
   // Helper method to get current gear state (for external access)

@@ -34,6 +34,8 @@ export type ControlFlowState = {
   removeEdge(dbId: number): void;
   addEdge(params: Connection): void;
   nodeLatestValues: Record<string, number>;
+  /** All outputs of a function node, in outputLabels order; nodeLatestValues holds the first. */
+  nodeOutputValues: Record<string, (number | string)[]>;
   frame: number,
   nodes: ControlFlowNode[];
   edges: ControlFlowEdge[];
@@ -99,6 +101,24 @@ export type ControlFlowState = {
   getSshKeyDownloadUrl: (carId: number, vehicleIp: string) => Promise<string | null>;
 };
 
+/**
+ * The value an edge carries: the source node's output at the edge's source
+ * port. Text outputs (e.g. a gear name) are passed on as numbers where they
+ * are numeric ("2" → 2), otherwise as 0.
+ */
+export function edgeValue(
+  state: Pick<ControlFlowState, "nodes" | "nodeLatestValues" | "nodeOutputValues">,
+  edge: Pick<ControlFlowEdge, "source" | "sourcePort">,
+): number {
+  const source = state.nodes.find(n => n.nodeId === edge.source);
+  const fnName = source?.metadata?.functionName;
+  const outputs = fnName ? filterFunctionRegistry[fnName as keyof typeof filterFunctionRegistry]?.outputLabels : undefined;
+  const port = edge.sourcePort ? outputs?.indexOf(edge.sourcePort) ?? -1 : -1;
+  const raw = port > 0 ? state.nodeOutputValues[edge.source]?.[port] : state.nodeLatestValues[edge.source];
+  const value = typeof raw === "number" ? raw : Number(raw);
+  return Number.isFinite(value) ? value : 0;
+}
+
 const _resendTimers = new Map<number, ReturnType<typeof setInterval>>();
 const _lastSentValues = new Map<number, number>();
 const _channelResendIntervals = new Map<number, number>();
@@ -135,6 +155,7 @@ function clearAllResendTimers() {
 
 export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
   nodeLatestValues: {},
+  nodeOutputValues: {},
   nodes: [],
   edges: [],
   frame: 0,
@@ -271,7 +292,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
       const incomingEdge = state.edges.find(e => e.target === nodeId);
       if (!incomingEdge) 
         return;
-      const inputValue = state.nodeLatestValues[incomingEdge.source] ?? 0;
+      const inputValue = edgeValue(state, incomingEdge);
       if (state.nodeLatestValues[nodeId] !== inputValue) {
         state.nodeLatestValues[nodeId] = inputValue;
         node.latestValue = inputValue;
@@ -305,7 +326,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
         (fnDef.inputLabels as readonly string[]).forEach((label: string) => {
           const incoming = state.edges.find(e => e.target === nodeId && e.targetPort === label);
           if (incoming) {
-            inputValues[label] = state.nodeLatestValues[incoming.source] ?? 0;
+            inputValues[label] = edgeValue(state, incoming);
           } else {
             inputValues[label] = 0;
           }
@@ -315,9 +336,10 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
       // Execute the function with current inputs and parameters
       const calculatedValue = fnDef.apply(inputValues as any, node.params ?? {}, nodeId);
       
-      // Update the node's latest value
+      // Update the node's latest value; nodes with several outputs keep all of them
       state.nodeLatestValues[nodeId] = calculatedValue[0] as number;
-      node.latestValue = calculatedValue[0] as number;
+      state.nodeOutputValues[nodeId] = calculatedValue;
+      node.latestValue = calculatedValue.length > 1 ? calculatedValue as number[] : calculatedValue[0] as number;
 
       // Propagate changes to downstream nodes
       const nextEdges = state.edges.filter(e => e.source === nodeId);
@@ -364,6 +386,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
 
     // Update the node's latest value
     state.nodeLatestValues[nodeId] = calculatedValue[0];
+    state.nodeOutputValues[nodeId] = calculatedValue;
     node.latestValue = calculatedValue[0];
 
     // Propagate changes to downstream nodes

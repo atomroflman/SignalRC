@@ -96,9 +96,9 @@ const de: Record<string, FlowNodeDoc> = {
     summary: "Schaltung: shiftUp bzw. shiftDown schalten bei jedem Druck einen Gang hoch bzw. runter.",
     details: [
       "gearNames legt die Gänge fest, z. B. R,N,1,2,3; initialGear ist der Index des Startgangs (0 = erster Name).",
-      "Weitergegeben wird der Index des Gangs (currentGear); der Gangname erscheint nur im Knoten.",
+      "Ausgänge: currentGear (Index), gearValue (Index ÷ höchster Index, 0 … 1) und gearName (als Zahl weitergegeben, wenn der Name eine Zahl ist, sonst 0).",
     ],
-    example: "R,N,1,2: Start N (Index 1), zweimal hoch → Gang 2 (Index 3)",
+    example: "R,N,1,2: Start N, zweimal hoch → 2 (currentGear 3, gearValue 1, gearName 2)",
   },
   FloatValue: {
     summary: "Fester Zahlenwert, per Knöpfe im Knoten einstellbar und auf min … max begrenzt.",
@@ -214,9 +214,9 @@ const en: Record<string, FlowNodeDoc> = {
     summary: "Gearbox: every press of shiftUp or shiftDown shifts one gear up or down.",
     details: [
       "gearNames defines the gears, e.g. R,N,1,2,3; initialGear is the index of the starting gear (0 = first name).",
-      "The flow passes on the gear index (currentGear); the gear name is only shown in the node.",
+      "Outputs: currentGear (index), gearValue (index ÷ highest index, 0 … 1) and gearName (passed on as a number if the name is one, otherwise 0).",
     ],
-    example: "R,N,1,2: start at N (index 1), shift up twice → gear 2 (index 3)",
+    example: "R,N,1,2: start at N, shift up twice → 2 (currentGear 3, gearValue 1, gearName 2)",
   },
   FloatValue: {
     summary: "Fixed number, adjustable with the buttons in the node and limited to min … max.",
