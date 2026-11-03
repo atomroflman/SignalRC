@@ -1,6 +1,7 @@
 using SignalRC.Shared;
 using SignalRC.Shared.Channels;
 using SignalRC.Shared.FileTransfer;
+using SignalRC.Shared.Logs;
 using SignalRC.Shared.Telemetry;
 using SignalRC.Shared.Video;
 
@@ -14,6 +15,8 @@ public interface IConnectionHubServer
     Task RegisterAvailableChannelTypes(int carId, AvailableChannelTypes types);
     // The car follows from the calling onboard connection.
     Task ReportChannelHealth(ChannelHealthReport report);
+    // Batches of the onboard log; the car follows from the calling onboard connection.
+    Task SendOnboardLogs(OnboardLogEntry[] entries);
     Task UpdateChannelMap(int carId, ChannelMap channelMap);
     Task<ChannelMapSyncResponse> SyncChannelMap(ChannelMapSyncRequest request);
     Task ReportFileTransferStatus(FileTransferStatusUpdate update);

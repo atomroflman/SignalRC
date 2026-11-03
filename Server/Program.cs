@@ -57,6 +57,7 @@ builder.Services.AddSingleton<VideoStreamReceiverService>();
 builder.Services.AddSingleton<VideoStreamActivationService>();
 builder.Services.AddSingleton<PushToTalkRegistry>();
 builder.Services.AddSingleton<CarConnectionStore>();
+builder.Services.AddSingleton<OnboardLogStore>();
 builder.Services.AddSingleton<AvailableTypesRegistry>();
 builder.Services.AddSingleton<IServerBuildInfoService, ServerBuildInfoService>();
 builder.Services.AddSingleton<IOnboardInstallScriptService, OnboardInstallScriptService>();

@@ -116,6 +116,9 @@ export default function CarControlFlowPage() {
               <Link href={`/car/${carIdNum}/channels`} className="text-blue-400 hover:underline block">
                 Channels (control / telemetry / video)
               </Link>
+              <Link href={`/car/${carIdNum}/logs`} className="text-blue-400 hover:underline block">
+                Onboard log
+              </Link>
               <Link href={`/car/${carIdNum}/test`} className="text-blue-400 hover:underline block">
                 Test inputs / telemetry / video / audio
               </Link>

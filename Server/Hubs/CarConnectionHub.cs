@@ -9,6 +9,7 @@ using SignalRC.Server.Telemetry;
 using SignalRC.Shared;
 using SignalRC.Shared.Channels;
 using SignalRC.Shared.FileTransfer;
+using SignalRC.Shared.Logs;
 using SignalRC.Shared.HubClients;
 using SignalRC.Shared.Video;
 using MessagePack;
@@ -184,6 +185,14 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
         }
         connection.Value.ChannelHealth = report;
         Logger.LogInformation("Car {CarId} reports {Count} channel health entries", connection.Key, report.Entries.Length);
+        return Task.CompletedTask;
+    }
+
+    public Task SendOnboardLogs(OnboardLogEntry[] entries)
+    {
+        // Not logged here: the server log would mirror the onboard log line by line.
+        if (_connectionStore.TryGetCarId(Context.ConnectionId, out var carId))
+            Service<OnboardLogStore>().Add(carId, entries);
         return Task.CompletedTask;
     }
 

@@ -123,7 +123,7 @@ const btnDanger = "px-2 py-1 bg-red-900 hover:bg-red-800 text-red-100 rounded te
 const btnGhost = "px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded text-xs border border-zinc-700";
 
 /** The onboard's verdict on one config row: nothing when OK, else state and message. */
-function HealthLine({ entry }: { entry?: HealthEntry }) {
+function HealthLine({ entry, carId }: { entry?: HealthEntry; carId?: number }) {
   if (!entry) return null;
   const error = entry.state === "error";
   return (
@@ -132,6 +132,7 @@ function HealthLine({ entry }: { entry?: HealthEntry }) {
         {error ? "error" : "warning"}
       </span>
       {entry.message}
+      <Link href={`/car/${carId}/logs?q=${encodeURIComponent(entry.name)}`} className="ml-2 text-blue-400 hover:underline">log</Link>
     </div>
   );
 }
@@ -624,6 +625,7 @@ export default function ChannelsPage() {
           </div>
           <div className="flex gap-2">
             <LanguageSwitcher />
+            <Link href={`/car/${carIdNum}/logs`} className={btnGhost}>Onboard log</Link>
             <button className={btnGhost} onClick={reload}>Reload</button>
           </div>
         </div>
@@ -681,7 +683,7 @@ export default function ChannelsPage() {
                     </div>
                   </div>
                 )}
-                <HealthLine entry={healthOf("pinManager", p.name)} />
+                <HealthLine entry={healthOf("pinManager", p.name)} carId={carIdNum} />
               </div>
             ))}
             {editingPinManager?.isNew && (
@@ -710,7 +712,7 @@ export default function ChannelsPage() {
                     </div>
                   </div>
                 )}
-                <HealthLine entry={healthOf("control", c.channelName)} />
+                <HealthLine entry={healthOf("control", c.channelName)} carId={carIdNum} />
               </div>
             ))}
             {editingControl?.isNew && (
@@ -738,7 +740,7 @@ export default function ChannelsPage() {
                     </div>
                   </div>
                 )}
-                <HealthLine entry={healthOf("telemetry", t.channelName)} />
+                <HealthLine entry={healthOf("telemetry", t.channelName)} carId={carIdNum} />
               </div>
             ))}
             {editingTelemetry?.isNew && (
@@ -770,7 +772,7 @@ export default function ChannelsPage() {
                     </div>
                   </div>
                 )}
-                <HealthLine entry={healthOf("video", v.streamId)} />
+                <HealthLine entry={healthOf("video", v.streamId)} carId={carIdNum} />
               </div>
             ))}
             {editingVideo?.isNew && (
