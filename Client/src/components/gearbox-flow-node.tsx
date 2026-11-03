@@ -6,6 +6,7 @@ import { CustomFlowNodeProps } from "./custom-flow-node";
 import { ParamInput } from "./param-input";
 import { useI18n } from "@/i18n/provider";
 import { flowNodeStyles, handleOffset } from "./flow-node-styles";
+import { FlowNodeHeader } from "./flow-node-header";
 
 export default function GearboxFlowNode(props: CustomFlowNodeProps) {
   const { messages } = useI18n();
@@ -87,47 +88,38 @@ export default function GearboxFlowNode(props: CustomFlowNodeProps) {
 
   return (
     <div className={`${flowNodeStyles.card} min-w-[200px]`}>
-      <div className={flowNodeStyles.header}>
-        <span className={flowNodeStyles.title}>Gearbox</span>
-        <button
-          className={flowNodeStyles.deleteButton}
-          onClick={() => flowControl.deleteNode(Number(id))}
-          title={messages.flowNode.deleteNode}
-        >
-          ✕
-        </button>
-      </div>
-
-      {/* Gear Indicator */}
-      <div className="flex justify-center gap-1 mb-2">
-        {gearNames.map((name: string, index: number) => (
-          <div
-            key={index}
-            className={`px-2 py-1 rounded text-xs font-mono border ${
-              index === currentGear
-                ? 'bg-zinc-100 text-zinc-900 border-zinc-100 font-semibold'
-                : 'bg-zinc-900 text-zinc-300 border-zinc-700'
-            }`}
-          >
-            {name}
-          </div>
-        ))}
-      </div>
-
-      {/* Parameters */}
-      {params && (
-        <div className="flex flex-col gap-1.5 pt-2 border-t border-zinc-700">
-          {params.map((e) => (
-            <ParamInput 
-              key={e.name}
-              name={e.name}
-              value={e.value}
-              onBlur={handleParamChange}
-            />
+      <FlowNodeHeader title="Gearbox" docKey="Gearbox" onDelete={() => flowControl.deleteNode(Number(id))} />
+      <div className={flowNodeStyles.body}>
+        {/* Gear Indicator */}
+        <div className="flex justify-center gap-1 mb-2">
+          {gearNames.map((name: string, index: number) => (
+            <div
+              key={index}
+              className={`px-2 py-1 rounded text-xs font-mono border ${
+                index === currentGear
+                  ? 'bg-zinc-100 text-zinc-900 border-zinc-100 font-semibold'
+                  : 'bg-zinc-900 text-zinc-300 border-zinc-700'
+              }`}
+            >
+              {name}
+            </div>
           ))}
         </div>
-      )} 
 
+        {/* Parameters */}
+        {params && (
+          <div className="flex flex-col gap-1.5 pt-2 border-t border-zinc-700">
+            {params.map((e) => (
+              <ParamInput 
+                key={e.name}
+                name={e.name}
+                value={e.value}
+                onBlur={handleParamChange}
+              />
+            ))}
+          </div>
+        )} 
+      </div>
       {inputHandles}
       {outputHandles}
     </div>

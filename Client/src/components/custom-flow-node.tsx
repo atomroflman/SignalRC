@@ -8,6 +8,7 @@ import IifFlowNode from "./iif-flow-node";
 import SmoothFlowNode from "./smooth-flow-node";
 import { ParamInput } from "./param-input";
 import { flowNodeStyles, handleOffset } from "./flow-node-styles";
+import { FlowNodeHeader } from "./flow-node-header";
 import { useI18n } from "@/i18n/provider";
 import { hudSignalProblem as findHudSignalProblem } from "./overlay/integration/control-display-binding";
 
@@ -53,17 +54,14 @@ export default function CustomFlowNode(props: NodeProps) {
     flowControl.setNodes(updatedNodes);
   }, [props.data.nodeId, flowControl]);
 
-  function removeButton() {
-    return (
-    <button
-          className={flowNodeStyles.deleteButton}
-          onClick={() => flowControl.deleteNode(Number(id))}
-          title={messages.flowNode.deleteNode}
-        >
-          ✕
-        </button>
-    );
-  }
+  const deleteNode = () => flowControl.deleteNode(Number(id));
+  // A node whose function is unknown can only be deleted.
+  const brokenNode = (text: string) => (
+    <div className={`${flowNodeStyles.card} min-w-[160px]`}>
+      <FlowNodeHeader title={data?.label ?? "?"} onDelete={deleteNode} />
+      <div className={`${flowNodeStyles.body} text-xs text-red-300`}>{text}</div>
+    </div>
+  );
 
   // Resolve known function names with their respective components
   if (data?.metadata?.functionName) {
@@ -99,12 +97,12 @@ export default function CustomFlowNode(props: NodeProps) {
   
   // Check for undefined function after useMemo
   if (data?.type !== "input" && data?.type !== "output" && !data?.metadata?.functionName) {
-    return (<>undefined! {removeButton()}</>);
+    return brokenNode("undefined!");
   }
   if (data?.type !== "input" && data?.type !== "output" && data?.metadata?.functionName) {
     const definition = filterFunctionRegistry[data?.metadata?.functionName as keyof typeof filterFunctionRegistry];
     if (!definition) {
-      return (<>{messages.flowNode.functionNotFound} {removeButton()}</>);
+      return brokenNode(messages.flowNode.functionNotFound);
     }
   }
   
@@ -143,31 +141,29 @@ export default function CustomFlowNode(props: NodeProps) {
   }[problem];
 
   return (
-    <div className={`${flowNodeStyles.card} min-w-[160px]`}>
-      <div className={params.length || hudSignalProblem ? flowNodeStyles.header : flowNodeStyles.headerBare}>
-        <span className={flowNodeStyles.title}>{data?.label}</span>
-        <span className={`${flowNodeStyles.headerValue} ml-auto`}>
-          {Array.isArray(data?.latestValue)
-            ? data.latestValue.map((v: number) => Number(v).toFixed(3)).join(", ")
-            : Number(data?.latestValue ?? '').toFixed(3)}
-        </span>
-        {removeButton()}
-      </div>
-      
-      {params.length > 0 && (
-        <div className="flex flex-col gap-1.5">
+    <div className={`${flowNodeStyles.card} min-w-[180px]`}>
+      <FlowNodeHeader
+        title={data?.label}
+        docKey={data?.type === "input" || data?.type === "output" ? data.type : data?.metadata?.functionName}
+        value={Array.isArray(data?.latestValue)
+          ? data.latestValue.map((v: number) => Number(v).toFixed(3)).join(", ")
+          : Number(data?.latestValue ?? 0).toFixed(3)}
+        onDelete={deleteNode}
+      />
+
+      {(params.length > 0 || hudSignalProblem) && (
+        <div className={`${flowNodeStyles.body} gap-1.5`}>
           {params.map((e) => (
-            <ParamInput 
-              key={e.name} 
-              name={e.name} 
-              value={e.value} 
+            <ParamInput
+              key={e.name}
+              name={e.name}
+              value={e.value}
               onBlur={handleParamChange}
             />
           ))}
+          {hudSignalProblem && <div className="text-[11px] text-red-300">{hudSignalProblem}</div>}
         </div>
-      )} 
-
-      {hudSignalProblem && <div className="mt-2 text-[11px] text-red-300">{hudSignalProblem}</div>}
+      )}
 
       {inputHandles}
       {outputHandles}

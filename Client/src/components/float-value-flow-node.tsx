@@ -6,6 +6,7 @@ import { CustomFlowNodeProps } from "./custom-flow-node";
 import { ParamInput } from "./param-input";
 import { useI18n } from "@/i18n/provider";
 import { flowNodeStyles, handleOffset } from "./flow-node-styles";
+import { FlowNodeHeader } from "./flow-node-header";
 
 export default function FloatValueFlowNode(props: CustomFlowNodeProps) {
   const { messages } = useI18n();
@@ -93,47 +94,39 @@ export default function FloatValueFlowNode(props: CustomFlowNodeProps) {
 
   return (
     <div className={`${flowNodeStyles.card} min-w-[220px]`}>
-      <div className={flowNodeStyles.header}>
-        <span className={flowNodeStyles.title}>Float Value</span>
-        <button
-          className={flowNodeStyles.deleteButton}
-          onClick={() => flowControl.deleteNode(Number(id))}
-          title={messages.flowNode.deleteNode}
-        >
-          ✕
-        </button>
-      </div>
-
-      <div className={`${flowNodeStyles.panel} text-center`}>
-        <div className={flowNodeStyles.label}>Current Value</div>
-        <div className={flowNodeStyles.primaryValue}>{Number(value).toFixed(3)}</div>
-      </div>
-
-      <div className="mb-2">
-        <div className="grid grid-cols-5 gap-1 mb-2">
-          {renderRow(leftRow)}
-          {renderRow(rightRow)}
+      <FlowNodeHeader title="Float Value" docKey="FloatValue" onDelete={() => flowControl.deleteNode(Number(id))} />
+      <div className={flowNodeStyles.body}>
+        <div className={`${flowNodeStyles.panel} text-center`}>
+          <div className={flowNodeStyles.label}>Current Value</div>
+          <div className={flowNodeStyles.primaryValue}>{Number(value).toFixed(3)}</div>
         </div>
 
-        <div className={`flex justify-between font-mono ${flowNodeStyles.hint}`}>
-          <span>{min}</span>
-          <span>Range</span>
-          <span>{max}</span>
-        </div>
-      </div>
+        <div className="mb-2">
+          <div className="grid grid-cols-5 gap-1 mb-2">
+            {renderRow(leftRow)}
+            {renderRow(rightRow)}
+          </div>
 
-      {params && (
-        <div className="flex flex-col gap-1.5 pt-2 border-t border-zinc-700">
-          {params.map((e) => (
-            <ParamInput
-              key={e.name}
-              name={e.name}
-              value={e.value}
-              onBlur={props.handleParamChange}
-            />
-          ))}
+          <div className={`flex justify-between font-mono ${flowNodeStyles.hint}`}>
+            <span>{min}</span>
+            <span>Range</span>
+            <span>{max}</span>
+          </div>
         </div>
-      )}
+
+        {params && (
+          <div className="flex flex-col gap-1.5 pt-2 border-t border-zinc-700">
+            {params.map((e) => (
+              <ParamInput
+                key={e.name}
+                name={e.name}
+                value={e.value}
+                onBlur={props.handleParamChange}
+              />
+            ))}
+          </div>
+        )}
+      </div>
       {outputHandles}
     </div>
   );

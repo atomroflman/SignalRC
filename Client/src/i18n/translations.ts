@@ -357,8 +357,10 @@ const deMessages = {
   },
   flowNode: {
     loading: 'Laden...',
-    deleteNode: 'Knoten loschen',
+    deleteNode: 'Knoten löschen',
     functionNotFound: 'Funktion nicht gefunden.',
+    info: 'Beschreibung',
+    example: 'Beispiel',
   },
   updateControl: {
     title: 'Update-Steuerung',
@@ -782,6 +784,8 @@ const enMessages: Messages = {
     loading: 'Loading...',
     deleteNode: 'Delete node',
     functionNotFound: 'Function not found.',
+    info: 'Description',
+    example: 'Example',
   },
   updateControl: {
     title: 'Update Control',

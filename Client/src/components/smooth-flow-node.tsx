@@ -6,6 +6,7 @@ import { CustomFlowNodeProps } from "./custom-flow-node";
 import { ParamInputField } from "./param-input";
 import { useI18n } from "@/i18n/provider";
 import { flowNodeStyles, handleOffset } from "./flow-node-styles";
+import { FlowNodeHeader } from "./flow-node-header";
 
 export default function SmoothFlowNode(props: CustomFlowNodeProps) {
   const { messages } = useI18n();
@@ -135,91 +136,79 @@ export default function SmoothFlowNode(props: CustomFlowNodeProps) {
 
   return (
     <div className={`${flowNodeStyles.card} min-w-[230px]`}>
-      <div className={flowNodeStyles.header}>
-        <span className={flowNodeStyles.title}>Smooth</span>
-        <button
-          className={flowNodeStyles.deleteButton}
-          onClick={(e) => {
-            e.stopPropagation();
-            flowControl.deleteNode(Number(id));
-          }}
-          title={messages.flowNode.deleteNode}
-        >
-          ✕
-        </button>
-      </div>
-
-      {/* Current Values Display */}
-      <div className={flowNodeStyles.panel}>
-        <div className={flowNodeStyles.label}>Current → Target</div>
-        <div className={flowNodeStyles.secondaryValue}>
-          {Number(currentValue).toFixed(3)} → {Number(inputValue).toFixed(3)}
-        </div>
-        <div className={`${flowNodeStyles.hint} mt-0.5`}>
-          Δ: {Number(Math.abs(inputValue - currentValue)).toFixed(3)}
-        </div>
-      </div>
-
-      {/* Transition Time Display */}
-      <div className={flowNodeStyles.panel}>
-        <div className={flowNodeStyles.label}>Transition Time</div>
-        <div className={flowNodeStyles.primaryValue}>
-          {formatTime(transitionTime)}
-        </div>
-        <div className={flowNodeStyles.hint}>
-          ~{transitionFrames} frames @ {fps}fps
-        </div>
-      </div>
-
-      {/* Max Duration Info */}
-      <div className={flowNodeStyles.panel}>
-        <div className={flowNodeStyles.label}>Max Duration (0→1)</div>
-        <div className={flowNodeStyles.secondaryValue}>
-          {formatTime(maxTransitionTime)}
-        </div>
-        <div className={flowNodeStyles.hint}>
-          ~{maxTransitionFrames} frames @ {fps}fps
-        </div>
-      </div>
-
-      {/* Parameters */}
-      <div className="space-y-2 pt-2 border-t border-zinc-700">
-        {params.map((param) => (
-          <div key={param.name} className="flex flex-col gap-1"
-            onMouseDown={(e) => e.stopPropagation()}
-            onMouseUp={(e) => e.stopPropagation()}
-            onMouseMove={(e) => e.stopPropagation()}
-            onTouchStart={(e) => e.stopPropagation()}
-            onTouchEnd={(e) => e.stopPropagation()}
-            onTouchMove={(e) => e.stopPropagation()}
-            onClick={(e) => e.stopPropagation()}
-            onFocus={(e) => e.stopPropagation()}
-            onBlur={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
-            onKeyUp={(e) => e.stopPropagation()}
-          >
-            <label className="text-xs text-zinc-300">{param.name}</label>
-            <ParamInputField
-              name={param.name}
-              value={param.value}
-              onBlur={handleParamChange}
-              className={`${flowNodeStyles.input} py-1 font-mono`}
-              placeholder={definition.params.find(p => p.name === param.name)?.default?.toString()}
-            />
-            {param.name === 'speed' && (
-              <div className={flowNodeStyles.hint}>
-                Range: 0.01 (slow) - 1.0 (instant)
-              </div>
-            )}
-            {param.name === 'threshold' && (
-              <div className={flowNodeStyles.hint}>
-                Precision: smaller = more precise
-              </div>
-            )}
+      <FlowNodeHeader title="Smooth" docKey="Smooth" onDelete={() => flowControl.deleteNode(Number(id))} />
+      <div className={flowNodeStyles.body}>
+        {/* Current Values Display */}
+        <div className={flowNodeStyles.panel}>
+          <div className={flowNodeStyles.label}>Current → Target</div>
+          <div className={flowNodeStyles.secondaryValue}>
+            {Number(currentValue).toFixed(3)} → {Number(inputValue).toFixed(3)}
           </div>
-        ))}
-      </div>
+          <div className={`${flowNodeStyles.hint} mt-0.5`}>
+            Δ: {Number(Math.abs(inputValue - currentValue)).toFixed(3)}
+          </div>
+        </div>
 
+        {/* Transition Time Display */}
+        <div className={flowNodeStyles.panel}>
+          <div className={flowNodeStyles.label}>Transition Time</div>
+          <div className={flowNodeStyles.primaryValue}>
+            {formatTime(transitionTime)}
+          </div>
+          <div className={flowNodeStyles.hint}>
+            ~{transitionFrames} frames @ {fps}fps
+          </div>
+        </div>
+
+        {/* Max Duration Info */}
+        <div className={flowNodeStyles.panel}>
+          <div className={flowNodeStyles.label}>Max Duration (0→1)</div>
+          <div className={flowNodeStyles.secondaryValue}>
+            {formatTime(maxTransitionTime)}
+          </div>
+          <div className={flowNodeStyles.hint}>
+            ~{maxTransitionFrames} frames @ {fps}fps
+          </div>
+        </div>
+
+        {/* Parameters */}
+        <div className="space-y-2 pt-2 border-t border-zinc-700">
+          {params.map((param) => (
+            <div key={param.name} className="flex flex-col gap-1"
+              onMouseDown={(e) => e.stopPropagation()}
+              onMouseUp={(e) => e.stopPropagation()}
+              onMouseMove={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
+              onTouchEnd={(e) => e.stopPropagation()}
+              onTouchMove={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
+              onFocus={(e) => e.stopPropagation()}
+              onBlur={(e) => e.stopPropagation()}
+              onKeyDown={(e) => e.stopPropagation()}
+              onKeyUp={(e) => e.stopPropagation()}
+            >
+              <label className="text-xs text-zinc-300">{param.name}</label>
+              <ParamInputField
+                name={param.name}
+                value={param.value}
+                onBlur={handleParamChange}
+                className={`${flowNodeStyles.input} py-1 font-mono`}
+                placeholder={definition.params.find(p => p.name === param.name)?.default?.toString()}
+              />
+              {param.name === 'speed' && (
+                <div className={flowNodeStyles.hint}>
+                  Range: 0.01 (slow) - 1.0 (instant)
+                </div>
+              )}
+              {param.name === 'threshold' && (
+                <div className={flowNodeStyles.hint}>
+                  Precision: smaller = more precise
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
       {inputHandles}
       {outputHandles}
     </div>

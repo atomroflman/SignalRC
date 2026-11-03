@@ -1,13 +1,14 @@
 // Shared look of the flow editor nodes: neutral grays with high-contrast text.
 // Handles, edges and canvas controls are styled in globals.css.
 export const flowNodeStyles = {
-  card: "bg-zinc-800 border border-zinc-600 rounded-lg shadow-lg shadow-black/40 text-zinc-100 p-3 flex flex-col relative",
-  header: "flex items-center justify-between gap-2 pb-2 mb-2 border-b border-zinc-700",
-  // Header of a node without body (input/output channels).
-  headerBare: "flex items-center justify-between gap-2",
+  card: "bg-zinc-800 border border-zinc-600 rounded-lg shadow-lg shadow-black/40 text-zinc-100 flex flex-col relative",
+  // Title bar (flow-node-header.tsx): a lighter gray strip over the card body.
+  titleBar: "flex items-center gap-2 pl-3 pr-1.5 py-1 bg-zinc-700 border-b border-zinc-600 rounded-t-lg",
   title: "truncate text-[13px] font-semibold text-zinc-50",
-  headerValue: "truncate text-xs font-mono tabular-nums text-zinc-300",
-  deleteButton: "shrink-0 w-5 h-5 grid place-items-center rounded text-[11px] text-zinc-400 hover:text-red-300 hover:bg-red-950/60 transition-colors",
+  titleValue: "shrink-0 font-mono tabular-nums text-[11px] text-zinc-100 bg-zinc-800/80 rounded px-1.5 py-0.5",
+  iconButton: "shrink-0 w-6 h-6 grid place-items-center rounded text-zinc-300 hover:text-zinc-50 hover:bg-zinc-600 transition-colors",
+  infoPopover: "invisible opacity-0 group-hover/info:visible group-hover/info:opacity-100 group-focus-within/info:visible group-focus-within/info:opacity-100 transition-opacity absolute right-0 top-full mt-1.5 z-50 w-72 p-3 rounded-md bg-zinc-950 border border-zinc-600 shadow-xl shadow-black/60 text-xs leading-relaxed font-normal whitespace-normal cursor-default",
+  body: "p-3 flex flex-col",
   panel: "bg-zinc-900/70 border border-zinc-700 rounded-md p-2 mb-2",
   label: "text-[11px] text-zinc-400",
   primaryValue: "text-lg font-semibold font-mono tabular-nums text-zinc-50",

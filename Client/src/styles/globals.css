@@ -91,3 +91,8 @@ textarea {
   background: #22c55e;
   box-shadow: 0 0 0 5px rgba(34, 197, 94, 0.6);
 }
+
+/* Flow editor: a hovered node (info popover) is drawn above its neighbours. */
+.react-flow .react-flow__node:hover {
+  z-index: 1000 !important;
+}

@@ -5,6 +5,7 @@ import { useControlFlowStore } from "./control-flow-store";
 import { CustomFlowNodeProps } from "./custom-flow-node";
 import { useI18n } from "@/i18n/provider";
 import { flowNodeStyles, handleOffset } from "./flow-node-styles";
+import { FlowNodeHeader } from "./flow-node-header";
 
 export default function IifFlowNode(props: CustomFlowNodeProps) {
   const { messages } = useI18n();
@@ -141,69 +142,60 @@ export default function IifFlowNode(props: CustomFlowNodeProps) {
 
   return (
     <div className={`${flowNodeStyles.card} min-w-[220px]`}>
-      <div className={flowNodeStyles.header}>
-        <span className={flowNodeStyles.title}>IIF (If-Then-Else)</span>
-        <button
-          className={flowNodeStyles.deleteButton}
-          onClick={() => flowControl.deleteNode(Number(id))}
-          title={messages.flowNode.deleteNode}
-        >
-          ✕
-        </button>
-      </div>
-
-      {/* Current Result Display */}
-      <div className={`${flowNodeStyles.panel} text-center`}>
-        <div className={flowNodeStyles.label}>Result</div>
-        <div className={flowNodeStyles.primaryValue}>{Number(currentResult).toFixed(3)}</div>
-      </div>
-
-      {/* Operator Selection */}
-      <div className="mb-2">
-        <label className={`${flowNodeStyles.label} block mb-1`}>Operator</label>
-        <select
-          value={operator}
-          onChange={(e) => {
-            e.stopPropagation();
-            handleParamChange('operator', e.target.value);
-          }}
-          onMouseDown={(e) => e.stopPropagation()}
-          onMouseUp={(e) => e.stopPropagation()}
-          onMouseMove={(e) => e.stopPropagation()}
-          onTouchStart={(e) => e.stopPropagation()}
-          onTouchEnd={(e) => e.stopPropagation()}
-          onTouchMove={(e) => e.stopPropagation()}
-          onClick={(e) => e.stopPropagation()}
-          onFocus={(e) => e.stopPropagation()}
-          onBlur={(e) => e.stopPropagation()}
-          className={`${flowNodeStyles.input} w-full py-1`}
-        >
-          {operators.map((op) => (
-            <option key={op.value} value={op.value} className="bg-zinc-900 text-zinc-100">
-              {op.label}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Logic Display */}
-      <div className={`${flowNodeStyles.panel} text-xs text-zinc-200 font-mono text-center`}>
-        <div className="mb-1">
-          if ({aValue.toFixed(2)} {operator} {bValue.toFixed(2)}) 
-          <span className={`ml-2 px-1 rounded text-[10px] font-bold ${
-            conditionResult ? 'bg-zinc-100 text-zinc-900' : 'bg-zinc-700 text-zinc-200'
-          }`}>
-            {conditionResult ? 'TRUE' : 'FALSE'}
-          </span>
+      <FlowNodeHeader title="IIF (If-Then-Else)" docKey="Iif" onDelete={() => flowControl.deleteNode(Number(id))} />
+      <div className={flowNodeStyles.body}>
+        {/* Current Result Display */}
+        <div className={`${flowNodeStyles.panel} text-center`}>
+          <div className={flowNodeStyles.label}>Result</div>
+          <div className={flowNodeStyles.primaryValue}>{Number(currentResult).toFixed(3)}</div>
         </div>
-        <div className={`${conditionResult ? 'text-zinc-50 font-semibold' : 'text-zinc-400'}`}>
-          → trueValue ({trueValue.toFixed(2)})
+
+        {/* Operator Selection */}
+        <div className="mb-2">
+          <label className={`${flowNodeStyles.label} block mb-1`}>Operator</label>
+          <select
+            value={operator}
+            onChange={(e) => {
+              e.stopPropagation();
+              handleParamChange('operator', e.target.value);
+            }}
+            onMouseDown={(e) => e.stopPropagation()}
+            onMouseUp={(e) => e.stopPropagation()}
+            onMouseMove={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+            onTouchEnd={(e) => e.stopPropagation()}
+            onTouchMove={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+            onFocus={(e) => e.stopPropagation()}
+            onBlur={(e) => e.stopPropagation()}
+            className={`${flowNodeStyles.input} w-full py-1`}
+          >
+            {operators.map((op) => (
+              <option key={op.value} value={op.value} className="bg-zinc-900 text-zinc-100">
+                {op.label}
+              </option>
+            ))}
+          </select>
         </div>
-        <div className={`${!conditionResult ? 'text-zinc-50 font-semibold' : 'text-zinc-400'}`}>
-          → falseValue ({falseValue.toFixed(2)})
+
+        {/* Logic Display */}
+        <div className={`${flowNodeStyles.panel} text-xs text-zinc-200 font-mono text-center`}>
+          <div className="mb-1">
+            if ({aValue.toFixed(2)} {operator} {bValue.toFixed(2)}) 
+            <span className={`ml-2 px-1 rounded text-[10px] font-bold ${
+              conditionResult ? 'bg-zinc-100 text-zinc-900' : 'bg-zinc-700 text-zinc-200'
+            }`}>
+              {conditionResult ? 'TRUE' : 'FALSE'}
+            </span>
+          </div>
+          <div className={`${conditionResult ? 'text-zinc-50 font-semibold' : 'text-zinc-400'}`}>
+            → trueValue ({trueValue.toFixed(2)})
+          </div>
+          <div className={`${!conditionResult ? 'text-zinc-50 font-semibold' : 'text-zinc-400'}`}>
+            → falseValue ({falseValue.toFixed(2)})
+          </div>
         </div>
       </div>
-
       {inputHandles}
       {outputHandles}
     </div>
