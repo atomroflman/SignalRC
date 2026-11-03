@@ -36,6 +36,8 @@ Installation oder Bereitstellung wird durch dieses Dokument automatisch gestarte
 | Ablageort | `Onboard/releases/<commit>/` im Repo (gitignored), Symlink `Onboard/current`. Arbeitsverzeichnis bleibt `Onboard/`. |
 | `update.sh` | Baut weiter lokal aus Git, publiziert aber ebenfalls nach `Onboard/releases/<commit>/` und setzt `current`. Migriert bestehende Units einmalig. |
 | Build-Fehler | Schlägt das Onboard-Paket fehl, schlägt der ganze Server-Build fehl. Server und Pakete sind so immer auf demselben Commit. |
+| Versions-ID | Echter Commit (`git rev-parse HEAD`) und aktueller Branch (`git branch --show-current`), gesetzt vom Build-Skript `scripts/build-images.sh`. Kein fester Wert wie `local` mehr. |
+| Uncommittete Änderungen | Build läuft trotzdem, das Skript warnt aber mit den betroffenen Dateien und der Auswirkung. Kein `-dirty`-Suffix an der ID. |
 
 ## Warum das Sperren der Dateien kein Problem ist
 
@@ -74,6 +76,19 @@ ein separater Updater-Prozess sind nötig.
   der letzte Steuerbefehl weniger als 30 s zurückliegt.
 - Es gibt keine `.dockerignore`. Ein `COPY Onboard/` würde lokale `bin/`- und
   `obj/`-Ordner (inkl. `project.assets.json` des Hosts) in den Build kopieren.
+- Die Images werden manuell aus dem Arbeitsverzeichnis gebaut und in die Registry
+  gepusht, bisher mit festen Werten:
+  ```
+  docker buildx build --push -f Server/Dockerfile -t <registry>/signalrc-web:latest \
+    --build-arg GIT_BRANCH=experimental --build-arg GIT_COMMIT=local .
+  docker buildx build --push -f Client/Dockerfile -t <registry>/signalrc-client:latest \
+    --build-arg GIT_BRANCH=experimental --build-arg GIT_COMMIT=local Client
+  ```
+  Mit `GIT_COMMIT=local` hätte jedes Paket dieselbe ID. Nach dem ersten
+  Auto-Update sähe die Onboard Unit nie wieder eine Abweichung, und ein Eintrag
+  in der Sperrliste würde alle künftigen Builds sperren.
+- `Client/Dockerfile` wertet `GIT_BRANCH`/`GIT_COMMIT` nicht aus, und der
+  Build-Kontext `Client/` enthält kein `.git`.
 
 ## Zielbild auf der Onboard Unit
 
@@ -237,7 +252,8 @@ automatische Update aktiviert werden soll.
 ## Arbeitspakete
 
 Die Pakete sind nach Modulgrenzen geschnitten. U1 und U2 legen die Verträge
-fest; danach können U3, U4 und U6 parallel laufen.
+fest; danach können U3, U4 und U6 parallel laufen. U2b hängt von nichts ab und
+kann sofort umgesetzt werden.
 
 ### U1: Verträge und Layout
 
@@ -247,7 +263,8 @@ fest; danach können U3, U4 und U6 parallel laufen.
   (zunächst mit leeren Implementierungen, damit alles baut).
 - `.gitignore` um `Onboard/releases/` und `Onboard/current` ergänzen.
 - `.dockerignore` anlegen: `**/bin/`, `**/obj/`, `Client/node_modules/`,
-  `Onboard/releases/`, `Onboard/current`.
+  `Onboard/releases/`, `Onboard/current`. **`.git` darf nicht ausgeschlossen
+  werden**, sonst fällt der MSBuild-Fallback für Branch und Commit weg.
 
 Fertig, wenn: alle drei Projekte und der Client bauen.
 
@@ -267,6 +284,55 @@ Fertig, wenn: alle drei Projekte und der Client bauen.
 Fertig, wenn: `docker compose build server` beide ZIPs erzeugt, jedes ZIP eine
 lauffähige `SignalRC.Onboard.dll` mit dem richtigen Commit enthält und die
 Build-Zeit für reine Codeänderungen nur um die zwei Publishes wächst.
+
+### U2b: Build-Skript `scripts/build-images.sh`
+
+Ersetzt die beiden manuellen `buildx`-Aufrufe. Unabhängig von den übrigen
+Paketen und sofort nutzbar.
+
+- Aufruf: `scripts/build-images.sh [server|client|all]`, Standard `all`. Läuft
+  aus jedem Unterverzeichnis (wechselt selbst ins Repo-Root).
+- Ermittelt `GIT_COMMIT=$(git rev-parse HEAD)` und
+  `GIT_BRANCH=$(git branch --show-current)`. Bei detached HEAD ist der Branch
+  leer; dann wird `detached` verwendet und eine Warnung ausgegeben.
+- Baut und pusht wie bisher:
+  - Server: `-f Server/Dockerfile`, Kontext `.`,
+    Tag `<registry>/signalrc-web:latest`.
+  - Client: `-f Client/Dockerfile`, Kontext `Client`,
+    Tag `<registry>/signalrc-client:latest`.
+  - Beide mit `--build-arg GIT_BRANCH=…`, `--build-arg GIT_COMMIT=…` und den
+    Labels `org.opencontainers.image.revision` und `…source`/`…ref.name`.
+    So ist der Stand jedes Images auch ohne Änderung am Client-Dockerfile per
+    `docker inspect` ablesbar.
+  - **Die Registry steht nie im Repo**, auch nicht als Default im Skript.
+    Das Skript liest `REGISTRY` (z. B. `host/pfad`) aus der Umgebung oder aus
+    der gitignorierten Datei `scripts/build-images.env`. Fehlt der Wert, bricht
+    es mit einem Hinweis ab, wie die Datei anzulegen ist. `TAG` ist optional,
+    Standard `latest`.
+  - `.gitignore` bekommt `scripts/build-images.env`.
+- **Warnung bei uncommitteten Änderungen**, gebaut wird trotzdem. Die Prüfung
+  läuft pro Image nur über die Pfade, die in das Image eingehen:
+  - Server: `Server/`, `Shared/`, `Onboard/`, `VehicleTemplates/`, `install.sh`
+  - Client: `Client/`
+
+  Ausgabe (Beispiel):
+  ```
+  WARNUNG: Uncommittete Änderungen im Server-Image (Commit 3f2a9c1e7b04):
+     M Onboard/Services/ServerConnectionService.cs
+  Auswirkung: Server und Onboard-Pakete tragen Commit 3f2a9c1e7b04, enthalten aber
+  diese Änderungen. Onboard Units auf 3f2a9c1e7b04 erkennen den Unterschied nicht
+  und aktualisieren sich nicht. Ein Rollback-Sperreintrag für 3f2a9c1e7b04 gilt
+  auch für diesen Stand.
+  ```
+  Für den Client lautet die Auswirkung: Das Image ist nicht reproduzierbar, und
+  das Label nennt einen Commit, der die Änderungen nicht enthält.
+- Optional, nicht im ersten Schritt: `GIT_BRANCH`/`GIT_COMMIT` im
+  `Client/Dockerfile` auswerten, damit die Web-GUI ihre eigene Version anzeigen
+  kann.
+
+Fertig, wenn: beide Images mit echtem Commit und Branch gebaut sind, die
+Warnung bei einer geänderten Datei unter `Onboard/` erscheint, bei einer
+geänderten Datei nur unter `Docs/` aber nicht.
 
 ### U3: Server-Endpoints und Status-Weiterleitung
 
