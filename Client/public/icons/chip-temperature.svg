@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <rect id="chip" x="5" y="5" width="14" height="14" rx="2"/>
+  <path id="pins" d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/>
+  <path id="tube" d="M11 8a1 1 0 0 1 2 0v4.5a2.2 2.2 0 1 1-2 0z" stroke-width="1.5"/>
+  <circle id="bulb" cx="12" cy="14.5" r="1" fill="#ffffff" stroke="none"/>
+</svg>

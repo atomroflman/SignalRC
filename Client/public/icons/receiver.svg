@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <rect id="case" x="3" y="10" width="14" height="10" rx="1.5"/>
+  <path id="pins" d="M7 14v2M10 14v2M13 14v2" stroke-width="1.5"/>
+  <path id="antenna" d="M17 12h2l2-9"/>
+</svg>

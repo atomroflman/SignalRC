@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path id="tube" d="M10 4a2 2 0 0 1 4 0v10.3a4 4 0 1 1-4 0z"/>
+  <line id="mercury" x1="12" y1="10" x2="12" y2="16"/>
+  <circle id="bulb" cx="12" cy="17.8" r="2" fill="#ffffff" stroke="none"/>
+  <line id="tick-1" x1="17" y1="5" x2="19" y2="5"/>
+  <line id="tick-2" x1="17" y1="9" x2="19" y2="9"/>
+</svg>
