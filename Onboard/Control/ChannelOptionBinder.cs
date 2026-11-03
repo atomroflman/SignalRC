@@ -29,6 +29,8 @@ public static class ChannelOptionBinder
         {
             if (ServiceOptions.Contains(option.Key)) continue;
             var property = type.GetProperty(option.Key, BindingFlags.IgnoreCase | BindingFlags.Public | BindingFlags.Instance);
+            // Name, Address, PinManager … of a control are set from the channel itself.
+            if (property?.DeclaringType == typeof(ControlTypes.ControlTypeBase)) property = null;
             if (property == null || !property.CanWrite)
             {
                 if (warnUnknown)
@@ -140,7 +142,7 @@ public static class ChannelOptionBinder
         !type.IsPrimitive && !type.IsEnum && type != typeof(string) && type != typeof(decimal) && type != typeof(Guid) && ElementType(type) == null;
 
     /// <summary>Element type of arrays and List/IList/IEnumerable/IReadOnlyList&lt;T&gt;; null otherwise.</summary>
-    private static Type? ElementType(Type type)
+    internal static Type? ElementType(Type type)
     {
         if (type.IsArray) return type.GetElementType();
         if (!type.IsGenericType) return null;

@@ -27,10 +27,15 @@ public class LidarGridTelemetryReader : TelemetryReaderBase
     private bool _warnedSource;
     private bool _warnedOptions;
 
+    /// <summary>Name of the pinManager entry holding the lidar.</summary>
     public string PinManager { get; set; } = "lidar";
+    /// <summary>Mounting offset in degrees, clockwise positive.</summary>
     public double MountYawDeg { get; set; }
+    /// <summary>Five upper zone limits in mm, strictly increasing, the last at most 65534.</summary>
     public int[] ZoneLimitsMm { get; set; } = [.. LidarGridOptions.DefaultZoneLimitsMm];
+    /// <summary>Largest distance in mm between neighbouring points of one group (inclusive).</summary>
     public int NeighborMaxMm { get; set; } = 50;
+    /// <summary>Smallest number of points that counts as a group (1–1440).</summary>
     public int MinGroupPoints { get; set; } = 3;
     /// <summary>Index direction of the scanner; provisional default (D58).</summary>
     public bool ScannerClockwise { get; set; } = true;

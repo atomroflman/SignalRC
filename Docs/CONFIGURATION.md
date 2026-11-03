@@ -75,6 +75,12 @@ Defines all hardware channels, telemetry, and video streams (`Shared/Channels/Ch
 
 There's no `minPulse`/`maxPulse`/`centerPulse` or `priority` field on channel items — servo calibration lives in the pin manager's own `options`/hardware configuration, not per-channel, and there's no stream priority field. `telemetryChannels` use a `telemetryType` key (not `type` — that's only the discriminator field name for `pinManagers`).
 
+#### `options`
+
+The `options` of pin managers, control channels and telemetry channels are set on the public writable properties of the type with the same name (case-insensitive, `ChannelOptionBinder`); unknown keys are logged and skipped. Control properties that come from the channel itself (`name`, `address`, `pinManager`, …) cannot be overridden through `options`. Video stream `options` are read by `MediaMtxConfigurator` (`inputFormat`, `hwEncoder` for V4L2 webcams).
+
+The onboard reports these options per type when it connects (`OptionSchemaBuilder`: JSON type, default of a fresh instance, XML doc summary as description); the server serves them at `GET /api/cars/{carId}/channels/option-schemas`. The channel config page uses them in its options editor: Ctrl+Space completes keys and values, hovering a key shows its description, and unknown keys, wrong types and unknown pin manager names are flagged. A new option property only needs a `/// <summary>` to be documented there.
+
 ---
 
 ## Feature Flags

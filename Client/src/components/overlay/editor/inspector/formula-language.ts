@@ -9,6 +9,7 @@ import { type Diagnostic } from "@codemirror/lint";
 import { StateEffect, StateField, type EditorState, type Extension } from "@codemirror/state";
 import { EditorView, hoverTooltip, keymap, showTooltip, tooltips, type Tooltip } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
+import { fieldTheme } from "../../../codemirror/field-theme";
 import type { SignalDefinition } from "../../document/types";
 import { FUNCTIONS, requiredType, type AnalysisEnv, type ExprDiagnostic, type ExprType } from "../../expression";
 import type { Locale } from "../../runtime/types";
@@ -211,16 +212,16 @@ const fits = (result: string, expected: Expected) =>
 
 function infoNode(f: FunctionDoc, locale: Locale, active?: number): HTMLElement {
   const dom = document.createElement("div");
-  dom.className = "cm-ovl-doc";
+  dom.className = "cm-doc";
   const sig = dom.appendChild(document.createElement("div"));
-  sig.className = "cm-ovl-sig";
+  sig.className = "cm-doc-sig";
   sig.append(`${f.name}(`);
   f.params.forEach((p, i) => {
     if (i > 0) sig.append(", ");
     const span = sig.appendChild(document.createElement("span"));
     span.textContent = `${p.name}: ${p.type}`;
     const last = i === f.params.length - 1;
-    if (active !== undefined && (active === i || (f.variadic && last && active > i))) span.className = "cm-ovl-active";
+    if (active !== undefined && (active === i || (f.variadic && last && active > i))) span.className = "cm-doc-active";
   });
   sig.append(`${f.variadic ? ", …" : ""}) → ${f.result}`);
   dom.appendChild(document.createElement("div")).textContent = f.doc[locale];
@@ -229,9 +230,9 @@ function infoNode(f: FunctionDoc, locale: Locale, active?: number): HTMLElement 
 
 function textNode(title: string, body?: string): HTMLElement {
   const dom = document.createElement("div");
-  dom.className = "cm-ovl-doc";
+  dom.className = "cm-doc";
   const head = dom.appendChild(document.createElement("div"));
-  head.className = "cm-ovl-sig";
+  head.className = "cm-doc-sig";
   head.textContent = title;
   if (body) dom.appendChild(document.createElement("div")).textContent = body;
   return dom;
@@ -448,26 +449,6 @@ export const formulaHighlight = HighlightStyle.define([
   { tag: tags.invalid, color: "#f87171", textDecoration: "underline wavy" },
 ]);
 
-const formulaTheme = EditorView.theme({
-  "&": { backgroundColor: "#27272a", color: "#f4f4f5", fontSize: "12px" },
-  "&.cm-focused": { outline: "none" },
-  ".cm-content": { fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", padding: "2px 0", caretColor: "#f4f4f5" },
-  ".cm-line": { padding: "0 4px" },
-  ".cm-scroller": { maxHeight: "6.5em", overflow: "auto" },
-  ".cm-matchingBracket": { backgroundColor: "#3f3f46", outline: "1px solid #71717a" },
-  ".cm-nonmatchingBracket": { color: "#f87171" },
-  ".cm-tooltip": { backgroundColor: "#18181b", color: "#e4e4e7", border: "1px solid #3f3f46", borderRadius: "4px", fontSize: "11px", zIndex: "1000" },
-  ".cm-tooltip-autocomplete > ul": { fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", maxHeight: "14em" },
-  ".cm-tooltip-autocomplete > ul > li[aria-selected]": { backgroundColor: "#3f3f46", color: "#fafafa" },
-  ".cm-completionDetail": { color: "#a1a1aa", fontStyle: "normal", marginLeft: "1em" },
-  ".cm-completionMatchedText": { textDecoration: "none", color: "#7dd3fc" },
-  ".cm-ovl-doc": { padding: "3px 6px", maxWidth: "22em", display: "flex", flexDirection: "column", gap: "2px" },
-  ".cm-ovl-sig": { fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", color: "#fafafa" },
-  ".cm-ovl-active": { color: "#7dd3fc", fontWeight: "bold" },
-  ".cm-diagnostic": { padding: "3px 6px" },
-  ".cm-lintRange-error": { backgroundImage: "none", textDecoration: "underline wavy #f87171" },
-  ".cm-lintRange-warning": { backgroundImage: "none", textDecoration: "underline wavy #fbbf24" },
-}, { dark: true });
 
 // ---------------------------------------------------------------------------
 // Diagnostics and the extension bundle
@@ -506,7 +487,7 @@ export function formulaExtensions(hooks: FormulaEditorHooks): Extension {
   return [
     formulaLanguage,
     syntaxHighlighting(formulaHighlight),
-    formulaTheme,
+    fieldTheme,
     EditorView.lineWrapping,
     history(),
     bracketMatching(),

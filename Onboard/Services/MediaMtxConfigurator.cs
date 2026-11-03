@@ -179,6 +179,27 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator
 
     private static readonly string[] V4l2Types = ["v4l2", "webcam", "usb"];
 
+    /// <summary>The stream options read in <see cref="BuildV4l2Command"/>, for the options editor.</summary>
+    public static IEnumerable<ChannelTypeSchema> OptionSchemas() => V4l2Types.Select(type => new ChannelTypeSchema
+    {
+        Kind = ChannelTypeSchema.Video,
+        TypeName = type,
+        Description = "USB webcam captured with ffmpeg (V4L2).",
+        Options =
+        [
+            new OptionSchema
+            {
+                Name = "inputFormat", Type = "string", Values = ["mjpeg", "yuyv422", "h264"],
+                Description = "Capture format (ffmpeg -input_format). Many webcams reach higher resolutions and framerates only in MJPEG.",
+            },
+            new OptionSchema
+            {
+                Name = "hwEncoder", Type = "boolean", DefaultJson = "false",
+                Description = "Encode with the SoC's H.264 block (h264_v4l2m2m) instead of libx264, which takes most of a Pi 3's CPU at 720p and above.",
+            },
+        ],
+    });
+
     /// <summary>
     /// The stream's <c>Type</c> picks the capture path: "v4l2"/"webcam"/"usb" is a plain V4L2 device
     /// (<c>CameraDevice</c>), anything else stays the Raspberry Pi camera (<c>RpiCamId</c>).

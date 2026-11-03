@@ -18,8 +18,10 @@ namespace SignalRC.Onboard.Hardware
         private const int PCA9685_DEFAULT_ADDRESS = 0x40; // Default I2C address for PCA9685
 
         public ILogger<Pca9685PwmExtension> Logger { get; }
+        /// <summary>Address offset set by the board's solder jumpers; the I2C address is 0x40 + this.</summary>
         public int BoardAddress { get; set; }
-        public int I2cBus { get; set; } = 1; // Default I2C bus
+        /// <summary>I2C bus number (/dev/i2c-N).</summary>
+        public int I2cBus { get; set; } = 1;
         public int BoardI2cAddress => BoardAddress + PCA9685_DEFAULT_ADDRESS;
 
         public Pca9685PwmExtension(IServiceProvider provider)

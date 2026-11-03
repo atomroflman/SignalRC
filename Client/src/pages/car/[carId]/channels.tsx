@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useContext, useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
 import CollapsibleSection from "@/components/collapsible-section";
@@ -7,6 +7,8 @@ import ConfigGuard from "@/components/config-guard";
 import { useI18n } from "@/i18n/provider";
 import LidarSourceSetup from "@/components/overlay/lidar-source/lidar-source-setup";
 import { confirmationText, dependencyWarning, loadChannelDependencies } from "@/components/overlay/integration/channel-dependencies";
+import OptionsJsonField from "@/components/config/options-json-field";
+import { findSchema, parseOptionSchemas, type ChannelTypeSchema, type SchemaKind } from "@/components/config/options-language";
 
 type PinManager = {
   name: string;
@@ -114,6 +116,25 @@ const btnPrimary = "px-2 py-1 bg-green-900 hover:bg-green-800 text-green-100 rou
 const btnDanger = "px-2 py-1 bg-red-900 hover:bg-red-800 text-red-100 rounded text-xs border border-red-800";
 const btnGhost = "px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded text-xs border border-zinc-700";
 
+/** Option schemas reported by the vehicle and the configured pin manager names, for the options fields. */
+const OptionsInfo = React.createContext<{ schemas: ChannelTypeSchema[]; pinManagers: string[] }>({ schemas: [], pinManagers: [] });
+
+/** The options field of an editor: schema of the chosen type, its description as hint. */
+function OptionsField({ kind, typeName, value, onChange, example, className }: {
+  kind: SchemaKind; typeName: string | null | undefined; value: string; onChange: (text: string) => void; example: string; className?: string;
+}) {
+  const { schemas, pinManagers } = useContext(OptionsInfo);
+  const schema = findSchema(schemas, kind, typeName);
+  const hint = schema
+    ? `${schema.description ? `${schema.description} ` : ""}${schema.options.length} options · Ctrl+Space to complete`
+    : schemas.length > 0 && typeName ? `No options known for ${typeName}. ${example}` : example;
+  return (
+    <Field label="Options (JSON)" hint={hint} className={className}>
+      <OptionsJsonField value={value} onChange={onChange} schema={schema} pinManagers={pinManagers} />
+    </Field>
+  );
+}
+
 function parseOptionsJson(json: string): any {
   if (!json || !json.trim()) return undefined;
   try { return JSON.parse(json); }
@@ -134,10 +155,8 @@ function PinManagerEditor({
   return (
     <div className="grid grid-cols-2 gap-2 p-2 border border-zinc-700 rounded bg-zinc-950">
       <Field label="Name"><input className={inputClass} value={p.name} onChange={e => update({ name: e.target.value })} disabled={!isNew} /></Field>
-      <Field label="Type"><input className={inputClass} value={p.type} onChange={e => update({ type: e.target.value })} /></Field>
-      <Field label="Options (JSON)" hint='e.g. {"pins":[1,2,3]}' className="col-span-2">
-        <textarea className={inputClass + " font-mono w-full"} rows={2} value={p.optionsJson} onChange={e => update({ optionsJson: e.target.value })} />
-      </Field>
+      <Field label="Type"><input className={inputClass} value={p.type} onChange={e => update({ type: e.target.value })} list="pin-manager-type-options" placeholder="e.g. Pca9685PwmExtension" /></Field>
+      <OptionsField kind="pinManager" typeName={p.type} value={p.optionsJson} onChange={optionsJson => update({ optionsJson })} example='e.g. {"boardAddress":0,"i2cBus":1}' className="col-span-2" />
       <div className="col-span-2 flex gap-2 justify-end">
         <button className={btnGhost} onClick={onCancel}>Cancel</button>
         <button className={btnPrimary} onClick={() => onSave(p)}>Save</button>
@@ -161,15 +180,13 @@ function ControlEditor({
       <Field label="Control type">
         <input className={inputClass} value={c.controlType} onChange={e => update({ controlType: e.target.value })} list="control-type-options" placeholder="e.g. Steering, PwmLight" />
       </Field>
-      <Field label="Pin manager"><input className={inputClass} value={c.pinManager} onChange={e => update({ pinManager: e.target.value })} /></Field>
+      <Field label="Pin manager"><input className={inputClass} value={c.pinManager} onChange={e => update({ pinManager: e.target.value })} list="pin-manager-options" /></Field>
       <Field label="Address (int)"><input className={inputClass} type="number" value={c.address ?? ""} onChange={e => update({ address: e.target.value === "" ? null : Number(e.target.value) })} /></Field>
       <Field label="Max resend interval (ms)"><input className={inputClass} type="number" value={c.maxResendInterval ?? ""} onChange={e => update({ maxResendInterval: e.target.value === "" ? null : Number(e.target.value) })} /></Field>
       <Field label="Enabled"><input type="checkbox" checked={c.isEnabled} onChange={e => update({ isEnabled: e.target.checked })} /></Field>
       <Field label="Requires axis"><input type="checkbox" checked={c.requiresAxis} onChange={e => update({ requiresAxis: e.target.checked })} /></Field>
       <Field label="Test disabled"><input type="checkbox" checked={c.testDisabled} onChange={e => update({ testDisabled: e.target.checked })} /></Field>
-      <Field label="Options (JSON)" hint='e.g. {"blinkCycleMs":500}'>
-        <textarea className={inputClass + " font-mono"} rows={2} value={c.optionsJson} onChange={e => update({ optionsJson: e.target.value })} />
-      </Field>
+      <OptionsField kind="control" typeName={c.controlType} value={c.optionsJson} onChange={optionsJson => update({ optionsJson })} example='e.g. {"blinkCycleMs":500}' />
       <div className="col-span-2 flex gap-2 justify-end">
         <button className={btnGhost} onClick={onCancel}>Cancel</button>
         <button className={btnPrimary} onClick={() => onSave(c)}>Save</button>
@@ -202,11 +219,9 @@ function TelemetryEditor({
       </Field>
       <Field label="Unit"><input className={inputClass} value={t.unit ?? ""} onChange={e => update({ unit: e.target.value })} /></Field>
       <Field label="Decimals"><input className={inputClass} type="number" value={t.decimals ?? ""} onChange={e => update({ decimals: e.target.value === "" ? null : Number(e.target.value) })} /></Field>
-      <Field label="Pin manager"><input className={inputClass} value={t.pinManager ?? ""} onChange={e => update({ pinManager: e.target.value })} /></Field>
+      <Field label="Pin manager"><input className={inputClass} value={t.pinManager ?? ""} onChange={e => update({ pinManager: e.target.value })} list="pin-manager-options" /></Field>
       <Field label="Address (int)"><input className={inputClass} type="number" value={t.address ?? ""} onChange={e => update({ address: e.target.value === "" ? null : Number(e.target.value) })} /></Field>
-      <Field label="Options (JSON)" hint='e.g. {"scale":0.1}' className="col-span-2">
-        <textarea className={inputClass + " font-mono w-full"} rows={2} value={t.optionsJson} onChange={e => update({ optionsJson: e.target.value })} />
-      </Field>
+      <OptionsField kind="telemetry" typeName={t.telemetryType} value={t.optionsJson} onChange={optionsJson => update({ optionsJson })} example='e.g. {"groupKey":"battery"}' className="col-span-2" />
       <div className="col-span-2 flex gap-2 justify-end">
         <button className={btnGhost} onClick={onCancel}>Cancel</button>
         <button className={btnPrimary} onClick={() => onSave(t)}>Save</button>
@@ -243,9 +258,7 @@ function VideoEditor({
         <input className={inputClass + " font-mono"} value={v.audioDevice ?? ""} onChange={e => update({ audioDevice: e.target.value })} list="audio-input-options" placeholder="e.g. plughw:CARD=Device,DEV=0" />
       </Field>
       <Field label="Noise filter"><input type="checkbox" checked={v.audioDenoise ?? false} disabled={!v.audioDevice} onChange={e => update({ audioDenoise: e.target.checked })} /></Field>
-      <Field label="Options (JSON)" hint='v4l2 webcam: {"inputFormat":"mjpeg","hwEncoder":true}' className="col-span-2">
-        <textarea className={inputClass + " font-mono w-full"} rows={2} value={v.optionsJson} onChange={e => update({ optionsJson: e.target.value })} />
-      </Field>
+      <OptionsField kind="video" typeName={v.type} value={v.optionsJson} onChange={optionsJson => update({ optionsJson })} example='v4l2 webcam: {"inputFormat":"mjpeg","hwEncoder":true}' className="col-span-2" />
       <div className="col-span-2 flex gap-2 justify-end">
         <button className={btnGhost} onClick={onCancel}>Cancel</button>
         <button className={btnPrimary} onClick={() => onSave(v)}>Save</button>
@@ -269,6 +282,7 @@ export default function ChannelsPage() {
   const [applyingTemplate, setApplyingTemplate] = useState(false);
   const [availableControlTypes, setAvailableControlTypes] = useState<string[]>([]);
   const [availableTelemetryTypes, setAvailableTelemetryTypes] = useState<string[]>([]);
+  const [optionSchemas, setOptionSchemas] = useState(parseOptionSchemas(undefined));
   const [audioInputs, setAudioInputs] = useState<AudioDevice[]>([]);
   const [audioOutputs, setAudioOutputs] = useState<AudioDevice[]>([]);
   const [audioOutputDevice, setAudioOutputDevice] = useState("");
@@ -348,6 +362,9 @@ export default function ChannelsPage() {
     }
   }, [carIdNum]);
   const reload = useCallback(() => load(true), [load]);
+  // "default" is the GPIO manager every vehicle has without an entry.
+  const pinManagerNames = useMemo(() => ["default", ...pinManagers.map(p => p.name).filter(n => n !== "default")], [pinManagers]);
+  const optionsInfo = useMemo(() => ({ schemas: optionSchemas.schemas, pinManagers: pinManagerNames }), [optionSchemas, pinManagerNames]);
   // Keeps embedded helpers (LiDAR source) mounted with their status message.
   const reloadQuietly = useCallback(() => { void load(false); }, [load]);
 
@@ -356,12 +373,14 @@ export default function ChannelsPage() {
   useEffect(() => {
     if (!carIdNum) return;
     (async () => {
-      const [c, t] = await Promise.all([
+      const [c, t, o] = await Promise.all([
         fetch(`/api/cars/${carIdNum}/channels/available-control-types`).then(r => r.ok ? r.json() : []),
         fetch(`/api/cars/${carIdNum}/channels/available-telemetry-types`).then(r => r.ok ? r.json() : []),
+        fetch(`/api/cars/${carIdNum}/channels/option-schemas`).then(r => r.ok ? r.json() : null),
       ]);
       if (Array.isArray(c)) setAvailableControlTypes(c);
       if (Array.isArray(t)) setAvailableTelemetryTypes(t);
+      setOptionSchemas(parseOptionSchemas(o));
     })();
   }, [carIdNum]);
 
@@ -536,6 +555,7 @@ export default function ChannelsPage() {
 
   return (
     <ConfigGuard carId={carIdNum}>
+      <OptionsInfo.Provider value={optionsInfo}>
       <div className="min-h-screen bg-zinc-950 text-zinc-100 p-4">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
@@ -724,7 +744,14 @@ export default function ChannelsPage() {
         <datalist id="telemetry-type-options">
           {availableTelemetryTypes.map(t => <option key={t} value={t} />)}
         </datalist>
+        <datalist id="pin-manager-type-options">
+          {optionSchemas.pinManagerTypes.map(t => <option key={t} value={t} />)}
+        </datalist>
+        <datalist id="pin-manager-options">
+          {pinManagerNames.map(n => <option key={n} value={n} />)}
+        </datalist>
       </div>
+      </OptionsInfo.Provider>
     </ConfigGuard>
   );
 }

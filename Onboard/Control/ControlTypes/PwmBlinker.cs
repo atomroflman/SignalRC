@@ -7,7 +7,8 @@ namespace SignalRC.Onboard.Control.ControlTypes;
 [ControlType("PwmBlinker")]
 public class PwmBlinker : PwmLight
 {
-    public int BlinkCycleMs { get; set; } = 500; // Dauer eines Blinkzyklus in ms
+    /// <summary>Duration of one on or off phase in ms.</summary>
+    public int BlinkCycleMs { get; set; } = 500;
     private CancellationTokenSource? _blinkCts;
 
     public PwmBlinker(ILogger<PwmBlinker> logger) : base(logger)

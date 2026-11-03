@@ -12,7 +12,7 @@ public class CustomBash : ControlTypeBase
     private readonly ILogger<CustomBash> _logger;
     private bool _lastOn;
 
-    // Options werden direkt auf Properties gemappt
+    /// <summary>Shell command run on the rising edge (0 → 1) of the control value.</summary>
     public string Command { get; set; } = string.Empty;
 
     public CustomBash(ILogger<CustomBash> logger)
@@ -25,17 +25,6 @@ public class CustomBash : ControlTypeBase
     // Executes the command from the mapped Command property on the rising edge (0 -> 1).
     public override void OnControlRecived(decimal newValue)
     {
-        try
-        {
-            this.Command = this.Options.TryGetValue("Command", out var command)
-                ? ChannelOptionBinder.Convert(command, typeof(string)) as string ?? string.Empty
-                : string.Empty;
-        }
-        catch (ChannelOptionException ex)
-        {
-            _logger.LogError("Option Command of {Channel} not applied: {Reason}", Name, ex.Message);
-            this.Command = string.Empty;
-        }
         var rounded = Math.Round(newValue);
         var isOn = rounded != 0;
 

@@ -22,6 +22,7 @@ public class JbdBmsTelemetryReader : TelemetryReaderBase
     /// </summary>
     public string Channel { get; set; } = string.Empty;
 
+    /// <summary>Path of the jbdtool CLI.</summary>
     public string JbdToolPath { get; set; } = "~/signalrc/bin/jbdtools";
 
     public JbdBmsTelemetryReader(ILogger<JbdBmsTelemetryReader> logger, ILogger<Bash> bashLogger, Bash bash)

@@ -422,6 +422,21 @@ public class ChannelsController : ControllerBase
         return Ok(_availableTypes.Get(carId)?.TelemetryTypes ?? Array.Empty<string>());
     }
 
+    // Pin manager types and the options of every type, for the options editor. Empty until the
+    // vehicle has connected with a build that reports them.
+    [HttpGet("option-schemas")]
+    public async Task<IActionResult> GetOptionSchemas(int carId)
+    {
+        var user = await GetCurrentUserAsync();
+        if (user == null) return Unauthorized();
+        var types = _availableTypes.Get(carId);
+        return Ok(new
+        {
+            pinManagerTypes = types?.PinManagerTypes ?? Array.Empty<string>(),
+            schemas = types?.OptionSchemas ?? Array.Empty<ChannelTypeSchema>(),
+        });
+    }
+
     [HttpGet("available-audio-devices")]
     public async Task<IActionResult> GetAvailableAudioDevices(int carId)
     {

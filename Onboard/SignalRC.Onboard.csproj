@@ -5,6 +5,9 @@
         <TargetFramework>net10.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
+        <!-- Doc summaries describe the channel options in the config UI (OptionSchemaBuilder). -->
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <NoWarn>$(NoWarn);CS1591;CS1572;CS1573;CS1574;CS1584;CS1658;CS1570;CS1587;CS1734</NoWarn>
       <UserSecretsId>a4995393-a0b4-4060-8810-10aedec03387</UserSecretsId>
   </PropertyGroup>
 

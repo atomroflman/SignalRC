@@ -52,6 +52,7 @@ public class ControlExecutionService
             baseControl.PinManager = pinManager;
             baseControl.Name = channel.Key;
             baseControl.Options = channel.Value.Options;
+            ChannelOptionBinder.Apply(baseControl, channel.Value.Options, Logger, $"channel {channel.Key}");
             baseControl.TestDisabled = channel.Value.TestDisabled;
             baseControl.Address = channel.Value.Address;
             IControlType control = baseControl;
