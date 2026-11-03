@@ -403,6 +403,11 @@ const deMessages = {
     updateNowHint: 'Steuerung wird gesperrt, das Fahrzeug startet neu. Danach die Steuerung neu übernehmen.',
     updateRefused: (reason: string) => `Update abgelehnt: ${reason}`,
     updateRequestFailed: 'Update-Anfrage fehlgeschlagen.',
+    badgeSynced: (commit: string) => `✓ ${commit}`,
+    badgeMismatch: 'Version abweichend',
+    badgeUnknown: 'Version unbekannt',
+    badgeUpdating: 'Update läuft',
+    badgeTitle: (server: string, onboard: string) => `Server: ${server}\nOnboard: ${onboard}`,
   },
   setupTemplate: {
     title: 'Setup-Vorlage',
@@ -821,6 +826,11 @@ const enMessages: Messages = {
     updateNowHint: 'Controls are locked and the vehicle restarts. Take over control again afterwards.',
     updateRefused: (reason: string) => `Update refused: ${reason}`,
     updateRequestFailed: 'Update request failed.',
+    badgeSynced: (commit: string) => `✓ ${commit}`,
+    badgeMismatch: 'Version mismatch',
+    badgeUnknown: 'Version unknown',
+    badgeUpdating: 'Updating',
+    badgeTitle: (server: string, onboard: string) => `Server: ${server}\nOnboard: ${onboard}`,
   },
   setupTemplate: {
     title: 'Setup template',

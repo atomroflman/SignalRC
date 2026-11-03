@@ -11,6 +11,7 @@ import SessionTransfer from "@/components/session-transfer";
 import InstallDialog from "@/components/install-dialog";
 import LanguageSwitcher from "@/components/language-switcher";
 import VersionBanner from "@/components/version-banner";
+import VersionBadge from "@/components/version-badge";
 import GamepadViewer from "@/components/gamepad-viewer";
 import CarFunctionsView from "@/components/car-functions-view";
 import AudioChat from "@/components/audio-chat";
@@ -127,6 +128,7 @@ export default function Home() {
             </div>
             <div className="flex items-center gap-2">
               <LanguageSwitcher className="shrink-0" />
+              {selectedCarId && <VersionBadge carId={selectedCarId} />}
               <div className="hidden items-center gap-2 md:flex">
               {!selectedCarId && <InstallDialog />}
               <div className="rounded-full bg-slate-800/90 px-3 py-2 text-[11px] font-medium text-slate-300 shadow-sm ring-1 ring-white/10">

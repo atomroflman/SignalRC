@@ -15,7 +15,7 @@ type UpdateStatus = {
   canUpdateManually: boolean;
   changedAtUtc: string;
 };
-type VersionSync = {
+export type VersionSync = {
   server: VersionInfo;
   onboard: VersionInfo | null;
   mismatch: boolean;
