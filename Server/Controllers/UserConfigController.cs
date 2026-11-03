@@ -77,7 +77,7 @@ namespace SignalRC.Server.Controllers
             {
                 id = e.Id,
                 name = e.DeviceName,
-                axes = e.Channels.Where(c => c.IsAxis).Select(c => new
+                axes = e.Channels.Where(c => c.IsAxis).OrderBy(c => c.ChannelId).Select(c => new
                 {
                     id = c.Id,
                     channelId = c.ChannelId,
@@ -86,7 +86,7 @@ namespace SignalRC.Server.Controllers
                     calibrationMax = c.CalibrationMax,
                     accuracy = c.Accuracy
                 }),
-                buttons = e.Channels.Where(c => !c.IsAxis).Select(c => new
+                buttons = e.Channels.Where(c => !c.IsAxis).OrderBy(c => c.ChannelId).Select(c => new
                 {
                     id = c.Id,
                     name = c.Name,
@@ -120,6 +120,7 @@ namespace SignalRC.Server.Controllers
                         name = exists.DeviceName,
                         axes = _context.Set<UserChannel>()
                             .Where(c => c.UserChannelDeviceId == exists.Id && c.IsAxis)
+                            .OrderBy(c => c.ChannelId)
                             .Select(c => new
                             {
                                 id = c.Id,
@@ -131,6 +132,7 @@ namespace SignalRC.Server.Controllers
                             }),
                         buttons = _context.Set<UserChannel>()
                             .Where(c => c.UserChannelDeviceId == exists.Id && !c.IsAxis)
+                            .OrderBy(c => c.ChannelId)
                             .Select(c => new
                             {
                                 id = c.Id,
@@ -173,19 +175,24 @@ namespace SignalRC.Server.Controllers
                     name = gamepad.DeviceName,
                     axes = _context.Set<UserChannel>()
                         .Where(c => c.UserChannelDeviceId == gamepad.Id && c.IsAxis)
+                        .OrderBy(c => c.ChannelId)
+                        .Select(c => new
+                        {
+                            id = c.Id,
+                            channelId = c.ChannelId,
+                            name = c.Name,
+                            calibrationMin = c.CalibrationMin,
+                            calibrationMax = c.CalibrationMax,
+                            accuracy = c.Accuracy
+                        }),
+                    buttons = _context.Set<UserChannel>()
+                        .Where(c => c.UserChannelDeviceId == gamepad.Id && !c.IsAxis)
+                        .OrderBy(c => c.ChannelId)
                         .Select(c => new
                         {
                             id = c.Id,
                             name = c.Name,
-                            calibrationMin = c.CalibrationMin,
-                            calibrationMax = c.CalibrationMax
-                        }),
-                    buttons = _context.Set<UserChannel>()
-                        .Where(c => c.UserChannelDeviceId == gamepad.Id && !c.IsAxis)
-                        .Select(c => new
-                        {
-                            id = c.Id,
-                                name = c.Name
+                            channelId = c.ChannelId
                         })
                 });
             }

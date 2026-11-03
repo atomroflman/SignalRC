@@ -3,13 +3,14 @@ import { useControlFlowStore } from "./control-flow-store";
 
 export default function GamepadButtonView({
   dbId,
-  index,
+  label,
   isPressed = false,
   alreadyUsed = false,
   hideFlowButtons
 }: {
   dbId?: number;
-  index: number;
+  /** Channel name as the flow input node shows it. */
+  label: string;
   isPressed?: boolean;
   alreadyUsed?: boolean;
   hideFlowButtons?: boolean;
@@ -21,11 +22,10 @@ export default function GamepadButtonView({
     controlFlow.registerInput(dbId as number);
   }
 
-  const name = `button-${index}`;
   return (
     <li className="flex items-center text-xs justify-between whitespace-nowrap">
       <div className="flex items-center min-w-0">
-        <span className="w-14 text-zinc-400 text-xs text-left whitespace-nowrap">button-{index}:</span>
+        <span className="w-16 text-zinc-400 text-xs text-left whitespace-nowrap">{label}:</span>
         <span
           className={`inline-block w-4 h-4 rounded-full border transition-colors duration-150 ${isPressed ? "bg-zinc-100 border-zinc-400" : "bg-zinc-700 border-zinc-500"}`}
           style={{ marginLeft: '1.5rem', marginRight: '1.5rem' }}

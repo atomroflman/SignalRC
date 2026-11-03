@@ -127,11 +127,11 @@ export default function GamepadViewer({ onUpdate, onRegisterInputChannelValue, h
                       const accuracy = typeof axis.accuracy === 'number' ? axis.accuracy : 2;
                       // Use .latestValue for live axis value
                       const value = typeof axis.latestValue === 'number' ? axis.latestValue : 0;
-                      const alreadyUsed = controlFlow.nodes.some(n => n.type === "input" && n.data?.gamepadId === gp.id && n.data?.name === `axis-${i}`);
+                      const alreadyUsed = controlFlow.nodes.some(n => n.type === "input" && n.representingId === axis.id);
                       return (
                         <GamepadAxisView
-                          key={i}
-                          index={i}
+                          key={axis.id}
+                          label={axis.name || `axis-${axis.channelId}`}
                           value={value}
                           accuracy={accuracy}
                           alreadyUsed={alreadyUsed}
@@ -152,11 +152,11 @@ export default function GamepadViewer({ onUpdate, onRegisterInputChannelValue, h
                     {gp.buttons.map((btn, i) => {
                       // Use .latestValue for live button value; pressed if > 0.5
                       const isPressed = typeof btn.latestValue === 'number' ? btn.latestValue > 0.5 : false;
-                      const alreadyUsed = controlFlow.nodes.some(n => n.type === "input" && n.data?.gamepadId === gp.id && n.data?.name === `button-${i}`);
+                      const alreadyUsed = controlFlow.nodes.some(n => n.type === "input" && n.representingId === btn.id);
                       return (
                         <GamepadButtonView
-                          key={i}
-                          index={i}
+                          key={btn.id}
+                          label={btn.name || `button-${btn.channelId}`}
                           isPressed={isPressed}
                           alreadyUsed={alreadyUsed}
                           hideFlowButtons={hideFlowButtons}

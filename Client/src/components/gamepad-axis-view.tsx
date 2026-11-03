@@ -4,14 +4,15 @@ import { useControlFlowStore } from "./control-flow-store";
 
 export default function GamepadAxisView({
   dbId,
-  index,
+  label,
   value = 0,
   accuracy = 2,
   alreadyUsed = false,
   hideFlowButtons
 }: {
   dbId?: number;
-  index: number;
+  /** Channel name as the flow input node shows it. */
+  label: string;
   value?: number;
   accuracy?: number;
   alreadyUsed?: boolean;
@@ -29,11 +30,10 @@ export default function GamepadAxisView({
 
   const acc = Math.pow(10, -accuracy);
   const formatted = (Math.round(value / acc) * acc).toFixed(accuracy);
-  const name = `axis-${index}`;
   return (
     <li className="flex items-center text-xs justify-between whitespace-nowrap">
       <div className="flex items-center min-w-0">
-        <span className="w-14 text-zinc-400 text-xs text-left whitespace-nowrap">axis-{index}:</span>
+        <span className="w-16 text-zinc-400 text-xs text-left whitespace-nowrap">{label}:</span>
         <span className="font-mono w-10 text-zinc-100 text-xs text-left whitespace-pre">{formatted}</span>
       </div>
       {!hideFlowButtons && (
