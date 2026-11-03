@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useI18n } from "@/i18n/provider";
-import type { VersionSync } from "./version-banner";
+import { useVersionBannerReopen, type VersionSync } from "./version-banner";
 
 // States of OnboardUpdateStatus in which the update runs (Docs/OnboardAutoUpdate.md).
 const RUNNING_STATES = new Set(["downloading", "installing", "restarting"]);
@@ -19,6 +19,7 @@ export default function VersionBadge({ carId }: { carId: number }) {
   const { messages } = useI18n();
   const t = messages.versionBanner;
   const [data, setData] = useState<VersionSync | null>(null);
+  const reopenBanner = useVersionBannerReopen((s) => s.reopen);
 
   useEffect(() => {
     let cancelled = false;
@@ -48,6 +49,8 @@ export default function VersionBadge({ carId }: { carId: number }) {
   const title = t.badgeTitle(server, onboard);
 
   let tone: string;
+  // Every state but "synced" has a banner; clicking the badge brings it back after dismissing.
+  let opensBanner = true;
   let dot: string;
   let label: string;
   if (data.update && RUNNING_STATES.has(data.update.state)) {
@@ -66,15 +69,25 @@ export default function VersionBadge({ carId }: { carId: number }) {
     tone = "bg-emerald-900/50 text-emerald-200 ring-emerald-500/30";
     dot = "bg-emerald-400";
     label = t.badgeSynced(short(data.server.commit));
+    opensBanner = false;
   }
 
-  return (
-    <div
-      title={title}
-      className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-2 text-[11px] font-medium shadow-sm ring-1 ${tone}`}
-    >
+  const className = `flex shrink-0 items-center gap-1.5 rounded-full px-3 py-2 text-[11px] font-medium shadow-sm ring-1 ${tone}`;
+  const content = (
+    <>
       <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
       <span className="font-mono">{label}</span>
-    </div>
+    </>
+  );
+  if (!opensBanner) return <div title={title} className={className}>{content}</div>;
+  return (
+    <button
+      type="button"
+      title={`${title}\n${t.badgeShowBanner}`}
+      className={`${className} cursor-pointer hover:brightness-125 transition`}
+      onClick={reopenBanner}
+    >
+      {content}
+    </button>
   );
 }

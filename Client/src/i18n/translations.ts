@@ -416,6 +416,7 @@ const deMessages = {
     badgeUnknown: 'Version unbekannt',
     badgeUpdating: 'Update läuft',
     badgeTitle: (server: string, onboard: string) => `Server: ${server}\nOnboard: ${onboard}`,
+    badgeShowBanner: 'Klicken, um die Update-Meldung wieder anzuzeigen',
   },
   setupTemplate: {
     title: 'Setup-Vorlage',
@@ -847,6 +848,7 @@ const enMessages: Messages = {
     badgeUnknown: 'Version unknown',
     badgeUpdating: 'Updating',
     badgeTitle: (server: string, onboard: string) => `Server: ${server}\nOnboard: ${onboard}`,
+    badgeShowBanner: 'Click to show the update notice again',
   },
   setupTemplate: {
     title: 'Setup template',

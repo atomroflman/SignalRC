@@ -1,8 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { create } from "zustand";
 import { useI18n } from "@/i18n/provider";
 import { useControlFlowStore } from "./control-flow-store";
+
+// Lets the version badge bring a dismissed banner back: every request counts up.
+export const useVersionBannerReopen = create<{ requests: number; reopen(): void }>((set) => ({
+  requests: 0,
+  reopen: () => set((s) => ({ requests: s.requests + 1 })),
+}));
 
 type VersionInfo = { branch: string; commit: string | null };
 // Mirrors SignalRC.Shared.Update.OnboardUpdateStatus (Docs/OnboardAutoUpdate.md).
@@ -95,6 +102,13 @@ export default function VersionBanner({ carId }: { carId: number }) {
     if (onboardUpdating && update && !RUNNING_STATES.has(update.state)) setOnboardUpdating(false);
   }, [onboardUpdating, update, setOnboardUpdating]);
 
+  const reopenRequests = useVersionBannerReopen((s) => s.requests);
+  useEffect(() => {
+    if (reopenRequests === 0) return;
+    setDismissedFor("none");
+    window.localStorage.removeItem(`versionBanner:dismissed:${carId}`);
+  }, [reopenRequests, carId]);
+
   const currentFingerprint = useMemo(() => fingerprint(data, update), [data, update]);
   const dismiss = () => {
     setDismissedFor(currentFingerprint);
@@ -123,6 +137,7 @@ export default function VersionBanner({ carId }: { carId: number }) {
   if (!data) return null;
 
   if (!data.onboard) {
+    if (dismissedFor === currentFingerprint) return null;
     return (
       <div className="pointer-events-auto fixed left-1/2 top-4 z-50 max-w-md -translate-x-1/2 rounded-lg border border-amber-700/60 bg-amber-900/90 px-4 py-3 text-xs text-amber-100 shadow-lg backdrop-blur">
         <div className="flex items-start justify-between gap-3">
