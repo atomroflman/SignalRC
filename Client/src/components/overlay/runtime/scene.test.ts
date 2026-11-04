@@ -150,6 +150,25 @@ describe("svgAsset", () => {
     expect(markup).toContain('data-ovl-part="bg" data-ovl-interaction="{&quot;input&quot;:&quot;mode&quot;,&quot;kind&quot;:&quot;value&quot;,&quot;value&quot;:2,&quot;public&quot;:true}" data-ovl-public=""');
   });
 
+  it("recolours the whole asset; none stays none, a part colour wins (svg §5)", () => {
+    const beacon: RuntimeAsset = {
+      svg: '<svg viewBox="0 0 10 10"><g data-part="lamp" fill="#111111"><circle cx="5" cy="5" r="4" fill="#222222"/><circle cx="5" cy="5" r="1" fill="none" stroke="#333333"/></g><rect data-part="base" width="10" height="2" fill="#444444"/></svg>',
+      metadata: { width: 10, height: 10, parts: { lamp: { tag: "g", bbox: [1, 1, 8, 8] }, base: { tag: "rect", bbox: [0, 0, 10, 2] } } },
+    };
+    const assets = { "sha256-b": beacon };
+    const whole = render({ e_b: { type: "svgAsset", assetId: "sha256-b", props: { fill: "#ffaa00" } } }, { assets }).markup;
+    expect(whole).toContain('<g fill="#ffaa00"><g data-part="lamp" fill="#ffaa00"><circle cx="5" cy="5" r="4" fill="#ffaa00"/><circle cx="5" cy="5" r="1" fill="none" stroke="#333333"/>');
+    expect(whole).toContain('<rect data-part="base" width="10" height="2" fill="#ffaa00"/>');
+    // A part colour reaches the shapes inside a group part and is kept under the asset colour.
+    const parts = render({
+      e_b: { type: "svgAsset", assetId: "sha256-b", props: { fill: "#ffaa00", stroke: "#000000" }, parts: { lamp: { props: { fill: "#ff0000" } } } },
+    }, { assets }).markup;
+    expect(parts).toContain('<g data-ovl-part="lamp"><g data-part="lamp" fill="#ff0000"><circle cx="5" cy="5" r="4" fill="#ff0000"/><circle cx="5" cy="5" r="1" fill="none" stroke="#333333"/></g></g>');
+    expect(parts).toContain('<rect data-part="base" width="10" height="2" fill="#ffaa00"/>');
+    // Without a colour the asset is untouched.
+    expect(render({ e_b: { type: "svgAsset", assetId: "sha256-b" } }, { assets }).markup).toContain('<circle cx="5" cy="5" r="4" fill="#222222"/>');
+  });
+
   it("two instances of one asset do not share ids", () => {
     const { markup } = render({
       e_a: { type: "svgAsset", assetId: "sha256-a" },

@@ -181,3 +181,25 @@ export function withParts(
   };
   return nodes.map(visit);
 }
+
+/**
+ * Recolours an asset subtree: every fill or stroke that paints (anything but
+ * "none") becomes the given colour, gradients included. Normalised assets
+ * carry all colours as attributes (svg §3), so this covers styles and classes
+ * too. Nodes in `keep` (parts with their own colour) are left alone.
+ */
+export function recolor(
+  nodes: (VNode | string)[],
+  fill: string | undefined,
+  stroke: string | undefined,
+  keep?: ReadonlySet<VNode>,
+): (VNode | string)[] {
+  const visit = (n: VNode | string): VNode | string => {
+    if (typeof n === "string" || keep?.has(n)) return n;
+    const attrs = { ...n.attrs };
+    if (fill !== undefined && attrs.fill !== undefined && attrs.fill !== "none") attrs.fill = fill;
+    if (stroke !== undefined && attrs.stroke !== undefined && attrs.stroke !== "none") attrs.stroke = stroke;
+    return { ...n, attrs, children: n.children.map(visit) };
+  };
+  return nodes.map(visit);
+}

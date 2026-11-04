@@ -5,7 +5,7 @@ import { formatDecimal, localized, type TextValue } from "../expression";
 import {
   apply, arcPath, elementMatrix, IDENTITY, matrixAttr, multiply, polar, transformBox, unionBox, type Box, type Mat,
 } from "./geometry";
-import { AssetParseError, parseAsset, partsBelow, scopeIds, withParts, type ParsedAsset } from "./svg-asset";
+import { AssetParseError, parseAsset, partsBelow, recolor, scopeIds, withParts, type ParsedAsset } from "./svg-asset";
 import type { ElementFrame, FrameResult, Locale, Marker, RuntimeAsset, RuntimeDiagnostic } from "./types";
 import { h, num, type VNode } from "./vnode";
 import { lidarScene } from "./widgets/lidar/lidar-scene";
@@ -365,9 +365,16 @@ export class SceneBuilder {
       inst = { assetId: el.assetId!, parsed: pa, children: content, below: partsBelow(content) };
       this.assetInstances.set(el.id, inst);
     }
+    // A colour for the whole asset, e.g. a beacon icon that blinks (svg §5).
+    const fill = assetColor(f.props.fill);
+    const stroke = assetColor(f.props.stroke);
     const ids = Object.keys(f.parts);
-    if (ids.length === 0) return { ok: true, content: inst.children };
+    if (ids.length === 0) {
+      return { ok: true, content: fill || stroke ? [h("g", { fill }, recolor(inst.children, fill, stroke))] : inst.children };
+    }
     const bboxes = a.metadata?.parts ?? {};
+    // Parts with their own colour keep it when the whole asset is recoloured.
+    const ownColor = new Set<VNode>();
     const content = withParts(inst.children, inst.below, new Set(ids), (partId, node, children) => {
       const pp = f.parts[partId].props;
       const bb = bboxes[partId]?.bbox;
@@ -375,19 +382,26 @@ export class SceneBuilder {
       const py = pp.pivotY === "center" ? (bb ? bb[1] + bb[3] / 2 : 0) : n(pp.pivotY);
       const m = elementMatrix(n(pp.x), n(pp.y), n(pp.rotation), n(pp.scaleX, 1), n(pp.scaleY, 1), px, py);
       const attrs = { ...node.attrs };
-      if (typeof pp.fill === "string" && pp.fill !== "fromAsset") attrs.fill = pp.fill;
-      if (typeof pp.stroke === "string" && pp.stroke !== "fromAsset") attrs.stroke = pp.stroke;
+      const partFill = assetColor(pp.fill);
+      const partStroke = assetColor(pp.stroke);
+      if (partFill) attrs.fill = partFill;
+      if (partStroke) attrs.stroke = partStroke;
       if (typeof pp.strokeWidth === "number") attrs["stroke-width"] = num(pp.strokeWidth);
+      // The colour reaches the whole part, also shapes inside a group part that carry their own.
+      const inner = partFill || partStroke ? recolor(children, partFill, partStroke) : children;
       const opacity = n(pp.opacity, 1);
-      return h("g", {
+      const wrapped = h("g", {
         "data-ovl-part": partId,
         ...interactionAttrs(el.parts[partId]?.interaction),
         transform: matrixAttr(m),
         opacity: opacity < 1 ? opacity : undefined,
         display: pp.visible === false ? "none" : undefined,
-      }, [{ tag: node.tag, attrs, children }]);
+      }, [{ tag: node.tag, attrs, children: inner }]);
+      if (partFill || partStroke) ownColor.add(wrapped);
+      return wrapped;
     });
-    return { ok: true, content };
+    if (!fill && !stroke) return { ok: true, content };
+    return { ok: true, content: [h("g", { fill }, recolor(content, fill, stroke, ownColor))] };
   }
 }
 
@@ -399,4 +413,9 @@ export class SceneBuilder {
 function interactionAttrs(i: Interaction | undefined): Record<string, string | undefined> {
   if (!i) return {};
   return { "data-ovl-interaction": JSON.stringify(i), "data-ovl-public": i.public ? "" : undefined };
+}
+
+/** An asset colour property: a colour, or undefined for "fromAsset" (keep the asset's own colours). */
+function assetColor(v: unknown): string | undefined {
+  return typeof v === "string" && v !== "fromAsset" ? v : undefined;
 }

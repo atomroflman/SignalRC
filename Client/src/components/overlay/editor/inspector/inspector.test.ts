@@ -112,6 +112,20 @@ describe("rows from the catalog", () => {
   });
 });
 
+describe("svgAsset colours", () => {
+  it("offers fill and stroke for the whole asset, defaulting to the asset's own colours", () => {
+    const store = storeOf({ schemaVersion: 1, workspace: { width: 100, height: 100 }, elements: { e_svg: { type: "svgAsset", assetId: "sha256-0000000000000000000000000000000000000000000000000000000000000001" } }, children: ["e_svg"] });
+    const el = store.effective().elements.e_svg;
+    expect(sections(el).find((s) => s.key === "appearance")!.names).toEqual(expect.arrayContaining(["fill", "stroke"]));
+    const row = inspectProperty(store, { element: "e_svg", property: "fill" })!;
+    expect(row.mode).toBe("static");
+    expect(row.value).toBeUndefined();
+    expect(row.base).toBe("fromAsset");
+    store.dispatch(staticCommand(row, "#ffaa00")!);
+    expect(store.document.elements.e_svg.props?.fill).toBe("#ffaa00");
+  });
+});
+
 describe("one controlling mode", () => {
   it("binding replaces a clip track in one undo step without a conflict", () => {
     const store = storeOf();

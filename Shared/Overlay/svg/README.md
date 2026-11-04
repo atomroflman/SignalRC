@@ -175,6 +175,12 @@ Auch sie führen zu `SVG_REJECTED_LIMIT`:
   Transformationsreihenfolge des Dokumentmodells umhüllt. Eine vorhandene
   `transform` des Teils bleibt innen.
 - `fill`/`stroke`/`strokeWidth`-Überschreibungen setzen das Attribut am Teil.
+  `fill`/`stroke` färben außerdem alles innerhalb des Teils ein: Jede Füllung
+  bzw. Kontur, die nicht `none` ist (auch Verläufe), erhält die Farbe.
+- `fill`/`stroke` am `svgAsset` selbst (Standard `fromAsset`) färben das ganze
+  Asset nach derselben Regel ein, z. B. ein blinkendes Symbol per Bindung oder
+  Clip. Teile mit eigener `fill`- oder `stroke`-Überschreibung behalten ihre
+  Farbe.
 
 ## 6. Importablauf
 

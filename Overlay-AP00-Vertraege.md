@@ -825,6 +825,7 @@ Gerätelauf ([modules §4](Shared/Overlay/modules/README.md)).
 | 2026-11-02 | D73: Verwalter ist der Sitzungsbenutzer, der die Steuerung des verbundenen Fahrzeugs hält (ersetzt Login-Regel aus D57, API §1); Codes `OVL_API_SESSION_REQUIRED` statt `OVL_API_LOGIN_REQUIRED`, `OVL_API_NO_CAR_ACCESS` entfällt; Stream-Freigabe folgt derselben Regel | AP02, AP04, AP09, AP13, AP14 |
 | 2026-11-02 | D74: LiDAR-Kontur-Modus (LiDAR-Vertrag §6 neu gegliedert, §6.2 Kontur); Katalog `lidarWidget` um `display`, `contourJoinMm`, `contourWidth`, `contourShadow`, `contourShadowOpacity`; Referenzfälle `contour` in `fixtures/lidar/cases.json`, Dokument-Fixtures `valid/lidar-contour.json`, `invalid-semantic/lidar-display-not-allowed.json`; Vorlage `lidarContour` | AP01, AP08, AP10, AP12 |
 | 2026-11-04 | D75: klickbare HUD-Elemente; Attribut `interaction` an Elementen und Element-Teilen (Schema `interaction`, `partOverrideMap` für Varianten), `catalogVersion` 2; Flow-Knoten `HudInput`; Hub-Aufruf `HudInput` und Weiterleitung an die Fahrerverbindung (API §4); Fixtures `valid/interactions.json`, `invalid-schema/interaction-unknown-kind.json` | AP01, AP08, AP10, AP13 |
+| 2026-11-04 | Katalog `svgAsset` um `fill`/`stroke` (Standard `fromAsset`) für das ganze Asset; Teil-Farben färben den ganzen Teil (SVG-Vertrag §5); `catalogVersion` 3 | AP07, AP08, AP10 |
 
 ## Prüfpunkte nach Freigabe
 

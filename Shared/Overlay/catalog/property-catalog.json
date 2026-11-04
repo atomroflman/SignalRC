@@ -1,5 +1,5 @@
 {
-  "catalogVersion": 2,
+  "catalogVersion": 3,
   "kinds": {
     "number":  { "valueType": "number", "interpolation": "linear", "modes": ["static", "binding", "rate", "clip"] },
     "length":  { "valueType": "number", "unit": "logicalPx", "interpolation": "linear", "modes": ["static", "binding", "rate", "clip"] },
@@ -126,7 +126,10 @@
       }
     },
     "svgAsset": {
-      "props": {},
+      "props": {
+        "fill": { "kind": "color", "default": "fromAsset" },
+        "stroke": { "kind": "color", "default": "fromAsset" }
+      },
       "partProps": ["x", "y", "rotation", "scaleX", "scaleY", "pivotX", "pivotY", "opacity", "visible", "fill", "stroke", "strokeWidth"],
       "partPropDefs": {
         "fill":        { "kind": "color",  "default": "fromAsset" },
