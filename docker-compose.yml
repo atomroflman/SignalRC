@@ -102,16 +102,18 @@ services:
     # via COTURN_EXTERNAL_IP wins; otherwise curl IMDS at 169.254.169.254.
     # Override Dockerfile ENTRYPOINT so we can shell-wrap the dotnet start.
     entrypoint: ["/bin/sh", "-c"]
-    command: |
-      IP="${COTURN_EXTERNAL_IP}";
-      if [ -z "$$IP" ]; then
-        IP=$$(curl -fsS -H "Metadata: true" "http://169.254.169.254/metadata/instance/network/interface/0/ipv4/ipAddress/0/publicIpAddress?api-version=2021-02-01&format=text" 2>/dev/null);
-      fi;
-      if [ -n "$$IP" ]; then
-        export WebRtc__Urls__0="turn:$$IP:3478?transport=udp";
-        export WebRtc__Urls__1="turn:$$IP:3478?transport=tcp";
-      fi;
-      exec dotnet SignalRC.Server.dll
+    # A list keeps the script one argument: podman-compose splits a plain string into words.
+    command:
+      - |
+        IP="${COTURN_EXTERNAL_IP}";
+        if [ -z "$$IP" ]; then
+          IP=$$(curl -fsS -H "Metadata: true" "http://169.254.169.254/metadata/instance/network/interface/0/ipv4/ipAddress/0/publicIpAddress?api-version=2021-02-01&format=text" 2>/dev/null);
+        fi;
+        if [ -n "$$IP" ]; then
+          export WebRtc__Urls__0="turn:$$IP:3478?transport=udp";
+          export WebRtc__Urls__1="turn:$$IP:3478?transport=tcp";
+        fi;
+        exec dotnet SignalRC.Server.dll
     volumes:
       - signalrc-server-data:/app/DataProtectionKeys
     healthcheck:
@@ -157,14 +159,16 @@ services:
       COTURN_EXTERNAL_IP: ${COTURN_EXTERNAL_IP:-}
       COTURN_USERNAME: ${COTURN_USERNAME:-signalrc}
       COTURN_CREDENTIAL: ${COTURN_CREDENTIAL:-}
-    command: >-
-      sh -c '
+    # The image's own entrypoint re-splits its arguments, so it can't run a script.
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
         IP="${COTURN_EXTERNAL_IP}";
         if [ -z "$$IP" ]; then
           IP=$$(curl -fsS -H "Metadata: true" "http://169.254.169.254/metadata/instance/network/interface/0/ipv4/ipAddress/0/publicIpAddress?api-version=2021-02-01&format=text" 2>/dev/null);
         fi;
         if [ -z "$$IP" ] || [ -z "$$COTURN_CREDENTIAL" ]; then echo "Need COTURN_CREDENTIAL and either COTURN_EXTERNAL_IP or Azure IMDS public IP"; exit 1; fi;
-        exec turnserver --no-tls --no-dtls --realm=signalrc.local --external-ip="$$IP" --lt-cred-mech --user="$$COTURN_USERNAME:$$COTURN_CREDENTIAL" --fingerprint --no-loopback-stun --no-multicast-peers --listening-port=3478 --min-port=49152 --max-port=50152'
+        exec turnserver --no-tls --no-dtls --realm=signalrc.local --external-ip="$$IP" --lt-cred-mech --user="$$COTURN_USERNAME:$$COTURN_CREDENTIAL" --fingerprint --no-loopback-stun --no-multicast-peers --listening-port=3478 --min-port=49152 --max-port=50152
     ports:
       - "3478:3478/udp"
       - "3478:3478/tcp"
