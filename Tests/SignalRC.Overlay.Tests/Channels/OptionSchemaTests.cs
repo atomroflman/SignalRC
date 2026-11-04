@@ -67,8 +67,11 @@ public class OptionSchemaTests
     public void VideoWebcamsDescribeTheirFfmpegOptions()
     {
         var v4l2 = Schema(ChannelTypeSchema.Video, "v4l2");
-        Assert.Equal(["inputFormat", "hwEncoder"], v4l2.Options.Select(o => o.Name));
-        Assert.Contains("mjpeg", v4l2.Options[0].Values!);
+        Assert.Equal(["ffmpegLogLevel", "inputFormat", "hwEncoder"], v4l2.Options.Select(o => o.Name));
+        Assert.Contains("mjpeg", v4l2.Options.Single(o => o.Name == "inputFormat").Values!);
+        var logLevel = v4l2.Options.Single(o => o.Name == "ffmpegLogLevel");
+        Assert.Equal("\"warning\"", logLevel.DefaultJson);
+        Assert.Contains("debug", logLevel.Values!);
     }
 
     [Fact]
