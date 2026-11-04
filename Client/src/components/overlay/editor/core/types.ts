@@ -1,8 +1,5 @@
 // AP09 – editor core types (Shared/Overlay/modules/README.md §1 "EditorStore").
-import type {
-  Clip, ClipSettings, Diagnostic, EffectiveConfig, Keyframe, OverlayDocument, OverlayElement, PropertyValue, RootTransform,
-  SignalDefinition, Workspace,
-} from "../../document/types";
+import type { Clip, ClipSettings, Diagnostic, EffectiveConfig, Keyframe, OverlayDocument, OverlayElement, PropertyValue, RootTransform, SignalDefinition, Workspace, Interaction } from "../../document/types";
 import type { Scrub } from "../../runtime/types";
 
 /** Edit scope: null = standard, otherwise the StreamId of a variant. */
@@ -37,6 +34,8 @@ export type EditorCommand =
   /** Removes variant overrides: one property, one attribute, or (neither) the whole element override. */
   | { type: "resetOverride"; element: string; part?: string; property?: string; attribute?: AttributeName; variant: string }
   | { type: "setAttribute"; element: string; name: AttributeName; value: unknown; variant?: Scope }
+  /** D75: clickable element or part; `undefined` removes it. Not overridable: always edits the element itself. */
+  | { type: "setInteraction"; element: string; part?: string; interaction: Interaction | undefined; variant?: Scope }
   /** `elements` may contain whole subtrees; `roots` are inserted into `container` (default root) at `index` (default top). */
   | { type: "addElements"; elements: Record<string, OverlayElement>; roots: string[]; container?: string; index?: number; variant?: Scope }
   /** Standard scope: elements with all dependent variant adjustments (AP01). Variant scope: only elements added by the variant. */

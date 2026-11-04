@@ -139,6 +139,17 @@ describe("svgAsset", () => {
     expect(markup).toMatch(/<g data-ovl-part="p_needle" transform="matrix\(0 1 -1 0 75 -25\)"><path data-part="p_needle" d="M50 50L50 0" stroke="#ff0000"\/><\/g>/);
   });
 
+  it("puts interactions of elements and parts into the DOM (D75)", () => {
+    const { markup } = render({
+      e_horn: { type: "rect", interaction: { input: "horn", kind: "button" }, props: { width: 10, height: 10 } },
+      e_logo: { type: "svgAsset", assetId: "sha256-a", parts: { bg: { interaction: { input: "mode", kind: "value", value: 2, public: true } } } },
+    }, { assets: { "sha256-a": asset } });
+    expect(markup).toContain('data-ovl-id="e_horn" data-ovl-interaction="{&quot;input&quot;:&quot;horn&quot;,&quot;kind&quot;:&quot;button&quot;}">');
+    expect(markup).not.toMatch(/data-ovl-id="e_horn"[^>]*data-ovl-public/);
+    // A part with only an interaction is wrapped like an animated one, so it is addressable on its own.
+    expect(markup).toContain('data-ovl-part="bg" data-ovl-interaction="{&quot;input&quot;:&quot;mode&quot;,&quot;kind&quot;:&quot;value&quot;,&quot;value&quot;:2,&quot;public&quot;:true}" data-ovl-public=""');
+  });
+
   it("two instances of one asset do not share ids", () => {
     const { markup } = render({
       e_a: { type: "svgAsset", assetId: "sha256-a" },

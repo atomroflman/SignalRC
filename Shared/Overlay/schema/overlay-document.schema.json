@@ -161,8 +161,37 @@
         "additionalProperties": false,
         "properties": {
           "props": { "$ref": "#/$defs/propMap" },
+          "lockAspect": { "type": "boolean" },
+          "interaction": { "$ref": "#/$defs/interaction" }
+        }
+      }
+    },
+    "partOverrideMap": {
+      "description": "Parts in a variant override: like partMap, but interaction is not overridable (D75).",
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/id" },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "props": { "$ref": "#/$defs/propMap" },
           "lockAspect": { "type": "boolean" }
         }
+      }
+    },
+    "interaction": {
+      "description": "D75: clickable HUD element or part; writes to the HUD input of the same name in the driver's flow.",
+      "type": "object",
+      "required": ["input", "kind"],
+      "additionalProperties": false,
+      "properties": {
+        "input": { "$ref": "#/$defs/signalName" },
+        "kind": { "enum": ["button", "toggle", "value", "slider"] },
+        "value": { "$ref": "#/$defs/finite" },
+        "min": { "$ref": "#/$defs/finite" },
+        "max": { "$ref": "#/$defs/finite" },
+        "step": { "type": "number", "exclusiveMinimum": 0, "maximum": 1000000 },
+        "public": { "type": "boolean" }
       }
     },
 
@@ -177,7 +206,8 @@
         "editorHidden": { "type": "boolean" },
         "lockAspect": { "type": "boolean" },
         "onInvalid": { "enum": ["hold", "hide"] },
-        "props": { "$ref": "#/$defs/propMap" }
+        "props": { "$ref": "#/$defs/propMap" },
+        "interaction": { "$ref": "#/$defs/interaction" }
       }
     },
     "element": {
@@ -187,7 +217,7 @@
           "properties": {
             "type": { "const": "group" },
             "children": { "$ref": "#/$defs/idList" },
-            "name": true, "disabled": true, "locked": true, "editorHidden": true, "lockAspect": true, "onInvalid": true, "props": true
+            "name": true, "disabled": true, "locked": true, "editorHidden": true, "lockAspect": true, "onInvalid": true, "props": true, "interaction": true
           },
           "required": ["children"],
           "additionalProperties": false
@@ -195,7 +225,7 @@
         {
           "properties": {
             "type": { "enum": ["rect", "ellipse", "line", "arc", "text", "valueText", "linearGauge", "radialGauge"] },
-            "name": true, "disabled": true, "locked": true, "editorHidden": true, "lockAspect": true, "onInvalid": true, "props": true
+            "name": true, "disabled": true, "locked": true, "editorHidden": true, "lockAspect": true, "onInvalid": true, "props": true, "interaction": true
           },
           "additionalProperties": false
         },
@@ -204,7 +234,7 @@
             "type": { "const": "svgAsset" },
             "assetId": { "$ref": "#/$defs/assetId" },
             "parts": { "$ref": "#/$defs/partMap" },
-            "name": true, "disabled": true, "locked": true, "editorHidden": true, "lockAspect": true, "onInvalid": true, "props": true
+            "name": true, "disabled": true, "locked": true, "editorHidden": true, "lockAspect": true, "onInvalid": true, "props": true, "interaction": true
           },
           "required": ["assetId"],
           "additionalProperties": false
@@ -213,7 +243,7 @@
           "properties": {
             "type": { "const": "lidarWidget" },
             "source": { "$ref": "#/$defs/channelName" },
-            "name": true, "disabled": true, "locked": true, "editorHidden": true, "lockAspect": true, "onInvalid": true, "props": true
+            "name": true, "disabled": true, "locked": true, "editorHidden": true, "lockAspect": true, "onInvalid": true, "props": true, "interaction": true
           },
           "required": ["source"],
           "additionalProperties": false
@@ -320,7 +350,7 @@
         "lockAspect": { "type": "boolean" },
         "onInvalid": { "enum": ["hold", "hide"] },
         "props": { "$ref": "#/$defs/propMap" },
-        "parts": { "$ref": "#/$defs/partMap" }
+        "parts": { "$ref": "#/$defs/partOverrideMap" }
       }
     },
     "variant": {

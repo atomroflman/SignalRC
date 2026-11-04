@@ -140,6 +140,8 @@ public sealed class EffectiveElement
     public required JsonObject Parts { get; init; }
     public string? AssetId { get; init; }
     public string? Source { get; init; }
+    /// <summary>Clickable HUD element (D75); from the standard only, not overridable.</summary>
+    public JsonObject? Interaction { get; init; }
 
     public JsonObject ToJson()
     {
@@ -165,6 +167,7 @@ public sealed class EffectiveElement
         o["parts"] = Parts.DeepClone();
         if (AssetId != null) o["assetId"] = AssetId;
         if (Source != null) o["source"] = Source;
+        if (Interaction != null) o["interaction"] = Interaction.DeepClone();
         return o;
     }
 }

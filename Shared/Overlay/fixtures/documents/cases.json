@@ -22,6 +22,11 @@
       "diagnostics": []
     },
     {
+      "file": "valid/interactions.json",
+      "schemaValid": true,
+      "diagnostics": []
+    },
+    {
       "file": "invalid-schema/unknown-schema-version.json",
       "schemaValid": false
     },
@@ -47,6 +52,10 @@
     },
     {
       "file": "invalid-schema/dynamic-without-driver.json",
+      "schemaValid": false
+    },
+    {
+      "file": "invalid-schema/interaction-unknown-kind.json",
       "schemaValid": false
     },
     {

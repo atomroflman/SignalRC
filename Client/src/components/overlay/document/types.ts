@@ -22,9 +22,28 @@ export interface DynamicProperty {
 export type PropertyValue = Literal | DynamicProperty;
 export type PropMap = Record<string, PropertyValue>;
 
+/**
+ * Clickable HUD element or SVG part (D75). Writes to the HUD input of the same
+ * name in the driver's flow: button = value while pressed, else 0; toggle =
+ * switches between 0 and value; value = sets value; slider = min … max by
+ * dragging, in steps of step. value defaults to 1, min/max to 0/1. Viewers may
+ * only use it when public. Standard only, not overridable in variants.
+ */
+export interface Interaction {
+  input: string;
+  kind: "button" | "toggle" | "value" | "slider";
+  value?: number;
+  min?: number;
+  max?: number;
+  step?: number;
+  public?: boolean;
+}
+
 export interface PartOverride {
   props?: PropMap;
   lockAspect?: boolean;
+  /** Element parts only; not allowed in a variant override. */
+  interaction?: Interaction;
 }
 
 export type ElementType =
@@ -44,6 +63,7 @@ export interface OverlayElement {
   assetId?: string;
   parts?: Record<string, PartOverride>;
   source?: string;
+  interaction?: Interaction;
 }
 
 export interface Keyframe {
@@ -223,6 +243,7 @@ export interface EffectiveElement {
   parts: Record<string, PartOverride>;
   assetId?: string;
   source?: string;
+  interaction?: Interaction;
 }
 
 export interface EffectiveClip extends Clip {

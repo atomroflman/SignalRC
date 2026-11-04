@@ -24,6 +24,15 @@ export type DynamicsMessages = {
   outputs: string;
   signals: string;
   flowSignals: string;
+  interaction: string;
+  interactionNone: string;
+  interactionKinds: Record<"button" | "toggle" | "value" | "slider", string>;
+  interactionInput: string;
+  interactionValue: string;
+  interactionPublic: string;
+  interactionHint: string;
+  interactionNameInvalid: string;
+  interactionNotInFlow: string;
   signalPanel: string;
   signalPanelHint: string;
   signalName: string;
@@ -128,6 +137,15 @@ const de: DynamicsMessages = {
   outputs: "Steuerausgänge",
   signals: "Signale",
   flowSignals: "Signale aus dem Flow (neu)",
+  interaction: "Interaktion",
+  interactionNone: "keine (nur Anzeige)",
+  interactionKinds: { button: "Taster", toggle: "Schalter", value: "Fester Wert", slider: "Regler" },
+  interactionInput: "HUD-Eingabe",
+  interactionValue: "Wert",
+  interactionPublic: "Öffentlich (auch Zuschauer)",
+  interactionHint: "Klicks gehen an den Flow-Knoten „HUD-Eingabe“ mit diesem Namen; nur der Fahrer, Zuschauer nur wenn öffentlich",
+  interactionNameInvalid: "Name: Buchstabe am Anfang, dann Buchstaben, Ziffern oder _ (max. 64)",
+  interactionNotInFlow: "kein HUD-Eingabe-Knoten mit diesem Namen im Flow",
   signalPanel: "HUD-Signale",
   signalPanelHint: "Werte aus HUD-Signal-Knoten im Flow, in Formeln als sig(\"Name\")",
   signalName: "Name",
@@ -231,6 +249,15 @@ const en: DynamicsMessages = {
   outputs: "Control outputs",
   signals: "Signals",
   flowSignals: "Signals from the flow (new)",
+  interaction: "Interaction",
+  interactionNone: "none (display only)",
+  interactionKinds: { button: "Button", toggle: "Toggle", value: "Fixed value", slider: "Slider" },
+  interactionInput: "HUD input",
+  interactionValue: "Value",
+  interactionPublic: "Public (viewers too)",
+  interactionHint: "Clicks go to the flow node \"HUD input\" of this name; only the driver, viewers only when public",
+  interactionNameInvalid: "Name: a letter first, then letters, digits or _ (max. 64)",
+  interactionNotInFlow: "no HUD input node with this name in the flow",
   signalPanel: "HUD signals",
   signalPanelHint: "Values of HUD-Signal nodes in the flow, used in formulas as sig(\"name\")",
   signalName: "Name",

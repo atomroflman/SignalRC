@@ -26,7 +26,7 @@ import type { CarSourceProvider, HubLike } from "../sources";
 import { sharedSourceHub } from "../sources";
 import { TemplateInserter } from "../templates/template-inserter";
 import { EditorAssetLoader, editorResolveContext, previewStream, withDraftAssetMetadata } from "./editor-assets";
-import { loadFlowSignalNames } from "./flow-signals";
+import { loadFlowNames } from "./flow-signals";
 import {
   controlReason, endLiveTest, installEditorKeyboardGuard, pauseOnEditorOpen, releaseForLiveTest, sendState,
   type MeLike, type PauseStoreLike,
@@ -204,13 +204,14 @@ export function OverlayEditorPage({ carId }: { carId: number }) {
     return () => { cancelled = true; };
   }, [carId, streams]);
 
-  // Signal names of the own flow's HUD-Signal nodes; undefined until loaded (or when loading failed).
+  // Names of the own flow's HUD-Signal and HUD-Eingabe nodes; undefined until loaded (or when loading failed).
   const [flowSignals, setFlowSignals] = useState<string[] | undefined>(undefined);
+  const [flowInputs, setFlowInputs] = useState<string[] | undefined>(undefined);
   useEffect(() => {
     let cancelled = false;
     const fetchJson = (url: string) => fetch(url, { credentials: "same-origin" }).then((r) => (r.ok ? r.json() : null));
-    loadFlowSignalNames(carId, fetchJson)
-      .then((names) => { if (!cancelled) setFlowSignals(names); })
+    loadFlowNames(carId, fetchJson)
+      .then((names) => { if (!cancelled) { setFlowSignals(names.signals); setFlowInputs(names.inputs); } })
       .catch((e) => console.warn("Overlay editor: flow signals", e));
     return () => { cancelled = true; };
   }, [carId]);
@@ -288,6 +289,7 @@ export function OverlayEditorPage({ carId }: { carId: number }) {
           assets={assets}
           resolveContext={resolveContext}
           flowSignals={flowSignals}
+          flowInputs={flowInputs}
           liveSource={live}
           packageSource={packageSource}
           videoLayer={videoLayer}

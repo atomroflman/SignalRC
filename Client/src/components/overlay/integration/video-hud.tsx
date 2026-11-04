@@ -2,13 +2,16 @@
 // AP13 – HUD layer over the displayed video frame. Measures the real frame of
 // the `object-contain` video (received size, element box, resize, fullscreen)
 // and places the AP08 renderer exactly there; the letterbox bars stay free.
-// Never intercepts pointer input; video and audio are not touched.
+// Intercepts pointer input only on clickable HUD elements (D75,
+// hud-interaction.ts); everything else stays click-through. Video and audio
+// are not touched.
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 import type { EffectiveConfig } from "../document";
 import { OverlayRenderer } from "../runtime/overlay-renderer";
 import type { FrameResult, Locale, RuntimeAsset } from "../runtime/types";
 import { sharedSourceHub, type CarSourceProvider } from "../sources";
 import { showsPausedControl } from "./hud-config";
+import { useHudInteraction } from "./hud-interaction";
 import { layerRect, NO_GEOMETRY, observeVideoFrame, sameGeometry, type Rect, type Size, type VideoGeometry } from "./video-frame";
 
 /**
@@ -77,6 +80,7 @@ export default function VideoHud({ carId, config, assets, locale, visible, conta
   const [provider, setProvider] = useState<CarSourceProvider | undefined>(undefined);
   const [paused, setPaused] = useState(false);
   const pausedRef = useRef(false);
+  const interaction = useHudInteraction(carId);
 
   // The live values of the vehicle: one shared provider per page (AP05).
   useEffect(() => {
@@ -113,6 +117,8 @@ export default function VideoHud({ carId, config, assets, locale, visible, conta
       className="pointer-events-none absolute"
       style={layerStyle(frame)}
       data-ovl-hud=""
+      data-ovl-hud-interact={interaction.mode}
+      onPointerDown={interaction.onPointerDown}
       hidden={!visible}
     >
       <OverlayRenderer

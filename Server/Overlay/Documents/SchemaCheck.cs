@@ -24,7 +24,8 @@ internal sealed partial class SchemaCheck(Action<string, string> report)
     public static bool IsId(string s) => Id().IsMatch(s);
 
     private static readonly string[] Shapes = ["rect", "ellipse", "line", "arc", "text", "valueText", "linearGauge", "radialGauge"];
-    private static readonly string[] CommonAttrs = ["type", "name", "disabled", "locked", "editorHidden", "lockAspect", "onInvalid", "props"];
+    private static readonly string[] CommonAttrs = ["type", "name", "disabled", "locked", "editorHidden", "lockAspect", "onInvalid", "props", "interaction"];
+    private static readonly string[] InteractionKinds = ["button", "toggle", "value", "slider"];
     private static readonly string[] ClipKeys = ["name", "disabled", "durationS", "repeat", "trigger", "endState", "tracks"];
     private static readonly string[] Flags = ["disabled", "locked", "editorHidden", "lockAspect"];
     private static readonly string[] Easings = ["linear", "easeIn", "easeOut", "easeInOut", "step"];
@@ -203,13 +204,28 @@ internal sealed partial class SchemaCheck(Action<string, string> report)
 
     private void PropMap(JsonNode? v, string p) => Map(v, p, k => Prop().IsMatch(k), PropertyValue);
 
-    private void PartMap(JsonNode? v, string p) =>
+    /// <summary>Parts of an element; in a variant override interaction is not allowed (D75).</summary>
+    private void PartMap(JsonNode? v, string p) => PartMap(v, p, false);
+
+    private void PartMap(JsonNode? v, string p, bool isOverride) =>
         Map(v, p, k => Id().IsMatch(k), (part, pp) =>
         {
-            if (!Object(part, pp, ["props", "lockAspect"])) return;
+            if (!Object(part, pp, isOverride ? ["props", "lockAspect"] : ["props", "lockAspect", "interaction"])) return;
             Opt(part!.AsObject(), "props", pp, PropMap);
             Opt(part.AsObject(), "lockAspect", pp, Bool);
+            Opt(part.AsObject(), "interaction", pp, Interaction);
         });
+
+    private void Interaction(JsonNode? v, string p)
+    {
+        if (!Object(v, p, ["input", "kind", "value", "min", "max", "step", "public"], ["input", "kind"])) return;
+        var o = v!.AsObject();
+        Expect(Json.AsString(o["input"]) is { } input && Signal().IsMatch(input), Pointer(p, "input"), "ungültiger Eingabename");
+        OneOf(o["kind"], Pointer(p, "kind"), InteractionKinds, "button, toggle, value oder slider erwartet");
+        foreach (var key in new[] { "value", "min", "max" }) Opt(o, key, p, Number);
+        Opt(o, "step", p, (s, sp) => Range(s, sp, 0, 1000000, true));
+        Opt(o, "public", p, Bool);
+    }
 
     private void OnInvalid(JsonNode? v, string p) => OneOf(v, p, ["hold", "hide"], "hold oder hide erwartet");
 
@@ -219,6 +235,7 @@ internal sealed partial class SchemaCheck(Action<string, string> report)
         foreach (var flag in Flags) Opt(v, flag, p, Bool);
         Opt(v, "onInvalid", p, OnInvalid);
         Opt(v, "props", p, PropMap);
+        Opt(v, "interaction", p, Interaction);
     }
 
     private void Element(JsonNode? v, string p)
@@ -345,7 +362,7 @@ internal sealed partial class SchemaCheck(Action<string, string> report)
         foreach (var flag in Flags) Opt(o, flag, p, Bool);
         Opt(o, "onInvalid", p, OnInvalid);
         Opt(o, "props", p, PropMap);
-        Opt(o, "parts", p, PartMap);
+        Opt(o, "parts", p, (parts, pp) => PartMap(parts, pp, true));
     }
 
     private void Variant(JsonNode? v, string p)

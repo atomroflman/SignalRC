@@ -207,6 +207,7 @@ export function effectiveConfig(input: OverlayDocument, streamId: string | null)
     if (element.type === "group") effective.children = view.children.get(id) ?? [];
     if (element.assetId !== undefined) effective.assetId = element.assetId;
     if (element.source !== undefined) effective.source = element.source;
+    if (element.interaction !== undefined) effective.interaction = { ...element.interaction };
     elements[id] = effective;
     for (const child of view.children.get(id) ?? []) build(child, effective.effectiveDisabled);
   };

@@ -54,6 +54,19 @@ describe("properties", () => {
     expect(doc.variants!.front.elements).toBeUndefined();
   });
 
+  it("interactions (D75) edit the element or part itself, also in a variant, and can be removed", () => {
+    const button = { input: "horn", kind: "button" as const };
+    let doc = run(base(), { type: "setInteraction", element: "e_a", interaction: button, variant: "front" });
+    expect(doc.elements.e_a.interaction).toEqual(button);
+    expect(doc.variants!.front.elements).toBeUndefined();
+    expect(effectiveConfig(doc, "front").elements.e_a.interaction).toEqual(button);
+    doc = run(doc, { type: "setInteraction", element: "e_a", part: "p_knob", interaction: { input: "mode", kind: "value", value: 2 }, variant: null });
+    expect(doc.elements.e_a.parts).toEqual({ p_knob: { interaction: { input: "mode", kind: "value", value: 2 } } });
+    doc = run(doc, { type: "setInteraction", element: "e_a", part: "p_knob", interaction: undefined, variant: null },
+      { type: "setInteraction", element: "e_a", interaction: undefined, variant: null });
+    expect(doc.elements.e_a).toEqual(base().elements.e_a);
+  });
+
   it("name is shared and edits the standard even in a variant", () => {
     const doc = run(base(), { type: "setAttribute", element: "e_a", name: "name", value: "Box", variant: "front" });
     expect(doc.elements.e_a.name).toBe("Box");

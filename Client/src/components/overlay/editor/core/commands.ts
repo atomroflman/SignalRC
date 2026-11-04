@@ -328,6 +328,15 @@ export function applyCommand(doc: OverlayDocument, cmd: EditorCommand, ctx: Appl
       break;
     }
 
+    case "setInteraction": {
+      // Like the name: shared by all views, so a standard element is edited in the standard.
+      const target = doc.elements[cmd.element] ? elementTarget(doc, null, cmd.element) : elementTarget(doc, scope, cmd.element);
+      const path = cmd.part === undefined ? [...target.path, "interaction"] : [...target.path, "parts", cmd.part, "interaction"];
+      if (cmd.interaction === undefined) w.remove(path, target.path.length + 1);
+      else w.set(path, detach(cmd.interaction));
+      break;
+    }
+
     case "addElements": {
       const container = cmd.container ?? ROOT;
       checkContainer(doc, scope, container);
@@ -615,6 +624,7 @@ export function commandLabel(cmd: EditorCommand): string {
     case "setProperties": return "Transformation";
     case "resetOverride": return "Überschreibung zurücksetzen";
     case "setAttribute": return `${cmd.name} ändern`;
+    case "setInteraction": return "Interaktion";
     case "addElements": return "Element einfügen";
     case "deleteElements": return "Löschen";
     case "groupElements": return "Gruppieren";

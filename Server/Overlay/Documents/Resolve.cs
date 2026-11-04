@@ -242,6 +242,7 @@ public static partial class DocumentResolver
                 Parts = MergeParts(element.Obj("parts"), over.Obj("parts")),
                 AssetId = element.Str("assetId"),
                 Source = element.Str("source"),
+                Interaction = (JsonObject?)element.Obj("interaction")?.DeepClone(),
             };
             elements[id] = effective;
             foreach (var child in view.Children.GetValueOrDefault(id) ?? []) Build(child, effective.EffectiveDisabled);

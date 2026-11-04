@@ -205,6 +205,7 @@ Veröffentlichung (neue Revision). Das aktuell angezeigte HUD bleibt unveränder
 | `SetTelemetryInterest(carId, ids)`, `SetControlDisplayInterest(carId, bool)` | – | `CanViewCarAsync` beim Anmelden von Interesse (nichtleere Liste bzw. `true`); das Zurückziehen wird nie geprüft (D70) |
 | `OverlayPublished` | `overlay:{carId}` | `{ carId, publicationId, number }` |
 | `OverlayDraftChanged` | `overlay:{carId}` | `{ carId, revision }` (keine Inhalte, keine Benutzerdaten) |
+| `HudInput(carId, elementId, part, action, value) → bool` | – | Zuschauer-Klick auf eine öffentliche Interaktion (D75): `CanViewCarAsync`, höchstens 30 je Verbindung und Sekunde. `action` ist `press`/`release` (Taster), `toggle` (Schalter) oder `set` (fester Wert, Regler). Der Server nimmt `input` und Wert aus dem veröffentlichten Dokument (Regler: `value` auf `min` … `max` begrenzt) und sendet `HudInput(carId, input, action, value)` an die Fahrerverbindung; `false`, wenn nicht öffentlich, unpassend oder kein Fahrer verbunden |
 
 - Clients laden nach `OverlayPublished` den Stand per `GET published` und
   übernehmen ihn als Ganzes. Assets werden vor der Übernahme geladen; erst

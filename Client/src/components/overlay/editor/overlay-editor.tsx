@@ -42,6 +42,8 @@ export interface OverlayEditorProps {
   channels?: ChannelDirectory;
   /** Signal names of the driver's HUD-Signal flow nodes (D37), offered for bindings. */
   flowSignals?: string[];
+  /** Input names of the driver's HUD-Eingabe flow nodes (D75), offered for clickable elements. */
+  flowInputs?: string[];
   packageSource?: () => PackageSource;
   /** Gives the host (AP10–AP13) access to the store and the save controller. */
   onReady?: (api: { store: EditorStore; save: SaveController }) => void;
@@ -75,10 +77,11 @@ export function OverlayEditor(props: OverlayEditorProps) {
     () => ({
       ...(props.channels ?? channelDirectory({ channels: source?.channels?.(), sources: props.resolveContext?.sources })),
       ...(props.flowSignals ? { flowSignals: props.flowSignals } : {}),
+      ...(props.flowInputs ? { flowInputs: props.flowInputs } : {}),
     }),
     // channelCount re-reads the provider after its metadata arrived.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [props.channels, source, props.resolveContext, channelCount, props.flowSignals],
+    [props.channels, source, props.resolveContext, channelCount, props.flowSignals, props.flowInputs],
   );
 
   useEffect(() => {

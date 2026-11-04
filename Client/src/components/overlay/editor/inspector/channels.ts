@@ -14,6 +14,8 @@ export interface ChannelDirectory {
   outputs?: string[];
   /** Signal names of the driver's HUD-Signal flow nodes (D37); offered for binding before the document declares them. */
   flowSignals?: string[];
+  /** Input names of the driver's HUD-Eingabe flow nodes (D75), offered for clickable elements. */
+  flowInputs?: string[];
 }
 
 export interface ChannelDirectoryInput {

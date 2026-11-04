@@ -75,7 +75,8 @@ die beiden letzten gehören zum Persistenzvertrag, nicht ins Dokument.
 | `svgAsset` | `assetId`, `parts` | Ursprung der normalisierten Asset-ViewBox |
 
 Gemeinsame Attribute (keine animierbaren Eigenschaften):
-`name`, `disabled`, `locked`, `editorHidden`, `lockAspect`, `onInvalid`.
+`name`, `disabled`, `locked`, `editorHidden`, `lockAspect`, `onInvalid`,
+`interaction`.
 
 - `disabled` – ausdrücklich deaktiviert (gilt für den ganzen Teilbaum).
   Laufzeit: nicht vorhanden. Veröffentlichung: Referenz-/Formelfehler nur Warnung;
@@ -87,6 +88,13 @@ Gemeinsame Attribute (keine animierbaren Eigenschaften):
   Bei `true` gibt es kein `scaleY`; `scaleX` gilt für beide Achsen.
 - `onInvalid` – `hold` (Standard: letzte gültige Darstellung, als ungültig
   markiert) oder `hide`.
+- `interaction` – klickbares Element (D75), auch an `parts[pid]` eines
+  `svgAsset`: `{ input, kind, value?, min?, max?, step?, public? }`. `input`
+  folgt der Signalnamen-Regel, `kind` ist `button` (Wert solange gedrückt,
+  sonst 0), `toggle` (wechselt zwischen 0 und `value`), `value` (setzt
+  `value`) oder `slider` (`min` … `max` per Ziehen, Schritt `step`).
+  Standardwerte: `value` 1, `min` 0, `max` 1, `public` `false`. Nicht in
+  Varianten überschreibbar.
 
 Winkel: Grad, im Uhrzeigersinn, 0° zeigt nach oben (12 Uhr). Das gilt für
 `rotation`, Bogen-/Anzeigewinkel und die LiDAR-Ausrichtung (vorne oben).
@@ -169,7 +177,8 @@ Eine Variante (`variants[streamId]`) enthält nur Abweichungen:
 - `workspace`, `rootTransform` – eigene Arbeitsfläche/Einpassung.
 - `elements[id]` – Überschreibungen geerbter Elemente: Attribute sowie `props`
   und `parts[pid].props` **je Eigenschaft vollständig ersetzend** (inklusive
-  Treiber). Rücksetzen = Schlüssel entfernen.
+  Treiber). Rücksetzen = Schlüssel entfernen. `name` und `interaction` sind
+  nicht überschreibbar (D75).
 - `addedElements` – eigene Elemente. Kinder hinzugefügter Gruppen stehen in
   deren `children`.
 - `structure.parents[id]` – neuer Container (`root` oder Gruppen-ID) für ein

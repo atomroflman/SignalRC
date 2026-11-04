@@ -126,6 +126,16 @@ const de: Record<string, FlowNodeDoc> = {
     ],
     example: "Smooth (geglättetes Gas) → HUD-Signal \"gas\" → im HUD als Balken mit sig(\"gas\")",
   },
+  HudInput: {
+    summary: "Eingang aus dem HUD: liefert den Wert, den klickbare HUD-Elemente mit diesem Namen setzen.",
+    details: [
+      "input ist der Name; im HUD-Editor wählst du ihn unter \"Interaktion\" an einem Element oder SVG-Teil.",
+      "Taster: Wert solange gedrückt, sonst 0. Schalter: wechselt zwischen 0 und Wert. Fester Wert: setzt den Wert. Regler: min … max per Ziehen.",
+      "Gilt nur im Browser des Fahrers und startet nach einem Neuladen bei 0. Zuschauer können nur öffentliche Elemente bedienen.",
+      "Für eine Rückmeldung im HUD (z. B. Schalter leuchtet) den Ausgang zusätzlich an ein HUD-Signal hängen.",
+    ],
+    example: "HUD-Eingabe \"light\" (Schalter) → Fahrzeugkanal light; parallel → HUD-Signal \"light\" für die Anzeige",
+  },
 };
 
 const en: Record<string, FlowNodeDoc> = {
@@ -243,6 +253,16 @@ const en: Record<string, FlowNodeDoc> = {
       "Name: a letter first, then letters, digits or _ (max. 64); each name only once in the flow.",
     ],
     example: "Smooth (smoothed throttle) → HUD signal \"gas\" → in the HUD as a bar with sig(\"gas\")",
+  },
+  HudInput: {
+    summary: "Input from the HUD: outputs the value that clickable HUD elements with this name set.",
+    details: [
+      "input is the name; in the HUD editor you pick it under \"Interaction\" on an element or SVG part.",
+      "Button: value while pressed, else 0. Toggle: switches between 0 and value. Fixed value: sets the value. Slider: min … max by dragging.",
+      "Only in the driver's browser and back at 0 after a reload. Viewers can only use public elements.",
+      "For feedback in the HUD (e.g. a lit switch) also connect the output to a HUD signal.",
+    ],
+    example: "HUD input \"light\" (toggle) → vehicle channel light; in parallel → HUD signal \"light\" for the display",
   },
 };
 

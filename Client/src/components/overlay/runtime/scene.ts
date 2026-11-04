@@ -1,6 +1,6 @@
 // Scene: effective configuration + frame values → SVG tree (Shared/Overlay/README.md
 // §3, §4; runtime/README.md §3 markers; svg/README.md §5 assets).
-import type { EffectiveConfig, EffectiveElement } from "../document/types";
+import type { EffectiveConfig, EffectiveElement, Interaction } from "../document/types";
 import { formatDecimal, localized, type TextValue } from "../expression";
 import {
   apply, arcPath, elementMatrix, IDENTITY, matrixAttr, multiply, polar, transformBox, unionBox, type Box, type Mat,
@@ -204,6 +204,7 @@ export class SceneBuilder {
     const opacity = n(p.opacity, 1) * (marker === "invalid" ? 0.4 : 1);
     return h("g", {
       "data-ovl-id": el.id,
+      ...interactionAttrs(el.interaction),
       transform: matrixAttr(local),
       opacity: opacity < 1 ? opacity : undefined,
       display: visible ? undefined : "none",
@@ -380,6 +381,7 @@ export class SceneBuilder {
       const opacity = n(pp.opacity, 1);
       return h("g", {
         "data-ovl-part": partId,
+        ...interactionAttrs(el.parts[partId]?.interaction),
         transform: matrixAttr(m),
         opacity: opacity < 1 ? opacity : undefined,
         display: pp.visible === false ? "none" : undefined,
@@ -387,4 +389,14 @@ export class SceneBuilder {
     });
     return { ok: true, content };
   }
+}
+
+/**
+ * Clickable element or part (D75): the interaction travels in the DOM so a
+ * pointer handler needs no config lookup (integration/hud-interaction.ts).
+ * Pointer events stay off unless the host enables them (globals.css).
+ */
+function interactionAttrs(i: Interaction | undefined): Record<string, string | undefined> {
+  if (!i) return {};
+  return { "data-ovl-interaction": JSON.stringify(i), "data-ovl-public": i.public ? "" : undefined };
 }

@@ -48,6 +48,13 @@ public sealed class ControlDisplayRelay(IControlDisplayTransport transport, Time
 
     private long Now => time.GetTimestamp() * 1000 / time.TimestampFrequency;
 
+    /// <summary>The connection that holds control of the car, or null (D75 forwards viewer HUD clicks there).</summary>
+    public string? DriverConnection(int carId)
+    {
+        var car = Get(carId);
+        lock (car.Lock) return car.Driver;
+    }
+
     /// <summary>A connection acquired control: new epoch, old values are void (D07).</summary>
     public async Task ControlAcquiredAsync(int carId, string driverConnectionId)
     {

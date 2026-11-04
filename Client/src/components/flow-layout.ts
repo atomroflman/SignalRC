@@ -96,7 +96,7 @@ function elkGraph(cluster: FlowCluster, nodes: ControlFlowNode[], edges: Control
       height: 1,
       layoutOptions: { "elk.port.side": dir === "in" ? "NORTH" : "SOUTH" },
     }));
-    const layer = n.type === "input" ? "FIRST" : n.type === "output" || n.metadata?.functionName === "HudSignal" ? "LAST" : "NONE";
+    const layer = n.type === "input" || n.metadata?.functionName === "HudInput" ? "FIRST" : n.type === "output" || n.metadata?.functionName === "HudSignal" ? "LAST" : "NONE";
     return {
       id: String(n.nodeId),
       width: size.width,

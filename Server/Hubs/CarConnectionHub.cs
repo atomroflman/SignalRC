@@ -217,6 +217,7 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
         Logger.LogWarning($"Client disconnected: {exception}");
         await Service<TelemetryRelay>().ConnectionClosedAsync(Context.ConnectionId);
         await Service<ControlDisplayRelay>().ConnectionClosedAsync(Context.ConnectionId);
+        Service<SignalRC.Server.Overlay.HudInputRateLimit>().Forget(Context.ConnectionId);
         if (_connectionStore.TryRemoveConnection(Context.ConnectionId, out var carId, out var connectionInfo) && carId != null)
         {
             await Clients.All.CarStateUpdated(new CarStateModel()

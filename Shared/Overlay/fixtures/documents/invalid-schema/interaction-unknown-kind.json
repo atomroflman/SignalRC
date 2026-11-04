@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "workspace": { "width": 1280, "height": 720 },
+  "elements": {
+    "e_horn": {
+      "type": "rect",
+      "interaction": { "input": "horn", "kind": "pushbutton" },
+      "props": { "width": 80, "height": 80 }
+    }
+  },
+  "children": ["e_horn"]
+}

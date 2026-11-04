@@ -13,7 +13,8 @@ const SIGNAL = SIGNAL_NAME;
 const PROP = /^[A-Za-z][A-Za-z0-9]{0,39}$/;
 const ASSET = /^sha256-[0-9a-f]{64}$/;
 const SHAPES = ["rect", "ellipse", "line", "arc", "text", "valueText", "linearGauge", "radialGauge"];
-const COMMON_ATTRS = ["type", "name", "disabled", "locked", "editorHidden", "lockAspect", "onInvalid", "props"];
+const COMMON_ATTRS = ["type", "name", "disabled", "locked", "editorHidden", "lockAspect", "onInvalid", "props", "interaction"];
+const INTERACTION_KINDS = ["button", "toggle", "value", "slider"];
 const CLIP_KEYS = ["name", "disabled", "durationS", "repeat", "trigger", "endState", "tracks"];
 
 /** JSON Schema string lengths count code points, not UTF-16 units. */
@@ -167,18 +168,30 @@ class Checker {
 
   propMap = (v: Json, p: string) => this.map(v, p, (k) => PROP.test(k), this.propertyValue);
 
-  partMap = (v: Json, p: string) =>
+  /** Parts of an element; in a variant override `interaction` is not allowed (D75). */
+  partMap = (v: Json, p: string, override = false) =>
     this.map(v, p, (k) => ID.test(k), (part, pp) => {
-      if (!this.object(part, pp, ["props", "lockAspect"])) return;
+      if (!this.object(part, pp, override ? ["props", "lockAspect"] : ["props", "lockAspect", "interaction"])) return;
       this.opt(part, "props", pp, this.propMap);
       this.opt(part, "lockAspect", pp, this.bool);
+      this.opt(part, "interaction", pp, this.interaction);
     });
+
+  interaction = (v: Json, p: string) => {
+    if (!this.object(v, p, ["input", "kind", "value", "min", "max", "step", "public"], ["input", "kind"])) return;
+    this.expect(typeof v.input === "string" && SIGNAL.test(v.input), pointer(p, "input"), "ungültiger Eingabename");
+    this.expect(typeof v.kind === "string" && INTERACTION_KINDS.includes(v.kind), pointer(p, "kind"), "button, toggle, value oder slider erwartet");
+    for (const key of ["value", "min", "max"]) this.opt(v, key, p, this.number);
+    this.opt(v, "step", p, (s, sp) => this.range(s, sp, 0, 1000000, true));
+    this.opt(v, "public", p, this.bool);
+  };
 
   commonAttributes(v: Record<string, Json>, p: string): void {
     this.opt(v, "name", p, this.displayName);
     for (const flag of ["disabled", "locked", "editorHidden", "lockAspect"]) this.opt(v, flag, p, this.bool);
     this.opt(v, "onInvalid", p, (o, op) => this.expect(o === "hold" || o === "hide", op, "hold oder hide erwartet"));
     this.opt(v, "props", p, this.propMap);
+    this.opt(v, "interaction", p, this.interaction);
   }
 
   element = (v: Json, p: string) => {
@@ -265,7 +278,7 @@ class Checker {
     for (const flag of ["disabled", "locked", "editorHidden", "lockAspect"]) this.opt(v, flag, p, this.bool);
     this.opt(v, "onInvalid", p, (o, op) => this.expect(o === "hold" || o === "hide", op, "hold oder hide erwartet"));
     this.opt(v, "props", p, this.propMap);
-    this.opt(v, "parts", p, this.partMap);
+    this.opt(v, "parts", p, (parts, pp) => this.partMap(parts, pp, true));
   };
 
   variant = (v: Json, p: string) => {

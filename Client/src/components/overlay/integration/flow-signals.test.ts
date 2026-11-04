@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { flowSignalNames, loadFlowSignalNames } from "./flow-signals";
+import { flowInputNames, flowSignalNames, loadFlowNames } from "./flow-signals";
 
+const input = (nodeId: number, name: unknown) => ({ nodeId, nodeTypeName: "UserSetupFunctionNode", metadata: { functionName: "HudInput" }, params: { input: name } });
 const hud = (nodeId: number, signal: unknown) => ({ nodeId, nodeTypeName: "UserSetupFunctionNode", metadata: { functionName: "HudSignal" }, params: { signal } });
 
 describe("flow signals for the overlay editor", () => {
@@ -17,10 +18,14 @@ describe("flow signals for the overlay editor", () => {
     const urls: string[] = [];
     const fetchJson = async (url: string) => {
       urls.push(url);
-      return url.endsWith("/setup/7") ? { id: 42 } : { nodes: [hud(1, "speedTarget")] };
+      return url.endsWith("/setup/7") ? { id: 42 } : { nodes: [hud(1, "speedTarget"), input(2, "light")] };
     };
-    expect(await loadFlowSignalNames(7, fetchJson)).toEqual(["speedTarget"]);
+    expect(await loadFlowNames(7, fetchJson)).toEqual({ signals: ["speedTarget"], inputs: ["light"] });
     expect(urls).toEqual(["/api/userconfig/setup/7", "/api/flow/42"]);
-    expect(await loadFlowSignalNames(7, async () => null)).toEqual([]);
+    expect(await loadFlowNames(7, async () => null)).toEqual({ signals: [], inputs: [] });
+  });
+
+  it("collects the valid names of HUD-Eingabe nodes once, sorted", () => {
+    expect(flowInputNames([input(1, "light"), input(2, " horn "), input(3, "light"), input(4, "bad-name"), hud(5, "x")])).toEqual(["horn", "light"]);
   });
 });

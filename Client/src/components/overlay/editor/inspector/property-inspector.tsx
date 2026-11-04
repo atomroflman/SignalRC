@@ -14,6 +14,7 @@ import { useEditorState } from "../canvas/hooks";
 import type { EditorStore } from "../core/store";
 import { analysisEnv, channelInfo, declareSignal, type ChannelDirectory } from "./channels";
 import { ChannelPicker, FormulaField, LiveBadge, btn, input, useLiveValue } from "./formula-field";
+import { InteractionEditor } from "./interaction-editor";
 import { checkFormula, simpleSource } from "./formula";
 import { dynamicsMessages, type DynamicsMessages } from "./messages";
 import {
@@ -96,6 +97,7 @@ export function PropertyInspector(props: PropertyInspectorProps) {
         </label>
       )}
       {el.type === "lidarWidget" && part === undefined && <LidarSource ctx={ctx} />}
+      {el.type !== "lidarWidget" && <InteractionEditor store={store} el={el} part={part} dir={dir} m={m} />}
       {sections(el, part).map((s) => (
         <div key={s.key} className="flex flex-col gap-1" data-ovl-section={s.key}>
           <div className="text-[11px] uppercase tracking-wide text-zinc-500">{m.section[s.key]}</div>

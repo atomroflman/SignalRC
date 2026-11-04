@@ -91,6 +91,15 @@ public sealed class OverlayService(
                 await PublicationAssetMetadataAsync(carId, publication.Id));
     }
 
+    /// <summary>Only the document of the current publication, without assets; null when none (D75 HUD input checks).</summary>
+    public async Task<JsonNode?> PublishedDocumentAsync(int carId)
+    {
+        var json = await db.OverlayPublications.AsNoTracking()
+            .Where(p => p.CarId == carId).OrderByDescending(p => p.Number)
+            .Select(p => p.DocumentJson).FirstOrDefaultAsync();
+        return json == null ? null : JsonNode.Parse(json);
+    }
+
     public async Task<OverlayResult<DraftInfo>> GetDraftAsync(int carId, User? user)
     {
         if (await RequireAdminAsync(user, carId) is { } error) return error;

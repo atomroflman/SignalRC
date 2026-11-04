@@ -666,6 +666,31 @@ Arbeitspakete: [Overlay-Arbeitspakete.md](Overlay-Arbeitspakete.md).
   Das Dokumentschema bleibt unverändert (Eigenschaften prüft der Katalog).
 - Zusätzliche Startvorlage „LiDAR-Kontur“; „LiDAR-Raster“ bleibt unverändert.
 
+### D75 – Klickbare HUD-Elemente als Eingaben des Flows
+
+- Ein Element oder SVG-Teil kann eine `interaction` tragen: `input` (Name,
+  Regel wie Signalnamen), `kind` (`button`, `toggle`, `value`, `slider`),
+  `value` (Standard 1), `min`/`max` (Standard 0/1), `step`, `public`
+  (Standard `false`).
+- Ein Klick schreibt in die HUD-Eingabe gleichen Namens; der Flow-Knoten
+  „HUD-Eingabe“ (`HudInput`) gibt den Wert aus. Taster: Wert solange
+  gedrückt, sonst 0. Schalter: wechselt zwischen 0 und Wert. Fester Wert:
+  setzt den Wert. Regler: `min` … `max` per Ziehen, in Schritten `step`.
+- Bewusste Ausnahme zu D09/D37: Das HUD bleibt beim Lesen nebenwirkungsfrei,
+  ein Klick dagegen berechnet den Flow neu wie jede andere Eingabe. Senden
+  ans Fahrzeug unterliegt weiter Pause, Konfigurationsmodus und Sitzung.
+- Nur der Browser des Fahrers führt den Flow aus und hält den Zustand
+  (z. B. ob ein Schalter an ist); nach einem Neuladen stehen alle
+  HUD-Eingaben auf 0.
+- Zuschauer dürfen nur öffentliche Interaktionen bedienen. Sie senden
+  Element, Teil und Aktion an den Server; Name und Wert nimmt der Server aus
+  dem **veröffentlichten** Dokument (Regler auf `min` … `max` begrenzt) und
+  leitet nur dann an die Fahrerverbindung weiter. Höchstens 30 Aufrufe je
+  Verbindung und Sekunde.
+- `interaction` ist wie `name` nicht in Varianten überschreibbar; in
+  Varianten-Überschreibungen von Teilen ist sie nicht erlaubt.
+- Kompatible Erweiterung: `catalogVersion` 2, `schemaVersion` bleibt 1.
+
 ## Spezifikationsstand
 
 ### S01 – Dokumentmodell und Property-Katalog v1 (Entwurf)
@@ -799,6 +824,7 @@ Gerätelauf ([modules §4](Shared/Overlay/modules/README.md)).
 | 2026-11-02 | AP06 auf dem Server registriert: Veröffentlichen prüft Formeln, D66 greift nur noch ohne registrierte Prüfung; `LidarGrid`-Kanäle sind kein Formelwert; Abhängigkeitsauskunft (`dependencies`) umgesetzt | AP02, AP06, AP13 |
 | 2026-11-02 | D73: Verwalter ist der Sitzungsbenutzer, der die Steuerung des verbundenen Fahrzeugs hält (ersetzt Login-Regel aus D57, API §1); Codes `OVL_API_SESSION_REQUIRED` statt `OVL_API_LOGIN_REQUIRED`, `OVL_API_NO_CAR_ACCESS` entfällt; Stream-Freigabe folgt derselben Regel | AP02, AP04, AP09, AP13, AP14 |
 | 2026-11-02 | D74: LiDAR-Kontur-Modus (LiDAR-Vertrag §6 neu gegliedert, §6.2 Kontur); Katalog `lidarWidget` um `display`, `contourJoinMm`, `contourWidth`, `contourShadow`, `contourShadowOpacity`; Referenzfälle `contour` in `fixtures/lidar/cases.json`, Dokument-Fixtures `valid/lidar-contour.json`, `invalid-semantic/lidar-display-not-allowed.json`; Vorlage `lidarContour` | AP01, AP08, AP10, AP12 |
+| 2026-11-04 | D75: klickbare HUD-Elemente; Attribut `interaction` an Elementen und Element-Teilen (Schema `interaction`, `partOverrideMap` für Varianten), `catalogVersion` 2; Flow-Knoten `HudInput`; Hub-Aufruf `HudInput` und Weiterleitung an die Fahrerverbindung (API §4); Fixtures `valid/interactions.json`, `invalid-schema/interaction-unknown-kind.json` | AP01, AP08, AP10, AP13 |
 
 ## Prüfpunkte nach Freigabe
 

@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { filterFunctionRegistry } from './filters/filter-function-registry';
+import { hudInputValues } from './filters/HudInputFunction';
+import { hudInputName, nextHudInputValue, type HudInputAction } from './overlay/integration/hud-input';
 import { Connection } from 'reactflow';
 
 export type ControlFlowNode = {
@@ -50,6 +52,8 @@ export type ControlFlowState = {
   setNodePositions: (positions: Record<number, { x: number; y: number }>) => Promise<void>;
   updateNodeParams(nodeId: number, params: Record<string, any>): Promise<void>;
   recalculateNode: (nodeId: number) => void;
+  /** A click on a clickable HUD element (D75), own or forwarded from a viewer: updates the HudInput nodes of that name. */
+  applyHudInput: (input: string, action: HudInputAction, value: number) => void;
   triggerNodeOutput: (nodeId: number, outputValues?: number[]) => void;
   reset: () => void;
   registerInput: (dbInputId: number ) => void;
@@ -383,6 +387,13 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
       set({ nodeLatestValues: state.nodeLatestValues, nodes: [...state.nodes], frame: state.frame + 1 });
     }
   },
+  applyHudInput(input, action, value) {
+    for (const node of get().nodes) {
+      if (hudInputName(node) !== input) continue;
+      hudInputValues.set(node.nodeId, nextHudInputValue(hudInputValues.get(node.nodeId) ?? 0, action, value));
+      get().recalculateNode(node.nodeId);
+    }
+  },
   triggerNodeOutput: (nodeId: number, outputValues?: number[]) => {
     const state = get();
     const node = state.nodes.find(n => n.nodeId === nodeId);
@@ -625,6 +636,11 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
       // startConnection builds a new one and resumes the stored session.
       connection.onclose(() => {
         if (get().connection === connection) set({ connection: undefined, carSession: undefined });
+      });
+      // A viewer's click on a public HUD element, checked and forwarded by the
+      // server to the connection that holds control (D75).
+      connection.on("HudInput", (inputCarId: number, input: string, action: HudInputAction, value: number) => {
+        if (get().carId === inputCarId && get().carSession) get().applyHudInput(input, action, value);
       });
       await connection.start();
       // ponytail: only replace carSession when the connection is brand-new.

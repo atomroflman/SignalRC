@@ -57,6 +57,7 @@ public static class TelemetryRegistration
         services.AddSingleton<ITelemetryChannelDirectory, DbTelemetryChannelDirectory>();
         services.AddSingleton<TelemetryRelay>();
         services.AddSingleton<ControlDisplayRelay>();
+        services.AddSingleton<SignalRC.Server.Overlay.HudInputRateLimit>();
         services.TryAddSingleton(TimeProvider.System);
         return services;
     }

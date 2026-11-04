@@ -1,5 +1,5 @@
 {
-  "catalogVersion": 1,
+  "catalogVersion": 2,
   "kinds": {
     "number":  { "valueType": "number", "interpolation": "linear", "modes": ["static", "binding", "rate", "clip"] },
     "length":  { "valueType": "number", "unit": "logicalPx", "interpolation": "linear", "modes": ["static", "binding", "rate", "clip"] },

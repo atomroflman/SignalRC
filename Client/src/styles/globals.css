@@ -118,3 +118,12 @@ textarea {
 .react-flow .react-flow__node-clusterFrame {
   pointer-events: none !important;
 }
+
+/* Live HUD: only clickable elements (D75) take pointer input, the rest of the
+   HUD stays click-through. Viewers only get the public ones. */
+[data-ovl-hud-interact="all"] [data-ovl-interaction],
+[data-ovl-hud-interact="public"] [data-ovl-interaction][data-ovl-public] {
+  pointer-events: visible;
+  cursor: pointer;
+  touch-action: none;
+}
