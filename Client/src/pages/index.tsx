@@ -110,6 +110,7 @@ export default function Home() {
       title: messages.ping.title,
       content: selectedCarId ? <Ping /> : null,
       visible: Boolean(selectedCarId),
+      defaultOpen: true,
     },
   ];
 
