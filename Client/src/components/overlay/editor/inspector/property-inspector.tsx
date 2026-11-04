@@ -244,14 +244,19 @@ function StaticEditor({ row, ctx }: { row: PropertyRow; ctx: RowContext }) {
   const shown = explicit || (typeof base !== "string" || !["fromSource", "fromAsset", "center"].includes(base)) ? (base === null ? "" : String(base)) : "";
   return (
     <span className="flex items-center gap-1 min-w-0">
-      {isColor && typeof base === "string" && /^#[0-9a-fA-F]{6}/.test(base) && (
-        <input
-          type="color"
-          className="h-5 w-6 shrink-0 bg-transparent"
-          value={base.slice(0, 7)}
-          onChange={(e) => commit(e.target.value + (base.length === 9 ? base.slice(7) : ""))}
-        />
-      )}
+      {/* Also without a colour yet ("aus Asset", "none"): the picker is the obvious way to set one. */}
+      {isColor && (() => {
+        const hex = typeof base === "string" && /^#[0-9a-fA-F]{6}/.test(base) ? base : undefined;
+        return (
+          <input
+            type="color"
+            className="h-5 w-6 shrink-0 bg-transparent"
+            value={hex ? hex.slice(0, 7) : "#ffffff"}
+            title={hex ? undefined : placeholderOf(row, ctx)}
+            onChange={(e) => commit(e.target.value + (hex?.length === 9 ? hex.slice(7) : ""))}
+          />
+        );
+      })()}
       <input
         className={`${input} ${error ? "border-red-700" : ""}`}
         key={key}
