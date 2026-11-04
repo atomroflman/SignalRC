@@ -125,6 +125,22 @@ elif [ "$DEPLOY_TYPE" = "onboard" ]; then
     LOG_DIR="$(grep -oP '^StandardOutput=append:\K.*(?=/onboard.log)' "$ONBOARD_SERVICE" | head -1 || true)"
     [ -n "$LOG_DIR" ] || LOG_DIR="/var/log/signalrc"
     bash "$SCRIPT_DIR/scripts/onboard-write-logrotate.sh" "$LOG_DIR"
+
+    # Migration: StartLimitIntervalSec=infinity lässt das Zählfenster nie
+    # ablaufen, nach 5 Starts blieb die Unit in start-limit-hit hängen.
+    # 0 schaltet die Begrenzung wirklich ab.
+    UNITS_FIXED=""
+    for UNIT_FILE in "$ONBOARD_SERVICE" /etc/systemd/system/signalrc-mediamtx.service; do
+        if [ -f "$UNIT_FILE" ] && grep -q '^StartLimitIntervalSec=infinity' "$UNIT_FILE"; then
+            sed -i 's/^StartLimitIntervalSec=infinity$/StartLimitIntervalSec=0/' "$UNIT_FILE"
+            echo "StartLimitIntervalSec=0 gesetzt in $UNIT_FILE"
+            UNITS_FIXED="yes"
+        fi
+    done
+    if [ -n "$UNITS_FIXED" ]; then
+        systemctl daemon-reload
+    fi
+    systemctl reset-failed signalrc-onboard.service signalrc-mediamtx.service 2>/dev/null || true
 fi
 
 # ── 3. Service stoppen ───────────────────────────────────────────────

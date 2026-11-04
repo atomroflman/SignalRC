@@ -18,7 +18,9 @@ Description=SignalRC Onboard Client
 After=network-online.target
 Wants=network-online.target
 # Endless retry: Onboard must always come back, even after a hard crash.
-StartLimitIntervalSec=infinity
+# 0 disables the start rate limit; "infinity" would make the window never
+# expire, so after 5 starts the unit stays in start-limit-hit for good.
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
