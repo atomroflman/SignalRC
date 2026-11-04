@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   PI_HEADER, channelsOnPin, freeChannelName, hasStandardHeader, isUsableGpio, pcaI2cAddress, pcaJumpers, piBoardVariant,
-  pinProblems, readPinConfigs, withOption, writePinConfigs, DEFAULT_PIN_CONFIG,
+  pinProblems, readPinConfigs, withOption, writePinConfigs, DEFAULT_PIN_CONFIG, nearestPin, inputLevel,
 } from "./pin-boards";
 import { pinPosition } from "./raspberry-pi-board";
 import { channelX } from "./pca9685-board";
@@ -88,5 +88,20 @@ describe("PCA9685 board", () => {
   it("leaves a gap between the groups of four", () => {
     expect(channelX(1) - channelX(0)).toBeCloseTo(2.54);
     expect(channelX(4) - channelX(3)).toBeCloseTo(5.08);
+  });
+});
+
+describe("pull resistor schematic helpers", () => {
+  it("finds the nearest GND and 3.3 V pin, same row first", () => {
+    expect(nearestPin(11, "gnd")?.physical).toBe(9);
+    expect(nearestPin(11, "3v3")?.physical).toBe(17);
+    expect(nearestPin(40, "gnd")?.physical).toBe(39);
+  });
+
+  it("gives the level of a switched input", () => {
+    expect(inputLevel("Up", false)).toBe("HIGH");
+    expect(inputLevel("Up", true)).toBe("LOW");
+    expect(inputLevel("Down", true)).toBe("HIGH");
+    expect(inputLevel("None", true)).toBe("LOW");
   });
 });

@@ -231,3 +231,18 @@ export function pcaJumpers(boardAddress: number): boolean[] {
 }
 
 export const pcaI2cAddress = (boardAddress: number) => `0x${(PCA_BASE_ADDRESS + (boardAddress & 0x3f)).toString(16).toUpperCase()}`;
+
+/** The header pin of a kind (e.g. "gnd") closest to a pin, for wiring hints; same row first. */
+export function nearestPin(physical: number, kind: PinKind): HeaderPin | undefined {
+  const col = (n: number) => Math.ceil(n / 2);
+  return PI_HEADER
+    .filter(p => p.kind === kind)
+    .sort((a, b) =>
+      Math.abs(col(a.physical) - col(physical)) - Math.abs(col(b.physical) - col(physical))
+      || Number(a.physical % 2 !== physical % 2) - Number(b.physical % 2 !== physical % 2))[0];
+}
+
+/** Electrical level of an input with a switch: pull-up (or external pull-up) reads low while closed. */
+export function inputLevel(pull: GpioPull, closed: boolean): "HIGH" | "LOW" {
+  return pull === "Down" ? (closed ? "HIGH" : "LOW") : (closed ? "LOW" : "HIGH");
+}

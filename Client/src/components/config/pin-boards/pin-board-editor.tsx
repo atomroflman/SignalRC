@@ -8,6 +8,7 @@ import {
   type ChannelRef, type GpioPinConfig, type HeaderPin, type PiBoardVariant, type PinKind,
 } from "./pin-boards";
 import { liveBool, liveNumber, useLiveTelemetry } from "./use-live-telemetry";
+import PullSchematic from "./pull-schematic";
 
 // Board editor of a pin manager: the board drawn with its real pinout, pins
 // hoverable (tooltip) and clickable (select + configure), and buttons that
@@ -258,6 +259,7 @@ function PiEditor(props: Props) {
                     <label className="flex flex-col gap-1 text-zinc-400">Debounce (ms)
                       <input className={fieldClass + " w-20"} type="number" min={0} value={config.debounceMs} onChange={e => setConfig(pin.physical, { ...config, debounceMs: Math.max(0, Number(e.target.value) || 0) })} />
                     </label>
+                    <PullSchematic physical={pin.physical} pull={config.pull} activeLow={config.activeLow} />
                   </>
                 )}
                 {config?.mode === "Output" && (
