@@ -40,7 +40,7 @@ public class GpioTelemetryTests
             ["pins"] = new List<object>
             {
                 new Dictionary<string, object> { ["pin"] = 11, ["mode"] = "Input", ["pull"] = "Up", ["activeLow"] = true, ["debounceMs"] = 20 },
-                new Dictionary<string, object> { ["pin"] = 13, ["mode"] = "output", ["initialState"] = true },
+                new Dictionary<string, object> { ["pin"] = 13, ["mode"] = "output", ["initialState"] = true, ["device"] = "Relay" },
             },
             ["driver"] = "Auto",
         };
@@ -52,7 +52,31 @@ public class GpioTelemetryTests
         Assert.True(manager.Pins[0].ActiveLow);
         Assert.Equal(20, manager.Pins[0].DebounceMs);
         Assert.True(manager.Pins[1].InitialState);
+        Assert.Equal(ConnectedDevice.Relay, manager.Pins[1].Device);
+        Assert.Equal(ConnectedDevice.Auto, manager.Pins[0].Device);
         Assert.Empty(manager.Validate());
+    }
+
+    [Fact]
+    public void PcaChannelConfigsBindAndValidate()
+    {
+        var pca = new Pca9685PwmExtension(Services());
+        var options = new Dictionary<string, object>
+        {
+            ["channels"] = new List<object>
+            {
+                new Dictionary<string, object> { ["channel"] = 4, ["device"] = "Led", ["label"] = "Blinker links" },
+                new Dictionary<string, object> { ["channel"] = 4, ["device"] = "servo" },
+                new Dictionary<string, object> { ["channel"] = 16 },
+            },
+        };
+        Assert.Empty(ChannelOptionBinder.Apply(pca, options, NullLogger.Instance, "test", warnUnknown: true));
+        Assert.Equal(ConnectedDevice.Led, pca.Channels[0].Device);
+        Assert.Equal("Blinker links", pca.Channels[0].Label);
+        Assert.Equal(ConnectedDevice.Servo, pca.Channels[1].Device);
+        var problems = pca.Validate().ToList();
+        Assert.Contains(problems, p => p.Contains("more than once"));
+        Assert.Contains(problems, p => p.Contains("0-15"));
     }
 
     [Fact]

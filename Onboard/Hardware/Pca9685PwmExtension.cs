@@ -10,9 +10,9 @@ namespace SignalRC.Onboard.Hardware
     /// PCA9685 16-channel PWM board over I2C (addresses 0–15 are the channels). Runs at 50 Hz
     /// for servos; outputs can be read back from the chip registers for telemetry.
     /// </summary>
-    public class Pca9685PwmExtension : IModuleManager, IDisposable
+    public class Pca9685PwmExtension : IModuleManager, IValidatingModuleManager, IDisposable
     {
-        public const int Channels = 16;
+        public const int ChannelCount = 16;
         public const int Resolution = 4096;
         private const byte Prescale = 0x79;
         /// <summary>25 MHz internal clock / (4096 × (prescale + 1)).</summary>
@@ -31,6 +31,8 @@ namespace SignalRC.Onboard.Hardware
         /// <summary>I2C bus number (/dev/i2c-N).</summary>
         public int I2cBus { get; set; } = 1;
         public int BoardI2cAddress => BoardAddress + PCA9685_DEFAULT_ADDRESS;
+        /// <summary>What is plugged into the channels (label, device); only used by the wiring diagram.</summary>
+        public List<PcaChannelConfig> Channels { get; set; } = new();
 
         public Pca9685PwmExtension(IServiceProvider provider)
         {
@@ -117,11 +119,23 @@ namespace SignalRC.Onboard.Hardware
                 (mode1[0] & 0x10) != 0);
         }
 
+        public IEnumerable<string> Validate()
+        {
+            var seen = new HashSet<int>();
+            foreach (var c in Channels)
+            {
+                if (c.Channel < 0 || c.Channel >= ChannelCount)
+                    yield return $"Channel config {c.Channel}: the PCA9685 has channels 0-15.";
+                else if (!seen.Add(c.Channel))
+                    yield return $"Channel {c.Channel} is configured more than once.";
+            }
+        }
+
         public T GetModule<T>(int address) where T : class, IModule
         {
             if (!typeof(T).IsAssignableTo(typeof(IPwmModule)))
                 throw new InvalidOperationException($"Module type {typeof(T).Name} is not a PWM module. Only IPwmModule is supported.");
-            if (address < 0 || address >= Channels)
+            if (address < 0 || address >= ChannelCount)
                 throw new ArgumentOutOfRangeException(nameof(address), "Address must be between 0 and 15.");
             EnsureInitialized();
 

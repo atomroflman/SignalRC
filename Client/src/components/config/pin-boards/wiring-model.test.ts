@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildWiring, controlDeviceKind, guessOutputKind, wireList, type WiringChannel, type WiringManager } from "./wiring-model";
-import { GPIO_READER, PWM_READER } from "./pin-boards";
+import { buildWiring, connectedDeviceKind, controlDeviceKind, guessOutputKind, wireList, type WiringChannel, type WiringManager } from "./wiring-model";
+import { GPIO_READER, PWM_READER, readPcaChannels, readPinConfigs, writePcaChannels, writePinConfigs } from "./pin-boards";
 import { layoutWiring, pulseMs } from "./wiring-diagram";
 import { ledColor } from "./device-art";
 
@@ -119,5 +119,34 @@ describe("layout", () => {
     expect(pulseMs({ name: "x", type: "pwm", report: "Percent" }, 7.5)).toBeCloseTo(1.5);
     expect(pulseMs({ name: "x", type: "pwm", report: "PulseWidthUs" }, 2000)).toBe(2);
     expect(pulseMs({ name: "x", type: "pwm", report: "Counts" }, 307)).toBeCloseTo(1.5, 1);
+  });
+});
+
+describe("configured devices", () => {
+  it("round-trips device in pin configs and PCA channel configs", () => {
+    const pins = readPinConfigs({ pins: [{ pin: 13, mode: "Output", device: "relay" }, { pin: 15, mode: "Output" }] });
+    expect(pins.map(p => p.device)).toEqual(["Relay", "Auto"]);
+    expect(writePinConfigs({}, pins)).toEqual({ pins: [{ pin: 13, mode: "Output", device: "Relay" }, { pin: 15, mode: "Output" }] });
+    const chans = readPcaChannels({ Channels: [{ channel: 4, device: "Led", label: "Blinker" }, { channel: 2 }] });
+    expect(chans).toEqual([{ channel: 4, device: "Led", label: "Blinker" }, { channel: 2, device: "Auto", label: "" }]);
+    expect(writePcaChannels({ boardAddress: 1, Channels: [] }, chans)).toEqual({ boardAddress: 1, channels: [{ channel: 4, device: "Led", label: "Blinker" }] });
+    expect(writePcaChannels({ channels: [{ channel: 1 }] }, [])).toEqual({});
+  });
+
+  it("lets the configured device win over the guess and keeps where it is saved", () => {
+    const d = buildWiring([
+      { name: "gpio", type: "RaspberryPiGpioManager", options: { pins: [{ pin: 13, mode: "Output", device: "Relay" }] } },
+      { name: "pca", type: "Pca9685PwmExtension", options: { channels: [{ channel: 0, device: "Esc" }, { channel: 7, device: "Led", label: "Blinker links" }] } },
+    ], [
+      control("light", "GpioOutput", "gpio", 13),
+      control("drive", "Steering", "pca", 0),
+    ], null);
+    expect(d.piDevices[0]).toMatchObject({ kind: "relay", device: "Relay", manager: "gpio" });
+    expect(d.pcas[0].devices.map(x => [x.endpoint, x.kind, x.title])).toEqual([
+      [{ board: "pca", manager: "pca", channel: 0 }, "esc", "drive"],
+      [{ board: "pca", manager: "pca", channel: 7 }, "led", "Blinker links"],
+    ]);
+    expect(connectedDeviceKind("Sensor")).toBe("input");
+    expect(connectedDeviceKind("Auto")).toBeUndefined();
   });
 });

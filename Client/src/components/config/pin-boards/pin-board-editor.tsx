@@ -2,10 +2,10 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import RaspberryPiBoard, { type PinVisual } from "./raspberry-pi-board";
 import Pca9685Board, { type PcaChannelVisual, type PcaHoverTarget } from "./pca9685-board";
 import {
-  DEFAULT_PIN_CONFIG, GPIO_READER, PI_BOARD_LABELS, PI_HEADER, PIN_COLORS, PIN_KIND_LABELS, PWM_READER, PCA_CHANNELS,
+  CONNECTED_DEVICES, CONNECTED_DEVICE_LABELS, DEFAULT_PIN_CONFIG, GPIO_READER, PI_BOARD_LABELS, PI_HEADER, PIN_COLORS, PIN_KIND_LABELS, PWM_READER, PCA_CHANNELS,
   channelsOnPin, freeChannelName, hasStandardHeader, isUsableGpio, optionValue, pcaI2cAddress, piBoardVariant, pinProblems,
-  readPinConfigs, withOption, writePinConfigs,
-  type ChannelRef, type GpioPinConfig, type HeaderPin, type PiBoardVariant, type PinKind,
+  readPcaChannels, readPinConfigs, withOption, writePcaChannels, writePinConfigs,
+  type ChannelRef, type ConnectedDevice, type GpioPinConfig, type HeaderPin, type PiBoardVariant, type PinKind,
 } from "./pin-boards";
 import { liveBool, liveNumber, useLiveTelemetry } from "./use-live-telemetry";
 import PullSchematic from "./pull-schematic";
@@ -55,6 +55,15 @@ interface Props {
 
 const fieldClass = "bg-zinc-800 text-zinc-100 border border-zinc-700 rounded px-2 py-1 text-xs";
 const btn = "px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded text-xs border border-zinc-700";
+/** "What is wired here" select, shared by both editors and the wiring page. */
+export function DeviceSelect({ value, onChange, className }: { value: ConnectedDevice; onChange: (d: ConnectedDevice) => void; className?: string }) {
+  return (
+    <select className={className ?? fieldClass} value={value} onChange={e => onChange(e.target.value as ConnectedDevice)} title="Only used by the wiring diagram">
+      {CONNECTED_DEVICES.map(d => <option key={d} value={d}>{CONNECTED_DEVICE_LABELS[d]}</option>)}
+    </select>
+  );
+}
+
 const btnAdd = "px-2 py-1 bg-sky-950 hover:bg-sky-900 text-sky-100 rounded text-xs border border-sky-800";
 
 // --- tooltip ------------------------------------------------------------------
@@ -247,6 +256,11 @@ function PiEditor(props: Props) {
                     <input className={fieldClass} value={config.label} placeholder="e.g. endstop front" onChange={e => setConfig(pin.physical, { ...config, label: e.target.value })} />
                   </label>
                 )}
+                {config && (
+                  <label className="flex flex-col gap-1 text-zinc-400">Device
+                    <DeviceSelect value={config.device} onChange={device => setConfig(pin.physical, { ...config, device })} />
+                  </label>
+                )}
                 {config?.mode === "Input" && (
                   <>
                     <label className="flex flex-col gap-1 text-zinc-400">Pull resistor
@@ -378,6 +392,10 @@ function PcaEditor(props: Props) {
   };
 
   const ch = selected;
+  const pcaConfigs = readPcaChannels(options);
+  const chConfig = ch !== undefined ? pcaConfigs.find(c => c.channel === ch) ?? { channel: ch, device: "Auto" as ConnectedDevice, label: "" } : undefined;
+  const setChConfig = (next: NonNullable<typeof chConfig>) =>
+    onOptionsChange(writePcaChannels(options, [...pcaConfigs.filter(c => c.channel !== next.channel), next]));
   const chChannels = ch !== undefined ? channelsOnPin(channels, managerName, ch) : [];
   const taken = channels.map(c => c.name);
   const create = (kind: "control" | "telemetry", type: string, suffix: string, extra: Partial<NewChannelRequest> = {}) => {
@@ -410,9 +428,19 @@ function PcaEditor(props: Props) {
       {ch !== undefined && (
         <div className="rounded border border-zinc-700 bg-zinc-900 p-2 text-xs space-y-1">
           <div className="flex items-center justify-between">
-            <span className="font-semibold text-zinc-100">Channel {ch}</span>
+            <span className="font-semibold text-zinc-100">Channel {ch}{chConfig?.label ? ` · ${chConfig.label}` : ""}</span>
             <button className={btn} onClick={() => setSelected(undefined)}>Close</button>
           </div>
+          {chConfig && (
+            <div className="flex flex-wrap items-end gap-3 pb-1">
+              <label className="flex flex-col gap-1 text-zinc-400">Label
+                <input className={fieldClass} value={chConfig.label} placeholder="e.g. blinker left" onChange={e => setChConfig({ ...chConfig, label: e.target.value })} />
+              </label>
+              <label className="flex flex-col gap-1 text-zinc-400">Device
+                <DeviceSelect value={chConfig.device} onChange={device => setChConfig({ ...chConfig, device })} />
+              </label>
+            </div>
+          )}
           {chChannels.length === 0 && <div className="text-zinc-500">No channel uses it yet.</div>}
           {chChannels.map(c => (
             <div key={c.kind + c.name} className="font-mono text-sky-300">

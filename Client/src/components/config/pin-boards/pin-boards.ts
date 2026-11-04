@@ -105,6 +105,14 @@ export function hasStandardHeader(model: string | null | undefined): boolean {
 // RaspberryPiGpioManager options
 
 export type GpioPinMode = "Output" | "Input" | "Pwm";
+
+/** What is wired to a pin or PCA channel (ConnectedDevice in Onboard/Hardware); only for the wiring diagram. */
+export const CONNECTED_DEVICES = ["Auto", "Led", "Relay", "Buzzer", "Servo", "Esc", "Button", "Sensor", "Other"] as const;
+export type ConnectedDevice = (typeof CONNECTED_DEVICES)[number];
+export const CONNECTED_DEVICE_LABELS: Record<ConnectedDevice, string> = {
+  Auto: "automatic (from the channels)", Led: "LED", Relay: "Relay / MOSFET module", Buzzer: "Buzzer", Servo: "Servo",
+  Esc: "ESC + motor", Button: "Button / switch", Sensor: "Sensor (digital)", Other: "Other load",
+};
 export type GpioPull = "None" | "Up" | "Down";
 
 export interface GpioPinConfig {
@@ -115,10 +123,11 @@ export interface GpioPinConfig {
   debounceMs: number;
   initialState: boolean;
   label: string;
+  device: ConnectedDevice;
 }
 
 export const DEFAULT_PIN_CONFIG: Omit<GpioPinConfig, "pin"> = {
-  mode: "Output", pull: "None", activeLow: false, debounceMs: 0, initialState: false, label: "",
+  mode: "Output", pull: "None", activeLow: false, debounceMs: 0, initialState: false, label: "", device: "Auto",
 };
 
 const pick = <T extends string>(value: unknown, allowed: readonly T[], fallback: T): T => {
@@ -145,6 +154,7 @@ export function readPinConfigs(options: unknown): GpioPinConfig[] {
       debounceMs: Number.isFinite(Number(r.debouncems)) ? Number(r.debouncems) : 0,
       initialState: r.initialstate === true,
       label: typeof r.label === "string" ? r.label : "",
+      device: pick(r.device, CONNECTED_DEVICES, "Auto"),
     }];
   });
 }
@@ -160,6 +170,7 @@ export function writePinConfigs(options: unknown, pins: GpioPinConfig[]): Record
     if (c.mode === "Input" && c.debounceMs > 0) out.debounceMs = c.debounceMs;
     if (c.mode === "Output" && c.initialState) out.initialState = true;
     if (c.label.trim()) out.label = c.label.trim();
+    if (c.device !== "Auto") out.device = c.device;
     return out;
   });
   if (list.length > 0) o.pins = list;
@@ -245,4 +256,28 @@ export function nearestPin(physical: number, kind: PinKind): HeaderPin | undefin
 /** Electrical level of an input with a switch: pull-up (or external pull-up) reads low while closed. */
 export function inputLevel(pull: GpioPull, closed: boolean): "HIGH" | "LOW" {
   return pull === "Down" ? (closed ? "HIGH" : "LOW") : (closed ? "LOW" : "HIGH");
+}
+
+/** One entry of the PCA9685 "channels" option: label and device per output, for the wiring diagram. */
+export interface PcaChannelConfig { channel: number; device: ConnectedDevice; label: string }
+
+export function readPcaChannels(options: unknown): PcaChannelConfig[] {
+  const list = optionValue(options, "channels");
+  if (!Array.isArray(list)) return [];
+  return list.flatMap((raw): PcaChannelConfig[] => {
+    if (!raw || typeof raw !== "object") return [];
+    const r = Object.fromEntries(Object.entries(raw as Record<string, unknown>).map(([k, v]) => [k.toLowerCase(), v]));
+    const channel = Number(r.channel);
+    if (!Number.isInteger(channel)) return [];
+    return [{ channel, device: pick(r.device, CONNECTED_DEVICES, "Auto"), label: typeof r.label === "string" ? r.label : "" }];
+  });
+}
+
+/** Writes the "channels" option; entries without device and label are dropped. */
+export function writePcaChannels(options: unknown, channels: PcaChannelConfig[]): Record<string, unknown> {
+  const list = [...channels]
+    .filter(c => c.device !== "Auto" || c.label.trim())
+    .sort((a, b) => a.channel - b.channel)
+    .map(c => ({ channel: c.channel, ...(c.device !== "Auto" ? { device: c.device } : {}), ...(c.label.trim() ? { label: c.label.trim() } : {}) }));
+  return withOption(options, "channels", list.length > 0 ? list : undefined);
 }

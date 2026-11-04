@@ -5,7 +5,7 @@
 
 import {
   GPIO_READER, PCA_BASE_ADDRESS, PI_HEADER, PWM_READER, isUsableGpio, nearestPin, optionValue, pcaI2cAddress, piBoardVariant,
-  readPinConfigs, type GpioPinConfig, type GpioPinMode, type GpioPull, type HeaderPin, type PiBoardVariant,
+  readPcaChannels, readPinConfigs, type ConnectedDevice, type GpioPinConfig, type GpioPinMode, type GpioPull, type HeaderPin, type PiBoardVariant,
 } from "./pin-boards";
 
 export interface WiringManager { name: string; type: string; options: unknown }
@@ -31,6 +31,10 @@ export interface WiringReader { name: string; type: "gpio" | "pwm"; report: stri
 export interface WiringDevice {
   id: string;
   kind: DeviceKind;
+  /** Device set in the pin manager config; Auto = guessed from the channels. */
+  device: ConnectedDevice;
+  /** Pin manager whose options hold the pin/channel config (where the device is saved). */
+  manager: string;
   /** Display name, channel name or pin label. */
   title: string;
   endpoint: Endpoint;
@@ -106,6 +110,21 @@ export function controlDeviceKind(type: string, name: string, displayName?: stri
   return undefined;
 }
 
+/** The part a configured device stands for; undefined for Auto. */
+export function connectedDeviceKind(device: ConnectedDevice): DeviceKind | undefined {
+  switch (device) {
+    case "Led": return "led";
+    case "Relay": return "relay";
+    case "Buzzer": return "buzzer";
+    case "Servo": return "servo";
+    case "Esc": return "esc";
+    case "Button": return "button";
+    case "Sensor": return "input";
+    case "Other": return "output";
+    default: return undefined;
+  }
+}
+
 const KIND_RANK: Record<DeviceKind, number> = { esc: 7, servo: 6, relay: 5, buzzer: 4, led: 3, output: 2, button: 1, input: 0 };
 
 const readerOf = (c: WiringChannel): WiringReader | undefined => {
@@ -139,19 +158,20 @@ export function buildWiring(managers: WiringManager[], channels: WiringChannel[]
 
   const piManagers = [...byName.values()].filter(m => isPiManagerType(m.type));
   const pinConfigs = new Map<number, GpioPinConfig>();
+  const pinOwner = new Map<number, string>();
   for (const m of piManagers) for (const c of readPinConfigs(m.options)) {
     if (pinConfigs.has(c.pin)) warnings.push(`Pin ${c.pin} is configured by more than one GPIO pin manager.`);
-    else pinConfigs.set(c.pin, c);
+    else { pinConfigs.set(c.pin, c); pinOwner.set(c.pin, m.name); }
   }
 
   // Group the channels by endpoint.
-  type Group = { endpoint: Endpoint; controls: WiringChannel[]; readers: WiringReader[]; kinds: DeviceKind[] };
+  type Group = { endpoint: Endpoint; manager: string; controls: WiringChannel[]; readers: WiringReader[]; kinds: DeviceKind[] };
   const groups = new Map<string, Group>();
   const keyOf = (e: Endpoint) => e.board === "pi" ? `pi:${e.pin}` : `pca:${e.manager}:${e.channel}`;
-  const group = (e: Endpoint) => {
+  const group = (e: Endpoint, manager: string) => {
     const k = keyOf(e);
     let g = groups.get(k);
-    if (!g) { g = { endpoint: e, controls: [], readers: [], kinds: [] }; groups.set(k, g); }
+    if (!g) { g = { endpoint: e, manager, controls: [], readers: [], kinds: [] }; groups.set(k, g); }
     return g;
   };
   const externals = new Map<string, WiringExternal>();
@@ -173,12 +193,12 @@ export function buildWiring(managers: WiringManager[], channels: WiringChannel[]
       const pin = PI_HEADER[c.address - 1];
       if (!pin) { warnings.push(`${c.name}: pin ${c.address} is not on the 40-pin header (addresses are physical pin numbers 1–40).`); continue; }
       if (!isUsableGpio(pin)) { warnings.push(`${c.name}: pin ${c.address} (${pin.label}) is not a GPIO.`); continue; }
-      const g = group({ board: "pi", pin: c.address });
+      const g = group({ board: "pi", pin: c.address }, pinOwner.get(c.address) ?? managerName);
       if (reader) g.readers.push(reader); else { g.controls.push(c); g.kinds.push(kind ?? "output"); }
     } else if (isPcaManagerType(m.type)) {
       if (kind === "software") continue;
       if (c.address == null || c.address < 0 || c.address > 15) { warnings.push(`${c.name}: PCA9685 channel ${c.address ?? "-"} is not 0–15.`); continue; }
-      const g = group({ board: "pca", manager: m.name, channel: c.address });
+      const g = group({ board: "pca", manager: m.name, channel: c.address }, m.name);
       if (reader) {
         if (reader.type === "gpio") warnings.push(`${c.name}: GpioPinReader on a PCA9685 channel - the PCA only has PWM outputs, use PwmOutputReader.`);
         g.readers.push(reader);
@@ -193,8 +213,14 @@ export function buildWiring(managers: WiringManager[], channels: WiringChannel[]
   // Configured pins without any channel still get drawn.
   for (const cfg of pinConfigs.values()) {
     const pin = PI_HEADER[cfg.pin - 1];
-    if (pin && isUsableGpio(pin)) group({ board: "pi", pin: cfg.pin });
+    if (pin && isUsableGpio(pin)) group({ board: "pi", pin: cfg.pin }, pinOwner.get(cfg.pin)!);
   }
+  const pcaConfigs = new Map<string, ReturnType<typeof readPcaChannels>[number]>();
+  for (const m of byName.values()) if (isPcaManagerType(m.type))
+    for (const c of readPcaChannels(m.options)) if (c.channel >= 0 && c.channel <= 15) {
+      pcaConfigs.set(`${m.name}:${c.channel}`, c);
+      group({ board: "pca", manager: m.name, channel: c.channel }, m.name);
+    }
 
   const pcaNames = [...byName.values()].filter(m => isPcaManagerType(m.type)).map(m => m.name);
   const piDevices: WiringDevice[] = [];
@@ -212,13 +238,14 @@ export function buildWiring(managers: WiringManager[], channels: WiringChannel[]
       const header = PI_HEADER[physical - 1];
       const cfg = pinConfigs.get(physical);
       const mode: GpioPinMode = cfg?.mode ?? (g.controls.length > 0 ? (strongest === "servo" || strongest === "esc" ? "Pwm" : "Output") : "Input");
-      const pin: GpioPinConfig = cfg ?? { pin: physical, mode, pull: "None", activeLow: false, debounceMs: 0, initialState: false, label: "" };
+      const pin: GpioPinConfig = cfg ?? { pin: physical, mode, pull: "None", activeLow: false, debounceMs: 0, initialState: false, label: "", device: "Auto" };
       let kind: DeviceKind = strongest ?? (mode === "Input" ? "button" : mode === "Pwm" ? "led" : "output");
       if (!strongest && mode === "Output" && cfg?.label) {
         // A configured output without channel: trust the label only when it says what it is.
         const guess = guessOutputKind(cfg.label);
         kind = guess !== "led" || /led|light|licht|lamp/i.test(cfg.label) ? guess : "output";
       }
+      kind = connectedDeviceKind(pin.device) ?? kind;
       if (mode === "Input" && g.controls.length > 0) warnings.push(`Pin ${physical}: configured as input but driven by ${controlNames.join(", ")}.`);
       if ((kind === "servo" || kind === "esc") && !header.pwm)
         warnings.push(`${title ?? pinTitle(header)}: a servo signal needs hardware PWM - use pin 12, 32, 33 or 35 or a PCA9685 channel.`);
@@ -231,18 +258,20 @@ export function buildWiring(managers: WiringManager[], channels: WiringChannel[]
       if (kind === "servo" || kind === "esc") notes.push("Servo power from a separate 5–6 V BEC, its GND joined with the Pi's GND.");
       if (kind === "button" && pin.pull === "None") notes.push("No internal pull: add 10 kΩ to 3.3 V.");
       piDevices.push({
-        id: keyOf(g.endpoint), kind, title: title ?? (cfg?.label || header.label), endpoint: g.endpoint,
+        id: keyOf(g.endpoint), kind, device: pin.device, manager: g.manager, title: title ?? (cfg?.label || header.label), endpoint: g.endpoint,
         controls: controlNames, readers: g.readers, pin, pwm: mode === "Pwm",
         gnd: nearestPin(physical, "gnd")?.physical, v33: nearestPin(physical, "3v3")?.physical, v5: nearestPin(physical, "5v")?.physical, notes,
       });
     } else {
-      const kind: DeviceKind = strongest ?? "output";
-      if (g.controls.length === 0) notes.push("Only read back, no control channel drives this channel.");
+      const cfg = pcaConfigs.get(`${g.endpoint.manager}:${g.endpoint.channel}`);
+      const kind: DeviceKind = connectedDeviceKind(cfg?.device ?? "Auto") ?? strongest ?? "output";
+      if (g.controls.length === 0) notes.push(g.readers.length > 0 ? "Only read back, no control channel drives this channel." : "Configured, but no channel uses this output yet.");
       if (kind === "led") notes.push("LED with 220 Ω series resistor between PWM (+) and GND (−); the PCA sinks/sources max. 25 mA.");
       if (kind === "relay") notes.push("Relay/MOSFET module: IN on PWM, VCC on V+, GND on GND.");
       if (kind === "esc") notes.push("If the ESC has a BEC, its red wire feeds V+ for all servos - use only one BEC.");
       pcaDevices.get(g.endpoint.manager)?.push({
-        id: keyOf(g.endpoint), kind, title: title ?? `Channel ${g.endpoint.channel}`, endpoint: g.endpoint,
+        id: keyOf(g.endpoint), kind, device: cfg?.device ?? "Auto", manager: g.manager,
+        title: title ?? (cfg?.label || `Channel ${g.endpoint.channel}`), endpoint: g.endpoint,
         controls: controlNames, readers: g.readers, pwm: true, notes,
       });
     }

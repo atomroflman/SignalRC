@@ -202,6 +202,8 @@ namespace SignalRC.Onboard.Hardware
         public bool InitialState { get; set; }
         /// <summary>Free text shown in the pin editor, e.g. "Endschalter vorne".</summary>
         public string? Label { get; set; }
+        /// <summary>What is wired to the pin; only used by the wiring diagram.</summary>
+        public ConnectedDevice Device { get; set; } = ConnectedDevice.Auto;
     }
 
     /// <summary>

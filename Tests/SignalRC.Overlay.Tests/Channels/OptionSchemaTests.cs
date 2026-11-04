@@ -28,7 +28,7 @@ public class OptionSchemaTests
         Assert.Contains("LidarManager", Types.PinManagerTypes);
 
         var pca = Schema(ChannelTypeSchema.PinManager, "Pca9685PwmExtension");
-        Assert.Equal(["boardAddress", "i2cBus"], pca.Options.Select(o => o.Name));
+        Assert.Equal(["boardAddress", "channels", "i2cBus"], pca.Options.Select(o => o.Name));
         var bus = pca.Options.Single(o => o.Name == "i2cBus");
         Assert.Equal("integer", bus.Type);
         Assert.Equal("1", bus.DefaultJson);

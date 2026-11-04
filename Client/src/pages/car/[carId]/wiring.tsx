@@ -4,8 +4,12 @@ import Link from "next/link";
 import ConfigGuard from "@/components/config-guard";
 import { parseOptionSchemas } from "@/components/config/options-language";
 import WiringDiagramView from "@/components/config/pin-boards/wiring-diagram";
-import { buildWiring, wireList, type WiringChannel, type WiringManager } from "@/components/config/pin-boards/wiring-model";
-import { PI_BOARD_LABELS, piBoardVariant, type PiBoardVariant } from "@/components/config/pin-boards/pin-boards";
+import { buildWiring, wireList, type WiringChannel, type WiringDevice, type WiringManager } from "@/components/config/pin-boards/wiring-model";
+import {
+  DEFAULT_PIN_CONFIG, PI_BOARD_LABELS, piBoardVariant, readPcaChannels, readPinConfigs, writePcaChannels, writePinConfigs,
+  type ConnectedDevice, type PiBoardVariant,
+} from "@/components/config/pin-boards/pin-boards";
+import { DeviceSelect } from "@/components/config/pin-boards/pin-board-editor";
 import { useLiveTelemetry } from "@/components/config/pin-boards/use-live-telemetry";
 
 // Wiring diagram of a vehicle, generated from its channel map: every part on
@@ -34,9 +38,10 @@ export default function WiringPage() {
   const [selected, setSelected] = useState<string | undefined>();
   const svgRef = useRef<SVGSVGElement>(null);
 
-  const load = useCallback(async () => {
+  const [saving, setSaving] = useState(false);
+  const load = useCallback(async (showLoading = true) => {
     if (!carId) return;
-    setLoading(true);
+    if (showLoading) setLoading(true);
     try {
       const [r, o] = await Promise.all([
         fetch(`/api/cars/${carId}/channels`),
@@ -71,6 +76,37 @@ export default function WiringPage() {
 
   const allDevices = useMemo(() => [...diagram.piDevices, ...diagram.pcas.flatMap(p => p.devices)], [diagram]);
   const focus = allDevices.find(d => d.id === (hovered ?? selected));
+  const editable = focus && focus.id === selected;
+
+  /** Stores the device in the pin manager that owns the pin/channel; the onboard ignores it. */
+  const saveDevice = async (d: WiringDevice, device: ConnectedDevice) => {
+    if (!carId) return;
+    const m = managers.find(x => x.name === d.manager) ?? { name: d.manager, type: "RaspberryPiGpioManager", options: {} };
+    let options: Record<string, unknown>;
+    if (d.endpoint.board === "pi") {
+      const pin = d.endpoint.pin;
+      const configs = readPinConfigs(m.options);
+      const current = configs.find(c => c.pin === pin) ?? { ...DEFAULT_PIN_CONFIG, ...d.pin, pin };
+      options = writePinConfigs(m.options, [...configs.filter(c => c.pin !== pin), { ...current, device }]);
+    } else {
+      const ch = d.endpoint.channel;
+      const configs = readPcaChannels(m.options);
+      const current = configs.find(c => c.channel === ch) ?? { channel: ch, device: "Auto" as ConnectedDevice, label: "" };
+      options = writePcaChannels(m.options, [...configs.filter(c => c.channel !== ch), { ...current, device }]);
+    }
+    setSaving(true);
+    try {
+      const r = await fetch(`/api/cars/${carId}/channels/pinmanager/${encodeURIComponent(m.name)}`, {
+        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: m.name, type: m.type, options }),
+      });
+      if (!r.ok) throw new Error(await r.text());
+      await load(false);
+    } catch (e: any) {
+      setError(`Saving the device failed: ${e?.message ?? e}`);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const downloadSvg = () => {
     const svg = svgRef.current;
@@ -98,7 +134,7 @@ export default function WiringPage() {
             <select className={field} value={shownVariant} onChange={e => setVariant(e.target.value as PiBoardVariant)} title={boardModel ? `Detected: ${boardModel}` : "Board model not reported"}>
               {(Object.keys(PI_BOARD_LABELS) as PiBoardVariant[]).map(v => <option key={v} value={v}>{PI_BOARD_LABELS[v]}{v === piBoardVariant(boardModel) && boardModel ? " (detected)" : ""}</option>)}
             </select>
-            <button className={btn} onClick={load}>Reload</button>
+            <button className={btn} onClick={() => load()}>Reload</button>
             <button className={btn} onClick={downloadSvg}>Download SVG</button>
             <button className={btn} onClick={() => window.print()}>Print</button>
           </div>
@@ -120,6 +156,13 @@ export default function WiringPage() {
                     {KIND_LABEL[focus.kind]} · {focus.endpoint.board === "pi" ? `Pi pin ${focus.endpoint.pin}` : `${focus.endpoint.manager} channel ${focus.endpoint.channel}`}
                     {focus.pin && focus.endpoint.board === "pi" ? ` · ${focus.pin.mode}${focus.pin.mode === "Input" ? `, pull ${focus.pin.pull}` : ""}${focus.pin.activeLow ? ", active low" : ""}` : ""}
                   </div>
+                  {editable ? (
+                    <label className="flex items-center gap-2 my-1 text-zinc-400">Device
+                      <DeviceSelect value={focus.device} onChange={d => saveDevice(focus, d)} className={field + (saving ? " opacity-50" : "")} />
+                    </label>
+                  ) : (
+                    <div className="text-zinc-500 my-1">Device: {focus.device === "Auto" ? "automatic" : focus.device} · click the part to change it</div>
+                  )}
                   {focus.controls.length > 0 && <div><span className="text-zinc-500">Controls:</span> <span className="font-mono">{focus.controls.join(", ")}</span></div>}
                   {focus.readers.length > 0 && (
                     <div><span className="text-zinc-500">Telemetry:</span> {focus.readers.map(r => (
