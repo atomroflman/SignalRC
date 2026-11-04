@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
@@ -13,6 +14,9 @@ public class JbdBmsTelemetryReader : TelemetryReaderBase
     private static readonly TimeSpan CacheTtl = TimeSpan.FromSeconds(2);
 
     private static readonly ConcurrentDictionary<string, CacheEntry> Cache = new();
+
+    // Per battery like the cache: channels of one battery can have their own reader instance.
+    private static readonly ConcurrentDictionary<string, BatteryRuntimeEstimator> Estimators = new();
 
     private sealed record CacheEntry(DateTime FetchedAtUtc, IReadOnlyDictionary<string, string> Values);
 
@@ -81,8 +85,10 @@ public class JbdBmsTelemetryReader : TelemetryReaderBase
             return null;
         }
 
-        Cache[Channel] = new CacheEntry(DateTime.UtcNow, parsed);
-        return parsed;
+        var now = DateTime.UtcNow;
+        var values = WithRuntime(parsed, Estimators.GetOrAdd(Channel, _ => new BatteryRuntimeEstimator()), now);
+        Cache[Channel] = new CacheEntry(now, values);
+        return values;
     }
 
     /// <summary>
@@ -124,13 +130,47 @@ public class JbdBmsTelemetryReader : TelemetryReaderBase
         return null;
     }
 
+    /// <summary>
+    /// Adds <c>currentAvg</c> (A, one hour average) and <c>runtime</c> (hours) to a fresh read. Without
+    /// an estimate the keys are missing, so these channels get no new value while charging or idle.
+    /// </summary>
+    public static IReadOnlyDictionary<string, string> WithRuntime(
+        IReadOnlyDictionary<string, string> values, BatteryRuntimeEstimator estimator, DateTime nowUtc)
+    {
+        if (!TryGetNumber(values, "current", out var current))
+            return values;
+        estimator.Add(nowUtc, current);
+        var average = estimator.AverageAmps();
+        if (average == null)
+            return values;
+
+        var result = new Dictionary<string, string>(values, StringComparer.Ordinal)
+        {
+            ["currentAvg"] = average.Value.ToString("0.###", CultureInfo.InvariantCulture),
+        };
+        if (TryGetNumber(values, "remaining", out var remaining)
+            && BatteryRuntimeEstimator.RuntimeHours(remaining, average) is { } hours)
+        {
+            result["runtime"] = hours.ToString("0.##", CultureInfo.InvariantCulture);
+        }
+        return result;
+    }
+
+    private static bool TryGetNumber(IReadOnlyDictionary<string, string> values, string key, out double number)
+    {
+        number = 0;
+        return values.TryGetValue(key, out var text)
+            && double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out number);
+    }
+
     private string BuildCommand(bool json)
     {
         var target = Channel.StartsWith("/dev/", StringComparison.Ordinal)
             ? $"serial:{Channel},9600"
             : $"bt:{Channel}";
 
-        var args = new List<string> { "-t", target, "-r", "-a" };
+        // No -r -a: that reads the configuration from the EEPROM (about a minute, no live values).
+        var args = new List<string> { "-t", target };
         if (json)
         {
             args.Add("-j");
