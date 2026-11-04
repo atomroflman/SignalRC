@@ -331,6 +331,8 @@ Manager options: `driver` (`Auto`, `LibGpiod`, `LibGpiodV2`, `SysFs`; `Auto` let
 
 The channel page draws the board for these two types: the Raspberry Pi matching the model the onboard reports (`/proc/device-tree/model`, sent as `boardModel` with the available channel types) or the PCA9685 breakout. Pins are hoverable and clickable; the selected pin is configured in place and can prefill a new control or telemetry channel.
 
+**Wiring diagram** (`/car/{id}/wiring`, button on the channel page): generated from the channel map. The Pi with the parts on its header, the PCA9685 boards on the I²C bus (chained when several share bus 1), BECs for servo power and CAN/serial managers as external boxes. Parts follow the control type (`Steering`/`ServoOnOff`/`OnOffServo` → servo, `Throttle` → ESC + motor, `PwmLight`/`PwmBlinker`/`RotaryLight` → LED); a `GpioOutput` becomes a relay or buzzer when its name says so (relay, pump, horn …), otherwise an LED; input pins become buttons with the pull resistor drawn. `GpioPinReader`/`PwmOutputReader` channels light the LEDs and turn the servo horns live. Also shows wiring warnings (servo on a non-PWM pin, I²C address clash, SDA/SCL in use), a parts list and a wire list; exports as SVG or print.
+
 ### Control Types
 
 Discriminated by the `[ControlType("...")]` attribute on each class (`Onboard/Control/ControlTypes/`), not by class name:

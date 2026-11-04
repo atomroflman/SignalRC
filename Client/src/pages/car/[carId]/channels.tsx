@@ -678,6 +678,7 @@ export default function ChannelsPage() {
           </div>
           <div className="flex gap-2">
             <LanguageSwitcher />
+            <Link href={`/car/${carIdNum}/wiring`} className={btnGhost}>Wiring diagram</Link>
             <Link href={`/car/${carIdNum}/logs`} className={btnGhost}>Onboard log</Link>
             <button className={btnGhost} onClick={reload}>Reload</button>
           </div>

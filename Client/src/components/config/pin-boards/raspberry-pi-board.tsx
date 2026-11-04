@@ -24,6 +24,8 @@ export interface PiBoardProps {
   busy?: Record<number, string>;
   onSelect: (pin: number) => void;
   onHover: (pin: HeaderPin | undefined, event?: React.PointerEvent) => void;
+  /** Embedded in a larger SVG: board origin at this point, 1 unit = 1 mm. */
+  at?: { x: number; y: number };
 }
 
 const PITCH = 2.54;
@@ -39,6 +41,9 @@ const SIZES: Record<PiBoardVariant, Size> = {
   pi400: { w: 120, h: 44, headerX: 30, headerY: 4.5 },
   generic: { w: 60, h: 12, headerX: 30, headerY: 5 },
 };
+
+/** Board outline in millimetres. */
+export const piBoardSize = (variant: PiBoardVariant) => ({ w: SIZES[variant].w, h: SIZES[variant].h });
 
 /** Centre of a header pin in board millimetres. */
 export function pinPosition(variant: PiBoardVariant, physical: number) {
@@ -194,12 +199,13 @@ function Decorations({ variant }: { variant: PiBoardVariant }) {
 
 // --- the board --------------------------------------------------------------
 
-export default function RaspberryPiBoard({ variant, pins, selected, busy, onSelect, onHover }: PiBoardProps) {
+export default function RaspberryPiBoard({ variant, pins, selected, busy, onSelect, onHover, at }: PiBoardProps) {
   const s = SIZES[variant];
   const pcb = variant === "pi400" ? "#27272a" : "url(#rpi-pcb)";
   const headerLeft = s.headerX - 10 * PITCH;
   return (
-    <svg viewBox={`-3 -6 ${s.w + 6} ${s.h + 9}`} className="w-full h-auto select-none" role="group" aria-label="Raspberry Pi GPIO header">
+    <svg viewBox={`-3 -6 ${s.w + 6} ${s.h + 9}`} role="group" aria-label="Raspberry Pi GPIO header"
+      {...(at ? { x: at.x - 3, y: at.y - 6, width: s.w + 6, height: s.h + 9, overflow: "visible" } : { className: "w-full h-auto select-none" })}>
       <defs>
         <linearGradient id="rpi-pcb" x1="0" y1="0" x2="1" y2="1">
           <stop offset="0" stopColor="#14532d" />

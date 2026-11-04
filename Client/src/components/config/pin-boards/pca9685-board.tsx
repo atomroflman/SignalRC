@@ -26,13 +26,21 @@ export interface PcaBoardProps {
   onSelect: (channel: number) => void;
   onToggleJumper: (bit: number) => void;
   onHover: (target: PcaHoverTarget | undefined, event?: React.PointerEvent) => void;
+  /** Embedded in a larger SVG: board origin at this point, 1 unit = 1 mm. */
+  at?: { x: number; y: number };
 }
 
-const W = 62.2;
-const H = 25.4;
 const PITCH = 2.54;
-const ROW_Y = { pwm: 17.2, "v+": 19.74, gnd: 22.28 } as const;
+export const PCA_W = 62.2;
+export const PCA_H = 25.4;
+export const ROW_Y = { pwm: 17.2, "v+": 19.74, gnd: 22.28 } as const;
+const W = PCA_W;
+const H = PCA_H;
 export const CONTROL_PINS = ["GND", "OE", "SCL", "SDA", "VCC", "V+"] as const;
+
+/** Centre of a control header pin; side "left" or "right". */
+export const controlPinPosition = (side: "left" | "right", name: (typeof CONTROL_PINS)[number]) =>
+  ({ x: side === "left" ? 2.2 : W - 2.2, y: 6.17 + CONTROL_PINS.indexOf(name) * PITCH });
 
 /** x centre of a servo column; a gap of one pitch between the groups of four. */
 export function channelX(channel: number) {
@@ -43,7 +51,7 @@ export function channelX(channel: number) {
 
 const ROW_COLORS = { pwm: "#facc15", "v+": "#ef4444", gnd: "#27272a" } as const;
 
-export default function Pca9685Board({ channels, selected, boardAddress, onSelect, onToggleJumper, onHover }: PcaBoardProps) {
+export default function Pca9685Board({ channels, selected, boardAddress, onSelect, onToggleJumper, onHover, at }: PcaBoardProps) {
   const jumpers = pcaJumpers(boardAddress);
   const hover = (t: PcaHoverTarget) => ({
     onPointerEnter: (e: React.PointerEvent) => onHover(t, e),
@@ -51,7 +59,8 @@ export default function Pca9685Board({ channels, selected, boardAddress, onSelec
     onPointerLeave: () => onHover(undefined),
   });
   return (
-    <svg viewBox={`-2 -3 ${W + 4} ${H + 5}`} className="w-full h-auto select-none" role="group" aria-label="PCA9685 16-channel PWM board">
+    <svg viewBox={`-2 -3 ${W + 4} ${H + 5}`} role="group" aria-label="PCA9685 16-channel PWM board"
+      {...(at ? { x: at.x - 2, y: at.y - 3, width: W + 4, height: H + 5, overflow: "visible" } : { className: "w-full h-auto select-none" })}>
       <defs>
         <linearGradient id="pca-pcb" x1="0" y1="0" x2="1" y2="1">
           <stop offset="0" stopColor="#1e3a8a" />
