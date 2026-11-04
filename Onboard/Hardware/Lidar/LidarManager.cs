@@ -235,9 +235,9 @@ public sealed class LidarManager : IModuleManager, ILidarSource, IDisposable
             _port = port;
 
             // The window describes a world the vehicle may have driven out of
-            // while the port was down.
+            // while the port was down. The Pico status is from before as well.
             _filter.Reset();
-            lock (_lock) { _haveSequence = false; }
+            lock (_lock) { _haveSequence = false; _status = null; }
 
             if (!string.IsNullOrWhiteSpace(CapturePath))
             {
@@ -245,7 +245,13 @@ public sealed class LidarManager : IModuleManager, ILidarSource, IDisposable
                 _logger.LogWarning("Lidar raw capture is on, writing to {Path}.", CapturePath);
             }
 
-            SendCommand(LidarProtocol.CommandStart);
+            // No START here. The Pico keeps the sensor spinning while the port
+            // is closed (service restart, reconnect after a read error), and
+            // "$" - the first half of START - stops a spinning FM1828 and locks
+            // it until its power is cycled. CheckStall sends START only once
+            // the grace period shows that no revolutions arrive; until then
+            // the first status frame says what the sensor is doing.
+            _lastStartUtc = DateTime.UtcNow;
             lock (_lock)
             {
                 _problem = null;
@@ -297,8 +303,16 @@ public sealed class LidarManager : IModuleManager, ILidarSource, IDisposable
 
         if (_needsPowerCycle) return;
         if ((DateTime.UtcNow - _lastStartUtc).TotalSeconds < 3) return;
-        _lastStartUtc = DateTime.UtcNow;
         var where = LidarProtocol.Describe(state ?? LidarProtocol.PicoState.Booting);
+
+        // The Pico sees the sensor spinning, only no revolution reaches this
+        // host. START would stop the sensor, not fix the link: leave it alone.
+        if (state is LidarProtocol.PicoState.Spinning or LidarProtocol.PicoState.Starting)
+        {
+            SetProblemOnce($"no revolution received, but the Pico reports {where}; not sending START");
+            return;
+        }
+        _lastStartUtc = DateTime.UtcNow;
 
         // Escalate rather than repeat. START works from cold, but once the
         // sensor has been told to stop it sits in a LOCKED idle and no amount
