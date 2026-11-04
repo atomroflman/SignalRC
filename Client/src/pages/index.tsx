@@ -72,19 +72,19 @@ export default function Home() {
     {
       id: "gamepadViewer",
       title: messages.gamepadViewer.title,
-      content: selectedCarId ? <GamepadViewer hideFlowButtons={true} /> : null,
+      content: selectedCarId ? <GamepadViewer hideFlowButtons={true} embedded /> : null,
       visible: Boolean(selectedCarId),
     },
     {
       id: "carFunctions",
       title: messages.carFunctions.title,
-      content: selectedCarId ? <CarFunctionsView carId={selectedCarId} hideFlowButtons={true} /> : null,
+      content: selectedCarId ? <CarFunctionsView carId={selectedCarId} hideFlowButtons={true} embedded /> : null,
       visible: Boolean(selectedCarId),
     },
     {
       id: "audioChat",
       title: messages.audioChat.title,
-      content: selectedCarId ? <AudioChat carId={selectedCarId} /> : null,
+      content: selectedCarId ? <AudioChat carId={selectedCarId} embedded /> : null,
       // Push-to-talk only exists when the vehicle has a speaker configured.
       visible: Boolean(selectedCarId && carAudioOutputDevice),
     },

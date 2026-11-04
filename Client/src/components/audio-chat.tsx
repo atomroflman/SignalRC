@@ -12,6 +12,8 @@ interface AudioDevice {
 
 interface AudioChatProps {
   carId?: number;
+  /** Inside a titled section (main page accordion): no own heading. */
+  embedded?: boolean;
 }
 
 // Push-to-talk is recorded in a container the Onboard's ffmpeg can demux from a pipe.
@@ -82,7 +84,7 @@ function toBase64(buffer: ArrayBuffer): string {
  * listening to the vehicle happens in the video panel (audio track of the stream).
  * Renders nothing if the vehicle has no speaker configured.
  */
-export default function AudioChat({ carId }: AudioChatProps) {
+export default function AudioChat({ carId, embedded }: AudioChatProps) {
   const { messages } = useI18n();
   const { outputDevice } = useCarAudioSettings(carId);
   const [microphones, setMicrophones] = useState<AudioDevice[]>([]);
@@ -337,7 +339,7 @@ export default function AudioChat({ carId }: AudioChatProps) {
   return (
     <div className="bg-zinc-800 rounded-lg p-3 space-y-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium text-zinc-200">{messages.audioChat.title}</h3>
+        {!embedded && <h3 className="text-sm font-medium text-zinc-200">{messages.audioChat.title}</h3>}
         {hasSession && (
           <div className="flex items-center gap-2">
             <div className={`w-2 h-2 rounded-full ${talking ? 'bg-red-500' : error ? 'bg-red-500' : 'bg-zinc-400'}`} />

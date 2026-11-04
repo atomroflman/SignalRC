@@ -207,7 +207,7 @@ export default function VideoSettingsControl(props: { carId?: number; canManageE
   }
 
   return (
-    <CollapsibleSection title={messages.videoSettings.title} label={messages.videoSettings.title} defaultCollapsed={true} className="px-2">
+    <CollapsibleSection title={messages.videoSettings.title} label={messages.videoSettings.title} embedded>
       <div className="space-y-2 text-xs leading-tight">
         {streams.length === 0 && <div className="text-zinc-400">{messages.videoSettings.noStreams}</div>}
 

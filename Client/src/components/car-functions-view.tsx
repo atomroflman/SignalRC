@@ -11,7 +11,7 @@ export type CarFunction = {
   requiresAxis: boolean;
 };
 
-export default function CarFunctionsView({ carId, hideFlowButtons }: { carId: number, hideFlowButtons?: boolean }) {
+export default function CarFunctionsView({ carId, hideFlowButtons, embedded }: { carId: number, hideFlowButtons?: boolean, embedded?: boolean }) {
   const { messages } = useI18n();
   const [functions, setFunctions] = useState<CarFunction[]>([]);
   const controlFlow = useControlFlowStore();
@@ -38,9 +38,8 @@ export default function CarFunctionsView({ carId, hideFlowButtons }: { carId: nu
     return controlFlow.nodes.some((n) => n.type === "output" && n.data?.id === dbId);
   };
   return (
-    <CollapsibleSection title={messages.collapsible.carFunctions} label={messages.collapsible.carFunctions}>
-      <div className="bg-zinc-900 rounded-lg p-2 border border-zinc-800 text-xs mt-2">
-        <div className="font-bold mb-2 text-zinc-200 text-xs">{messages.carFunctions.title}</div>
+    <CollapsibleSection title={messages.collapsible.carFunctions} label={messages.collapsible.carFunctions} embedded={embedded}>
+      <div className={embedded ? "text-xs" : "bg-zinc-900 rounded-lg p-2 border border-zinc-800 text-xs mt-2"}>
         {functions.length === 0 && <div className="text-zinc-400 text-xs">{messages.carFunctions.none}</div>}
         <ul className="space-y-1">
           {functions.map((f) => {

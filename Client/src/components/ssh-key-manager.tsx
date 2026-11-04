@@ -141,16 +141,14 @@ export default function SshKeyManager({ carId }: SshKeyManagerProps) {
     }
   };
 
-  const title = (
-    <div className="flex items-center space-x-2">
-      <div className={`w-1.5 h-1.5 rounded-full ${hasStoredKey ? 'bg-green-500' : 'bg-red-500'}`}></div>
-      <span>{hasStoredKey ? messages.sshKeyManager.titleStored : messages.sshKeyManager.titleMissing}</span>
-    </div>
-  );
-
   return (
-    <CollapsibleSection title={title} label="SSH Key" defaultCollapsed={true}>
-      <div className="space-y-2">
+    <CollapsibleSection title={messages.sshKeyManager.sectionTitle} embedded>
+      <div className="space-y-2 text-xs">
+          {/* Key status; the section title above already names the topic */}
+          <div className="flex items-center space-x-2 text-zinc-300">
+            <div className={`w-1.5 h-1.5 rounded-full ${hasStoredKey ? 'bg-green-500' : 'bg-red-500'}`}></div>
+            <span>{hasStoredKey ? messages.sshKeyManager.keyStored : messages.sshKeyManager.keyMissing}</span>
+          </div>
           {/* Message */}
           {message && (
             <div className={`p-2 rounded text-xs ${

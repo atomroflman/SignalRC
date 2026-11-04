@@ -7,6 +7,8 @@ interface CollapsibleSectionProps {
   defaultCollapsed?: boolean;
   className?: string;
   label?: string;
+  /** Inside an already titled section (e.g. the main page accordion): render only the content. */
+  embedded?: boolean;
 }
 
 export default function CollapsibleSection({ 
@@ -15,9 +17,11 @@ export default function CollapsibleSection({
   defaultCollapsed = false,
   className = "",
   label,
+  embedded = false,
 }: CollapsibleSectionProps) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const { messages } = useI18n();
+  if (embedded) return <>{children}</>;
   const sectionLabel = label ?? (typeof title === 'string' ? title : 'section');
 
   return (
