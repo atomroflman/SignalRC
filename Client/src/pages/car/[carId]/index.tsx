@@ -9,13 +9,17 @@ import "reactflow/dist/style.css";
 import { ControlFlowEdge, ControlFlowNode, useControlFlowStore } from "@/components/control-flow-store";
 import FunctionNodesView from "@/components/function-nodes-view";
 import CustomFlowNode from "@/components/custom-flow-node";
+import FlowEdge from "@/components/flow-edge";
+import { clusterFrame } from "@/components/flow-layout";
+import { ArrangedClusters, ClusterFrameNode, FlowLayoutPanel } from "@/components/flow-layout-panel";
 import ConfigGuard from "@/components/config-guard";
 import UpdateControl from "@/components/update-control";
 import LanguageSwitcher from "@/components/language-switcher";
 import SetupTemplatePanel from "@/components/setup-template-panel";
 import { useI18n } from "@/i18n/provider";
 
-const nodeTypes = { custom: CustomFlowNode };
+const nodeTypes = { custom: CustomFlowNode, clusterFrame: ClusterFrameNode };
+const edgeTypes = { flow: FlowEdge };
 
 export default function CarControlFlowPage() {
   const { messages } = useI18n();
@@ -23,6 +27,10 @@ export default function CarControlFlowPage() {
   const flowControl = useControlFlowStore();
   const carId = router.query.carId as string;
   const carIdNum = carId ? parseInt(carId) : undefined;
+  // Clicking a connection selects it; its trash button or the Delete key removes it.
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+  // Cluster frames of the last auto arrangement; they follow dragged nodes.
+  const [arranged, setArranged] = useState<ArrangedClusters | null>(null);
 
   function controlNodeToReact(input: ControlFlowNode): Node<any, string | undefined> {
     return {
@@ -36,13 +44,34 @@ export default function CarControlFlowPage() {
     };
   }
 
+  function clusterFrameNodes(): Node[] {
+    if (!arranged) return [];
+    const positions = Object.fromEntries(flowControl.nodes.map(n => [n.nodeId, n.position]));
+    return arranged.clusters.flatMap((cluster, i) => {
+      const frame = clusterFrame(cluster, positions, arranged.sizes);
+      if (!frame) return [];
+      return [{
+        id: `cluster-${i}`,
+        type: "clusterFrame",
+        position: { x: frame.x, y: frame.y },
+        data: { title: cluster.title },
+        style: { width: frame.width, height: frame.height },
+        draggable: false,
+        selectable: false,
+        connectable: false,
+        zIndex: -1,
+      }];
+    });
+  }
+
   function controlEdgeToReact(input: ControlFlowEdge): Edge<any> {
     return {
       id: input.id.toString(),
       source: input.source.toString(),
       target: input.target.toString(),
-      type: "smoothstep",
+      type: "flow",
       animated: true,
+      selected: input.id.toString() === selectedEdgeId,
       sourceHandle: input.sourcePort,
       targetHandle: input.targetPort,
     };
@@ -50,6 +79,8 @@ export default function CarControlFlowPage() {
 
   useEffect(() => {
     if (carIdNum) {
+      // Opened directly or reloaded: the main page that normally connects is skipped.
+      flowControl.startConnection(carIdNum, undefined).catch(err => console.error("Connecting to the server failed:", err));
       flowControl.load(carIdNum);
       flowControl.startUserChannelConnection();
       flowControl.subscribeToInputNodes();
@@ -74,7 +105,12 @@ export default function CarControlFlowPage() {
   }, [flowControl]);
 
   const onEdgeClick = useCallback((event: any, edge: Edge<any>) => {
-    flowControl.removeEdge(Number(edge.id));
+    setSelectedEdgeId(id => id === edge.id ? null : edge.id);
+  }, []);
+
+  const onEdgesDelete: OnEdgesDelete = useCallback((edges) => {
+    edges.forEach(edge => flowControl.removeEdge(Number(edge.id)));
+    setSelectedEdgeId(null);
   }, [flowControl]);
 
   const onNodeDragStop: NodeDragHandler = async (event, node) => {
@@ -103,7 +139,8 @@ export default function CarControlFlowPage() {
     <ConfigGuard carId={carIdNum}>
       <div className="flex flex-col md:flex-row gap-4 p-4 bg-zinc-950 min-h-screen">
         <div className="w-full md:w-1/4 space-y-4">
-          <div className="flex justify-end">
+          <div className="flex items-center justify-between">
+            <Link href="/" className="text-xs text-sky-400 hover:underline">← {messages.controlFlowPage.back}</Link>
             <LanguageSwitcher />
           </div>
           <UpdateControl />
@@ -115,29 +152,46 @@ export default function CarControlFlowPage() {
               <Link href={`/car/${carIdNum}/channels`} className="text-blue-400 hover:underline block">
                 Channels (control / telemetry / video)
               </Link>
+              <Link href={`/car/${carIdNum}/logs`} className="text-blue-400 hover:underline block">
+                Onboard log
+              </Link>
               <Link href={`/car/${carIdNum}/test`} className="text-blue-400 hover:underline block">
                 Test inputs / telemetry / video / audio
+              </Link>
+              <Link href={`/car/${carIdNum}/overlay`} className="text-blue-400 hover:underline block">
+                {messages.overlay.editorPage.open}
               </Link>
             </div>
           )}
           {carIdNum && <SetupTemplatePanel carId={carIdNum} />}
         </div>
-        <div className="flex-1 bg-zinc-900 rounded-lg p-2 min-h-[600px]">
+        <div className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg p-2 min-h-[600px]">
           <ReactFlowProvider>
             <ReactFlow
-              nodes={flowControl.nodes.map(controlNodeToReact)}
+              nodes={[...clusterFrameNodes(), ...flowControl.nodes.map(controlNodeToReact)]}
               edges={flowControl.edges.map(controlEdgeToReact)}
               fitView
               onNodeDrag={onNodeDrag}
               onNodeDragStop={onNodeDragStop}
               onConnect={onConnect}
               onEdgeClick={onEdgeClick}
+              onEdgesDelete={onEdgesDelete}
+              onPaneClick={() => setSelectedEdgeId(null)}
+              edgeTypes={edgeTypes}
+              deleteKeyCode={["Delete", "Backspace"]}
               nodeTypes={nodeTypes}
+              connectionLineStyle={{ stroke: "#e4e4e7", strokeWidth: 2 }}
+              connectionRadius={30}
               draggable
             >
-              <MiniMap />
+              <MiniMap
+                nodeColor={n => n.type === "clusterFrame" ? "transparent" : "#52525b"}
+                nodeStrokeColor={n => n.type === "clusterFrame" ? "#3f3f46" : "#a1a1aa"}
+                maskColor="rgba(9, 9, 11, 0.6)"
+              />
+              <FlowLayoutPanel onArranged={setArranged} />
               <Controls />
-              <Background />
+              <Background color="#3f3f46" gap={20} />
             </ReactFlow>
           </ReactFlowProvider>
         </div>

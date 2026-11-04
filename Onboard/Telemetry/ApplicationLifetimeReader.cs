@@ -12,6 +12,13 @@ namespace SignalRC.Onboard.Telemetry
             _startTime = DateTime.UtcNow;
         }
 
+        // Computed on the spot: always current.
+        public override async Task<IReadOnlyDictionary<string, TelemetrySample>?> ReadAllSamplesAsync(string channelKey)
+        {
+            var value = await ReadTelemetry();
+            return new Dictionary<string, TelemetrySample> { [channelKey] = TelemetrySample.Valid(value) };
+        }
+
         public override Task<string> ReadTelemetry()
         {
             var applicationUptime = DateTime.UtcNow - _startTime;

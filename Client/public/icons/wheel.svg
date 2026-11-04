@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <circle id="tire" cx="12" cy="12" r="9"/>
+  <circle id="rim" cx="12" cy="12" r="5"/>
+  <circle id="hub" cx="12" cy="12" r="1.5" fill="#ffffff" stroke="none"/>
+  <path id="spokes" d="M12 7v3.5M12 13.5V17M7.2 10.5l3.3 1M13.5 12.5l3.3 1M7.2 13.5l3.3-1M13.5 11.5l3.3-1" stroke-width="1.5"/>
+</svg>

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 10 10" xml:base="https://evil.example/">
+  <style>
+    @import url("https://evil.example/a.css");
+    @font-face { font-family: X; src: url(https://evil.example/f.woff); }
+    .bg { fill: url(https://evil.example/p.svg#g); stroke: url('data:image/svg+xml,<svg/>'); }
+  </style>
+  <image href="https://evil.example/i.png" width="10" height="10"/>
+  <image xlink:href="data:image/png;base64,iVBORw0KGgo=" width="10" height="10"/>
+  <use href="https://evil.example/s.svg#shape"/>
+  <use xlink:href="other.svg#shape"/>
+  <rect class="bg" width="10" height="10" style="fill: url(//evil.example/x)"/>
+  <circle cx="5" cy="5" r="2" fill="url(https://evil.example/p.svg#g) blue" clip-path="url(https://evil.example/c.svg#c)"/>
+  <linearGradient id="g" href="https://evil.example/g.svg#base"><stop offset="0" stop-color="red"/></linearGradient>
+  <rect width="5" height="5" fill="url(#g)" filter="url(https://evil.example/f.svg#f)" mask="url(#m)" cursor="url(https://evil.example/c.cur), auto"/>
+</svg>

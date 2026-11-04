@@ -17,6 +17,11 @@ public class StoreBackedTelemetryReader : TelemetryReaderBase
         _store = store;
     }
 
+    // Quality: deliberately the base default (Unchecked, age 0). The store only
+    // holds the last string pushed in from outside; it neither knows when that
+    // value was measured nor whether its source is still alive, so claiming
+    // Valid or inventing an age would be a lie.
+
     public override async Task<IReadOnlyDictionary<string, string>?> ReadAllTelemetryAsync(string channelKey)
     {
         var v = _store.Get(channelKey);

@@ -8,6 +8,8 @@ export type SortableSectionItem = {
   title: string;
   content: ReactNode;
   visible?: boolean;
+  /** Sections start collapsed unless this is set; a stored choice of the user wins. */
+  defaultOpen?: boolean;
 };
 
 type SortableSectionListProps = {
@@ -124,18 +126,19 @@ export default function SortableSectionList({ storageKey, items }: SortableSecti
     setDragOverIndex(null);
   };
 
-  const toggle = (id: string) => {
-    setCollapsed(prev => ({ ...prev, [id]: !prev[id] }));
-  };
-
   const byId = new Map(visibleItems.map(item => [item.id, item]));
+  const isCollapsedById = (id: string, state: Record<string, boolean>) => state[id] ?? !byId.get(id)?.defaultOpen;
+
+  const toggle = (id: string) => {
+    setCollapsed(prev => ({ ...prev, [id]: !isCollapsedById(id, prev) }));
+  };
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto pr-1">
       {order.map((id, index) => {
         const item = byId.get(id);
         if (!item) return null;
-        const isCollapsed = collapsed[id] ?? false;
+        const isCollapsed = isCollapsedById(id, collapsed);
         const isDragging = dragIndex === index;
         const isDropTarget = dragOverIndex === index && dragIndex !== null && dragIndex !== index;
         return (

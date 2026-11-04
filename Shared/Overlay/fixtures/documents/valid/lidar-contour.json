@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1, "workspace": { "width": 1280, "height": 720 },
+  "elements": {
+    "e_l": {
+      "type": "lidarWidget", "source": "lidarGrid",
+      "props": { "x": 1000, "y": 420, "radius": 120, "display": "contour", "contourJoinMm": 250, "contourWidth": 4, "contourShadow": false, "contourShadowOpacity": 0.4 }
+    }
+  },
+  "children": ["e_l"]
+}

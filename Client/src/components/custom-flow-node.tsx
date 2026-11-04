@@ -7,7 +7,11 @@ import GearboxFlowNode from "./gearbox-flow-node";
 import IifFlowNode from "./iif-flow-node";
 import SmoothFlowNode from "./smooth-flow-node";
 import { ParamInput } from "./param-input";
+import { flowNodeStyles, handleOffset } from "./flow-node-styles";
+import { FlowNodeHeader } from "./flow-node-header";
 import { useI18n } from "@/i18n/provider";
+import { hudSignalProblem as findHudSignalProblem } from "./overlay/integration/control-display-binding";
+import { hudInputProblem as findHudInputProblem } from "./overlay/integration/hud-input";
 
 export type CustomFlowNodeProps = NodeProps & {
   data: any;
@@ -27,7 +31,7 @@ export default function CustomFlowNode(props: NodeProps) {
   const { messages } = useI18n();
   if (!props || !props.data) {
     console.warn('CustomFlowNode: props oder props.data ist null/undefined', { props });
-    return <div className="bg-zinc-800 border border-zinc-700 rounded p-2">{messages.flowNode.loading}</div>;
+    return <div className={flowNodeStyles.card}>{messages.flowNode.loading}</div>;
   }
 
   const id = props.data.nodeId;
@@ -51,17 +55,14 @@ export default function CustomFlowNode(props: NodeProps) {
     flowControl.setNodes(updatedNodes);
   }, [props.data.nodeId, flowControl]);
 
-  function removeButton() {
-    return (
-    <button
-          className="ml-2 px-1 py-0.5 bg-red-900 hover:bg-red-800 text-red-100 rounded text-[10px] border border-red-800 transition-colors duration-150"
-          onClick={() => flowControl.deleteNode(Number(id))}
-          title={messages.flowNode.deleteNode}
-        >
-          ✕
-        </button>
-    );
-  }
+  const deleteNode = () => flowControl.deleteNode(Number(id));
+  // A node whose function is unknown can only be deleted.
+  const brokenNode = (text: string) => (
+    <div className={`${flowNodeStyles.card} min-w-[160px]`}>
+      <FlowNodeHeader title={data?.label ?? "?"} onDelete={deleteNode} />
+      <div className={`${flowNodeStyles.body} text-xs text-red-300`}>{text}</div>
+    </div>
+  );
 
   // Resolve known function names with their respective components
   if (data?.metadata?.functionName) {
@@ -97,12 +98,12 @@ export default function CustomFlowNode(props: NodeProps) {
   
   // Check for undefined function after useMemo
   if (data?.type !== "input" && data?.type !== "output" && !data?.metadata?.functionName) {
-    return (<>undefined! {removeButton()}</>);
+    return brokenNode("undefined!");
   }
   if (data?.type !== "input" && data?.type !== "output" && data?.metadata?.functionName) {
     const definition = filterFunctionRegistry[data?.metadata?.functionName as keyof typeof filterFunctionRegistry];
     if (!definition) {
-      return (<>{messages.flowNode.functionNotFound} {removeButton()}</>);
+      return brokenNode(messages.flowNode.functionNotFound);
     }
   }
   
@@ -113,50 +114,61 @@ export default function CustomFlowNode(props: NodeProps) {
       type="target"
       position={Position.Top}
       id={`${label}`}
-      style={{ left: `${100 / (inputs.length + 1) * (index + 1)}%`, top: "-4px" }}
-      className="bg-green-500"
+      style={handleOffset(index, inputs.length)}
     >
-      <span className="text-[8px] pt-1 text-center text-green-300 font-mono block" style={{marginLeft: -50 / (inputs.length + 1), width: 100 / (inputs.length + 1)}}>{label}</span>
+      <span className={flowNodeStyles.inputLabel}>{label}</span>
     </Handle>
   ));
   const outputHandles = outputs.map((label, index) => (
       <Handle
+        key={`${label}`}
         type="source"
         position={Position.Bottom}
         id={`${label}`}
-        className="bg-blue-500"
-        style={{ left: `${100 / (outputs.length + 1) * (index + 1)}%`, bottom: "-4px" }}
-      >  
-        <span className="text-[8px] text-blue-300 font-mono block" style={{ marginTop: -24, marginLeft: -4 }}>
+        style={handleOffset(index, outputs.length)}
+      >
+        <span className={flowNodeStyles.outputLabel}>
           {label}: {outputValues[index] !== undefined ? Number(outputValues[index]).toFixed(3) : ''}
         </span>
       </Handle>
   ));
 
+  // HUD-Signal (D37): one node per signal; a missing or doubled mapping makes it unavailable.
+  const problem = data ? findHudSignalProblem(data, flowControl.nodes) : undefined;
+  const inputProblem = data ? findHudInputProblem(data) : undefined;
+  const hudSignalProblem = problem ? {
+    missing: messages.overlay.flowNode.hudSignalMissing,
+    invalid: messages.overlay.flowNode.hudSignalInvalid,
+    duplicate: messages.overlay.flowNode.hudSignalDuplicate,
+  }[problem] : inputProblem ? {
+    missing: messages.overlay.flowNode.hudInputMissing,
+    invalid: messages.overlay.flowNode.hudSignalInvalid,
+  }[inputProblem] : undefined;
+
   return (
-    <div className="bg-zinc-800 border border-zinc-700 rounded p-2 pt-3 pb-6 flex flex-col min-w-[140px] relative">
-      <div className="flex items-center justify-between">
-        <span className="truncate text-xs font-mono">{data?.label}</span>
-        <span className="truncate text-xs font-mono">
-          {Array.isArray(data?.latestValue)
-            ? data.latestValue.map((v: number) => Number(v).toFixed(3)).join(", ")
-            : Number(data?.latestValue ?? '').toFixed(3)}
-        </span>
-        {removeButton()}
-      </div>
-      
-      {params && (
-        <div className="flex flex-col gap-1 mt-1">
+    <div className={`${flowNodeStyles.card} min-w-[180px]`}>
+      <FlowNodeHeader
+        title={data?.label}
+        docKey={data?.type === "input" || data?.type === "output" ? data.type : data?.metadata?.functionName}
+        value={Array.isArray(data?.latestValue)
+          ? data.latestValue.map((v: number) => Number(v).toFixed(3)).join(", ")
+          : Number(data?.latestValue ?? 0).toFixed(3)}
+        onDelete={deleteNode}
+      />
+
+      {(params.length > 0 || hudSignalProblem) && (
+        <div className={`${flowNodeStyles.body} gap-1.5`}>
           {params.map((e) => (
-            <ParamInput 
-              key={e.name} 
-              name={e.name} 
-              value={e.value} 
+            <ParamInput
+              key={e.name}
+              name={e.name}
+              value={e.value}
               onBlur={handleParamChange}
             />
           ))}
+          {hudSignalProblem && <div className="text-[11px] text-red-300">{hudSignalProblem}</div>}
         </div>
-      )} 
+      )}
 
       {inputHandles}
       {outputHandles}

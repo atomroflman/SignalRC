@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Text.Json;
+using SignalRC.Onboard.Control;
+using SignalRC.Onboard.Services;
 using SignalRC.Shared.Channels;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -17,6 +19,10 @@ namespace SignalRC.Onboard.Hardware
         private readonly IServiceProvider _serviceProvider;
         private readonly ChannelMap _channelMap;
         private readonly Dictionary<string, IModuleManager> _instances = new();
+        // Pin managers that could not be built: Create would otherwise retry, and log,
+        // on every telemetry tick of a reader that resolves it lazily.
+        private readonly Dictionary<string, Exception> _failures = new();
+        private readonly object _lock = new();
 
         /// <summary>
         /// Constructor. All dependencies are injected via DI.
@@ -26,33 +32,78 @@ namespace SignalRC.Onboard.Hardware
             _loggerFactory = loggerFactory;
             _serviceProvider = serviceProvider;
             _channelMap = channelMap;
-            _instances.Add("default", new RaspberryPiGpioManager(serviceProvider));
         }
+
+        /// <summary>
+        /// "default" is the Pi's own header. It exists without a ChannelMap entry; an entry named
+        /// "default" (type RaspberryPiGpioManager) adds its pin configuration.
+        /// </summary>
+        public const string DefaultName = "default";
 
         /// <summary>
         /// Creates an IModuleManager instance for the given pin manager name using ChannelMap.
         /// </summary>
         public IModuleManager Create(string name)
         {
-            var logger = _loggerFactory.CreateLogger<ModuleManagerFactory>();
-            if (_instances.ContainsKey(name))
+            // Controls are rebuilt on the SignalR thread while telemetry readers resolve
+            // their pin manager on the telemetry loop.
+            lock (_lock)
             {
-                // Return existing instance if already created
-                return _instances[name];
+                if (_instances.TryGetValue(name, out var existing))
+                    return existing;
+                if (_failures.TryGetValue(name, out var failure))
+                    throw new InvalidOperationException($"Pin manager '{name}' failed: {failure.Message}", failure);
+                try
+                {
+                    return Build(name);
+                }
+                catch (Exception ex)
+                {
+                    _failures[name] = ex;
+                    _serviceProvider.GetService<ChannelHealthService>()?.Error(ChannelTypeSchema.PinManager, name, ex);
+                    throw;
+                }
             }
+        }
+
+        public void Invalidate(string name)
+        {
+            IModuleManager? dropped;
+            lock (_lock)
+            {
+                _failures.Remove(name);
+                if (!_instances.Remove(name, out dropped))
+                    return;
+            }
+            try
+            {
+                (dropped as IDisposable)?.Dispose();
+            }
+            catch (Exception ex)
+            {
+                _loggerFactory.CreateLogger<ModuleManagerFactory>().LogWarning(ex, "Disposing pin manager {Name} failed.", name);
+            }
+        }
+
+        private IModuleManager Build(string name)
+        {
+            var logger = _loggerFactory.CreateLogger<ModuleManagerFactory>();
             // Find pin manager config by name
             if (!_channelMap.PinManagers.TryGetValue(name, out var managerConfig))
             {
+                if (name == DefaultName)
+                {
+                    var bare = new RaspberryPiGpioManager(_serviceProvider);
+                    _instances.Add(name, bare);
+                    return bare;
+                }
                 logger.LogError($"No pinManager named '{name}' in ChannelMap.");
                 return new NullModuleManager(logger);
             }
 
             var typeName = managerConfig.Type;
             if (string.IsNullOrWhiteSpace(typeName))
-            {
-                logger.LogError($"No type defined for pinManager '{name}'.");
-                return new NullModuleManager(logger);
-            }
+                throw new InvalidOperationException($"No type defined for pinManager '{name}'.");
 
             // Find all types matching the type name (without namespace)
             var matchingTypes = Assembly.GetExecutingAssembly().GetTypes();
@@ -82,85 +133,19 @@ namespace SignalRC.Onboard.Hardware
                 instance = ActivatorUtilities.CreateInstance(_serviceProvider, type);
             }
 
-            // Set properties from options dictionary
-            foreach (var kv in managerConfig.Options)
+            // Set properties from options dictionary; unknown keys are ignored as before.
+            var problems = ChannelOptionBinder.Apply(instance!, managerConfig.Options, logger, $"pinManager {name}", warnUnknown: false);
+            var res = instance as IModuleManager ?? throw new InvalidCastException($"{typeName} does not implement IModuleManager");
+            if (res is IValidatingModuleManager validating)
             {
-                var pi = type.GetProperty(kv.Key, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
-                if (pi != null && pi.CanWrite)
+                foreach (var problem in validating.Validate())
                 {
-                    if (kv.Value is JsonElement jsonElement && jsonElement.ValueKind == System.Text.Json.JsonValueKind.Null)
-                        continue; // Skip null values
-                    if (kv.Value is JsonElement jsonValue)
-                    {
-                        // Handle JsonElement conversion
-                        if (jsonValue.ValueKind == System.Text.Json.JsonValueKind.String)
-                        {
-                            pi.SetValue(instance, jsonValue.GetString());
-                        }
-                        else if (jsonValue.ValueKind == System.Text.Json.JsonValueKind.Number)
-                        {
-                            if (pi.PropertyType == typeof(int))
-                                pi.SetValue(instance, jsonValue.GetInt32());
-                            else if (pi.PropertyType == typeof(float))
-                                pi.SetValue(instance, jsonValue.GetSingle());
-                            else if (pi.PropertyType == typeof(double))
-                                pi.SetValue(instance, jsonValue.GetDouble());
-                            else if (pi.PropertyType == typeof(long))
-                                pi.SetValue(instance, jsonValue.GetInt64());
-                        }
-                        else if (jsonValue.ValueKind == System.Text.Json.JsonValueKind.True || jsonValue.ValueKind == System.Text.Json.JsonValueKind.False)
-                        {
-                            if (pi.PropertyType == typeof(bool))
-                                pi.SetValue(instance, jsonValue.GetBoolean());
-                        }
-                        else if (jsonValue.ValueKind == System.Text.Json.JsonValueKind.Object || jsonValue.ValueKind == System.Text.Json.JsonValueKind.Array)
-                        {
-                            // Handle complex types (e.g. dictionaries, lists)
-                            var optionsJson = jsonValue.GetRawText();
-                            var optionsType = pi.PropertyType;
-                            if (optionsType.IsGenericType && optionsType.GetGenericTypeDefinition() == typeof(Dictionary<,>))
-                            {
-                                var genericArgs = optionsType.GetGenericArguments();
-                                if (genericArgs.Length == 2 && genericArgs[0] == typeof(string))
-                                {
-                                    // Deserialize to Dictionary<string, object>        
-                                    var dictType = typeof(Dictionary<,>).MakeGenericType(genericArgs);
-                                    var dict = JsonSerializer.Deserialize(optionsJson, dictType);
-                                    pi.SetValue(instance, dict);
-                                }
-                            }
-                            else if (optionsType.IsArray)
-                            {
-                                // Deserialize to array
-                                var elementType = optionsType.GetElementType();
-                                if (elementType != null)
-                                {
-                                    var array = JsonSerializer.Deserialize(optionsJson, optionsType);
-                                    pi.SetValue(instance, array);
-                                }
-                            }
-                        }
-                    }
-                    else
-                    {
-                        if (kv.Value is not IConvertible)
-                            continue;
-                        // Handle primitive types directly
-                        if (pi.PropertyType == typeof(string))
-                            pi.SetValue(instance, kv.Value.ToString());
-                        else if (pi.PropertyType == typeof(int))
-                            pi.SetValue(instance, Convert.ToInt32(kv.Value));
-                        else if (pi.PropertyType == typeof(float))
-                            pi.SetValue(instance, Convert.ToSingle(kv.Value));
-                        else if (pi.PropertyType == typeof(double))
-                            pi.SetValue(instance, Convert.ToDouble(kv.Value));
-                        else if (pi.PropertyType == typeof(bool))
-                            pi.SetValue(instance, Convert.ToBoolean(kv.Value));
-                    }
+                    logger.LogWarning("pinManager {Name}: {Problem}", name, problem);
+                    problems.Add(problem);
                 }
             }
-            var res = instance as IModuleManager ?? throw new InvalidCastException($"{typeName} does not implement IModuleManager");
             _instances.Add(name, res);
+            _serviceProvider.GetService<ChannelHealthService>()?.Problems(ChannelTypeSchema.PinManager, name, problems);
             return res;
         }
 
@@ -175,7 +160,12 @@ namespace SignalRC.Onboard.Hardware
 
             T IModuleManager.GetModule<T>(int address)
             {
-                return new NullModule(Logger) as T;
+                if (new NullModule(Logger) is not T module)
+                {
+                    throw new InvalidCastException(
+                        $"NullModuleManager provides IPwmModule and IGpioModule, not {typeof(T).Name}.");
+                }
+                return module;
             }
 
             private class NullModule : IModule, IPwmModule, IGpioModule

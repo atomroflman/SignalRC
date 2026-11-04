@@ -1,0 +1,123 @@
+{
+  "schemaVersion": 1,
+  "workspace": { "width": 1280, "height": 720 },
+  "signals": {
+    "steeringRaw": { "label": "Lenkung roh", "unit": "%", "decimals": 0 }
+  },
+  "sources": {
+    "telemetry": { "batteryVoltage": { "staleAfterMs": 5000 } }
+  },
+  "elements": {
+    "e_belt": {
+      "type": "rect",
+      "name": "Kettenmuster",
+      "props": {
+        "x": { "base": 0, "rate": { "expr": "tel(\"odoSpeed\") * 200", "wrap": { "min": 0, "max": 40 } } },
+        "y": 650, "width": 400, "height": 20, "fill": "#808080"
+      }
+    },
+    "e_warning": {
+      "type": "text",
+      "name": "Unterspannung",
+      "onInvalid": "hide",
+      "props": { "x": 640, "y": 360, "text": "AKKU", "align": "middle", "fontSize": 48, "fill": "#ff0000", "opacity": 0 }
+    },
+    "e_steer": {
+      "type": "linearGauge",
+      "props": {
+        "x": 440, "y": 690,
+        "value": { "base": 0, "binding": { "expr": "out(\"steering\")" } },
+        "min": -1, "max": 1
+      }
+    },
+    "e_logo": {
+      "type": "svgAsset",
+      "assetId": "sha256-0000000000000000000000000000000000000000000000000000000000000001",
+      "lockAspect": true,
+      "props": { "x": 20, "y": 20, "scaleX": 0.5 },
+      "parts": {
+        "p_needle": { "props": { "rotation": { "base": 0, "binding": { "expr": "sig(\"steeringRaw\") * 0.9" } } } }
+      }
+    },
+    "e_lidar": {
+      "type": "lidarWidget",
+      "source": "lidarGrid",
+      "props": { "x": 1000, "y": 440, "radius": 120, "sectors": 12, "sweepEnabled": true }
+    },
+    "e_driver_hint": {
+      "type": "text",
+      "lockAspect": true,
+      "props": {
+        "x": 640, "y": 40, "align": "middle", "text": "Kein Fahrer",
+        "visible": { "base": false, "binding": { "expr": "!driverActive()" } }
+      }
+    }
+  },
+  "children": ["e_belt", "e_steer", "e_logo", "e_lidar", "e_warning", "e_driver_hint"],
+  "clips": {
+    "c_low_battery": {
+      "name": "Unterspannung blinken",
+      "durationS": 1,
+      "repeat": "infinite",
+      "trigger": { "mode": "whileTrue", "condition": "tel(\"batteryVoltage\") < 10.5", "onDeactivate": "finish" },
+      "tracks": [
+        {
+          "element": "e_warning",
+          "property": "opacity",
+          "keyframes": [
+            { "t": 0, "value": 0, "easing": "easeInOut" },
+            { "t": 0.5, "value": 1, "easing": "easeInOut" },
+            { "t": 1, "value": 0 }
+          ]
+        }
+      ]
+    },
+    "c_hint_pulse": {
+      "durationS": 0.4,
+      "trigger": { "mode": "pulse", "condition": "!driverActive()", "retrigger": "ignore" },
+      "endState": "base",
+      "tracks": [
+        {
+          "element": "e_driver_hint",
+          "property": "scaleX",
+          "keyframes": [
+            { "t": 0, "value": 1 },
+            { "t": 0.2, "value": 1.3 },
+            { "t": 0.4, "value": 1 }
+          ]
+        }
+      ]
+    }
+  },
+  "variants": {
+    "rear": { "disabled": true },
+    "front-wide": {
+      "workspace": { "width": 1920, "height": 1080 },
+      "rootTransform": { "scale": 1.5, "offsetX": 0, "offsetY": 0 },
+      "elements": {
+        "e_lidar": { "props": { "sectors": 8 } },
+        "e_logo": { "disabled": true }
+      },
+      "addedElements": {
+        "e_front_box": {
+          "type": "group",
+          "children": ["e_front_label"],
+          "props": { "x": 600, "y": 300 }
+        },
+        "e_front_label": {
+          "type": "text",
+          "props": { "text": "Front", "fontSize": 20 }
+        }
+      },
+      "structure": {
+        "parents": { "e_front_box": "root", "e_steer": "e_front_box" },
+        "order": { "root": ["e_front_box", "e_belt", "e_lidar"] }
+      },
+      "clips": {
+        "c_low_battery": {
+          "trigger": { "mode": "whileTrue", "condition": "tel(\"batteryVoltage\") < 11", "onDeactivate": "finish" }
+        }
+      }
+    }
+  }
+}

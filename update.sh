@@ -101,10 +101,46 @@ elif [ "$DEPLOY_TYPE" = "onboard" ]; then
         exit 1
     fi
 
+    # Release-Layout (Docs/OnboardAutoUpdate.md): baut nach Onboard/releases/<commit>/
+    # und setzt Onboard/current um. Der laufende Dienst behält seine Dateien.
     run_as_user \
         DOTNET_ROOT="$(dirname "$DOTNET_BIN")" \
         PATH="$(dirname "$DOTNET_BIN"):$(dirname "$DOTNET_BIN")/tools:$PATH" \
-        "$DOTNET_BIN" publish "$SCRIPT_DIR/Onboard/SignalRC.Onboard.csproj" -c Release
+        bash "$SCRIPT_DIR/scripts/onboard-publish-release.sh" "$SCRIPT_DIR" "$DOTNET_BIN"
+
+    # Migration: Eine Unit aus der Zeit vor dem Release-Layout startet noch
+    # bin/Release/.../publish und kennt den Rollback-Wächter nicht.
+    if ! grep -q '^ExecStart=.*/Onboard/current/SignalRC.Onboard.dll' "$ONBOARD_SERVICE" \
+        || ! grep -q '^ExecStartPre=.*onboard-prestart.sh' "$ONBOARD_SERVICE"; then
+        echo "Migriere $ONBOARD_SERVICE auf das Release-Layout ..."
+        LOG_DIR="$(grep -oP '^StandardOutput=append:\K.*(?=/onboard.log)' "$ONBOARD_SERVICE" | head -1 || true)"
+        [ -n "$LOG_DIR" ] || LOG_DIR="/var/log/signalrc"
+        cp "$ONBOARD_SERVICE" "$ONBOARD_SERVICE.bak"
+        bash "$SCRIPT_DIR/scripts/onboard-write-service.sh" "$SCRIPT_DIR" "$(dirname "$DOTNET_BIN")" "$RUN_USER" "$LOG_DIR"
+        systemctl daemon-reload
+        echo "Alte Unit gesichert unter $ONBOARD_SERVICE.bak"
+    fi
+
+    # Logrotate für die append:-Logs der Units, auch auf älteren Installationen.
+    LOG_DIR="$(grep -oP '^StandardOutput=append:\K.*(?=/onboard.log)' "$ONBOARD_SERVICE" | head -1 || true)"
+    [ -n "$LOG_DIR" ] || LOG_DIR="/var/log/signalrc"
+    bash "$SCRIPT_DIR/scripts/onboard-write-logrotate.sh" "$LOG_DIR"
+
+    # Migration: StartLimitIntervalSec=infinity lässt das Zählfenster nie
+    # ablaufen, nach 5 Starts blieb die Unit in start-limit-hit hängen.
+    # 0 schaltet die Begrenzung wirklich ab.
+    UNITS_FIXED=""
+    for UNIT_FILE in "$ONBOARD_SERVICE" /etc/systemd/system/signalrc-mediamtx.service; do
+        if [ -f "$UNIT_FILE" ] && grep -q '^StartLimitIntervalSec=infinity' "$UNIT_FILE"; then
+            sed -i 's/^StartLimitIntervalSec=infinity$/StartLimitIntervalSec=0/' "$UNIT_FILE"
+            echo "StartLimitIntervalSec=0 gesetzt in $UNIT_FILE"
+            UNITS_FIXED="yes"
+        fi
+    done
+    if [ -n "$UNITS_FIXED" ]; then
+        systemctl daemon-reload
+    fi
+    systemctl reset-failed signalrc-onboard.service signalrc-mediamtx.service 2>/dev/null || true
 fi
 
 # ── 3. Service stoppen ───────────────────────────────────────────────

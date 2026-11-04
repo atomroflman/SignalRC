@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path id="body" d="M5 16H3.5a.5.5 0 0 1-.5-.5V12l2-1 2.5-4h7l3 4 3.5 1v3.5a.5.5 0 0 1-.5.5H19M9 16h6"/>
+  <path id="window" d="M8.5 11h9" stroke-width="1.5"/>
+  <circle id="wheel-front" cx="17" cy="16.5" r="2"/>
+  <circle id="wheel-rear" cx="7" cy="16.5" r="2"/>
+</svg>

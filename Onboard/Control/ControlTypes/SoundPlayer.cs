@@ -1,25 +1,11 @@
 using Microsoft.Extensions.Logging;
 using SignalRC.Onboard.Audio;
-using SignalRC.Shared.Channels;
 
 namespace SignalRC.Onboard.Control.ControlTypes;
 
 /// <summary>
 /// Plays a file of the car's sound library on the vehicle speaker, mixed with push-to-talk and other
 /// sounds. The channel value is a button: |value| ≥ 0.5 is pressed.
-/// <para>Options (all optional except <c>file</c>):</para>
-/// <list type="bullet">
-/// <item><c>file</c>: library file name, e.g. "horn.mp3"</item>
-/// <item><c>mode</c>: "toEnd" (press starts, plays to the end), "hold" (plays while pressed),
-/// "toggle" (press starts, next press stops)</item>
-/// <item><c>retrigger</c> (toEnd): pressing while it plays — "restart", "ignore" or "stop"</item>
-/// <item><c>loop</c>: repeat until stopped</item>
-/// <item><c>volumePercent</c>: 0–200, default 100</item>
-/// <item><c>startSeconds</c> / <c>endSeconds</c>: play only this part (end 0 = to the end of the file)</item>
-/// <item><c>fadeInMs</c> / <c>fadeOutMs</c>: fades when starting / stopping</item>
-/// <item><c>duckOnTalk</c>: quieter while push-to-talk plays</item>
-/// </list>
-/// Options are read on every press, so edits apply without a restart.
 /// </summary>
 [ControlType("SoundPlayer")]
 public class SoundPlayer : ControlTypeBase
@@ -31,17 +17,36 @@ public class SoundPlayer : ControlTypeBase
     private readonly ILogger<SoundPlayer> _logger;
     private readonly AudioMixer _mixer;
     private readonly SoundLibrary _library;
-    private readonly ChannelMap _channelMap;
     private readonly object _lock = new();
     private bool _pressed;
     private SoundPlayback? _current;
 
-    public SoundPlayer(ILogger<SoundPlayer> logger, AudioMixer mixer, SoundLibrary library, ChannelMap channelMap)
+    /// <summary>Library file name, e.g. "horn.mp3".</summary>
+    public string? File { get; set; }
+    /// <summary>"toEnd" (press starts, plays to the end), "hold" (plays while pressed) or "toggle" (press starts, next press stops).</summary>
+    public string Mode { get; set; } = ModeToEnd;
+    /// <summary>Pressing while it plays in mode toEnd: "restart", "ignore" or "stop".</summary>
+    public string Retrigger { get; set; } = "restart";
+    /// <summary>Repeat until stopped.</summary>
+    public bool Loop { get; set; }
+    /// <summary>Volume in percent, 0–200.</summary>
+    public double VolumePercent { get; set; } = 100;
+    /// <summary>Start of the part to play, in seconds.</summary>
+    public double StartSeconds { get; set; }
+    /// <summary>End of the part to play, in seconds; 0 = to the end of the file.</summary>
+    public double EndSeconds { get; set; }
+    /// <summary>Fade when starting, in ms.</summary>
+    public int FadeInMs { get; set; }
+    /// <summary>Fade when stopping, in ms.</summary>
+    public int FadeOutMs { get; set; }
+    /// <summary>Quieter while push-to-talk plays.</summary>
+    public bool DuckOnTalk { get; set; }
+
+    public SoundPlayer(ILogger<SoundPlayer> logger, AudioMixer mixer, SoundLibrary library)
     {
         _logger = logger;
         _mixer = mixer;
         _library = library;
-        _channelMap = channelMap;
     }
 
     public override string ToString() => $"SoundPlayer({Name})";
@@ -50,27 +55,26 @@ public class SoundPlayer : ControlTypeBase
         string? File, string Mode, string Retrigger, bool Loop, float Volume,
         double StartSeconds, double EndSeconds, int FadeInMs, int FadeOutMs, bool DuckOnTalk);
 
+    // Edits arrive as a rebuilt channel (ControlExecutionService.Reload), so the properties are current.
     private SoundOptions ReadOptions()
     {
-        // The channel map holds the latest options (UI edits replace the entry); fall back to init-time ones.
-        var options = _channelMap.ControlChannels.TryGetValue(Name, out var item) ? item.Options : Options;
-        var mode = OptionValues.GetString(options, "mode")?.Trim().ToLowerInvariant() switch
+        var mode = Mode?.Trim().ToLowerInvariant() switch
         {
             "hold" => ModeHold,
             "toggle" => ModeToggle,
             _ => ModeToEnd,
         };
         return new SoundOptions(
-            OptionValues.GetString(options, "file"),
+            File,
             mode,
-            OptionValues.GetString(options, "retrigger")?.ToLowerInvariant() ?? "restart",
-            OptionValues.GetBool(options, "loop", false),
-            (float)Math.Clamp(OptionValues.GetDouble(options, "volumePercent", 100) / 100, 0, 2),
-            Math.Max(0, OptionValues.GetDouble(options, "startSeconds", 0)),
-            Math.Max(0, OptionValues.GetDouble(options, "endSeconds", 0)),
-            (int)Math.Clamp(OptionValues.GetDouble(options, "fadeInMs", 0), 0, 60_000),
-            (int)Math.Clamp(OptionValues.GetDouble(options, "fadeOutMs", 0), 0, 60_000),
-            OptionValues.GetBool(options, "duckOnTalk", false));
+            Retrigger?.ToLowerInvariant() ?? "restart",
+            Loop,
+            (float)Math.Clamp(VolumePercent / 100, 0, 2),
+            Math.Max(0, StartSeconds),
+            Math.Max(0, EndSeconds),
+            Math.Clamp(FadeInMs, 0, 60_000),
+            Math.Clamp(FadeOutMs, 0, 60_000),
+            DuckOnTalk);
     }
 
     public override void Initialize()

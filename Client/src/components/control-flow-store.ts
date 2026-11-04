@@ -1,6 +1,9 @@
 import { create } from 'zustand';
 import { filterFunctionRegistry } from './filters/filter-function-registry';
+import { hudInputValues } from './filters/HudInputFunction';
+import { hudInputName, nextHudInputValue, type HudInputAction } from './overlay/integration/hud-input';
 import { Connection } from 'reactflow';
+import { bindFlowTelemetry } from './flow-telemetry';
 
 export type ControlFlowNode = {
   nodeId: number;
@@ -34,6 +37,8 @@ export type ControlFlowState = {
   removeEdge(dbId: number): void;
   addEdge(params: Connection): void;
   nodeLatestValues: Record<string, number>;
+  /** All outputs of a function node, in outputLabels order; nodeLatestValues holds the first. */
+  nodeOutputValues: Record<string, (number | string)[]>;
   frame: number,
   nodes: ControlFlowNode[];
   edges: ControlFlowEdge[];
@@ -44,8 +49,12 @@ export type ControlFlowState = {
   setNodes: (nodes: ControlFlowNode[]) => void;
   setEdges: (edges: ControlFlowEdge[]) => void;
   updateNode: (node: ControlFlowNode) => void;
+  /** Moves several nodes at once and saves all positions in one request (auto layout). */
+  setNodePositions: (positions: Record<number, { x: number; y: number }>) => Promise<void>;
   updateNodeParams(nodeId: number, params: Record<string, any>): Promise<void>;
   recalculateNode: (nodeId: number) => void;
+  /** A click on a clickable HUD element (D75), own or forwarded from a viewer: updates the HudInput nodes of that name. */
+  applyHudInput: (input: string, action: HudInputAction, value: number) => void;
   triggerNodeOutput: (nodeId: number, outputValues?: number[]) => void;
   reset: () => void;
   registerInput: (dbInputId: number ) => void;
@@ -75,6 +84,12 @@ export type ControlFlowState = {
   updatesEnabled: boolean;
   setConfigMode: (isConfig: boolean) => void;
   setUpdatesEnabled: (enabled: boolean) => void;
+  /** Sending was paused by opening the overlay editor; only an explicit enable lifts it (api/README.md §6). */
+  editorPaused: boolean;
+  /** The driver started the onboard update: nothing is sent until the vehicle is back (Docs/OnboardAutoUpdate.md). */
+  onboardUpdating: boolean;
+  setOnboardUpdating: (updating: boolean) => void;
+  pauseForOverlayEditor: () => void;
   // Authentication tracking
   hasAuthenticatedWithCar: (carId: number) => boolean;
   markCarAsAuthenticated: (carId: number) => void;
@@ -93,9 +108,49 @@ export type ControlFlowState = {
   getSshKeyDownloadUrl: (carId: number, vehicleIp: string) => Promise<string | null>;
 };
 
+/**
+ * The value an edge carries: the source node's output at the edge's source
+ * port. Text outputs (e.g. a gear name) are passed on as numbers where they
+ * are numeric ("2" → 2), otherwise as 0.
+ */
+export function edgeValue(
+  state: Pick<ControlFlowState, "nodes" | "nodeLatestValues" | "nodeOutputValues">,
+  edge: Pick<ControlFlowEdge, "source" | "sourcePort">,
+): number {
+  const source = state.nodes.find(n => n.nodeId === edge.source);
+  const fnName = source?.metadata?.functionName;
+  const outputs = fnName ? filterFunctionRegistry[fnName as keyof typeof filterFunctionRegistry]?.outputLabels : undefined;
+  const port = edge.sourcePort ? outputs?.indexOf(edge.sourcePort) ?? -1 : -1;
+  const raw = port > 0 ? state.nodeOutputValues[edge.source]?.[port] : state.nodeLatestValues[edge.source];
+  const value = typeof raw === "number" ? raw : Number(raw);
+  return Number.isFinite(value) ? value : 0;
+}
+
 const _resendTimers = new Map<number, ReturnType<typeof setInterval>>();
 const _lastSentValues = new Map<number, number>();
 const _channelResendIntervals = new Map<number, number>();
+
+// The control session outlives the SignalR connection (commands carry the session id),
+// so it is kept per tab and resumed after a reload or a lost connection.
+const sessionStorageKey = (carId: number) => `car_session_${carId}`;
+
+function rememberCarSession(carId: number | undefined, carSession: string | undefined) {
+  if (!carId) return;
+  try {
+    if (carSession) sessionStorage.setItem(sessionStorageKey(carId), carSession);
+    else sessionStorage.removeItem(sessionStorageKey(carId));
+  } catch {}
+}
+
+function storedCarSession(carId: number): string | null {
+  try {
+    return sessionStorage.getItem(sessionStorageKey(carId));
+  } catch {
+    return null;
+  }
+}
+
+let _connecting: Promise<void> | undefined;
 
 function clearAllResendTimers() {
   for (const timer of _resendTimers.values()) {
@@ -107,6 +162,7 @@ function clearAllResendTimers() {
 
 export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
   nodeLatestValues: {},
+  nodeOutputValues: {},
   nodes: [],
   edges: [],
   frame: 0,
@@ -120,6 +176,8 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
   // Update control
   isInConfigMode: false,
   updatesEnabled: true,
+  editorPaused: false,
+  onboardUpdating: false,
   async load(carId: number) {
     set({ isLoading: true, error: null });
     try {
@@ -187,6 +245,18 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
       nodes: state.nodes.map(n => n.nodeId === node.nodeId ? { ...n, ...node, params: { ...node.params ?? n.params } } : n),
     }));
   },
+  async setNodePositions(positions) {
+    const res = await fetch("/api/flow/movenodes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(Object.entries(positions).map(([id, p]) => ({ NodeId: Number(id), PositionX: p.x, PositionY: p.y }))),
+    });
+    if (!res.ok)
+      throw new Error(`Saving node positions failed: ${res.status}`);
+    set(state => ({
+      nodes: state.nodes.map(n => positions[n.nodeId] ? { ...n, position: positions[n.nodeId] } : n),
+    }));
+  },
   async updateNodeParams(nodeId: number, params: Record<string, any>) {
     if (params) {
       await fetch(`/api/flow/${nodeId}/params`, {
@@ -241,7 +311,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
       const incomingEdge = state.edges.find(e => e.target === nodeId);
       if (!incomingEdge) 
         return;
-      const inputValue = state.nodeLatestValues[incomingEdge.source] ?? 0;
+      const inputValue = edgeValue(state, incomingEdge);
       if (state.nodeLatestValues[nodeId] !== inputValue) {
         state.nodeLatestValues[nodeId] = inputValue;
         node.latestValue = inputValue;
@@ -275,7 +345,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
         (fnDef.inputLabels as readonly string[]).forEach((label: string) => {
           const incoming = state.edges.find(e => e.target === nodeId && e.targetPort === label);
           if (incoming) {
-            inputValues[label] = state.nodeLatestValues[incoming.source] ?? 0;
+            inputValues[label] = edgeValue(state, incoming);
           } else {
             inputValues[label] = 0;
           }
@@ -285,9 +355,10 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
       // Execute the function with current inputs and parameters
       const calculatedValue = fnDef.apply(inputValues as any, node.params ?? {}, nodeId);
       
-      // Update the node's latest value
+      // Update the node's latest value; nodes with several outputs keep all of them
       state.nodeLatestValues[nodeId] = calculatedValue[0] as number;
-      node.latestValue = calculatedValue[0] as number;
+      state.nodeOutputValues[nodeId] = calculatedValue;
+      node.latestValue = calculatedValue.length > 1 ? calculatedValue as number[] : calculatedValue[0] as number;
 
       // Propagate changes to downstream nodes
       const nextEdges = state.edges.filter(e => e.source === nodeId);
@@ -317,6 +388,13 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
       set({ nodeLatestValues: state.nodeLatestValues, nodes: [...state.nodes], frame: state.frame + 1 });
     }
   },
+  applyHudInput(input, action, value) {
+    for (const node of get().nodes) {
+      if (hudInputName(node) !== input) continue;
+      hudInputValues.set(node.nodeId, nextHudInputValue(hudInputValues.get(node.nodeId) ?? 0, action, value));
+      get().recalculateNode(node.nodeId);
+    }
+  },
   triggerNodeOutput: (nodeId: number, outputValues?: number[]) => {
     const state = get();
     const node = state.nodes.find(n => n.nodeId === nodeId);
@@ -334,6 +412,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
 
     // Update the node's latest value
     state.nodeLatestValues[nodeId] = calculatedValue[0];
+    state.nodeOutputValues[nodeId] = calculatedValue;
     node.latestValue = calculatedValue[0];
 
     // Propagate changes to downstream nodes
@@ -415,7 +494,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
             representingId: dbId,
             type: 'input',
             data: { ...input },
-            position: { x: input.positionX, y: input.positionY },
+            position: input.position,
             nodeTypeName: input.nodeTypeName,
             metadata: undefined,
             label: input.label,
@@ -454,7 +533,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
             representingId: dbId,
             type: 'output',
             data: { ...output },
-            position: { x: output.positionX, y: output.positionY },
+            position: output.position,
             nodeTypeName: output.nodeTypeName,
             metadata: undefined,
             label: output.label,
@@ -491,7 +570,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
           representingId: undefined,
           type: 'default',
           data: { ...fnNode },
-          position: { x: fnNode.positionX, y: fnNode.positionY },
+          position: fnNode.position,
           nodeTypeName: fnNode.nodeTypeName,
           metadata: fnNode.metadata,
           label: fnNode.label,
@@ -515,10 +594,10 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
     }));
   },
   async sendOutput(channelId: number, value: number) {
-    const { carId, carSession, connection, updatesEnabled, isInConfigMode } = get();
+    const { carId, carSession, connection, updatesEnabled, isInConfigMode, onboardUpdating } = get();
     console.log("send out", carId, carSession, connection?.state, "updatesEnabled:", updatesEnabled, "isInConfigMode:", isInConfigMode);
     
-    if (connection && carId && carSession && updatesEnabled) {
+    if (connection && carId && carSession && updatesEnabled && !onboardUpdating) {
       await connection.invoke("UpdateChannel", carId, carSession, channelId, value);
       _lastSentValues.set(channelId, value);
 
@@ -526,9 +605,9 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
       if (resendMs && !_resendTimers.has(channelId)) {
         const interval = Math.floor(resendMs / 2);
         _resendTimers.set(channelId, setInterval(() => {
-          const { connection: conn, carId: cId, carSession: sess, updatesEnabled: enabled } = get();
+          const { connection: conn, carId: cId, carSession: sess, updatesEnabled: enabled, onboardUpdating: updating } = get();
           const lastVal = _lastSentValues.get(channelId);
-          if (conn && cId && sess && enabled && lastVal !== undefined) {
+          if (conn && cId && sess && enabled && !updating && lastVal !== undefined) {
             conn.invoke("UpdateChannel", cId, sess, channelId, lastVal)
               .catch((err: any) => console.error("Resend failed:", err));
           }
@@ -541,22 +620,52 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
     }
   },
   async startConnection(carId: number, carKey: string | undefined) {
+    // Several pages call this on mount; share one connection attempt.
+    while (_connecting) await _connecting.catch(() => {});
     const signalR = await import("@microsoft/signalr");
-    var { connection } = get();
-    if (!get().connection) {
-        connection = new signalR.HubConnectionBuilder()
+    const existing = get().connection;
+    if (existing && existing.state !== signalR.HubConnectionState.Disconnected) {
+      set({ carId });
+      return;
+    }
+    _connecting = (async () => {
+      const connection = new signalR.HubConnectionBuilder()
         .withUrl(`/hubs/connection`)
         .withAutomaticReconnect()
         .build();
-        await connection.start();
-        // ponytail: only wipe carSession when the connection is brand-new.
-        // On a remount (page nav, / → /car/[id] → /) the zustand store
-        // survives but this useEffect re-runs and would clobber the
-        // already-authenticated session, flipping UpdateControl to
-        // "Disconnected" while the Onboard still has _sessionId.
-        set({ connection, carId, carSession: undefined });
-    } else {
-        set({ carId });
+      // Reconnect attempts exhausted: drop the dead connection so the next
+      // startConnection builds a new one and resumes the stored session.
+      connection.onclose(() => {
+        if (get().connection === connection) set({ connection: undefined, carSession: undefined });
+      });
+      // A viewer's click on a public HUD element, checked and forwarded by the
+      // server to the connection that holds control (D75).
+      connection.on("HudInput", (inputCarId: number, input: string, action: HudInputAction, value: number) => {
+        if (get().carId === inputCarId && get().carSession) get().applyHudInput(input, action, value);
+      });
+      await connection.start();
+      // ponytail: only replace carSession when the connection is brand-new.
+      // On a remount (page nav, / → /car/[id] → /) the zustand store
+      // survives but this useEffect re-runs and would clobber the
+      // already-authenticated session, flipping UpdateControl to
+      // "Disconnected" while the Onboard still has _sessionId.
+      // A new connection (reload, connection lost) resumes the tab's session if the vehicle still holds it.
+      const stored = get().carSession ?? storedCarSession(carId);
+      let carSession: string | undefined;
+      if (stored) {
+        try {
+          if (await connection.invoke("ResumeCarControl", carId, stored) === true) carSession = stored;
+        } catch (err) {
+          console.warn("ResumeCarControl failed:", err);
+        }
+      }
+      rememberCarSession(carId, carSession);
+      set({ connection, carId, carSession });
+    })();
+    try {
+      await _connecting;
+    } finally {
+      _connecting = undefined;
     }
   },
   async downloadSshKey(carId: number, vehicleIp: string, saveToStorage: boolean = true): Promise<{ success: boolean; key?: string; error?: string }> {
@@ -672,6 +781,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
       // Try to authenticate
       const carSession = await connection.invoke("AquireCarControl", carId, sshAuthRequest);
       if (carSession) {
+        rememberCarSession(carId, carSession);
         set({ carSession });
         // Mark car as authenticated for config access
         get().markCarAsAuthenticated(carId);
@@ -813,6 +923,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
     } catch (err) {
       console.error("Failed to notify vehicle about session release:", err);
     } finally {
+      rememberCarSession(carId, undefined);
       try { if (connection) await connection.stop(); } catch {}
       set({ connection: undefined, carSession: undefined });
     }
@@ -850,7 +961,10 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
   carSession: undefined,
   setConnection: (connection: any) => set({ connection }),
   setCarId: (carId: number | undefined) => set({ carId }),
-  setCarSession: (carSession: string) => set({ carSession }),
+  setCarSession: (carSession: string) => {
+    rememberCarSession(get().carId, carSession);
+    set({ carSession });
+  },
   
   async startUserChannelConnection() {
     const signalR = await import("@microsoft/signalr");
@@ -965,19 +1079,46 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
       });
       console.log("Config mode: ON, Updates disabled by default");
     } else {
-      // Leaving config mode: restore previous state or enable by default
+      // Leaving config mode: restore previous state or enable by default.
+      // A pause from the overlay editor is never lifted here (api/README.md §6).
+      const keepPaused = state.editorPaused;
       set({ 
         isInConfigMode: false,
-        updatesEnabled: true // Re-enable when leaving config mode
+        updatesEnabled: !keepPaused // Re-enable when leaving config mode
       });
-      console.log("Config mode: OFF, Updates enabled");
+      console.log(keepPaused ? "Config mode: OFF, Updates stay paused (overlay editor)" : "Config mode: OFF, Updates enabled");
     }
   },
 
   setUpdatesEnabled: (enabled: boolean) => {
     if (!enabled) clearAllResendTimers();
-    set({ updatesEnabled: enabled });
+    // An explicit enable is the deliberate release that ends an editor pause.
+    set(enabled ? { updatesEnabled: true, editorPaused: false } : { updatesEnabled: false });
     console.log("Updates enabled:", enabled);
+  },
+
+  pauseForOverlayEditor: () => {
+    clearAllResendTimers();
+    set({ updatesEnabled: false, editorPaused: true });
+    console.log("Updates paused: overlay editor opened");
+  },
+
+  setOnboardUpdating: (updating: boolean) => {
+    if (updating) {
+      clearAllResendTimers();
+      set({ onboardUpdating: true });
+    } else {
+      // The onboard ends the session with the update (restart or failure); control has to be taken anew.
+      // Tell the server too, so it drops the session and the driver display.
+      const { connection, carId, carSession } = get();
+      if (connection && carId && carSession) {
+        connection.invoke("ReleaseCarControl", carId, carSession)
+          .catch((err: any) => console.error("Failed to release the session after the update:", err));
+      }
+      rememberCarSession(carId, undefined);
+      set({ onboardUpdating: false, carSession: undefined });
+    }
+    console.log("Onboard update in progress:", updating);
   },
 
   // Authentication tracking functions
@@ -1001,3 +1142,6 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
     }
   },
 }));
+
+// Telemetry nodes follow their vehicle channel while the flow is loaded.
+if (typeof window !== 'undefined') bindFlowTelemetry(useControlFlowStore);

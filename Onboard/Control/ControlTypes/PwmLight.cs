@@ -13,7 +13,9 @@ public class PwmLight : ControlTypeBase
     private float _currentBrightness = 0f;
     private CancellationTokenSource? _fadeCts;
 
+    /// <summary>Brightness change per fade step (0–1); 1 switches without fading.</summary>
     public float InertiaStep { get; set; } = 0.2f;
+    /// <summary>Delay between two fade steps in ms.</summary>
     public int InertiaDelayMs { get; set; } = 10;
 
     public PwmLight(ILogger<PwmLight> logger) : base()
@@ -39,7 +41,7 @@ public class PwmLight : ControlTypeBase
         Logger.LogDebug($"PwmLight rec: {target}");
         _fadeCts?.Cancel();
         _fadeCts = new CancellationTokenSource();
-        _ = FadeToAsync(target, _fadeCts.Token);
+        Observe(FadeToAsync(target, _fadeCts.Token));
     }
 
     private async Task FadeToAsync(float target, CancellationToken token)

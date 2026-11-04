@@ -190,6 +190,7 @@ public class VehicleConnectionManager : IVehicleConnectionManager, IDisposable
         if (config.ChannelMap != null)
         {
             _logger.LogInformation("Server pushed a channel map (hash {Hash}). Applying locally.", config.ChannelMapHash);
+            ChannelOptions.Normalize(config.ChannelMap);
             foreach (var kv in config.ChannelMap.ControlChannels)
                 _channelMap.ControlChannels[kv.Key] = kv.Value;
             foreach (var kv in config.ChannelMap.TelemetryChannels)

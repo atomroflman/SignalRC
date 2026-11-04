@@ -90,6 +90,7 @@ services:
       ASPNETCORE_URLS: http://0.0.0.0:5000
       ConnectionStrings__DefaultConnection: Host=postgres;Database=signalrc;Username=signalrc;Password=signalrc
       JanusConfiguration__HostName: janus
+      JanusConfiguration__PublicHostName: ${JANUS_PUBLIC_HOST:-}
       JanusConfiguration__PortRangeStart: "10000"
       JanusConfiguration__PortRangeEnd: "10200"
       FileTransfer__StoragePath: /app/data/signalrc

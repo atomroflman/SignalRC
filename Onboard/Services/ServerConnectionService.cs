@@ -3,6 +3,7 @@ using System.Text.Json;
 using SignalRC.Onboard.Control;
 using SignalRC.Onboard.Services;
 using SignalRC.Onboard.Telemetry;
+using SignalRC.Onboard.Update;
 using SignalRC.Onboard.Video;
 using SignalRC.Shared;
 using SignalRC.Shared.Channels;
@@ -102,7 +103,7 @@ public class ServerConnectionService
             Logger.LogError($"Connection closed: {error}");
             return Task.CompletedTask;
         };
-        await _connection.StartAsync();
+        await StartConnectionAsync();
 
         // Register each Onboard service under its own narrow SignalR-client
         // interface so the merged hub can push the matching subset of calls
@@ -120,6 +121,7 @@ public class ServerConnectionService
         _connection.Register<IDiagnosticsClient>(diagnosticsService);
         var audioService = ServiceProvider.GetRequiredService<AudioService>();
         _connection.Register<IAudioClient>(audioService);
+        _connection.Register<IOnboardUpdateClient>(ServiceProvider.GetRequiredService<OnboardUpdateService>());
 
         Logger.LogInformation($"Connected to server: {_connection.State}");
         await _connection.InvokeAsync("Test");
@@ -127,6 +129,30 @@ public class ServerConnectionService
 
         await CheckServerVersionAsync();
         await PerformServerHandshakeAsync();
+    }
+
+    /// <summary>
+    /// Without a server the onboard normally exits and systemd restarts it. A freshly
+    /// installed release must not do that: every restart counts toward its rollback, and a
+    /// dead LTE link would roll back a good release within seconds. It retries instead,
+    /// until the confirmation timeout of <see cref="OnboardUpdateService"/> ends it.
+    /// </summary>
+    private async Task StartConnectionAsync()
+    {
+        var update = ServiceProvider.GetRequiredService<OnboardUpdateService>();
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                await _connection.StartAsync();
+                return;
+            }
+            catch (Exception ex) when (update.IsUnconfirmed)
+            {
+                Logger.LogWarning(ex, "Server not reachable (attempt {Attempt}); the unconfirmed release keeps trying.", attempt);
+                await Task.Delay(TimeSpan.FromSeconds(Math.Min(5 * attempt, 30)));
+            }
+        }
     }
 
     private async Task OnReconnectedAsync(string? connectionId)
@@ -186,6 +212,10 @@ public class ServerConnectionService
             }
 
             await RegisterAvailableTypesAsync();
+            // The server forgets the report with the connection.
+            await ServiceProvider.GetRequiredService<ChannelHealthService>().PublishAsync();
+            // Confirms a fresh release and looks for a newer one; a server restart with a new build lands here too.
+            await ServiceProvider.GetRequiredService<OnboardUpdateService>().OnHandshakeAsync();
         }
         catch (Exception ex)
         {
@@ -293,8 +323,8 @@ public class ServerConnectionService
     }
 
     // ponytail: fetches /api/version once on connect and warns on branch/commit mismatch.
-    // Single-shot, fire-and-log: we don't retry on transient failures and we don't act
-    // (auto-update would need a separate opt-in flag — out of scope here).
+    // Single-shot, fire-and-log: we don't retry on transient failures. Acting on it is
+    // OnboardUpdateService's job after the handshake.
     private async Task CheckServerVersionAsync()
     {
         try
@@ -324,7 +354,7 @@ public class ServerConnectionService
             if (branchMismatch || commitMismatch)
             {
                 Logger.LogWarning(
-                    "Version mismatch with server. Local={LocalBranch}@{LocalCommit}, Server={RemoteBranch}@{RemoteCommit}. Run 'sudo ./update.sh' in the repo checkout to sync.",
+                    "Version mismatch with server. Local={LocalBranch}@{LocalCommit}, Server={RemoteBranch}@{RemoteCommit}. The self-update decides after the handshake (AutoUpdate:Enabled); 'sudo ./update.sh' in the repo checkout syncs by hand.",
                     local.Branch, shortLocal, remote.Branch ?? "?", shortRemote);
             }
         }

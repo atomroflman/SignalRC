@@ -12,9 +12,8 @@ namespace SignalRC.Onboard.Hardware
         Task SetPwmCyclePercentage(float value);
 
         /// <summary>
-        /// Gets the current PWM value.
+        /// The current duty cycle, 0–1, whatever method set it.
         /// </summary>
-        /// <returns>The current PWM value.</returns>
         Task<float> GetPwmValue();
 
         /// <summary>
@@ -32,5 +31,24 @@ namespace SignalRC.Onboard.Hardware
         /// <returns>A task representing the asynchronous operation.</returns>
         /// <exception cref="ArgumentOutOfRangeException">Thrown if the pulse width is out of range.</exception>
         Task SetPulseWidthMilliseconds(float pulseWidthMs);
+
+        /// <summary>
+        /// What the output currently drives, for telemetry. Boards that can be
+        /// read back (PCA9685) report the register contents; others report the
+        /// last value written with <see cref="PwmReadback.Measured"/> false.
+        /// </summary>
+        Task<PwmReadback> ReadOutputAsync() =>
+            GetPwmValue().ContinueWith(t => new PwmReadback((int)Math.Round(t.Result * 4095), 4096, 50f, false, null));
+    }
+
+    /// <param name="Counts">High time in counts of <paramref name="Resolution"/>.</param>
+    /// <param name="Resolution">Counts per period.</param>
+    /// <param name="FrequencyHz">PWM frequency.</param>
+    /// <param name="Measured">Read back from the hardware rather than cached.</param>
+    /// <param name="Fault">Set when the readback shows the hardware is not driving the output (e.g. PCA9685 in sleep after a brown-out).</param>
+    public readonly record struct PwmReadback(int Counts, int Resolution, float FrequencyHz, bool Measured, string? Fault)
+    {
+        public double DutyCycle => Resolution <= 0 ? 0 : Math.Clamp((double)Counts / Resolution, 0, 1);
+        public double PulseWidthMs => FrequencyHz <= 0 ? 0 : DutyCycle * 1000.0 / FrequencyHz;
     }
 }

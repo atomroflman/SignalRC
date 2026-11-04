@@ -1,4 +1,5 @@
 import React from "react";
+import { flowNodeStyles } from "./flow-node-styles";
 
 // Component for individual parameter input with local state
 // This prevents focus loss during typing by using local state
@@ -7,7 +8,7 @@ export function ParamInput({
   name, 
   value, 
   onBlur,
-  className = "bg-zinc-900 border border-zinc-700 rounded px-1 text-xs w-16 text-right",
+  className = `${flowNodeStyles.input} w-20 text-right font-mono`,
   placeholder
 }: { 
   name: string; 
@@ -34,8 +35,8 @@ export function ParamInput({
   };
   
   return (
-    <div className="flex flex-row items-center justify-between gap-1">
-      <span className="text-zinc-400 text-xs text-left flex-1">{name}:</span>
+    <div className="flex flex-row items-center justify-between gap-2">
+      <span className="text-zinc-300 text-xs text-left flex-1">{name}</span>
       <input
         className={className}
         value={localValue}
@@ -58,7 +59,7 @@ export function ParamInputField({
   name, 
   value, 
   onBlur,
-  className = "bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-200",
+  className = flowNodeStyles.input,
   placeholder
 }: { 
   name: string; 

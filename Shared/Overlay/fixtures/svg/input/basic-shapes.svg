@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Plain shapes with ids, sized in millimetres -->
+<svg xmlns="http://www.w3.org/2000/svg" width="50mm" height="25mm" viewBox="0 0 200 100" version="1.1">
+  <rect id="frame" x="0" y="0" width="200" height="100" rx="8" fill="#222" stroke="white" stroke-width="2"/>
+  <circle id="lamp" cx="30" cy="50" r="12" fill="rgb(255, 0, 0)"/>
+  <ellipse cx="70" cy="50" rx="15" ry="10" fill="hsl(120, 100%, 25%)" fill-opacity="50%"/>
+  <line id="divider" x1="100" y1="10" x2="100" y2="90" stroke="#fff" stroke-dasharray="4,2" stroke-linecap="round"/>
+  <polyline points="110,80 130,20 150,80" fill="none" stroke="orange" stroke-width="3" stroke-linejoin="round"/>
+  <polygon id="arrow" points="160,40 190,50 160,60" fill="yellow"/>
+  <path id="wave" d="m110 90 q10 -10 20 0 t20 0 h10 v-5 z" fill="none" stroke="cyan"/>
+  <rect width="0" height="10" fill="red"/>
+</svg>

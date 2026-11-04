@@ -34,3 +34,16 @@ channelMap.server.json
 
 # Server runtime env (deployment-specific, contains public hostname)
 .env
+
+# Onboard self-update: installed releases and the symlink to the running one
+Onboard/releases/
+Onboard/current
+
+# Build script config (registry is never committed)
+scripts/build-images.env
+
+# Server local overrides per environment (e.g. dev database host)
+Server/appSettings.*.json
+
+# Claude Code agent worktrees
+.claude/worktrees/

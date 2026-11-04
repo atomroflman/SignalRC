@@ -1,0 +1,159 @@
+{
+  "description": "Referenzfälle der SVG-Bereinigung (svg/README.md). input: Rohdatei unter input/. accepted: Ergebnis. expected: normalisierte Ausgabe unter expected/ (byte-genau, nur bei accepted). parts: erwartete Teile-Metadaten (Teilmenge; Reihenfolge der Schlüssel = Dokumentreihenfolge). report: je Code die Mindestanzahl; rejected: Ablehnungscode. forbidden: Zeichenfolgen, die in der Ausgabe nicht vorkommen dürfen.",
+  "cases": [
+    {
+      "id": "basic-shapes",
+      "input": "basic-shapes.svg",
+      "accepted": true,
+      "expected": "basic-shapes.svg",
+      "width": 188.976378,
+      "height": 94.488189,
+      "parts": {
+        "frame": { "tag": "rect", "bbox": [0, 0, 200, 100], "fill": "#222222", "stroke": "#ffffff", "strokeWidth": 2 },
+        "lamp": { "tag": "circle", "bbox": [18, 38, 24, 24], "fill": "#ff0000" },
+        "part-1": { "tag": "ellipse", "bbox": [55, 40, 30, 20], "fill": "#008000" },
+        "divider": { "tag": "line" },
+        "part-2": { "tag": "polyline" },
+        "arrow": { "tag": "polygon", "bbox": [160, 40, 30, 20] },
+        "wave": { "tag": "path", "bbox": [110, 80, 50, 20] }
+      },
+      "report": { "SVG_UNIT_CONVERTED": 2 }
+    },
+    {
+      "id": "inkscape",
+      "input": "inkscape.svg",
+      "accepted": true,
+      "expected": "inkscape.svg",
+      "parts": {
+        "layer1": { "tag": "g" },
+        "dial-face": { "tag": "circle", "bbox": [5, 5, 110, 110] },
+        "needle": { "tag": "g", "bbox": [12, 55, 53, 10] },
+        "needle-tip": { "tag": "path", "bbox": [58, 12, 4, 48], "fill": "#ff2a2a", "stroke": "none" },
+        "hub": { "tag": "circle" },
+        "label": { "tag": "text" }
+      },
+      "report": { "SVG_METADATA_REMOVED": 3, "SVG_UNSUPPORTED_CSS": 1, "SVG_FONT_MAPPED": 1 },
+      "forbidden": ["inkscape", "sodipodi", "rdf", "style="]
+    },
+    {
+      "id": "illustrator",
+      "input": "illustrator.svg",
+      "accepted": true,
+      "expected": "illustrator.svg",
+      "parts": {
+        "part-1": { "tag": "g", "bbox": [0, 0, 100, 50] },
+        "Hintergrund": { "tag": "rect", "fill": "#333333" }
+      },
+      "report": { "SVG_REMOVED_ELEMENT": 1, "SVG_FONT_MAPPED": 1, "SVG_METADATA_REMOVED": 1 },
+      "forbidden": ["class=", "<style", "foreignObject", "switch"]
+    },
+    {
+      "id": "gradients-use",
+      "input": "gradients-use.svg",
+      "accepted": true,
+      "expected": "gradients-use.svg",
+      "parts": {
+        "bar": { "tag": "g", "bbox": [0, 0, 100, 100] },
+        "tick-1": { "tag": "g", "bbox": [18, 10, 4, 20] },
+        "tick-2": { "tag": "g", "bbox": [48, 10, 4, 20], "fill": "#0000ff" },
+        "part-1": { "tag": "g", "bbox": [80, 80, 4, 4], "fill": "#ffffff" }
+      },
+      "report": { "SVG_REMOVED_ATTRIBUTE": 1 },
+      "forbidden": ["href", "<use", "<symbol", "unused", "#base", "#glow"]
+    },
+    {
+      "id": "part-ids",
+      "input": "part-ids.svg",
+      "accepted": true,
+      "expected": "part-ids.svg",
+      "width": 160,
+      "height": 100,
+      "parts": {
+        "part-1": { "tag": "g", "bbox": [10, 10, 40, 10] },
+        "a_b": { "tag": "rect" },
+        "a_b-2": { "tag": "rect" },
+        "a_b-3": { "tag": "rect" },
+        "part-2": { "tag": "circle" },
+        "part-2-2": { "tag": "circle" },
+        "link": { "tag": "g" },
+        "part-3": { "tag": "text" }
+      },
+      "report": { "SVG_REMOVED_ATTRIBUTE": 1 },
+      "forbidden": ["https://", "<a"]
+    },
+    {
+      "id": "no-namespace",
+      "input": "no-namespace.svg",
+      "accepted": true,
+      "width": 20,
+      "height": 10,
+      "parts": { "part-1": { "tag": "rect", "fill": "#008080" } }
+    },
+    {
+      "id": "no-size",
+      "input": "no-size.svg",
+      "accepted": true,
+      "width": 35,
+      "height": 20,
+      "parts": { "part-1": { "tag": "g", "bbox": [100, 50, 35, 20] } }
+    },
+    {
+      "id": "css-cascade",
+      "input": "css-cascade.svg",
+      "accepted": true,
+      "expected": "css-cascade.svg",
+      "report": { "SVG_UNSUPPORTED_CSS": 5 },
+      "forbidden": ["purple", "#800080", "yellow", "#ffff00"]
+    },
+    {
+      "id": "script-events",
+      "input": "script-events.svg",
+      "accepted": true,
+      "report": { "SVG_REMOVED_ATTRIBUTE": 4, "SVG_REMOVED_ELEMENT": 4 },
+      "forbidden": ["script", "alert", "javascript", "onclick", "onload", "handler", "iframe", "evil"]
+    },
+    {
+      "id": "foreign-object",
+      "input": "foreign-object.svg",
+      "accepted": true,
+      "report": { "SVG_REMOVED_ELEMENT": 2 },
+      "forbidden": ["foreign", "div", "img", "evil", "onerror"]
+    },
+    {
+      "id": "external-refs",
+      "input": "external-refs.svg",
+      "accepted": true,
+      "report": { "SVG_EXTERNAL_REFERENCE": 6, "SVG_UNSUPPORTED_CSS": 2, "SVG_REMOVED_ELEMENT": 2, "SVG_REMOVED_ATTRIBUTE": 2 },
+      "forbidden": ["evil", "http", "data:", "//", "image", "base", "@import", "url(h", "url(o", "url('", "url(\""]
+    },
+    {
+      "id": "animations",
+      "input": "animations.svg",
+      "accepted": true,
+      "report": { "SVG_UNSUPPORTED_CSS": 4, "SVG_REMOVED_ELEMENT": 5 },
+      "forbidden": ["animate", "<set", "keyframes", "animation", "transition", "evil", "#ffffff", "discard"]
+    },
+    {
+      "id": "unsupported-effects",
+      "input": "unsupported-effects.svg",
+      "accepted": true,
+      "report": { "SVG_REMOVED_ELEMENT": 6, "SVG_REMOVED_ATTRIBUTE": 5, "SVG_FONT_MAPPED": 2 },
+      "forbidden": ["mask", "filter", "pattern", "marker", "vector-effect", "feGaussianBlur", "feImage", "evil", "textPath", "#ff0000", "em\""]
+    },
+    {
+      "id": "bad-values",
+      "input": "bad-values.svg",
+      "accepted": true,
+      "report": { "SVG_REMOVED_ATTRIBUTE": 8 },
+      "forbidden": ["expression", "javascript", "evil", "NaN", "Infinity", "<script", "1e7", "10000000"]
+    },
+    { "id": "xxe", "input": "xxe.svg", "accepted": false, "rejected": "SVG_REJECTED_DOCTYPE" },
+    { "id": "billion-laughs", "input": "billion-laughs.svg", "accepted": false, "rejected": "SVG_REJECTED_DOCTYPE" },
+    { "id": "use-cycle", "input": "use-cycle.svg", "accepted": false, "rejected": "SVG_REJECTED_USE_CYCLE" },
+    { "id": "use-self", "input": "use-self.svg", "accepted": false, "rejected": "SVG_REJECTED_USE_CYCLE" },
+    { "id": "use-bomb", "input": "use-bomb.svg", "accepted": false, "rejected": "SVG_REJECTED_LIMIT" },
+    { "id": "only-metadata", "input": "only-metadata.svg", "accepted": false, "rejected": "SVG_REJECTED_EMPTY", "report": { "SVG_METADATA_REMOVED": 3 } },
+    { "id": "not-svg", "input": "not-svg.svg", "accepted": false, "rejected": "SVG_REJECTED_PARSE" },
+    { "id": "malformed", "input": "malformed.svg", "accepted": false, "rejected": "SVG_REJECTED_PARSE" }
+  ]
+}

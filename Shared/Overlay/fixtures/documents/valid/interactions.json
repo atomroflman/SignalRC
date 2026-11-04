@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "workspace": { "width": 1280, "height": 720 },
+  "elements": {
+    "e_horn": {
+      "type": "rect",
+      "name": "Hupe",
+      "interaction": { "input": "horn", "kind": "button" },
+      "props": { "x": 40, "y": 600, "width": 80, "height": 80, "fill": "#333333" }
+    },
+    "e_light": {
+      "type": "group",
+      "name": "Licht",
+      "interaction": { "input": "light", "kind": "toggle", "value": 1 },
+      "children": ["e_light_bg", "e_light_label"],
+      "props": { "x": 140, "y": 600 }
+    },
+    "e_light_bg": {
+      "type": "rect",
+      "props": { "width": 80, "height": 80, "fill": "#333333" }
+    },
+    "e_light_label": {
+      "type": "text",
+      "props": { "x": 40, "y": 45, "text": "L", "align": "middle", "fontSize": 24, "fill": "#ffffff" }
+    },
+    "e_beacon": {
+      "type": "ellipse",
+      "name": "Blinklicht",
+      "interaction": { "input": "beacon", "kind": "toggle", "public": true },
+      "props": { "x": 240, "y": 600, "width": 80, "height": 80, "fill": "#ffaa00" }
+    },
+    "e_panel": {
+      "type": "svgAsset",
+      "assetId": "sha256-0000000000000000000000000000000000000000000000000000000000000001",
+      "props": { "x": 340, "y": 560, "scaleX": 0.5 },
+      "parts": {
+        "p_mode_eco": { "interaction": { "input": "driveMode", "kind": "value", "value": 1 } },
+        "p_mode_sport": { "interaction": { "input": "driveMode", "kind": "value", "value": 2 } },
+        "p_power": {
+          "props": { "opacity": 0.8 },
+          "interaction": { "input": "powerLimit", "kind": "slider", "min": 0.2, "max": 1, "step": 0.1 }
+        }
+      }
+    }
+  },
+  "children": ["e_horn", "e_light", "e_beacon", "e_panel"]
+}

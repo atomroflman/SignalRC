@@ -2,6 +2,9 @@ using SignalRC.Shared;
 using SignalRC.Shared.Audio;
 using SignalRC.Shared.Channels;
 using SignalRC.Shared.FileTransfer;
+using SignalRC.Shared.Logs;
+using SignalRC.Shared.Telemetry;
+using SignalRC.Shared.Update;
 using SignalRC.Shared.Video;
 
 
@@ -12,6 +15,10 @@ public interface IConnectionHubServer
     Task<CarConfiguration> OpenCarConnection(string carIdentityKey, string channelMapHash);
     Task ReportOnboardVersion(string branch, string? commit);
     Task RegisterAvailableChannelTypes(int carId, AvailableChannelTypes types);
+    // The car follows from the calling onboard connection.
+    Task ReportChannelHealth(ChannelHealthReport report);
+    // Batches of the onboard log; the car follows from the calling onboard connection.
+    Task SendOnboardLogs(OnboardLogEntry[] entries);
     Task UpdateChannelMap(int carId, ChannelMap channelMap);
     Task<ChannelMapSyncResponse> SyncChannelMap(ChannelMapSyncRequest request);
     Task ReportFileTransferStatus(FileTransferStatusUpdate update);
@@ -31,6 +38,8 @@ public interface IConnectionHubServer
 
     // Telemetry (onboard → server, browser → server; formerly ITelemetryServer)
     Task UpdateTelemetry(string carId, string valueName, string value);
+    // Telemetry v1.1 (overlay): the car follows from the calling onboard connection.
+    Task UpdateTelemetrySamples(TelemetryDelta delta);
     Task SubscribeToCarTelemetry(string carId);
     Task UnsubscribeFromCarTelemetry(string carId);
     Task RegisterAsOnboard(string carId);
@@ -40,11 +49,7 @@ public interface IConnectionHubServer
     // Video streams (onboard + browser → server; formerly ICarVideoServer)
     Task ConnectCar(string carIdentityKey);
     Task<IReadOnlyList<VideoStreamMapItem>> GetVideoStreamsForCar(int carId);
-    Task ActivateStream(int streamId);
-    Task DeactivateStream(int streamId);
-    Task StartVideoStream(int streamId);
     Task ChangeVideoStreamSettings(int streamId, VideoStreamMapItem settings);
-    Task StopVideoStream(int streamId);
     Task SetVideoStreamEnabled(int carId, int streamId, bool enabled);
 
     // Listening (browser → server): the car's microphone runs on its own Janus audio mountpoint while
@@ -74,4 +79,10 @@ public interface IConnectionHubServer
     // Diagnostics (browser → server → onboard)
     Task<OnboardDiagnosticsReport> GetOnboardDiagnostics(int carId);
     Task<OnboardDiagnosticsReport> RunOnboardStartupTest(int carId);
+
+    // Self-update (Docs/OnboardAutoUpdate.md)
+    // The car follows from the calling onboard connection.
+    Task ReportOnboardUpdateStatus(OnboardUpdateStatus status);
+    // Browser → server → onboard. Requires the control session id.
+    Task<OnboardUpdateRequestResult> RequestOnboardUpdate(int carId, string sessionId);
 }

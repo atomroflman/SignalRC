@@ -534,6 +534,181 @@ namespace SignalRC.Server.Migrations
                     b.ToTable("FileTransfers");
                 });
 
+            modelBuilder.Entity("SignalRC.Server.Data.OverlayAsset", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AssetId")
+                        .IsRequired()
+                        .HasMaxLength(71)
+                        .HasColumnType("character varying(71)");
+
+                    b.Property<int>("CarId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("CreatedByUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("MetadataJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Svg")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CarId", "AssetId")
+                        .IsUnique();
+
+                    b.ToTable("OverlayAssets", (string)null);
+                });
+
+            modelBuilder.Entity("SignalRC.Server.Data.OverlayDraft", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CarId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("DocumentJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<long>("Revision")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("UpdatedByUserId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CarId")
+                        .IsUnique();
+
+                    b.ToTable("OverlayDrafts", (string)null);
+                });
+
+            modelBuilder.Entity("SignalRC.Server.Data.OverlayDraftRevision", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CarId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DocumentJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<long>("Revision")
+                        .HasColumnType("bigint");
+
+                    b.Property<int?>("UserId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CarId", "Revision")
+                        .IsUnique();
+
+                    b.ToTable("OverlayDraftRevisions", (string)null);
+                });
+
+            modelBuilder.Entity("SignalRC.Server.Data.OverlayPublication", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CarId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("DocumentJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int>("Number")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("PublishedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PublishedByName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int?>("PublishedByUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SchemaVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("SourceDraftRevision")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CarId", "Number")
+                        .IsUnique();
+
+                    b.ToTable("OverlayPublications", (string)null);
+                });
+
+            modelBuilder.Entity("SignalRC.Server.Data.OverlayPublicationAsset", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AssetId")
+                        .IsRequired()
+                        .HasMaxLength(71)
+                        .HasColumnType("character varying(71)");
+
+                    b.Property<int>("PublicationId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicationId", "AssetId")
+                        .IsUnique();
+
+                    b.ToTable("OverlayPublicationAssets", (string)null);
+                });
+
             modelBuilder.Entity("SignalRC.Server.Data.SetupFilterType", b =>
                 {
                     b.Property<int>("Id")
@@ -958,6 +1133,59 @@ namespace SignalRC.Server.Migrations
                     b.Navigation("UploadedByUser");
                 });
 
+            modelBuilder.Entity("SignalRC.Server.Data.OverlayAsset", b =>
+                {
+                    b.HasOne("SignalRC.Server.Data.Car", "Car")
+                        .WithMany()
+                        .HasForeignKey("CarId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Car");
+                });
+
+            modelBuilder.Entity("SignalRC.Server.Data.OverlayDraft", b =>
+                {
+                    b.HasOne("SignalRC.Server.Data.Car", "Car")
+                        .WithMany()
+                        .HasForeignKey("CarId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Car");
+                });
+
+            modelBuilder.Entity("SignalRC.Server.Data.OverlayDraftRevision", b =>
+                {
+                    b.HasOne("SignalRC.Server.Data.Car", null)
+                        .WithMany()
+                        .HasForeignKey("CarId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SignalRC.Server.Data.OverlayPublication", b =>
+                {
+                    b.HasOne("SignalRC.Server.Data.Car", "Car")
+                        .WithMany()
+                        .HasForeignKey("CarId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Car");
+                });
+
+            modelBuilder.Entity("SignalRC.Server.Data.OverlayPublicationAsset", b =>
+                {
+                    b.HasOne("SignalRC.Server.Data.OverlayPublication", "Publication")
+                        .WithMany("Assets")
+                        .HasForeignKey("PublicationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Publication");
+                });
+
             modelBuilder.Entity("SignalRC.Server.Data.User", b =>
                 {
                     b.HasOne("SignalRC.Server.Data.Car", "ActiveVehicle")
@@ -1139,6 +1367,11 @@ namespace SignalRC.Server.Migrations
             modelBuilder.Entity("SignalRC.Server.Data.CarChannel", b =>
                 {
                     b.Navigation("SetupNodes");
+                });
+
+            modelBuilder.Entity("SignalRC.Server.Data.OverlayPublication", b =>
+                {
+                    b.Navigation("Assets");
                 });
 
             modelBuilder.Entity("SignalRC.Server.Data.User", b =>

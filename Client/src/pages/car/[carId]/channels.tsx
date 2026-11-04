@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useContext, useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
 import CollapsibleSection from "@/components/collapsible-section";
@@ -6,6 +6,12 @@ import LanguageSwitcher from "@/components/language-switcher";
 import ConfigGuard from "@/components/config-guard";
 import { useI18n } from "@/i18n/provider";
 import { CarAudioSettings, DEFAULT_CAR_AUDIO_SETTINGS } from "@/components/audio-store";
+import LidarSourceSetup from "@/components/overlay/lidar-source/lidar-source-setup";
+import { confirmationText, dependencyWarning, loadChannelDependencies } from "@/components/overlay/integration/channel-dependencies";
+import OptionsJsonField from "@/components/config/options-json-field";
+import { findSchema, parseOptionSchemas, type ChannelTypeSchema, type SchemaKind } from "@/components/config/options-language";
+import PinBoardEditor, { boardKindOf, type NewChannelRequest, type OtherPinManager } from "@/components/config/pin-boards/pin-board-editor";
+import type { ChannelRef } from "@/components/config/pin-boards/pin-boards";
 
 type PinManager = {
   name: string;
@@ -60,6 +66,12 @@ type VideoStream = {
 
 type AudioDevice = { name: string; description?: string | null };
 
+/** One problem the onboard reported (Shared/Channels/ChannelHealth.cs); OK channels have none. */
+type HealthEntry = { kind: "pinManager" | "control" | "telemetry" | "video"; name: string; state: "warning" | "error"; message: string; sinceUtc: string };
+/** entries is null while the vehicle is offline or its onboard build does not report health. */
+type Health = { connected: boolean; entries: HealthEntry[] | null };
+const HEALTH_POLL_MS = 3000;
+
 type Template = {
   id: number;
   key: string;
@@ -72,7 +84,8 @@ type Template = {
   updatedAt?: string | null;
 };
 
-const DATA_TYPES = ["String", "Integer", "Float", "Boolean"];
+// Index = TelemetryDataType (Shared/Channels/TelemetryDataType.cs); 4 = compact LiDAR grid (AP04).
+const DATA_TYPES = ["String", "Integer", "Float", "Boolean", "LidarGrid"];
 
 function Field({ label, children, hint, className }: { label: string; children: React.ReactNode; hint?: string; className?: string }) {
   return (
@@ -85,9 +98,84 @@ function Field({ label, children, hint, className }: { label: string; children: 
 }
 
 const inputClass = "bg-zinc-800 text-zinc-100 border border-zinc-700 rounded px-2 py-1 text-xs";
+
+// The onboard reads telemetry every n-th tick of its 100 ms loop; the editor speaks milliseconds.
+const TICK_MS = 100;
+const msToTicks = (ms: number) => Math.max(1, Math.round(ms / TICK_MS));
+
+/** Read interval edited in ms, stored as ticks; converted when the field loses focus. */
+function ReadIntervalInput({ ticks, onChange }: { ticks: number; onChange: (ticks: number) => void }) {
+  const [text, setText] = useState(String(ticks * TICK_MS));
+  useEffect(() => { setText(String(ticks * TICK_MS)); }, [ticks]);
+  const commit = () => {
+    const ms = Number(text);
+    if (!Number.isFinite(ms) || ms <= 0) { setText(String(ticks * TICK_MS)); return; }
+    const next = msToTicks(ms);
+    setText(String(next * TICK_MS));
+    if (next !== ticks) onChange(next);
+  };
+  return (
+    <input className={inputClass} type="number" min={TICK_MS} step={TICK_MS} value={text}
+      onChange={e => setText(e.target.value)} onBlur={commit} onKeyDown={e => { if (e.key === "Enter") commit(); }} />
+  );
+}
 const btnPrimary = "px-2 py-1 bg-green-900 hover:bg-green-800 text-green-100 rounded text-xs border border-green-800";
 const btnDanger = "px-2 py-1 bg-red-900 hover:bg-red-800 text-red-100 rounded text-xs border border-red-800";
 const btnGhost = "px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded text-xs border border-zinc-700";
+
+/** The onboard's verdict on one config row: nothing when OK, else state and message. */
+function HealthLine({ entry, carId }: { entry?: HealthEntry; carId?: number }) {
+  if (!entry) return null;
+  const error = entry.state === "error";
+  return (
+    <div className={`mt-1 text-[11px] font-mono break-words ${error ? "text-red-300" : "text-amber-300"}`}>
+      <span className={`inline-block px-1 mr-2 rounded border ${error ? "border-red-800 bg-red-950" : "border-amber-800 bg-amber-950"}`}>
+        {error ? "error" : "warning"}
+      </span>
+      {entry.message}
+      <Link href={`/car/${carId}/logs?q=${encodeURIComponent(entry.name)}`} className="ml-2 text-blue-400 hover:underline">log</Link>
+    </div>
+  );
+}
+
+/** Summary above the sections: offline, no report, or how many rows have problems. */
+function HealthSummary({ health }: { health: Health | null }) {
+  if (!health) return null;
+  if (!health.connected)
+    return <div className="mb-3 text-xs text-zinc-400 border border-zinc-800 rounded p-2">Vehicle offline: no channel status. Changes are applied when it connects.</div>;
+  if (!health.entries)
+    return <div className="mb-3 text-xs text-zinc-400 border border-zinc-800 rounded p-2">The onboard does not report channel status (older build).</div>;
+  const errors = health.entries.filter(e => e.state === "error").length;
+  const warnings = health.entries.length - errors;
+  if (health.entries.length === 0)
+    return <div className="mb-3 text-xs text-green-300 border border-green-900 rounded p-2">All channels running on the vehicle.</div>;
+  return (
+    <div className={`mb-3 text-xs rounded p-2 border ${errors > 0 ? "text-red-200 border-red-800 bg-red-950/40" : "text-amber-200 border-amber-800 bg-amber-950/40"}`}>
+      {errors > 0 && <span className="mr-3">{errors} channel{errors === 1 ? "" : "s"} not running</span>}
+      {warnings > 0 && <span>{warnings} warning{warnings === 1 ? "" : "s"}</span>}
+      <span className="text-zinc-400 ml-3">Details at the affected entries below.</span>
+    </div>
+  );
+}
+
+/** Option schemas reported by the vehicle and the configured pin manager names, for the options fields. */
+const OptionsInfo = React.createContext<{ schemas: ChannelTypeSchema[]; pinManagers: string[] }>({ schemas: [], pinManagers: [] });
+
+/** The options field of an editor: schema of the chosen type, its description as hint. */
+function OptionsField({ kind, typeName, value, onChange, example, className }: {
+  kind: SchemaKind; typeName: string | null | undefined; value: string; onChange: (text: string) => void; example: string; className?: string;
+}) {
+  const { schemas, pinManagers } = useContext(OptionsInfo);
+  const schema = findSchema(schemas, kind, typeName);
+  const hint = schema
+    ? `${schema.description ? `${schema.description} ` : ""}${schema.options.length} options · Ctrl+Space to complete`
+    : schemas.length > 0 && typeName ? `No options known for ${typeName}. ${example}` : example;
+  return (
+    <Field label="Options (JSON)" hint={hint} className={className}>
+      <OptionsJsonField value={value} onChange={onChange} schema={schema} pinManagers={pinManagers} />
+    </Field>
+  );
+}
 
 function parseOptionsJson(json: string): any {
   if (!json || !json.trim()) return undefined;
@@ -101,18 +189,43 @@ function formatOptionsJson(options: any): string {
   catch { return ""; }
 }
 
+/** What the board editors need from the page: channels on the pins, the other managers, the vehicle's board. */
+type BoardContext = {
+  carId: number;
+  channels: ChannelRef[];
+  pinManagers: PinManager[];
+  boardModel: string | null;
+  onCreateChannel: (request: NewChannelRequest) => void;
+};
+
 function PinManagerEditor({
-  initial, isNew, onSave, onCancel,
-}: { initial?: PinManager; isNew: boolean; onSave: (p: PinManager) => Promise<void>; onCancel: () => void }) {
+  initial, isNew, onSave, onCancel, board,
+}: { initial?: PinManager; isNew: boolean; onSave: (p: PinManager) => Promise<void>; onCancel: () => void; board: BoardContext }) {
   const [p, setP] = useState<PinManager>(initial ?? { name: "", type: "", optionsJson: "" });
   const update = (patch: Partial<PinManager>) => setP(prev => ({ ...prev, ...patch }));
+  const kind = boardKindOf(p.type);
+  const options = useMemo(() => {
+    if (!p.optionsJson.trim()) return {};
+    try {
+      const o = JSON.parse(p.optionsJson);
+      return o && typeof o === "object" && !Array.isArray(o) ? o as Record<string, unknown> : undefined;
+    } catch { return undefined; }
+  }, [p.optionsJson]);
+  const others = useMemo<OtherPinManager[]>(() => board.pinManagers
+    .filter(m => m.name !== p.name)
+    .map(m => ({ name: m.name, type: m.type, options: parseOptionsJson(m.optionsJson) })), [board.pinManagers, p.name]);
   return (
     <div className="grid grid-cols-2 gap-2 p-2 border border-zinc-700 rounded bg-zinc-950">
       <Field label="Name"><input className={inputClass} value={p.name} onChange={e => update({ name: e.target.value })} disabled={!isNew} /></Field>
-      <Field label="Type"><input className={inputClass} value={p.type} onChange={e => update({ type: e.target.value })} /></Field>
-      <Field label="Options (JSON)" hint='e.g. {"pins":[1,2,3]}' className="col-span-2">
-        <textarea className={inputClass + " font-mono w-full"} rows={2} value={p.optionsJson} onChange={e => update({ optionsJson: e.target.value })} />
-      </Field>
+      <Field label="Type"><input className={inputClass} value={p.type} onChange={e => update({ type: e.target.value })} list="pin-manager-type-options" placeholder="e.g. Pca9685PwmExtension" /></Field>
+      {kind && (
+        <div className="col-span-2">
+          <PinBoardEditor carId={board.carId} managerName={p.name || "default"} kind={kind} options={options}
+            onOptionsChange={o => update({ optionsJson: formatOptionsJson(o) })}
+            channels={board.channels} otherPinManagers={others} boardModel={board.boardModel} onCreateChannel={board.onCreateChannel} />
+        </div>
+      )}
+      <OptionsField kind="pinManager" typeName={p.type} value={p.optionsJson} onChange={optionsJson => update({ optionsJson })} example='e.g. {"boardAddress":0,"i2cBus":1}' className="col-span-2" />
       <div className="col-span-2 flex gap-2 justify-end">
         <button className={btnGhost} onClick={onCancel}>Cancel</button>
         <button className={btnPrimary} onClick={() => onSave(p)}>Save</button>
@@ -190,13 +303,13 @@ function ControlEditor({
   });
   const update = (patch: Partial<ControlChannel>) => setC(prev => ({ ...prev, ...patch }));
   return (
-    <div className="grid grid-cols-2 gap-2 p-2 border border-zinc-700 rounded bg-zinc-950">
+    <div id={isNew ? "new-control-editor" : undefined} className="grid grid-cols-2 gap-2 p-2 border border-zinc-700 rounded bg-zinc-950">
       <Field label="Channel name"><input className={inputClass} value={c.channelName} onChange={e => update({ channelName: e.target.value })} disabled={!isNew} /></Field>
       <Field label="Display name"><input className={inputClass} value={c.displayName ?? ""} onChange={e => update({ displayName: e.target.value })} /></Field>
       <Field label="Control type">
         <input className={inputClass} value={c.controlType} onChange={e => update({ controlType: e.target.value })} list="control-type-options" placeholder="e.g. Steering, PwmLight" />
       </Field>
-      <Field label="Pin manager"><input className={inputClass} value={c.pinManager} onChange={e => update({ pinManager: e.target.value })} /></Field>
+      <Field label="Pin manager"><input className={inputClass} value={c.pinManager} onChange={e => update({ pinManager: e.target.value })} list="pin-manager-options" /></Field>
       <Field label="Address (int)"><input className={inputClass} type="number" value={c.address ?? ""} onChange={e => update({ address: e.target.value === "" ? null : Number(e.target.value) })} /></Field>
       <Field label="Max resend interval (ms)"><input className={inputClass} type="number" value={c.maxResendInterval ?? ""} onChange={e => update({ maxResendInterval: e.target.value === "" ? null : Number(e.target.value) })} /></Field>
       <Field label="Enabled"><input type="checkbox" checked={c.isEnabled} onChange={e => update({ isEnabled: e.target.checked })} /></Field>
@@ -205,9 +318,7 @@ function ControlEditor({
       {c.controlType === "SoundPlayer" && (
         <SoundPlayerOptionsEditor optionsJson={c.optionsJson} onChange={json => update({ optionsJson: json })} soundFiles={soundFiles} hasSpeaker={hasSpeaker} />
       )}
-      <Field label="Options (JSON)" hint='e.g. {"blinkCycleMs":500}'>
-        <textarea className={inputClass + " font-mono"} rows={2} value={c.optionsJson} onChange={e => update({ optionsJson: e.target.value })} />
-      </Field>
+      <OptionsField kind="control" typeName={c.controlType} value={c.optionsJson} onChange={optionsJson => update({ optionsJson })} example='e.g. {"blinkCycleMs":500}' />
       <div className="col-span-2 flex gap-2 justify-end">
         <button className={btnGhost} onClick={onCancel}>Cancel</button>
         <button className={btnPrimary} onClick={() => onSave(c)}>Save</button>
@@ -220,17 +331,19 @@ function TelemetryEditor({
   initial, isNew, onSave, onCancel, telemetryTypes,
 }: { initial?: TelemetryChannel; isNew: boolean; onSave: (t: TelemetryChannel) => Promise<void>; onCancel: () => void; telemetryTypes: string[] }) {
   const [t, setT] = useState<TelemetryChannel>(initial ?? {
-    channelName: "", readIntervalTicks: 1000, telemetryType: "", dataType: 0, unit: "", decimals: null,
+    channelName: "", readIntervalTicks: msToTicks(1000), telemetryType: "", dataType: 0, unit: "", decimals: null,
     pinManager: "default", address: null, optionsJson: "",
   });
   const update = (patch: Partial<TelemetryChannel>) => setT(prev => ({ ...prev, ...patch }));
   return (
-    <div className="grid grid-cols-2 gap-2 p-2 border border-zinc-700 rounded bg-zinc-950">
+    <div id={isNew ? "new-telemetry-editor" : undefined} className="grid grid-cols-2 gap-2 p-2 border border-zinc-700 rounded bg-zinc-950">
       <Field label="Channel name"><input className={inputClass} value={t.channelName} onChange={e => update({ channelName: e.target.value })} disabled={!isNew} /></Field>
       <Field label="Telemetry type">
         <input className={inputClass + " font-mono"} value={t.telemetryType} onChange={e => update({ telemetryType: e.target.value })} list="telemetry-type-options" placeholder="e.g. SignalRC.Onboard.Telemetry.CpuTemperatureReader" />
       </Field>
-      <Field label="Read interval (ms)"><input className={inputClass} type="number" value={t.readIntervalTicks} onChange={e => update({ readIntervalTicks: Number(e.target.value) })} /></Field>
+      <Field label="Read interval (ms)" hint={`${t.readIntervalTicks} × ${TICK_MS} ms onboard ticks; rounded to whole ticks`}>
+        <ReadIntervalInput ticks={t.readIntervalTicks} onChange={readIntervalTicks => update({ readIntervalTicks })} />
+      </Field>
       <Field label="Data type">
         <select className={inputClass} value={t.dataType} onChange={e => update({ dataType: Number(e.target.value) })}>
           {DATA_TYPES.map((d, i) => <option key={d} value={i}>{d}</option>)}
@@ -238,11 +351,9 @@ function TelemetryEditor({
       </Field>
       <Field label="Unit"><input className={inputClass} value={t.unit ?? ""} onChange={e => update({ unit: e.target.value })} /></Field>
       <Field label="Decimals"><input className={inputClass} type="number" value={t.decimals ?? ""} onChange={e => update({ decimals: e.target.value === "" ? null : Number(e.target.value) })} /></Field>
-      <Field label="Pin manager"><input className={inputClass} value={t.pinManager ?? ""} onChange={e => update({ pinManager: e.target.value })} /></Field>
+      <Field label="Pin manager"><input className={inputClass} value={t.pinManager ?? ""} onChange={e => update({ pinManager: e.target.value })} list="pin-manager-options" /></Field>
       <Field label="Address (int)"><input className={inputClass} type="number" value={t.address ?? ""} onChange={e => update({ address: e.target.value === "" ? null : Number(e.target.value) })} /></Field>
-      <Field label="Options (JSON)" hint='e.g. {"scale":0.1}' className="col-span-2">
-        <textarea className={inputClass + " font-mono w-full"} rows={2} value={t.optionsJson} onChange={e => update({ optionsJson: e.target.value })} />
-      </Field>
+      <OptionsField kind="telemetry" typeName={t.telemetryType} value={t.optionsJson} onChange={optionsJson => update({ optionsJson })} example='e.g. {"groupKey":"battery"}' className="col-span-2" />
       <div className="col-span-2 flex gap-2 justify-end">
         <button className={btnGhost} onClick={onCancel}>Cancel</button>
         <button className={btnPrimary} onClick={() => onSave(t)}>Save</button>
@@ -263,9 +374,11 @@ function VideoEditor({
     <div className="grid grid-cols-2 gap-2 p-2 border border-zinc-700 rounded bg-zinc-950">
       <Field label="Stream ID"><input className={inputClass} value={v.streamId} onChange={e => update({ streamId: e.target.value })} disabled={!isNew} /></Field>
       <Field label="Name"><input className={inputClass} value={v.name ?? ""} onChange={e => update({ name: e.target.value })} /></Field>
-      <Field label="Type"><input className={inputClass} value={v.type ?? ""} onChange={e => update({ type: e.target.value })} /></Field>
+      <Field label="Type" hint="v4l2 = USB webcam (Camera device), otherwise Raspberry Pi camera (RpiCamId)">
+        <input className={inputClass} value={v.type ?? ""} onChange={e => update({ type: e.target.value })} list="video-type-options" />
+      </Field>
       <Field label="Location"><input className={inputClass} value={v.location ?? ""} onChange={e => update({ location: e.target.value })} /></Field>
-      <Field label="Camera device"><input className={inputClass} value={v.cameraDevice ?? ""} onChange={e => update({ cameraDevice: e.target.value })} /></Field>
+      <Field label="Camera device"><input className={inputClass} value={v.cameraDevice ?? ""} onChange={e => update({ cameraDevice: e.target.value })} placeholder="/dev/video0" /></Field>
       <Field label="RpiCamId"><input className={inputClass} type="number" value={v.rpiCamId ?? ""} onChange={e => update({ rpiCamId: e.target.value === "" ? null : Number(e.target.value) })} /></Field>
       <Field label="Priority"><input className={inputClass} type="number" value={v.priority ?? ""} onChange={e => update({ priority: e.target.value === "" ? null : Number(e.target.value) })} /></Field>
       <Field label="Enabled"><input type="checkbox" checked={v.enabled} onChange={e => update({ enabled: e.target.checked })} /></Field>
@@ -273,9 +386,7 @@ function VideoEditor({
       <Field label="Height"><input className={inputClass} type="number" value={v.height ?? ""} onChange={e => update({ height: e.target.value === "" ? null : Number(e.target.value) })} /></Field>
       <Field label="Framerate"><input className={inputClass} type="number" value={v.framerate ?? ""} onChange={e => update({ framerate: e.target.value === "" ? null : Number(e.target.value) })} /></Field>
       <Field label="Bitrate (kbps)"><input className={inputClass} type="number" value={v.bitrateKbps ?? ""} onChange={e => update({ bitrateKbps: e.target.value === "" ? null : Number(e.target.value) })} /></Field>
-      <Field label="Options (JSON)" hint='e.g. {"codec":"h264"}' className="col-span-2">
-        <textarea className={inputClass + " font-mono w-full"} rows={2} value={v.optionsJson} onChange={e => update({ optionsJson: e.target.value })} />
-      </Field>
+      <OptionsField kind="video" typeName={v.type} value={v.optionsJson} onChange={optionsJson => update({ optionsJson })} example='v4l2 webcam: {"inputFormat":"mjpeg","hwEncoder":true}' className="col-span-2" />
       <div className="col-span-2 flex gap-2 justify-end">
         <button className={btnGhost} onClick={onCancel}>Cancel</button>
         <button className={btnPrimary} onClick={() => onSave(v)}>Save</button>
@@ -419,20 +530,22 @@ export default function ChannelsPage() {
   const [applyingTemplate, setApplyingTemplate] = useState(false);
   const [availableControlTypes, setAvailableControlTypes] = useState<string[]>([]);
   const [availableTelemetryTypes, setAvailableTelemetryTypes] = useState<string[]>([]);
+  const [optionSchemas, setOptionSchemas] = useState(parseOptionSchemas(undefined));
   const [audioInputs, setAudioInputs] = useState<AudioDevice[]>([]);
   const [audioOutputs, setAudioOutputs] = useState<AudioDevice[]>([]);
   const [audioSettings, setAudioSettings] = useState<CarAudioSettings>(DEFAULT_CAR_AUDIO_SETTINGS);
   const [savedAudioSettings, setSavedAudioSettings] = useState<CarAudioSettings>(DEFAULT_CAR_AUDIO_SETTINGS);
   const [soundFiles, setSoundFiles] = useState<SoundFile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [health, setHealth] = useState<Health | null>(null);
   const [editingPinManager, setEditingPinManager] = useState<{ key: string; pinManager: PinManager; isNew: boolean } | null>(null);
   const [editingControl, setEditingControl] = useState<{ key: string; channel: ControlChannel; isNew: boolean } | null>(null);
   const [editingTelemetry, setEditingTelemetry] = useState<{ key: string; channel: TelemetryChannel; isNew: boolean } | null>(null);
   const [editingVideo, setEditingVideo] = useState<{ key: string; stream: VideoStream; isNew: boolean } | null>(null);
 
-  const reload = useCallback(async () => {
+  const load = useCallback(async (showLoading: boolean) => {
     if (!carIdNum) return;
-    setLoading(true);
+    if (showLoading) setLoading(true);
     try {
       const [r, t] = await Promise.all([
         fetch(`/api/cars/${carIdNum}/channels`),
@@ -463,7 +576,7 @@ export default function ChannelsPage() {
       })));
       setTelemetries(Object.entries(map.telemetryChannels ?? {}).map(([k, v]: [string, any]) => ({
         channelName: k,
-        readIntervalTicks: v.readIntervalTicks ?? 1000,
+        readIntervalTicks: v.readIntervalTicks ?? 1,
         telemetryType: v.telemetryType ?? "",
         dataType: v.dataType ?? 0,
         unit: v.unit ?? null,
@@ -482,7 +595,7 @@ export default function ChannelsPage() {
         width: v.width ?? null,
         height: v.height ?? null,
         framerate: v.framerate ?? null,
-        bitrateKbps: v.bitrateKbps ?? (typeof v.bitrate === "number" ? v.bitrate : null),
+        bitrateKbps: typeof v.bitrate === "number" ? Math.round(v.bitrate / 1000) : null,
         cameraDevice: v.cameraDevice ?? null,
         rpiCamId: v.rpiCamId ?? null,
         priority: v.priority ?? null,
@@ -496,18 +609,69 @@ export default function ChannelsPage() {
       setLoading(false);
     }
   }, [carIdNum]);
+  const reload = useCallback(() => load(true), [load]);
+  // "default" is the GPIO manager every vehicle has without an entry.
+  const pinManagerNames = useMemo(() => ["default", ...pinManagers.map(p => p.name).filter(n => n !== "default")], [pinManagers]);
+  const optionsInfo = useMemo(() => ({ schemas: optionSchemas.schemas, pinManagers: pinManagerNames }), [optionSchemas, pinManagerNames]);
+  const channelRefs = useMemo<ChannelRef[]>(() => [
+    ...controls.map(c => ({ kind: "control" as const, name: c.channelName, type: c.controlType, pinManager: c.pinManager, address: c.address })),
+    ...telemetries.map(t => ({ kind: "telemetry" as const, name: t.channelName, type: t.telemetryType, pinManager: t.pinManager, address: t.address })),
+  ], [controls, telemetries]);
+  // A pin in the board editor prefills a new channel; the editor opens below and is scrolled to.
+  const createChannelFromBoard = useCallback((r: NewChannelRequest) => {
+    if (r.kind === "control") {
+      setEditingControl({ key: "__new__", isNew: true, channel: {
+        channelName: r.channelName, displayName: "", isEnabled: true, requiresAxis: false, maxResendInterval: null,
+        controlType: r.type, pinManager: r.pinManager, address: r.address, testDisabled: false, optionsJson: formatOptionsJson(r.options),
+      } });
+    } else {
+      setEditingTelemetry({ key: "__new__", isNew: true, channel: {
+        channelName: r.channelName, readIntervalTicks: r.readIntervalTicks ?? 1, telemetryType: r.type, dataType: r.dataType ?? 0,
+        unit: r.unit ?? "", decimals: r.decimals ?? null, pinManager: r.pinManager, address: r.address, optionsJson: formatOptionsJson(r.options),
+      } });
+    }
+    setTimeout(() => document.getElementById(r.kind === "control" ? "new-control-editor" : "new-telemetry-editor")?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
+  }, []);
+  const boardContext = useMemo<BoardContext>(() => ({
+    carId: carIdNum ?? 0, channels: channelRefs, pinManagers, boardModel: optionSchemas.boardModel, onCreateChannel: createChannelFromBoard,
+  }), [carIdNum, channelRefs, pinManagers, optionSchemas.boardModel, createChannelFromBoard]);
+  const hasDefaultEntry = pinManagers.some(p => p.name === "default");
+
+  // Keeps embedded helpers (LiDAR source) mounted with their status message.
+  const reloadQuietly = useCallback(() => { void load(false); }, [load]);
 
   useEffect(() => { reload(); }, [reload]);
+
+  // The onboard applies a change within a tick and reports the outcome; poll while the page is open.
+  useEffect(() => {
+    if (!carIdNum) return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const r = await fetch(`/api/cars/${carIdNum}/channels/health`);
+        if (!r.ok || cancelled) return;
+        const h = await r.json();
+        setHealth({ connected: !!h.connected, entries: Array.isArray(h.entries) ? h.entries : null });
+      } catch { /* keep the last status */ }
+    };
+    void poll();
+    const timer = setInterval(poll, HEALTH_POLL_MS);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [carIdNum]);
+  const healthOf = useCallback((kind: HealthEntry["kind"], name: string) =>
+    health?.entries?.find(e => e.kind === kind && e.name === name), [health]);
 
   useEffect(() => {
     if (!carIdNum) return;
     (async () => {
-      const [c, t] = await Promise.all([
+      const [c, t, o] = await Promise.all([
         fetch(`/api/cars/${carIdNum}/channels/available-control-types`).then(r => r.ok ? r.json() : []),
         fetch(`/api/cars/${carIdNum}/channels/available-telemetry-types`).then(r => r.ok ? r.json() : []),
+        fetch(`/api/cars/${carIdNum}/channels/option-schemas`).then(r => r.ok ? r.json() : null),
       ]);
       if (Array.isArray(c)) setAvailableControlTypes(c);
       if (Array.isArray(t)) setAvailableTelemetryTypes(t);
+      setOptionSchemas(parseOptionSchemas(o));
     })();
   }, [carIdNum]);
 
@@ -595,8 +759,16 @@ export default function ChannelsPage() {
     reload();
   };
 
+  // Deleting a channel the HUD uses breaks its bindings: warn first (AP02 dependencies).
+  const confirmChannelDelete = async (question: string, channel: string) => {
+    if (!carIdNum) return false;
+    const m = messages.overlay.channels;
+    const warning = dependencyWarning(await loadChannelDependencies(carIdNum, channel), channel, m);
+    return confirm(confirmationText(question, warning, m));
+  };
+
   const deleteControl = async (key: string) => {
-    if (!carIdNum || !confirm(`Delete control channel "${key}"?`)) return;
+    if (!carIdNum || !(await confirmChannelDelete(`Delete control channel "${key}"?`, key))) return;
     const r = await fetch(`/api/cars/${carIdNum}/channels/control/${encodeURIComponent(key)}`, { method: "DELETE" });
     if (!r.ok) { alert(await r.text()); return; }
     reload();
@@ -629,7 +801,7 @@ export default function ChannelsPage() {
   };
 
   const deleteTelemetry = async (key: string) => {
-    if (!carIdNum || !confirm(`Delete telemetry channel "${key}"?`)) return;
+    if (!carIdNum || !(await confirmChannelDelete(`Delete telemetry channel "${key}"?`, key))) return;
     const r = await fetch(`/api/cars/${carIdNum}/channels/telemetry/${encodeURIComponent(key)}`, { method: "DELETE" });
     if (!r.ok) { alert(await r.text()); return; }
     reload();
@@ -644,7 +816,8 @@ export default function ChannelsPage() {
     }
     const body: any = {
       streamId: v.streamId, name: v.name, type: v.type, location: v.location, enabled: v.enabled,
-      width: v.width, height: v.height, framerate: v.framerate, bitrateKbps: v.bitrateKbps,
+      // The server stores bit/s; only the editor shows kbps.
+      width: v.width, height: v.height, framerate: v.framerate, bitrateKbps: v.bitrateKbps == null ? null : Math.round(v.bitrateKbps * 1000),
       cameraDevice: v.cameraDevice, rpiCamId: v.rpiCamId, priority: v.priority, options,
     };
     const r = await fetch(`/api/cars/${carIdNum}/channels/video/${encodeURIComponent(isNew ? v.streamId : origKey)}`, {
@@ -681,6 +854,7 @@ export default function ChannelsPage() {
 
   return (
     <ConfigGuard carId={carIdNum}>
+      <OptionsInfo.Provider value={optionsInfo}>
       <div className="min-h-screen bg-zinc-950 text-zinc-100 p-4">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
@@ -689,9 +863,13 @@ export default function ChannelsPage() {
           </div>
           <div className="flex gap-2">
             <LanguageSwitcher />
+            <Link href={`/car/${carIdNum}/wiring`} className={btnGhost}>Wiring diagram</Link>
+            <Link href={`/car/${carIdNum}/logs`} className={btnGhost}>Onboard log</Link>
             <button className={btnGhost} onClick={reload}>Reload</button>
           </div>
         </div>
+
+        <HealthSummary health={health} />
 
         <CollapsibleSection title="Templates" defaultCollapsed={false}>
           <div className="flex items-end gap-2 mb-2">
@@ -731,7 +909,7 @@ export default function ChannelsPage() {
             {pinManagers.map(p => (
               <div key={p.name} className="border border-zinc-800 rounded p-2 bg-zinc-900">
                 {editingPinManager?.key === p.name && !editingPinManager.isNew ? (
-                  <PinManagerEditor initial={p} isNew={false} onSave={(np) => savePinManager(p.name, np, false)} onCancel={() => setEditingPinManager(null)} />
+                  <PinManagerEditor initial={p} isNew={false} onSave={(np) => savePinManager(p.name, np, false)} onCancel={() => setEditingPinManager(null)} board={boardContext} />
                 ) : (
                   <div className="flex items-center justify-between">
                     <div className="font-mono text-xs">
@@ -744,10 +922,28 @@ export default function ChannelsPage() {
                     </div>
                   </div>
                 )}
+                <HealthLine entry={healthOf("pinManager", p.name)} carId={carIdNum} />
               </div>
             ))}
-            {editingPinManager?.isNew && (
-              <PinManagerEditor isNew={true} onSave={(np) => savePinManager("__new__", np, true)} onCancel={() => setEditingPinManager(null)} />
+            {!hasDefaultEntry && (
+              <div className="border border-zinc-800 border-dashed rounded p-2 bg-zinc-900/50">
+                {editingPinManager?.key === "default" ? (
+                  <PinManagerEditor initial={{ name: "default", type: "RaspberryPiGpioManager", optionsJson: "" }} isNew={true}
+                    onSave={(np) => savePinManager("default", np, true)} onCancel={() => setEditingPinManager(null)} board={boardContext} />
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <div className="font-mono text-xs">
+                      <span className="text-zinc-100">default</span>
+                      <span className="text-zinc-500 ml-2">RaspberryPiGpioManager · built in, no pin configuration yet</span>
+                    </div>
+                    <button className={btnGhost} onClick={() => setEditingPinManager({ key: "default", pinManager: { name: "default", type: "RaspberryPiGpioManager", optionsJson: "" }, isNew: true })}>Configure pins</button>
+                  </div>
+                )}
+                <HealthLine entry={healthOf("pinManager", "default")} carId={carIdNum} />
+              </div>
+            )}
+            {editingPinManager?.isNew && editingPinManager.key === "__new__" && (
+              <PinManagerEditor isNew={true} onSave={(np) => savePinManager("__new__", np, true)} onCancel={() => setEditingPinManager(null)} board={boardContext} />
             )}
           </div>
         </CollapsibleSection>
@@ -772,10 +968,11 @@ export default function ChannelsPage() {
                     </div>
                   </div>
                 )}
+                <HealthLine entry={healthOf("control", c.channelName)} carId={carIdNum} />
               </div>
             ))}
             {editingControl?.isNew && (
-              <ControlEditor isNew={true} onSave={(nc) => saveControl("__new__", nc, true)} onCancel={() => setEditingControl(null)} controlTypes={availableControlTypes} soundFiles={soundFiles} hasSpeaker={!!savedAudioSettings.outputDevice} />
+              <ControlEditor key={editingControl.channel.channelName ?? "new"} initial={editingControl.channel.channelName ? editingControl.channel : undefined} isNew={true} onSave={(nc) => saveControl("__new__", nc, true)} onCancel={() => setEditingControl(null)} controlTypes={availableControlTypes} soundFiles={soundFiles} hasSpeaker={!!savedAudioSettings.outputDevice} />
             )}
           </div>
         </CollapsibleSection>
@@ -799,12 +996,17 @@ export default function ChannelsPage() {
                     </div>
                   </div>
                 )}
+                <HealthLine entry={healthOf("telemetry", t.channelName)} carId={carIdNum} />
               </div>
             ))}
             {editingTelemetry?.isNew && (
-              <TelemetryEditor isNew={true} onSave={(nt) => saveTelemetry("__new__", nt, true)} onCancel={() => setEditingTelemetry(null)} telemetryTypes={availableTelemetryTypes} />
+              <TelemetryEditor key={editingTelemetry.channel.channelName ?? "new"} initial={editingTelemetry.channel.channelName ? editingTelemetry.channel : undefined} isNew={true} onSave={(nt) => saveTelemetry("__new__", nt, true)} onCancel={() => setEditingTelemetry(null)} telemetryTypes={availableTelemetryTypes} />
             )}
           </div>
+        </CollapsibleSection>
+
+        <CollapsibleSection title={messages.overlay.lidarSource.title} defaultCollapsed={false}>
+          <LidarSourceSetup carId={carIdNum} onChanged={reloadQuietly} />
         </CollapsibleSection>
 
         <CollapsibleSection title={`Video streams (${videos.length})`} defaultCollapsed={false}>
@@ -826,6 +1028,7 @@ export default function ChannelsPage() {
                     </div>
                   </div>
                 )}
+                <HealthLine entry={healthOf("video", v.streamId)} carId={carIdNum} />
               </div>
             ))}
             {editingVideo?.isNew && (
@@ -855,13 +1058,24 @@ export default function ChannelsPage() {
         <datalist id="audio-output-options">
           {audioOutputs.map(d => <option key={d.name} value={d.name}>{d.description ?? ""}</option>)}
         </datalist>
+        <datalist id="video-type-options">
+          <option value="camera">Raspberry Pi camera</option>
+          <option value="v4l2">USB webcam (V4L2)</option>
+        </datalist>
         <datalist id="control-type-options">
           {availableControlTypes.map(t => <option key={t} value={t} />)}
         </datalist>
         <datalist id="telemetry-type-options">
           {availableTelemetryTypes.map(t => <option key={t} value={t} />)}
         </datalist>
+        <datalist id="pin-manager-type-options">
+          {optionSchemas.pinManagerTypes.map(t => <option key={t} value={t} />)}
+        </datalist>
+        <datalist id="pin-manager-options">
+          {pinManagerNames.map(n => <option key={n} value={n} />)}
+        </datalist>
       </div>
+      </OptionsInfo.Provider>
     </ConfigGuard>
   );
 }

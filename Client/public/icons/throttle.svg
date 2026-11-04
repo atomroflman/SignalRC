@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <rect id="pedal" x="7" y="3" width="10" height="14" rx="2"/>
+  <path id="grip" d="M10 7h4M10 10h4M10 13h4"/>
+  <line id="base" x1="8" y1="21" x2="16" y2="21"/>
+</svg>

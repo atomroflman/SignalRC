@@ -85,6 +85,8 @@ namespace SignalRC.Server.Controllers
                 dataType = c.DataType.ToString().ToLowerInvariant(),
                 unit = c.Unit,
                 decimals = c.Decimals,
+                readIntervalTicks = c.ReadIntervalTicks,
+                zoneLimitsMm = SignalRC.Server.Telemetry.OverlaySourceCatalog.ZoneLimits(c.OptionsJson),
                 subscribed = subscribedIds.Contains(c.Id),
             }));
         }

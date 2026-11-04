@@ -5,11 +5,13 @@ import VideoSettingsControl from "@/components/video-settings";
 import { useControlFlowStore } from "@/components/control-flow-store";
 import CarControl from "@/components/car-control";
 import Telemetry from "@/components/telemetry";
+import { TelemetryDiagnosticsPanel } from "@/components/overlay/integration/telemetry-diagnostics-panel";
 import Ping from "@/components/ping";
 import SessionTransfer from "@/components/session-transfer";
 import InstallDialog from "@/components/install-dialog";
 import LanguageSwitcher from "@/components/language-switcher";
 import VersionBanner from "@/components/version-banner";
+import VersionBadge from "@/components/version-badge";
 import GamepadViewer from "@/components/gamepad-viewer";
 import CarFunctionsView from "@/components/car-functions-view";
 import AudioChat from "@/components/audio-chat";
@@ -71,13 +73,13 @@ export default function Home() {
     {
       id: "gamepadViewer",
       title: messages.gamepadViewer.title,
-      content: selectedCarId ? <GamepadViewer hideFlowButtons={true} /> : null,
+      content: selectedCarId ? <GamepadViewer hideFlowButtons={true} embedded /> : null,
       visible: Boolean(selectedCarId),
     },
     {
       id: "carFunctions",
       title: messages.carFunctions.title,
-      content: selectedCarId ? <CarFunctionsView carId={selectedCarId} hideFlowButtons={true} /> : null,
+      content: selectedCarId ? <CarFunctionsView carId={selectedCarId} hideFlowButtons={true} embedded /> : null,
       visible: Boolean(selectedCarId),
     },
     {
@@ -90,7 +92,7 @@ export default function Home() {
     {
       id: "audioChat",
       title: messages.audioChat.title,
-      content: selectedCarId ? <AudioChat carId={selectedCarId} /> : null,
+      content: selectedCarId ? <AudioChat carId={selectedCarId} embedded /> : null,
       // Push-to-talk only exists when the vehicle has a speaker configured.
       visible: Boolean(selectedCarId && carAudioOutputDevice),
     },
@@ -106,7 +108,7 @@ export default function Home() {
       content: selectedCarId ? (
         <VideoSettingsControl
           carId={selectedCarId}
-          canManageEnabled={Boolean(user?.loginName && selectedCarId && carSession)}
+          canManageEnabled={Boolean(selectedCarId && carSession)}
         />
       ) : null,
       visible: Boolean(selectedCarId),
@@ -116,6 +118,7 @@ export default function Home() {
       title: messages.ping.title,
       content: selectedCarId ? <Ping /> : null,
       visible: Boolean(selectedCarId),
+      defaultOpen: true,
     },
   ];
 
@@ -134,6 +137,7 @@ export default function Home() {
             </div>
             <div className="flex items-center gap-2">
               <LanguageSwitcher className="shrink-0" />
+              {selectedCarId && <VersionBadge carId={selectedCarId} />}
               <div className="hidden items-center gap-2 md:flex">
               {!selectedCarId && <InstallDialog />}
               <div className="rounded-full bg-slate-800/90 px-3 py-2 text-[11px] font-medium text-slate-300 shadow-sm ring-1 ring-white/10">
@@ -163,6 +167,11 @@ export default function Home() {
               <div className="min-h-24 border border-white/8 bg-slate-900/70 shadow-sm">
                 <Telemetry carId={selectedCarId} />
               </div>
+              <TelemetryDiagnosticsPanel
+                carId={selectedCarId}
+                className="mt-2 border border-white/8 bg-slate-900/70 px-2 py-1"
+                summaryClassName="cursor-pointer select-none text-[11px] font-semibold uppercase tracking-wide text-slate-400"
+              />
             </div>
           )}
         </div>

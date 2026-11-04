@@ -184,11 +184,11 @@ update_onboard_appsettings() {
         return 0
     fi
 
-    python3 - "$appsettings_path" "${SIGNALRC_SERVER_NAME:-}" "${SIGNALRC_SERVER_PORT:-}" "$(normalize_boolean "${SIGNALRC_USE_HTTPS:-false}")" "$(MEDIAMTX_DEST)" <<'PY'
+    python3 - "$appsettings_path" "${SIGNALRC_SERVER_NAME:-}" "${SIGNALRC_SERVER_PORT:-}" "$(normalize_boolean "${SIGNALRC_USE_HTTPS:-false}")" "$(MEDIAMTX_DEST)" "${SIGNALRC_AUTO_UPDATE:-}" <<'PY'
 import json
 import sys
 
-path, server_name, server_port, use_https, mtx_dest = sys.argv[1:6]
+path, server_name, server_port, use_https, mtx_dest, auto_update = sys.argv[1:7]
 
 with open(path, encoding="utf-8") as handle:
     data = json.load(handle)
@@ -200,6 +200,9 @@ if server_port:
 if mtx_dest:
     data["MediaMtxPath"] = mtx_dest
 data["UseHttps"] = use_https == "true"
+# Self-update from the server (Docs/OnboardAutoUpdate.md); off unless chosen.
+if auto_update in ("true", "false"):
+    data.setdefault("AutoUpdate", {})["Enabled"] = auto_update == "true"
 
 with open(path, "w", encoding="utf-8") as handle:
     json.dump(data, handle, indent=2)
@@ -549,6 +552,15 @@ if [ "$DEPLOY_MODE" = "onboard" ]; then
         echo "Warning: No libcamera runtime package found in apt. Continuing without it."
     fi
 
+    # GPIO pins (RaspberryPiGpioManager) go through libgpiod; System.Device.Gpio
+    # loads v2 (libgpiod3, Trixie) or v1 (libgpiod2, Bookworm), whichever is there.
+    for gpiod_pkg in libgpiod3 libgpiod2; do
+        if pkg_candidate_exists "$gpiod_pkg"; then
+            base_packages+=("$gpiod_pkg")
+            break
+        fi
+    done
+
     pkg_install "${base_packages[@]}" "${camera_packages[@]}"
 
     # Two-way audio: the Onboard service talks to ALSA directly (no desktop
@@ -556,6 +568,12 @@ if [ "$DEPLOY_MODE" = "onboard" ]; then
     if getent group audio >/dev/null; then
         usermod -aG audio "$RUN_USER"
     fi
+    # /dev/gpiochip* and /dev/i2c-* (GPIO pins, PCA9685) belong to these groups on Raspberry Pi OS.
+    for hw_group in gpio i2c; do
+        if getent group "$hw_group" >/dev/null; then
+            usermod -aG "$hw_group" "$RUN_USER"
+        fi
+    done
 
     # ── Phase 2: mediamtx ───────────────────────────────────────────
     echo ""
@@ -624,6 +642,15 @@ if [ "$DEPLOY_MODE" = "onboard" ]; then
 
     APPSETTINGS_PATH="$REPO_DIR/Onboard/appSettings.json"
     prompt_onboard_server_settings "$APPSETTINGS_PATH"
+
+    # Self-update: the onboard installs new builds from the server by itself
+    # while no driver is connected. A driver can always update from the GUI.
+    if [ -n "${SIGNALRC_AUTO_UPDATE:-}" ]; then
+        SIGNALRC_AUTO_UPDATE=$(normalize_boolean "$SIGNALRC_AUTO_UPDATE")
+    else
+        read -rp "Enable automatic onboard updates from the server? [y/N]: " AUTO_UPDATE_CHOICE
+        SIGNALRC_AUTO_UPDATE=$([[ "${AUTO_UPDATE_CHOICE,,}" =~ ^(y|j)$ ]] && echo "true" || echo "false")
+    fi
     update_onboard_appsettings "$APPSETTINGS_PATH"
 
     # ── Phase 4: Build ───────────────────────────────────────────────
@@ -631,11 +658,12 @@ if [ "$DEPLOY_MODE" = "onboard" ]; then
     echo "── Phase 4: Build ────────────────────────────────────"
     export PATH="$DOTNET_ROOT:$DOTNET_ROOT/tools:$PATH"
 
+    # Release layout (Docs/OnboardAutoUpdate.md): Onboard/releases/<commit>/ and
+    # the symlink Onboard/current, shared with update.sh and the self-update.
     echo "Building .NET Onboard Client ..."
-    echo "\"$DOTNET_ROOT/dotnet\" publish \"$REPO_DIR/Onboard/SignalRC.Onboard.csproj\" -c Release"
-    run_as_user "$DOTNET_ROOT/dotnet" publish "$REPO_DIR/Onboard/SignalRC.Onboard.csproj" -c Release || true
+    run_as_user bash "$REPO_DIR/scripts/onboard-publish-release.sh" "$REPO_DIR" "$DOTNET_ROOT/dotnet" || true
 
-    ONBOARD_DLL="$REPO_DIR/Onboard/bin/Release/net10.0/publish/SignalRC.Onboard.dll"
+    ONBOARD_DLL="$REPO_DIR/Onboard/current/SignalRC.Onboard.dll"
     if [ ! -f "$ONBOARD_DLL" ]; then
         echo "Error: Onboard DLL not found at $ONBOARD_DLL. Build failed?"
         exit 1
@@ -662,30 +690,8 @@ if [ "$DEPLOY_MODE" = "onboard" ]; then
     mkdir -p "$LOG_DIR"
     chown "$RUN_USER:$RUN_USER" "$LOG_DIR"
 
-    cat > /etc/systemd/system/signalrc-onboard.service <<EOF
-[Unit]
-Description=SignalRC Onboard Client
-After=network-online.target
-Wants=network-online.target
-# Endless retry: Onboard must always come back, even after a hard crash.
-StartLimitIntervalSec=infinity
-
-[Service]
-Type=simple
-ExecStart=$DOTNET_ROOT/dotnet $ONBOARD_DLL
-Restart=always
-RestartSec=5
-User=$RUN_USER
-WorkingDirectory=$REPO_DIR/Onboard
-Environment=DOTNET_ROOT=$DOTNET_ROOT
-Environment=DOTNET_ENVIRONMENT=Production
-Environment=PATH=$DOTNET_ROOT:$DOTNET_ROOT/tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-StandardOutput=append:$LOG_DIR/onboard.log
-StandardError=append:$LOG_DIR/onboard.err
-
-[Install]
-WantedBy=multi-user.target
-EOF
+    bash "$REPO_DIR/scripts/onboard-write-service.sh" "$REPO_DIR" "$DOTNET_ROOT" "$RUN_USER" "$LOG_DIR"
+    bash "$REPO_DIR/scripts/onboard-write-logrotate.sh" "$LOG_DIR"
 
    cat > /etc/systemd/system/signalrc-mediamtx.service <<EOF
 [Unit]
@@ -693,7 +699,9 @@ Description=SignalRC mediamtx
 After=signalrc-onboard.service
 Wants=signalrc-onboard.service
 # Endless retry: Onboard must always come back, even after a hard crash.
-StartLimitIntervalSec=infinity
+# 0 disables the start rate limit; "infinity" would make the window never
+# expire, so after 5 starts the unit stays in start-limit-hit for good.
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple

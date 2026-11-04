@@ -1,0 +1,595 @@
+{
+  "description": "AP12 exchange round trip: package with two normalized assets (fixtures/svg/expected) and one unreferenced asset, a target vehicle, the mapping and the expected document after the mapping. Re-sanitizing the assets keeps their ids (svg/README.md §4, §7). Only the disabled element keeps an unresolved reference (warning).",
+  "package": {
+    "format": "signalrc-overlay-package",
+    "formatVersion": 1,
+    "kind": "export",
+    "exportedAt": "2026-11-02T10:00:00.000Z",
+    "source": {
+      "streams": [
+        {
+          "streamId": "cam1",
+          "name": "Front",
+          "width": 1280,
+          "height": 720
+        }
+      ],
+      "telemetry": [
+        {
+          "name": "legacy"
+        },
+        {
+          "name": "scan",
+          "dataType": "LidarGrid",
+          "unit": null
+        },
+        {
+          "name": "speed",
+          "dataType": "Number",
+          "unit": "m/s"
+        }
+      ],
+      "outputs": [
+        "steer"
+      ]
+    },
+    "document": {
+      "schemaVersion": 1,
+      "workspace": {
+        "width": 1280,
+        "height": 720
+      },
+      "signals": {
+        "gear": {
+          "label": "Gang",
+          "decimals": 0
+        }
+      },
+      "sources": {
+        "telemetry": {
+          "speed": {
+            "staleAfterMs": 800
+          }
+        }
+      },
+      "elements": {
+        "e_speed": {
+          "type": "valueText",
+          "name": "Tempo",
+          "props": {
+            "x": 20,
+            "y": 40,
+            "value": {
+              "base": null,
+              "binding": {
+                "expr": "tel(\"speed\") * 3.6",
+                "smoothing": {
+                  "timeConstantS": 0.2
+                }
+              }
+            },
+            "unit": "km/h",
+            "decimals": 0
+          }
+        },
+        "e_label": {
+          "type": "text",
+          "name": "Hinweis",
+          "props": {
+            "x": 20,
+            "y": 80,
+            "text": "tel(\"speed\") bleibt Text",
+            "fill": {
+              "base": "#ffffff",
+              "binding": {
+                "expr": "if(tel(\"speed\") > 1, \"#00ff00\", \"#ffffff\")"
+              }
+            }
+          }
+        },
+        "e_mode": {
+          "type": "text",
+          "name": "Modus",
+          "props": {
+            "x": 20,
+            "y": 120,
+            "text": {
+              "base": "",
+              "binding": {
+                "expr": "if(tel(\"speed\") > 1, \"speed\", concat(\"sig \", format(sig(\"gear\"), 0)))"
+              }
+            }
+          }
+        },
+        "e_dash": {
+          "type": "svgAsset",
+          "name": "Armaturen",
+          "assetId": "sha256-cd1b551502e69de9d092656f44003f410f48e5b20adb401d1d6bb6606a48c354",
+          "props": {
+            "x": 300,
+            "y": 20
+          },
+          "parts": {
+            "lamp": {
+              "props": {
+                "fill": {
+                  "base": "#333333",
+                  "binding": {
+                    "expr": "if(out(\"steer\") > 0.5, \"#ff0000\", \"#333333\")"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "e_links": {
+          "type": "svgAsset",
+          "name": "Glieder",
+          "assetId": "sha256-2748a6f4318b3a8b766107975bbbd378f3b0772d5071df57f2e5f27d1a6022c3",
+          "props": {
+            "x": 300,
+            "y": 200
+          },
+          "parts": {
+            "a_b": {
+              "props": {
+                "y": {
+                  "base": 0,
+                  "rate": {
+                    "expr": "tel(\"speed\") * 20",
+                    "wrap": {
+                      "min": 0,
+                      "max": 15
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "e_scan": {
+          "type": "lidarWidget",
+          "name": "LiDAR",
+          "source": "scan",
+          "props": {
+            "x": 900,
+            "y": 300,
+            "radius": 100,
+            "sweepEnabled": true
+          }
+        },
+        "e_old": {
+          "type": "valueText",
+          "name": "Alt",
+          "disabled": true,
+          "props": {
+            "x": 20,
+            "y": 160,
+            "value": {
+              "base": null,
+              "binding": {
+                "expr": "tel(\"legacy\")"
+              }
+            }
+          }
+        },
+        "e_box": {
+          "type": "group",
+          "name": "Box",
+          "children": [
+            "e_dash",
+            "e_links"
+          ],
+          "props": {
+            "pivotX": 200,
+            "pivotY": 150
+          },
+          "locked": true
+        }
+      },
+      "children": [
+        "e_speed",
+        "e_label",
+        "e_mode",
+        "e_box",
+        "e_scan",
+        "e_old"
+      ],
+      "clips": {
+        "c_flash": {
+          "name": "Blitz",
+          "durationS": 0.5,
+          "trigger": {
+            "mode": "pulse",
+            "condition": "tel(\"speed\") > 10",
+            "retrigger": "restart"
+          },
+          "tracks": [
+            {
+              "element": "e_label",
+              "property": "opacity",
+              "keyframes": [
+                {
+                  "t": 0,
+                  "value": 1
+                },
+                {
+                  "t": 0.25,
+                  "value": 0.2,
+                  "easing": "easeInOut"
+                },
+                {
+                  "t": 0.5,
+                  "value": 1
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "variants": {
+        "cam1": {
+          "workspace": {
+            "width": 640,
+            "height": 480
+          },
+          "elements": {
+            "e_speed": {
+              "props": {
+                "value": {
+                  "base": null,
+                  "binding": {
+                    "expr": "tel(\"speed\")"
+                  }
+                }
+              }
+            }
+          },
+          "addedElements": {
+            "e_steer": {
+              "type": "valueText",
+              "name": "Lenkung",
+              "props": {
+                "x": 10,
+                "y": 460,
+                "value": {
+                  "base": null,
+                  "binding": {
+                    "expr": "out(\"steer\")"
+                  }
+                }
+              }
+            }
+          },
+          "structure": {
+            "parents": {
+              "e_steer": "root"
+            },
+            "order": {
+              "root": [
+                "e_steer",
+                "e_speed"
+              ]
+            }
+          },
+          "clips": {
+            "c_flash": {
+              "trigger": {
+                "mode": "whileTrue",
+                "condition": "tel(\"speed\") > 20",
+                "onDeactivate": "finish"
+              }
+            }
+          }
+        }
+      }
+    },
+    "assets": {
+      "sha256-cd1b551502e69de9d092656f44003f410f48e5b20adb401d1d6bb6606a48c354": {
+        "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 188.976378 94.488189\"><g transform=\"matrix(0.944882 0 0 0.944882 0 0)\"><rect data-part=\"frame\" x=\"0\" y=\"0\" width=\"200\" height=\"100\" rx=\"8\" fill=\"#222222\" stroke=\"#ffffff\" stroke-width=\"2\"/><circle data-part=\"lamp\" cx=\"30\" cy=\"50\" r=\"12\" fill=\"#ff0000\"/><ellipse data-part=\"part-1\" cx=\"70\" cy=\"50\" rx=\"15\" ry=\"10\" fill=\"#008000\" fill-opacity=\"0.5\"/><line data-part=\"divider\" x1=\"100\" y1=\"10\" x2=\"100\" y2=\"90\" stroke=\"#ffffff\" stroke-linecap=\"round\" stroke-dasharray=\"4 2\"/><polyline data-part=\"part-2\" points=\"110 80 130 20 150 80\" fill=\"none\" stroke=\"#ffa500\" stroke-width=\"3\" stroke-linejoin=\"round\"/><polygon data-part=\"arrow\" points=\"160 40 190 50 160 60\" fill=\"#ffff00\"/><path data-part=\"wave\" d=\"M110 90Q120 80 130 90Q140 100 150 90L160 90L160 85Z\" fill=\"none\" stroke=\"#00ffff\"/></g></svg>"
+      },
+      "sha256-2748a6f4318b3a8b766107975bbbd378f3b0772d5071df57f2e5f27d1a6022c3": {
+        "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 160 100\"><g transform=\"matrix(2 0 0 2 -20 -20)\"><g data-part=\"part-1\"><rect data-part=\"a_b\" x=\"10\" y=\"10\" width=\"10\" height=\"10\"/><rect data-part=\"a_b-2\" x=\"25\" y=\"10\" width=\"10\" height=\"10\"/><rect data-part=\"a_b-3\" x=\"40\" y=\"10\" width=\"10\" height=\"10\"/></g><circle data-part=\"part-2\" cx=\"60\" cy=\"30\" r=\"5\"/><circle data-part=\"part-2-2\" cx=\"75\" cy=\"30\" r=\"5\"/><g data-part=\"link\"><rect x=\"10\" y=\"30\" width=\"10\" height=\"10\"/></g><text data-part=\"part-3\" x=\"50\" y=\"45\" font-size=\"8\" text-anchor=\"middle\">two words</text></g></svg>"
+      },
+      "sha256-0000000000000000000000000000000000000000000000000000000000000000": {
+        "svg": "<svg/>"
+      }
+    }
+  },
+  "unreferencedAssetId": "sha256-0000000000000000000000000000000000000000000000000000000000000000",
+  "target": {
+    "telemetry": [
+      {
+        "name": "odoSpeed",
+        "dataType": "Number",
+        "unit": "m/s"
+      },
+      {
+        "name": "lidarGrid",
+        "dataType": "LidarGrid",
+        "unit": null
+      }
+    ],
+    "outputs": [
+      "steering"
+    ],
+    "streams": [
+      {
+        "streamId": "front",
+        "name": "Front",
+        "width": 1280,
+        "height": 720
+      }
+    ]
+  },
+  "mapping": {
+    "telemetry": {
+      "speed": "odoSpeed",
+      "scan": "lidarGrid"
+    },
+    "outputs": {
+      "steer": "steering"
+    },
+    "streams": {
+      "cam1": "front"
+    }
+  },
+  "expected": {
+    "schemaVersion": 1,
+    "workspace": {
+      "width": 1280,
+      "height": 720
+    },
+    "signals": {
+      "gear": {
+        "label": "Gang",
+        "decimals": 0
+      }
+    },
+    "sources": {
+      "telemetry": {
+        "odoSpeed": {
+          "staleAfterMs": 800
+        }
+      }
+    },
+    "elements": {
+      "e_speed": {
+        "type": "valueText",
+        "name": "Tempo",
+        "props": {
+          "x": 20,
+          "y": 40,
+          "value": {
+            "base": null,
+            "binding": {
+              "expr": "tel(\"odoSpeed\") * 3.6",
+              "smoothing": {
+                "timeConstantS": 0.2
+              }
+            }
+          },
+          "unit": "km/h",
+          "decimals": 0
+        }
+      },
+      "e_label": {
+        "type": "text",
+        "name": "Hinweis",
+        "props": {
+          "x": 20,
+          "y": 80,
+          "text": "tel(\"speed\") bleibt Text",
+          "fill": {
+            "base": "#ffffff",
+            "binding": {
+              "expr": "if(tel(\"odoSpeed\") > 1, \"#00ff00\", \"#ffffff\")"
+            }
+          }
+        }
+      },
+      "e_mode": {
+        "type": "text",
+        "name": "Modus",
+        "props": {
+          "x": 20,
+          "y": 120,
+          "text": {
+            "base": "",
+            "binding": {
+              "expr": "if(tel(\"odoSpeed\") > 1, \"speed\", concat(\"sig \", format(sig(\"gear\"), 0)))"
+            }
+          }
+        }
+      },
+      "e_dash": {
+        "type": "svgAsset",
+        "name": "Armaturen",
+        "assetId": "sha256-cd1b551502e69de9d092656f44003f410f48e5b20adb401d1d6bb6606a48c354",
+        "props": {
+          "x": 300,
+          "y": 20
+        },
+        "parts": {
+          "lamp": {
+            "props": {
+              "fill": {
+                "base": "#333333",
+                "binding": {
+                  "expr": "if(out(\"steering\") > 0.5, \"#ff0000\", \"#333333\")"
+                }
+              }
+            }
+          }
+        }
+      },
+      "e_links": {
+        "type": "svgAsset",
+        "name": "Glieder",
+        "assetId": "sha256-2748a6f4318b3a8b766107975bbbd378f3b0772d5071df57f2e5f27d1a6022c3",
+        "props": {
+          "x": 300,
+          "y": 200
+        },
+        "parts": {
+          "a_b": {
+            "props": {
+              "y": {
+                "base": 0,
+                "rate": {
+                  "expr": "tel(\"odoSpeed\") * 20",
+                  "wrap": {
+                    "min": 0,
+                    "max": 15
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "e_scan": {
+        "type": "lidarWidget",
+        "name": "LiDAR",
+        "source": "lidarGrid",
+        "props": {
+          "x": 900,
+          "y": 300,
+          "radius": 100,
+          "sweepEnabled": true
+        }
+      },
+      "e_old": {
+        "type": "valueText",
+        "name": "Alt",
+        "disabled": true,
+        "props": {
+          "x": 20,
+          "y": 160,
+          "value": {
+            "base": null,
+            "binding": {
+              "expr": "tel(\"legacy\")"
+            }
+          }
+        }
+      },
+      "e_box": {
+        "type": "group",
+        "name": "Box",
+        "children": [
+          "e_dash",
+          "e_links"
+        ],
+        "props": {
+          "pivotX": 200,
+          "pivotY": 150
+        },
+        "locked": true
+      }
+    },
+    "children": [
+      "e_speed",
+      "e_label",
+      "e_mode",
+      "e_box",
+      "e_scan",
+      "e_old"
+    ],
+    "clips": {
+      "c_flash": {
+        "name": "Blitz",
+        "durationS": 0.5,
+        "trigger": {
+          "mode": "pulse",
+          "condition": "tel(\"odoSpeed\") > 10",
+          "retrigger": "restart"
+        },
+        "tracks": [
+          {
+            "element": "e_label",
+            "property": "opacity",
+            "keyframes": [
+              {
+                "t": 0,
+                "value": 1
+              },
+              {
+                "t": 0.25,
+                "value": 0.2,
+                "easing": "easeInOut"
+              },
+              {
+                "t": 0.5,
+                "value": 1
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "variants": {
+      "front": {
+        "workspace": {
+          "width": 640,
+          "height": 480
+        },
+        "elements": {
+          "e_speed": {
+            "props": {
+              "value": {
+                "base": null,
+                "binding": {
+                  "expr": "tel(\"odoSpeed\")"
+                }
+              }
+            }
+          }
+        },
+        "addedElements": {
+          "e_steer": {
+            "type": "valueText",
+            "name": "Lenkung",
+            "props": {
+              "x": 10,
+              "y": 460,
+              "value": {
+                "base": null,
+                "binding": {
+                  "expr": "out(\"steering\")"
+                }
+              }
+            }
+          }
+        },
+        "structure": {
+          "parents": {
+            "e_steer": "root"
+          },
+          "order": {
+            "root": [
+              "e_steer",
+              "e_speed"
+            ]
+          }
+        },
+        "clips": {
+          "c_flash": {
+            "trigger": {
+              "mode": "whileTrue",
+              "condition": "tel(\"odoSpeed\") > 20",
+              "onDeactivate": "finish"
+            }
+          }
+        }
+      }
+    }
+  },
+  "expectedUnresolved": [
+    {
+      "kind": "telemetry",
+      "name": "legacy",
+      "uses": 1
+    }
+  ]
+}

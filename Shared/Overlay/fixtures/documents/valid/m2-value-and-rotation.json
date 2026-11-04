@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "workspace": { "width": 1280, "height": 720 },
+  "elements": {
+    "e_speed": {
+      "type": "valueText",
+      "name": "Geschwindigkeit",
+      "props": {
+        "x": 40,
+        "y": 680,
+        "value": { "base": null, "binding": { "expr": "tel(\"odoSpeed\")" } },
+        "decimals": 1,
+        "fontSize": 32
+      }
+    },
+    "e_compass": {
+      "type": "group",
+      "name": "Kompass",
+      "children": ["e_compass_ring", "e_compass_north"],
+      "props": {
+        "x": 1140,
+        "y": 40,
+        "pivotX": 50,
+        "pivotY": 50,
+        "rotation": {
+          "base": 0,
+          "binding": { "expr": "-tel(\"odoHeading\")", "smoothing": { "timeConstantS": 0.2 } }
+        }
+      }
+    },
+    "e_compass_ring": {
+      "type": "ellipse",
+      "props": { "width": 100, "height": 100, "fill": "none", "stroke": "#ffffff", "strokeWidth": 3 }
+    },
+    "e_compass_north": {
+      "type": "text",
+      "props": { "x": 50, "y": 22, "text": "N", "align": "middle", "fontSize": 18, "fontWeight": "bold", "fill": "#ff3030" }
+    }
+  },
+  "children": ["e_speed", "e_compass"]
+}

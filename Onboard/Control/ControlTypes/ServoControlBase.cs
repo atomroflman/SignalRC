@@ -29,7 +29,7 @@ public abstract class ServoControlBase : ControlTypeBase
             return;
         }
         Logger.LogDebug($"{this.GetType().Name} rec: {newValue}");
-        _pinInstance.SetServoPosition((float)newValue);
+        Observe(_pinInstance.SetServoPosition((float)newValue));
     }
 
     protected override async Task RunTestInternalAsync()

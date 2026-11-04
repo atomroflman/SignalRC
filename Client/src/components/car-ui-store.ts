@@ -11,6 +11,8 @@ type CarUiStateModel = {
 type CarUiState = {
   states: Record<number, CarUiStateModel>;
   isConnected: boolean;
+  /** Counts OnboardVersionChanged events and reconnects; version views reload when it changes. */
+  versionEpoch: number;
   connect: () => Promise<void>;
 };
 
@@ -30,6 +32,7 @@ function toStateMap(states: CarUiStateModel[]): Record<number, CarUiStateModel> 
 export const useCarUiStore = create<CarUiState>((set) => ({
   states: {},
   isConnected: false,
+  versionEpoch: 0,
 
   async connect() {
     if (_connection) {
@@ -61,6 +64,11 @@ export const useCarUiStore = create<CarUiState>((set) => ({
         }));
       });
 
+      // The onboard reported its version or disconnected: GET version-sync has news.
+      connection.on('OnboardVersionChanged', () => {
+        set(currentState => ({ versionEpoch: currentState.versionEpoch + 1 }));
+      });
+
       connection.onclose(() => {
         set({ isConnected: false });
       });
@@ -68,7 +76,8 @@ export const useCarUiStore = create<CarUiState>((set) => ({
       connection.onreconnected(async () => {
         set({ isConnected: true });
         const snapshot = await connection.invoke('UiClientConnected') as CarUiStateModel[];
-        set({ states: toStateMap(snapshot) });
+        // Events may have been missed while reconnecting.
+        set(currentState => ({ states: toStateMap(snapshot), versionEpoch: currentState.versionEpoch + 1 }));
       });
 
       await connection.start();

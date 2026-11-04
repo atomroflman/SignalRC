@@ -5,10 +5,12 @@ using System.Diagnostics;
 using SignalRC.Server.Configuration;
 using SignalRC.Server.Data;
 using SignalRC.Server.Services;
+using SignalRC.Server.Telemetry;
 using SignalRC.Shared;
 using SignalRC.Shared.Audio;
 using SignalRC.Shared.Channels;
 using SignalRC.Shared.FileTransfer;
+using SignalRC.Shared.Logs;
 using SignalRC.Shared.HubClients;
 using SignalRC.Shared.Video;
 using MessagePack;
@@ -18,7 +20,7 @@ using Sqids;
 
 namespace SignalRC.Server.Hubs;
 
-public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
+public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
 {
     // Handshake Overview:
     // 1. Car connects and (optionally) calls SyncChannelMap first sending full ChannelMap.
@@ -37,7 +39,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
     private readonly IConfigurationService _configService;
     private readonly CarConnectionStore _connectionStore;
     private readonly SqidsEncoder<long> _sqidsEncoder;
-    private readonly ActiveVideoStreamViewerRegistry _viewerRegistry;
+    private readonly VideoStreamActivationService _streamActivation;
     private readonly AvailableTypesRegistry _availableTypes;
     private readonly PushToTalkRegistry _pushToTalk;
     private readonly CarAudioService _carAudio;
@@ -48,7 +50,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
         VideoStreamReceiverService streamService,
         CarConnectionStore connectionStore,
         SqidsEncoder<long> sqidsEncoder,
-        ActiveVideoStreamViewerRegistry viewerRegistry,
+        VideoStreamActivationService streamActivation,
         AvailableTypesRegistry availableTypes,
         PushToTalkRegistry pushToTalk,
         CarAudioService carAudio)
@@ -58,7 +60,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
         _configService = configService;
         _connectionStore = connectionStore;
         _sqidsEncoder = sqidsEncoder;
-        _viewerRegistry = viewerRegistry;
+        _streamActivation = streamActivation;
         _availableTypes = availableTypes;
         _pushToTalk = pushToTalk;
         _carAudio = carAudio;
@@ -108,15 +110,10 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
         await Groups.AddToGroupAsync(Context.ConnectionId, $"Car-{car.Id}");
         Logger.LogInformation($"Car '{car.Name}' (ID: {car.Id}) connected and added to group 'Car-{car.Id}'");
         
-        var janusServerHost = _configService.Janus.HostName;
-        if (string.IsNullOrEmpty(janusServerHost))
-        {
-            janusServerHost = System.Net.Dns.GetHostName();
-            Logger.LogWarning($"Janus server host is not configured. Using default: {janusServerHost}");
-        }
-
         var carConfig = new CarConfiguration();
         carConfig.ServerAssignedCarId = car.Id;
+        if (!string.IsNullOrWhiteSpace(_configService.Janus.PublicHostName))
+            carConfig.JanusConfiguration = new Shared.JanusConfiguration { JanusServerHost = _configService.Janus.PublicHostName };
 
         // SPOT: Server is the source of truth for channel configuration.
         // Compare hashes and push the server's config if the client is out of date.
@@ -152,6 +149,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
         
         var connectionInfo = _connectionStore.RegisterConnection(car.Id.ToString(), Context.ConnectionId);
         connectionInfo.CarConfiguration = carConfig;
+        await Service<TelemetryRelay>().OnboardConnectedAsync(car.Id, Context.ConnectionId);
 
         try
         {
@@ -177,16 +175,39 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
         Logger.LogInformation("Test Invoked");
     }
 
-    public Task ReportOnboardVersion(string branch, string? commit)
+    public async Task ReportOnboardVersion(string branch, string? commit)
     {
         var carId = _connectionStore.FirstOrDefault(kv => kv.Value.ConnectionId == Context.ConnectionId).Key;
         if (carId == null)
         {
             Logger.LogWarning("ReportOnboardVersion received without an active car connection");
-            return Task.CompletedTask;
+            return;
         }
         _connectionStore.TrySetOnboardVersion(carId, branch, commit);
         Logger.LogInformation("Car {CarId} reports onboard version {Branch}@{Commit}", carId, branch, commit);
+        // Browsers reload version-sync right away instead of waiting for their poll.
+        if (int.TryParse(carId, out var id))
+            await Clients.All.OnboardVersionChanged(id);
+    }
+
+    public Task ReportChannelHealth(ChannelHealthReport report)
+    {
+        var connection = _connectionStore.FirstOrDefault(kv => kv.Value.ConnectionId == Context.ConnectionId);
+        if (connection.Key == null)
+        {
+            Logger.LogWarning("ReportChannelHealth received without an active car connection");
+            return Task.CompletedTask;
+        }
+        connection.Value.ChannelHealth = report;
+        Logger.LogInformation("Car {CarId} reports {Count} channel health entries", connection.Key, report.Entries.Length);
+        return Task.CompletedTask;
+    }
+
+    public Task SendOnboardLogs(OnboardLogEntry[] entries)
+    {
+        // Not logged here: the server log would mirror the onboard log line by line.
+        if (_connectionStore.TryGetCarId(Context.ConnectionId, out var carId))
+            Service<OnboardLogStore>().Add(carId, entries);
         return Task.CompletedTask;
     }
 
@@ -207,6 +228,9 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
         Logger.LogWarning($"Client disconnected: {exception}");
+        await Service<TelemetryRelay>().ConnectionClosedAsync(Context.ConnectionId);
+        await Service<ControlDisplayRelay>().ConnectionClosedAsync(Context.ConnectionId);
+        Service<SignalRC.Server.Overlay.HudInputRateLimit>().Forget(Context.ConnectionId);
         if (_connectionStore.TryRemoveConnection(Context.ConnectionId, out var carId, out var connectionInfo) && carId != null)
         {
             await Clients.All.CarStateUpdated(new CarStateModel()
@@ -217,17 +241,11 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
                 DriverName = connectionInfo?.DriverName
             });
             if (int.TryParse(carId, out var carIdInt))
+            {
                 await _carAudio.OnCarDisconnectedAsync(carIdInt);
-        }
-
-        var stoppedStreamIds = _viewerRegistry.RemoveConnection(Context.ConnectionId);
-        foreach (var streamId in stoppedStreamIds)
-        {
-            var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<SignalRCContext>();
-            var stream = await dbContext.CarVideoStreams.FirstOrDefaultAsync(s => s.Id == streamId);
-            if (stream == null)
-                continue;
-            await StopStreamForViewersAsync(stream);
+                // The onboard version is forgotten with the connection.
+                await Clients.All.OnboardVersionChanged(carIdInt);
+            }
         }
 
         await CleanupAudioForConnectionAsync(Context.ConnectionId);
@@ -351,6 +369,8 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
             await MarkUserAsActiveVehicle(carId);
             await MarkUserAsHasControlledCar(carId);
             await UpdateCarUiDriverStateAsync(carId);
+            _connectionStore.RememberControlSession(carId.ToString(), session);
+            await Service<ControlDisplayRelay>().ControlAcquiredAsync(carId, Context.ConnectionId);
         }
         return session;
     }
@@ -361,8 +381,10 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
         if (!_connectionStore.TryGetValue(carId.ToString(), out var connectionInfo))
             return;
         await Clients.Client(connectionInfo.ConnectionId!).ReleaseCarControl(sessionId);
+        _connectionStore.ForgetControlSession(carId.ToString(), sessionId);
         await ClearUserActiveVehicle(carId);
         await UpdateCarUiDriverStateAsync(carId);
+        await Service<ControlDisplayRelay>().ControlEndedAsync(carId);
     }
 
     public async Task UpdateChannel(int carId, string sessionId, int channelId, decimal value)
@@ -507,9 +529,13 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
         {
             var user = await GetCurrentUserAsync();
             if (user == null) return;
-            if (user.ActiveVehicleId == carId) return;
-            user.ActiveVehicleId = carId;
             var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<SignalRCContext>();
+            // The onboard holds one control session: a takeover ends the previous
+            // driver's, so the announced driver (DriverId, D73) must be unique.
+            var previous = await dbContext.Users.Where(u => u.ActiveVehicleId == carId && u.Id != user.Id).ToListAsync();
+            foreach (var other in previous) other.ActiveVehicleId = null;
+            if (user.ActiveVehicleId == carId && previous.Count == 0) return;
+            user.ActiveVehicleId = carId;
             await dbContext.SaveChangesAsync();
         }
         catch (Exception ex)
@@ -565,19 +591,37 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
 
     // -- Telemetry (formerly TelemetryHub) ------------------------------------------
 
-    public Task UpdateTelemetry(string carId, string valueName, string value)
+    // Legacy path of old onboards. Only the registered onboard of that car may
+    // send (D56); values reach new and old clients through the relay.
+    public async Task UpdateTelemetry(string carId, string valueName, string value)
     {
-        return Clients.Group($"car:{carId}").UpdateTelemetry(valueName, value);
+        if (!_connectionStore.TryGetCarId(Context.ConnectionId, out var registered) || registered.ToString() != carId)
+        {
+            LogRejectedTelemetry(carId);
+            return;
+        }
+        await Service<TelemetryRelay>().OnLegacyValueAsync(registered, valueName, value);
     }
 
-    public Task SubscribeToCarTelemetry(string carId)
+    // Old clients: "car:" is shared with video, the legacy group carries telemetry.
+    public async Task SubscribeToCarTelemetry(string carId)
     {
-        return Groups.AddToGroupAsync(Context.ConnectionId, $"car:{carId}");
+        await Groups.AddToGroupAsync(Context.ConnectionId, $"car:{carId}");
+        if (int.TryParse(carId, out var id))
+        {
+            await Groups.AddToGroupAsync(Context.ConnectionId, TelemetryGroups.Legacy(id));
+            await Service<TelemetryRelay>().AddLegacyClientAsync(Context.ConnectionId, id);
+        }
     }
 
-    public Task UnsubscribeFromCarTelemetry(string carId)
+    public async Task UnsubscribeFromCarTelemetry(string carId)
     {
-        return Groups.RemoveFromGroupAsync(Context.ConnectionId, $"car:{carId}");
+        await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"car:{carId}");
+        if (int.TryParse(carId, out var id))
+        {
+            await Groups.RemoveFromGroupAsync(Context.ConnectionId, TelemetryGroups.Legacy(id));
+            await Service<TelemetryRelay>().RemoveLegacyClientAsync(Context.ConnectionId, id);
+        }
     }
 
     public Task RegisterAsOnboard(string carId)
@@ -663,19 +707,8 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
             throw new InvalidOperationException($"Car with identity key {carIdentityKey} not found!");
         }
         await this.AddCarToGroupAsync(car.Id);
-        Logger.LogInformation("Car {CarIdentityKey} connected with ID {CarId}. Synchronizing viewer-driven video streams.", carIdentityKey, car.Id);
-
-        foreach (var stream in car.VideoStreams.Where(stream => stream.Enabled && _viewerRegistry.GetViewerCount(stream.Id) > 0))
-        {
-            await StartStreamForViewersAsync(stream);
-        }
-    }
-
-    public async Task StartVideoStream(int streamId)
-    {
-        Logger.LogInformation($"Starting Video Stream: {streamId}");
-        var stream = await GetStreamAsync(streamId);
-        await StartStreamForViewersAsync(stream);
+        Logger.LogInformation("Car {CarIdentityKey} connected with ID {CarId}. Starting its enabled video streams.", carIdentityKey, car.Id);
+        await _streamActivation.ApplyCarAsync(car.Id);
     }
 
     private async Task SanitizeStreamSettings(CarVideoStream s)
@@ -780,35 +813,6 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
             .ToList();
     }
 
-    public async Task ActivateStream(int streamId)
-    {
-        var stream = await GetStreamAsync(streamId);
-        if (!stream.Enabled)
-        {
-            throw new HubException($"Stream {stream.Name} is disabled.");
-        }
-        var firstViewer = _viewerRegistry.Activate(Context.ConnectionId, streamId);
-        Logger.LogInformation("Connection {ConnectionId} activated stream {StreamId}. Viewers: {ViewerCount}", Context.ConnectionId, streamId, _viewerRegistry.GetViewerCount(streamId));
-        if (firstViewer)
-        {
-            await StartStreamForViewersAsync(stream);
-        }
-    }
-
-    [Obsolete]
-    public async Task DeactivateStream(int streamId)
-    {
-        Logger.LogInformation("Connection {ConnectionId} deactivated stream {StreamId}. (Legacy Endpoint!!!)", Context.ConnectionId, streamId);
-        await StopVideoStream(streamId);
-    }
-
-    public async Task StopVideoStream(int streamId)
-    {
-        Logger.LogInformation("Connection {ConnectionId} deactivated stream {StreamId}.", Context.ConnectionId, streamId);
-        var stream = await GetStreamAsync(streamId);
-        await StopStreamForViewersAsync(stream);
-    }
-
     public async Task ChangeVideoStreamSettings(int streamId, VideoStreamMapItem settings)
     {
         var stream = await GetStreamAsync(streamId);
@@ -838,7 +842,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
         settings.Enabled = stream.Enabled;
         settings.CameraDevice = stream.CameraDevice;
         settings.RpiCamId = stream.RpiCamId;
-        settings.Port = stream.Port;
+        settings.Port = stream.OnboardTargetPort;
         settings.Width = stream.Width;
         settings.Height = stream.Height;
         settings.Framerate = stream.Framerate;
@@ -952,13 +956,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
         await dbContext.SaveChangesAsync();
         Logger.LogInformation("Driver changed enabled state for stream {StreamId} on car {CarId} to {Enabled}", streamId, carId, enabled);
 
-        if (enabled)
-        {
-            return;
-        }
-
-        _viewerRegistry.ClearStream(streamId);
-        await StopStreamForViewersAsync(stream);
+        await _streamActivation.ApplyAsync(streamId);
     }
 
     private async Task<CarVideoStream> GetStreamAsync(int streamId)
@@ -969,46 +967,20 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
             ?? throw new InvalidOperationException($"Video stream with ID {streamId} not found.");
     }
 
-    private async Task StartStreamForViewersAsync(CarVideoStream stream)
-    {
-        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<SignalRCContext>();
-        Logger.LogInformation("Starting video stream {StreamId} ({StreamName}) for car {CarId}", stream.Id, stream.Name, stream.CarId);
-        await _streamService.StartStreamAsync(stream.Id);
-        stream.IsActive = true;
-        await dbContext.SaveChangesAsync();
-        await Clients.Car(stream.CarId).StartVideoStream(stream.StreamId);
-    }
-
-    private async Task StopStreamForViewersAsync(CarVideoStream stream)
-    {
-        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<SignalRCContext>();
-        Logger.LogInformation("Stopping video stream {StreamId} ({StreamName}) for car {CarId}", stream.Id, stream.Name, stream.CarId);
-        await Clients.Car(stream.CarId).StopVideoStream(stream.StreamId);
-        await _streamService.StopStream(stream.Id);
-        stream.IsActive = false;
-        await dbContext.SaveChangesAsync();
-    }
-
     private async Task EnsureDriverCanManageStreamAsync(int carId)
     {
         var httpContext = Context.GetHttpContext()
             ?? throw new HubException("No HTTP context available for video hub request.");
         var dbContext = httpContext.RequestServices.GetRequiredService<SignalRCContext>();
         var user = await HubUserHelper.GetUserAsync(httpContext, dbContext);
-        if (user == null || string.IsNullOrWhiteSpace(user.LoginName))
+        // Same rule as overlay management (Shared/Overlay/api/README.md §1).
+        var access = httpContext.RequestServices.GetRequiredService<Overlay.OverlayAccess>();
+        switch (await access.CheckAdminAsync(user, carId))
         {
-            throw new HubException("You must be logged in to enable or disable streams.");
-        }
-
-        var hasSetup = await dbContext.UserSetups.AnyAsync(setup => setup.UserId == user.Id && setup.CarId == carId);
-        if (!hasSetup)
-        {
-            throw new HubException("You do not have access to manage this vehicle.");
-        }
-
-        if (user.ActiveVehicleId != carId)
-        {
-            throw new HubException("You must actively control this vehicle to change stream enable state.");
+            case Overlay.OverlayAccessError.SessionRequired:
+                throw new HubException("No user session.");
+            case Overlay.OverlayAccessError.NotDriver:
+                throw new HubException("You must actively control this vehicle to change stream enable state.");
         }
     }
 

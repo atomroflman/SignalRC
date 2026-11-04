@@ -1,0 +1,24 @@
+# Build context of Server/Dockerfile (context: repo root).
+# .git must stay: MSBuild reads branch and commit from it when no build args are given.
+
+**/bin/
+**/obj/
+Client/node_modules/
+Client/.next/
+Client/out/
+.claude/
+.env
+scripts/build-images.env
+
+# Onboard: installed releases and vehicle-local state, never part of an image
+Onboard/releases/
+Onboard/current
+Onboard/Generated/
+Onboard/ssh_key
+Onboard/ssh_key.pub
+Onboard/*.sqlite
+Onboard/channelMap.json
+Onboard/channelMap.server.json
+Onboard/channelMap.hash
+Onboard/appSettings.development.json
+Onboard/*.bak

@@ -37,7 +37,7 @@ export default function CarControl() {
     ? { bg: 'bg-red-900/30', border: 'border-red-700', text: 'text-red-300', dot: 'bg-red-500' }
     : carOnline === false
       ? { bg: 'bg-yellow-900/30', border: 'border-yellow-700', text: 'text-yellow-300', dot: 'bg-yellow-400' }
-      : !updatesEnabled
+      : !updatesEnabled || flowControl.onboardUpdating
         ? { bg: 'bg-yellow-900/30', border: 'border-yellow-700', text: 'text-yellow-300', dot: 'bg-yellow-400' }
         : { bg: 'bg-green-900/30', border: 'border-green-700', text: 'text-green-300', dot: 'bg-green-500' };
 
@@ -201,11 +201,17 @@ export default function CarControl() {
                 {messages.carControl.vehicleOfflineHint}
               </div>
             )}
+            {flowControl.onboardUpdating && (
+              <div className="mt-1 text-[11px] font-medium opacity-90">
+                {messages.carControl.onboardUpdatingHint}
+              </div>
+            )}
           </div>
           <div className="mt-2 flex items-center space-x-1">
             <button
-              className={`px-2 py-1 text-xs rounded ${updatesEnabled ? 'bg-amber-600 hover:bg-amber-700' : 'bg-green-600 hover:bg-green-700'} text-white`}
+              className={`px-2 py-1 text-xs rounded ${updatesEnabled ? 'bg-amber-600 hover:bg-amber-700' : 'bg-green-600 hover:bg-green-700'} text-white disabled:opacity-40`}
               title={updatesEnabled ? messages.carControl.pauseUpdates : messages.carControl.resumeUpdates}
+              disabled={flowControl.onboardUpdating}
               onClick={() => setUpdatesEnabled(!updatesEnabled)}
             >
               ⏸
@@ -226,6 +232,13 @@ export default function CarControl() {
               onClick={() => router.push(`/car/${flowControl.carId}`)}
             >
               🧭
+            </button>
+            <button
+              className="px-2 py-1 text-xs rounded bg-zinc-700 hover:bg-zinc-600 text-zinc-100"
+              title={messages.overlay.editorPage.open}
+              onClick={() => router.push(`/car/${flowControl.carId}/overlay`)}
+            >
+              HUD
             </button>
           </div>
         </>

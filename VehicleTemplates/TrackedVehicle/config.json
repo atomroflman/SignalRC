@@ -1,0 +1,318 @@
+{
+  "name": "TrackedVehicle",
+  "description": "Kettenfahrzeug mit zwei Hoverboard-Nabenmotoren an MKS XDrive Mini, gesteuert über CAN",
+  "version": "1.0",
+  "author": "SignalRC",
+  "created": "2026-10-29",
+  "channelMap": {
+    "pinManagers": {
+      "trackDrive": {
+        "type": "CanTrackDriveManager",
+        "options": {
+          "interface": "can0",
+          "maxSpeedRadPerSecond": 30,
+          "steeringGain": 1.0,
+          "commandIntervalMs": 20,
+          "nodeTimeoutMs": 250,
+          "expectedNodes": 2,
+          "controlTimeoutMs": 500,
+          "invertLeft": false,
+          "invertRight": false,
+          "wheelRadiusM": 0.09466,
+          "trackWidthM": 0,
+          "recorderDirectory": "/var/log/signalrc/drive",
+          "recorderSeconds": 60,
+          "recorderHz": 20
+        }
+      },
+      "lidar": {
+        "type": "LidarManager",
+        "options": {
+          "port": "/dev/lidar",
+          "baudRate": 115200,
+          "stallTimeoutMs": 2000,
+          "startAttempts": 3,
+          "restartAttempts": 2,
+          "capturePath": "",
+          "windowScans": 3,
+          "minHits": 2
+        }
+      }
+    },
+    "controlChannels": {
+      "throttle": {
+        "pinManager": "trackDrive",
+        "controlType": "TrackThrottle",
+        "maxResendInterval": 300,
+        "testDisabled": true
+      },
+      "steer": {
+        "pinManager": "trackDrive",
+        "controlType": "TrackSteering",
+        "maxResendInterval": 300,
+        "testDisabled": true
+      },
+      "faultReset": {
+        "pinManager": "trackDrive",
+        "controlType": "TrackFaultReset",
+        "testDisabled": true
+      },
+      "emergencyStop": {
+        "pinManager": "trackDrive",
+        "controlType": "TrackEmergencyStop",
+        "testDisabled": true
+      },
+      "recordDump": {
+        "pinManager": "trackDrive",
+        "controlType": "TrackRecordDump",
+        "testDisabled": true
+      },
+      "odometryReset": {
+        "pinManager": "trackDrive",
+        "controlType": "TrackOdometryReset",
+        "testDisabled": true
+      }
+    },
+    "telemetryChannels": {
+      "lifetime": {
+        "telemetryType": "SignalRC.Onboard.Telemetry.ApplicationLifetimeReader"
+      },
+      "cpuTemperature": {
+        "telemetryType": "SignalRC.Onboard.Telemetry.CpuTemperatureReader",
+        "readIntervalTicks": 20,
+        "unit": "°C",
+        "decimals": 1
+      },
+      "lidar": {
+        "pinManager": "lidar",
+        "telemetryType": "SignalRC.Onboard.Telemetry.LidarTelemetryReader",
+        "readIntervalTicks": 5,
+        "options": {
+          "groupKey": "lidar",
+          "pinManager": "lidar",
+          "sectors": 36,
+          "frontHalfAngle": 30
+        }
+      },
+      "drive.driveEnabled": {
+        "pinManager": "trackDrive",
+        "telemetryType": "SignalRC.Onboard.Telemetry.CanTrackDriveTelemetryReader",
+        "readIntervalTicks": 1,
+        "dataType": "Boolean",
+        "options": {
+          "groupKey": "drive",
+          "pinManager": "trackDrive"
+        }
+      },
+      "drive.inhibit": {
+        "pinManager": "trackDrive",
+        "telemetryType": "SignalRC.Onboard.Telemetry.CanTrackDriveTelemetryReader",
+        "readIntervalTicks": 1,
+        "options": {
+          "groupKey": "drive",
+          "pinManager": "trackDrive"
+        }
+      },
+      "drive.mode": {
+        "pinManager": "trackDrive",
+        "telemetryType": "SignalRC.Onboard.Telemetry.CanTrackDriveTelemetryReader",
+        "readIntervalTicks": 1,
+        "options": {
+          "groupKey": "drive",
+          "pinManager": "trackDrive"
+        }
+      },
+      "drive.nodesPresent": {
+        "pinManager": "trackDrive",
+        "telemetryType": "SignalRC.Onboard.Telemetry.CanTrackDriveTelemetryReader",
+        "readIntervalTicks": 1,
+        "dataType": "Boolean",
+        "options": {
+          "groupKey": "drive",
+          "pinManager": "trackDrive"
+        }
+      },
+      "drive.busState": {
+        "pinManager": "trackDrive",
+        "telemetryType": "SignalRC.Onboard.Telemetry.CanTrackDriveTelemetryReader",
+        "readIntervalTicks": 1,
+        "options": {
+          "groupKey": "drive",
+          "pinManager": "trackDrive"
+        }
+      },
+      "drive.leftState": {
+        "pinManager": "trackDrive",
+        "telemetryType": "SignalRC.Onboard.Telemetry.CanTrackDriveTelemetryReader",
+        "readIntervalTicks": 1,
+        "options": {
+          "groupKey": "drive",
+          "pinManager": "trackDrive"
+        }
+      },
+      "drive.leftFault": {
+        "pinManager": "trackDrive",
+        "telemetryType": "SignalRC.Onboard.Telemetry.CanTrackDriveTelemetryReader",
+        "readIntervalTicks": 1,
+        "options": {
+          "groupKey": "drive",
+          "pinManager": "trackDrive"
+        }
+      },
+      "drive.leftSpeed": {
+        "pinManager": "trackDrive",
+        "telemetryType": "SignalRC.Onboard.Telemetry.CanTrackDriveTelemetryReader",
+        "readIntervalTicks": 1,
+        "dataType": "Number",
+        "unit": "rad/s",
+        "decimals": 1,
+        "options": {
+          "groupKey": "drive",
+          "pinManager": "trackDrive"
+        }
+      },
+      "drive.leftCurrent": {
+        "pinManager": "trackDrive",
+        "telemetryType": "SignalRC.Onboard.Telemetry.CanTrackDriveTelemetryReader",
+        "readIntervalTicks": 1,
+        "dataType": "Number",
+        "unit": "A",
+        "decimals": 1,
+        "options": {
+          "groupKey": "drive",
+          "pinManager": "trackDrive"
+        }
+      },
+      "drive.leftBusVolts": {
+        "pinManager": "trackDrive",
+        "telemetryType": "SignalRC.Onboard.Telemetry.CanTrackDriveTelemetryReader",
+        "readIntervalTicks": 1,
+        "dataType": "Number",
+        "unit": "V",
+        "decimals": 1,
+        "options": {
+          "groupKey": "drive",
+          "pinManager": "trackDrive"
+        }
+      },
+      "drive.leftTemperature": {
+        "pinManager": "trackDrive",
+        "telemetryType": "SignalRC.Onboard.Telemetry.CanTrackDriveTelemetryReader",
+        "readIntervalTicks": 1,
+        "dataType": "Number",
+        "unit": "°C",
+        "decimals": 0,
+        "options": {
+          "groupKey": "drive",
+          "pinManager": "trackDrive"
+        }
+      },
+      "drive.leftThermal": {
+        "pinManager": "trackDrive",
+        "telemetryType": "SignalRC.Onboard.Telemetry.CanTrackDriveTelemetryReader",
+        "readIntervalTicks": 1,
+        "dataType": "Number",
+        "unit": "%",
+        "decimals": 0,
+        "options": {
+          "groupKey": "drive",
+          "pinManager": "trackDrive"
+        }
+      },
+      "drive.rightState": {
+        "pinManager": "trackDrive",
+        "telemetryType": "SignalRC.Onboard.Telemetry.CanTrackDriveTelemetryReader",
+        "readIntervalTicks": 1,
+        "options": {
+          "groupKey": "drive",
+          "pinManager": "trackDrive"
+        }
+      },
+      "drive.rightFault": {
+        "pinManager": "trackDrive",
+        "telemetryType": "SignalRC.Onboard.Telemetry.CanTrackDriveTelemetryReader",
+        "readIntervalTicks": 1,
+        "options": {
+          "groupKey": "drive",
+          "pinManager": "trackDrive"
+        }
+      },
+      "drive.rightSpeed": {
+        "pinManager": "trackDrive",
+        "telemetryType": "SignalRC.Onboard.Telemetry.CanTrackDriveTelemetryReader",
+        "readIntervalTicks": 1,
+        "dataType": "Number",
+        "unit": "rad/s",
+        "decimals": 1,
+        "options": {
+          "groupKey": "drive",
+          "pinManager": "trackDrive"
+        }
+      },
+      "drive.rightCurrent": {
+        "pinManager": "trackDrive",
+        "telemetryType": "SignalRC.Onboard.Telemetry.CanTrackDriveTelemetryReader",
+        "readIntervalTicks": 1,
+        "dataType": "Number",
+        "unit": "A",
+        "decimals": 1,
+        "options": {
+          "groupKey": "drive",
+          "pinManager": "trackDrive"
+        }
+      },
+      "drive.rightBusVolts": {
+        "pinManager": "trackDrive",
+        "telemetryType": "SignalRC.Onboard.Telemetry.CanTrackDriveTelemetryReader",
+        "readIntervalTicks": 1,
+        "dataType": "Number",
+        "unit": "V",
+        "decimals": 1,
+        "options": {
+          "groupKey": "drive",
+          "pinManager": "trackDrive"
+        }
+      },
+      "drive.rightTemperature": {
+        "pinManager": "trackDrive",
+        "telemetryType": "SignalRC.Onboard.Telemetry.CanTrackDriveTelemetryReader",
+        "readIntervalTicks": 1,
+        "dataType": "Number",
+        "unit": "°C",
+        "decimals": 0,
+        "options": {
+          "groupKey": "drive",
+          "pinManager": "trackDrive"
+        }
+      },
+      "drive.rightThermal": {
+        "pinManager": "trackDrive",
+        "telemetryType": "SignalRC.Onboard.Telemetry.CanTrackDriveTelemetryReader",
+        "readIntervalTicks": 1,
+        "dataType": "Number",
+        "unit": "%",
+        "decimals": 0,
+        "options": {
+          "groupKey": "drive",
+          "pinManager": "trackDrive"
+        }
+      }
+    },
+    "videoStreams": {
+      "mainCamera": {
+        "streamId": "mainCamera",
+        "name": "Main Camera",
+        "description": "Frontkamera",
+        "type": "rpiCamera",
+        "location": "front",
+        "enabled": true,
+        "priority": 1,
+        "rpiCamId": 0,
+        "width": 1024,
+        "height": 768,
+        "framerate": 22,
+        "bitrate": 1000000
+      }
+    }
+  }
+}

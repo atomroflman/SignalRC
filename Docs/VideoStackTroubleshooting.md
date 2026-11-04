@@ -25,7 +25,7 @@ This document describes the complete data flow of a video stream from the Raspbe
 │  ┌──────────────────────────┐    SignalR     ┌────────────────────────────┐ │
 │  │ SignalRC.Server            │ ◄──────────────►│ SignalRC.Onboard (lte-truck) │ │
 │  │  - VideoStreamReceiver   │                 │  - VideoStreamService      │ │
-│  │  - ActiveVideoStreamViewerRegistry          │  - MediaMtxConfigurator    │ │
+│  │  - VideoStreamActivationService             │  - MediaMtxConfigurator    │ │
 │  └──────────────────────────┘                 └────────────────────────────┘ │
 │                          │                                                    │
 │                          ▼ Janus HTTP API (localhost:8088)                    │
@@ -278,10 +278,8 @@ ssh lte-rc-server '
 ### Step 6: SignalR control works
 
 **What happens:**
-- A stream is selected in the browser (`car-video-panel.tsx`).
-- `ActivateStream(streamId)` is called over SignalR on the `CarConnectionHub`.
-- The server starts the stream (`StartStreamForViewersAsync`) and sends `StartVideoStream` to the truck.
-- The truck then starts MediaMTX/ffmpeg (see step 3).
+- Every enabled stream runs; there is no manual start. Enabling it (`SetVideoStreamEnabled` or the channel editor) or the car (re)connecting makes `VideoStreamActivationService` create the Janus mountpoint and send `StartVideoStream` to the truck.
+- Parameter changes reach the truck as `UpdateVideoStream` / `UpsertVideoStream`; the onboard rewrites `mediamtx.yml` on every one of them, MediaMTX reloads it.
 
 **Test from the browser DevTools console tab (authenticated on the UI):**
 
@@ -293,17 +291,17 @@ const conn = new signalR.HubConnectionBuilder()
 await conn.start();
 const streams = await conn.invoke('GetVideoStreamsForCar', <carId>);
 console.table(streams);
-await conn.invoke('ActivateStream', streams[0].id);
+await conn.invoke('SetVideoStreamEnabled', <carId>, streams[0].serverId, true);
 ```
 
 **Expected result:**
 - `GetVideoStreamsForCar` returns at least one activated stream.
-- `ActivateStream` returns without error.
+- `SetVideoStreamEnabled` returns without error (it is a no-op when the stream is already enabled).
 - An ffmpeg process appears on the truck (see step 3).
 
 **If not:**
 - Check the SignalR connection (`/hubs/connection` must be proxied to the server through nginx).
-- Check the server log for errors in `ActivateStream`.
+- Check the server log for errors from `VideoStreamActivationService`.
 
 ---
 
@@ -442,7 +440,7 @@ ssh lte-rc-server '
 | `Onboard/Services/MediaMtxConfigurator.cs` | Writes `mediamtx.yml`, starts/stops MediaMTX |
 | `Server/Hubs/CarConnectionHub.cs` | SignalR hub for stream activation/deactivation |
 | `Server/Services/VideoStreamReceiverService.cs` | Assigns ports, creates Janus mountpoints |
-| `Server/Services/ActiveVideoStreamViewerRegistry.cs` | Counts viewers per stream |
+| `Server/Services/VideoStreamActivationService.cs` | Starts enabled / stops disabled streams |
 | `Shared/Channels/ChannelMap.cs` | Data type for the ChannelMap, including PinManagers |
 | `Client/src/components/car-video-panel.tsx` | UI for stream selection and activation |
 | `Client/src/components/video-stream.tsx` | Janus/WebRTC player in the browser |

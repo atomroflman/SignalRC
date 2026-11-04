@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1, "workspace": { "width": 1280, "height": 720 },
+  "elements": { "e_a": { "type": "rect" } },
+  "children": ["e_a"],
+  "clips": {
+    "c_1": { "durationS": 1, "trigger": { "mode": "whileTrue", "condition": "true" }, "tracks": [ { "element": "e_a", "property": "opacity", "keyframes": [ { "t": 0, "value": 1 } ] } ] },
+    "c_2": { "durationS": 1, "trigger": { "mode": "whileTrue", "condition": "false" }, "tracks": [ { "element": "e_a", "property": "opacity", "keyframes": [ { "t": 0, "value": 0 } ] } ] }
+  }
+}

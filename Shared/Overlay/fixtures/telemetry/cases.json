@@ -1,0 +1,544 @@
+{
+ "description": "Referenzfälle der Onboard-Delta-Logik (telemetry/README.md §4). read: Kanal-ID → [value, state, ageMs] des Reader-Ergebnisses im Tick t (Sekunden). demand: wirksamer Bedarf ab diesem Tick. expect: alle gesendeten TelemetryDelta in Reihenfolge (Ticks ohne Eintrag senden nichts); changed-Einträge [id, value, state, ageMs?]; ageMs/touchedAged nur angegeben, wo relevant.",
+ "cases": [
+  {
+   "id": "first-read-full",
+   "description": "erster Wert nach Bedarf ist vollständig",
+   "ticks": [
+    {
+     "t": 0,
+     "read": {
+      "101": [
+       "12.35",
+       0,
+       0
+      ]
+     },
+     "demand": [
+      101
+     ]
+    }
+   ],
+   "expect": [
+    {
+     "t": 0,
+     "changed": [
+      [
+       101,
+       "12.35",
+       0
+      ]
+     ],
+     "touched": []
+    }
+   ]
+  },
+  {
+   "id": "unchanged-touched-throttled",
+   "description": "unverändert: Bestätigung höchstens alle 250 ms",
+   "ticks": [
+    {
+     "t": 0,
+     "read": {
+      "101": [
+       "1.0",
+       0,
+       0
+      ]
+     },
+     "demand": [
+      101
+     ]
+    },
+    {
+     "t": 0.1,
+     "read": {
+      "101": [
+       "1.0",
+       0,
+       0
+      ]
+     }
+    },
+    {
+     "t": 0.2,
+     "read": {
+      "101": [
+       "1.0",
+       0,
+       0
+      ]
+     }
+    },
+    {
+     "t": 0.3,
+     "read": {
+      "101": [
+       "1.0",
+       0,
+       0
+      ]
+     }
+    },
+    {
+     "t": 0.4,
+     "read": {
+      "101": [
+       "1.0",
+       0,
+       0
+      ]
+     }
+    },
+    {
+     "t": 0.5,
+     "read": {
+      "101": [
+       "1.0",
+       0,
+       0
+      ]
+     }
+    },
+    {
+     "t": 0.6,
+     "read": {
+      "101": [
+       "1.0",
+       0,
+       0
+      ]
+     }
+    }
+   ],
+   "expect": [
+    {
+     "t": 0,
+     "changed": [
+      [
+       101,
+       "1.0",
+       0
+      ]
+     ],
+     "touched": []
+    },
+    {
+     "t": 0.3,
+     "changed": [],
+     "touched": [
+      101
+     ]
+    },
+    {
+     "t": 0.6,
+     "changed": [],
+     "touched": [
+      101
+     ]
+    }
+   ]
+  },
+  {
+   "id": "value-change-immediate",
+   "description": "Änderung geht sofort hinaus und setzt den Bestätigungszeitpunkt",
+   "ticks": [
+    {
+     "t": 0,
+     "read": {
+      "101": [
+       "1.0",
+       0,
+       0
+      ]
+     },
+     "demand": [
+      101
+     ]
+    },
+    {
+     "t": 0.1,
+     "read": {
+      "101": [
+       "1.1",
+       0,
+       0
+      ]
+     }
+    },
+    {
+     "t": 0.2,
+     "read": {
+      "101": [
+       "1.1",
+       0,
+       0
+      ]
+     }
+    },
+    {
+     "t": 0.4,
+     "read": {
+      "101": [
+       "1.1",
+       0,
+       0
+      ]
+     }
+    }
+   ],
+   "expect": [
+    {
+     "t": 0,
+     "changed": [
+      [
+       101,
+       "1.0",
+       0
+      ]
+     ],
+     "touched": []
+    },
+    {
+     "t": 0.1,
+     "changed": [
+      [
+       101,
+       "1.1",
+       0
+      ]
+     ],
+     "touched": []
+    },
+    {
+     "t": 0.4,
+     "changed": [],
+     "touched": [
+      101
+     ]
+    }
+   ]
+  },
+  {
+   "id": "state-change-is-change",
+   "description": "gleicher Wert, anderer Zustand gilt als Änderung",
+   "ticks": [
+    {
+     "t": 0,
+     "read": {
+      "101": [
+       "5",
+       0,
+       0
+      ]
+     },
+     "demand": [
+      101
+     ]
+    },
+    {
+     "t": 0.1,
+     "read": {
+      "101": [
+       "5",
+       2,
+       0
+      ]
+     }
+    }
+   ],
+   "expect": [
+    {
+     "t": 0,
+     "changed": [
+      [
+       101,
+       "5",
+       0
+      ]
+     ],
+     "touched": []
+    },
+    {
+     "t": 0.1,
+     "changed": [
+      [
+       101,
+       "5",
+       2
+      ]
+     ],
+     "touched": []
+    }
+   ]
+  },
+  {
+   "id": "not-demanded-omitted",
+   "description": "nicht angeforderte Kanäle werden nicht gesendet",
+   "ticks": [
+    {
+     "t": 0,
+     "read": {
+      "101": [
+       "1",
+       0,
+       0
+      ],
+      "102": [
+       "2",
+       0,
+       0
+      ]
+     },
+     "demand": [
+      101
+     ]
+    }
+   ],
+   "expect": [
+    {
+     "t": 0,
+     "changed": [
+      [
+       101,
+       "1",
+       0
+      ]
+     ],
+     "touched": []
+    }
+   ]
+  },
+  {
+   "id": "newly-demanded-full",
+   "description": "neu angeforderter Kanal kommt vollständig, auch wenn unverändert",
+   "ticks": [
+    {
+     "t": 0,
+     "read": {
+      "101": [
+       "1",
+       0,
+       0
+      ],
+      "102": [
+       "2",
+       0,
+       0
+      ]
+     },
+     "demand": [
+      101
+     ]
+    },
+    {
+     "t": 0.1,
+     "read": {
+      "101": [
+       "1",
+       0,
+       0
+      ],
+      "102": [
+       "2",
+       0,
+       0
+      ]
+     },
+     "demand": [
+      101,
+      102
+     ]
+    }
+   ],
+   "expect": [
+    {
+     "t": 0,
+     "changed": [
+      [
+       101,
+       "1",
+       0
+      ]
+     ],
+     "touched": []
+    },
+    {
+     "t": 0.1,
+     "changed": [
+      [
+       102,
+       "2",
+       0
+      ]
+     ],
+     "touched": []
+    }
+   ]
+  },
+  {
+   "id": "no-demand-no-message",
+   "description": "ohne Bedarf keine Nachricht",
+   "ticks": [
+    {
+     "t": 0,
+     "read": {
+      "101": [
+       "1",
+       0,
+       0
+      ]
+     },
+     "demand": []
+    }
+   ],
+   "expect": []
+  },
+  {
+   "id": "reconnect-resends-full",
+   "description": "nach Wiederverbindung neue Basis",
+   "ticks": [
+    {
+     "t": 0,
+     "read": {
+      "101": [
+       "1",
+       0,
+       0
+      ]
+     },
+     "demand": [
+      101
+     ]
+    },
+    {
+     "t": 0.1,
+     "read": {
+      "101": [
+       "1",
+       0,
+       0
+      ]
+     },
+     "demand": [
+      101
+     ],
+     "reconnect": true
+    }
+   ],
+   "expect": [
+    {
+     "t": 0,
+     "changed": [
+      [
+       101,
+       "1",
+       0
+      ]
+     ],
+     "touched": []
+    },
+    {
+     "t": 0.1,
+     "changed": [
+      [
+       101,
+       "1",
+       0
+      ]
+     ],
+     "touched": []
+    }
+   ]
+  },
+  {
+   "id": "age-default-and-override",
+   "description": "abweichendes Alter wird je Eintrag bzw. als Paar übertragen; Standardalter = häufigstes Alter des Ticks, bei Gleichstand das kleinste",
+   "ticks": [
+    {
+     "t": 0,
+     "read": {
+      "101": [
+       "1",
+       0,
+       20
+      ],
+      "102": [
+       "2",
+       0,
+       20
+      ],
+      "103": [
+       "3",
+       0,
+       900
+      ]
+     },
+     "demand": [
+      101,
+      102,
+      103
+     ]
+    },
+    {
+     "t": 0.3,
+     "read": {
+      "101": [
+       "1",
+       0,
+       20
+      ],
+      "102": [
+       "2",
+       0,
+       20
+      ],
+      "103": [
+       "3",
+       0,
+       1200
+      ]
+     }
+    }
+   ],
+   "expect": [
+    {
+     "t": 0,
+     "ageMs": 20,
+     "changed": [
+      [
+       101,
+       "1",
+       0
+      ],
+      [
+       102,
+       "2",
+       0
+      ],
+      [
+       103,
+       "3",
+       0,
+       900
+      ]
+     ],
+     "touched": []
+    },
+    {
+     "t": 0.3,
+     "ageMs": 20,
+     "changed": [],
+     "touched": [
+      101,
+      102
+     ],
+     "touchedAged": [
+      103,
+      1200
+     ]
+    }
+   ]
+  }
+ ]
+}

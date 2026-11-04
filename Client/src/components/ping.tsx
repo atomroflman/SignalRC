@@ -87,7 +87,6 @@ const Ping: React.FC = () => {
     if (!carId) {
         return (
             <div className="bg-zinc-900 border border-zinc-700 rounded p-3 text-sm">
-                <span className="font-bold text-zinc-200">{messages.ping.title}</span>
                 <div className="text-zinc-500 text-center py-2 text-xs">{messages.ping.noCarSelected}</div>
             </div>
         );
@@ -97,8 +96,7 @@ const Ping: React.FC = () => {
 
     return (
         <div className="bg-zinc-900 border border-zinc-700 rounded p-3 text-sm">
-            <div className="flex items-center justify-between mb-2">
-                <span className="font-bold text-zinc-200">{messages.ping.title}</span>
+            <div className="flex items-center justify-end mb-2">
                 <div className="flex items-center gap-2">
                     <select
                         value={pingIntervalMs}

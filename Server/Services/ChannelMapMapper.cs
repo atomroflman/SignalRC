@@ -56,34 +56,35 @@ public static class ChannelMapMapper
                     ServerId = t.Id,
                     ModifiedAt = t.ModifiedAt,
                 }),
-            VideoStreams = streams.ToDictionary(
-                s => s.StreamId,
-                s => new VideoStreamMapItem
-                {
-                    StreamId = s.StreamId,
-                    Name = s.Name,
-                    Type = s.Type,
-                    Location = s.Location,
-                    Enabled = s.Enabled,
-                    Width = s.Width,
-                    Height = s.Height,
-                    Framerate = s.Framerate,
-                    Bitrate = s.Bitrate,
-                    Gain = s.Gain,
-                    Shutter = s.Shutter,
-                    Brightness = s.Brightness,
-                    Contrast = s.Contrast,
-                    EV = s.EV,
-                    Exposure = s.Exposure,
-                    CameraDevice = s.CameraDevice,
-                    RpiCamId = s.RpiCamId,
-                    Options = DeserializeOptions(s.OptionsJson),
-                    ServerId = s.Id,
-                    ModifiedAt = s.ModifiedAt,
-                    Port = s.Port,
-                })
+            VideoStreams = streams.ToDictionary(s => s.StreamId, ToMapItem)
         };
     }
+
+    /// <summary>Full onboard view of a stream: the per-stream push must carry the same fields as the map.</summary>
+    public static VideoStreamMapItem ToMapItem(CarVideoStream s) => new()
+    {
+        StreamId = s.StreamId,
+        Name = s.Name,
+        Type = s.Type,
+        Location = s.Location,
+        Enabled = s.Enabled,
+        Width = s.Width,
+        Height = s.Height,
+        Framerate = s.Framerate,
+        Bitrate = s.Bitrate,
+        Gain = s.Gain,
+        Shutter = s.Shutter,
+        Brightness = s.Brightness,
+        Contrast = s.Contrast,
+        EV = s.EV,
+        Exposure = s.Exposure,
+        CameraDevice = s.CameraDevice,
+        RpiCamId = s.RpiCamId,
+        Options = DeserializeOptions(s.OptionsJson),
+        ServerId = s.Id,
+        ModifiedAt = s.ModifiedAt,
+        Port = s.OnboardTargetPort,
+    };
 
     /// <summary>
     /// Replaces all channel configuration for a car with the provided <see cref="ChannelMap"/>.
@@ -164,7 +165,7 @@ public static class ChannelMapMapper
                 Width = kv.Value.Width ?? 1280,
                 Height = kv.Value.Height ?? 720,
                 Framerate = kv.Value.Framerate ?? 30,
-                Bitrate = kv.Value.Bitrate ?? 1500,
+                Bitrate = kv.Value.Bitrate ?? 1_000_000,
                 Brightness = kv.Value.Brightness ?? 0.5f,
                 Gain = kv.Value.Gain,
                 Shutter = kv.Value.Shutter,
@@ -185,12 +186,8 @@ public static class ChannelMapMapper
         await db.SaveChangesAsync(cancellationToken);
     }
 
-    private static Dictionary<string, object> DeserializeOptions(string? json)
-    {
-        if (string.IsNullOrEmpty(json)) return new();
-        try { return JsonSerializer.Deserialize<Dictionary<string, object>>(json) ?? new(); }
-        catch { return new(); }
-    }
+    // Plain values, not JsonElement: the map goes to the onboard over MessagePack.
+    private static Dictionary<string, object> DeserializeOptions(string? json) => ChannelOptions.FromJson(json);
 
     private static string? SerializeOptions(Dictionary<string, object>? options)
     {

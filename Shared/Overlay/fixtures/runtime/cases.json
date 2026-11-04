@@ -1,0 +1,1543 @@
+{
+ "description": "Referenzfälle des Laufzeitvertrags (runtime/README.md). Jeder Fall ist eine eigene Anzeigesitzung. Frame-Zeiten sind relativ zum Sitzungsbeginn bei t = 0; auto-Clips starten dort, auch wenn der erste Frame später liegt. frames werden in Reihenfolge ausgewertet; condition/rate/input ist das Formelergebnis des Frames. Spur e_a.x interpoliert 0→10 über 1 s, base ist der Grundwert. value ist der angezeigte Eigenschaftswert; Zahlen mit Toleranz 1e-9.",
+ "cases": [
+  {
+   "id": "auto-repeat-base",
+   "description": "auto, 2 Wiederholungen, Endzustand Grundwert",
+   "kind": "clip",
+   "base": -1,
+   "clip": {
+    "durationS": 1,
+    "repeat": 2,
+    "trigger": {
+     "mode": "auto"
+    },
+    "endState": "base",
+    "tracks": [
+     {
+      "element": "e_a",
+      "property": "x",
+      "keyframes": [
+       {
+        "t": 0,
+        "value": 0
+       },
+       {
+        "t": 1,
+        "value": 10
+       }
+      ]
+     }
+    ]
+   },
+   "frames": [
+    {
+     "t": 0,
+     "expect": {
+      "value": 0,
+      "phase": "running"
+     }
+    },
+    {
+     "t": 0.5,
+     "expect": {
+      "value": 5
+     }
+    },
+    {
+     "t": 1.5,
+     "expect": {
+      "value": 5
+     }
+    },
+    {
+     "t": 2.0,
+     "expect": {
+      "value": -1,
+      "phase": "ended"
+     }
+    },
+    {
+     "t": 3,
+     "expect": {
+      "value": -1,
+      "phase": "ended"
+     }
+    }
+   ]
+  },
+  {
+   "id": "auto-repeat-hold",
+   "description": "auto, 2 Wiederholungen, Endzustand halten",
+   "kind": "clip",
+   "base": -1,
+   "clip": {
+    "durationS": 1,
+    "repeat": 2,
+    "trigger": {
+     "mode": "auto"
+    },
+    "endState": "hold",
+    "tracks": [
+     {
+      "element": "e_a",
+      "property": "x",
+      "keyframes": [
+       {
+        "t": 0,
+        "value": 0
+       },
+       {
+        "t": 1,
+        "value": 10
+       }
+      ]
+     }
+    ]
+   },
+   "frames": [
+    {
+     "t": 0,
+     "expect": {
+      "value": 0
+     }
+    },
+    {
+     "t": 1.25,
+     "expect": {
+      "value": 2.5
+     }
+    },
+    {
+     "t": 2.0,
+     "expect": {
+      "value": 10,
+      "phase": "ended"
+     }
+    }
+   ]
+  },
+  {
+   "id": "auto-infinite",
+   "description": "auto endlos",
+   "kind": "clip",
+   "base": -1,
+   "clip": {
+    "durationS": 1,
+    "repeat": "infinite",
+    "trigger": {
+     "mode": "auto"
+    },
+    "endState": "base",
+    "tracks": [
+     {
+      "element": "e_a",
+      "property": "x",
+      "keyframes": [
+       {
+        "t": 0,
+        "value": 0
+       },
+       {
+        "t": 1,
+        "value": 10
+       }
+      ]
+     }
+    ]
+   },
+   "frames": [
+    {
+     "t": 0,
+     "expect": {
+      "value": 0
+     }
+    },
+    {
+     "t": 2.25,
+     "expect": {
+      "value": 2.5
+     }
+    },
+    {
+     "t": 10.75,
+     "expect": {
+      "value": 7.5
+     }
+    }
+   ]
+  },
+  {
+   "id": "while-stop",
+   "description": "whileTrue, sofort stoppen",
+   "kind": "clip",
+   "base": -1,
+   "clip": {
+    "durationS": 1,
+    "repeat": "infinite",
+    "trigger": {
+     "mode": "whileTrue",
+     "condition": "c",
+     "onDeactivate": "stop"
+    },
+    "endState": "base",
+    "tracks": [
+     {
+      "element": "e_a",
+      "property": "x",
+      "keyframes": [
+       {
+        "t": 0,
+        "value": 0
+       },
+       {
+        "t": 1,
+        "value": 10
+       }
+      ]
+     }
+    ]
+   },
+   "frames": [
+    {
+     "t": 0,
+     "condition": {
+      "state": "valid",
+      "value": true
+     },
+     "expect": {
+      "value": 0,
+      "phase": "running"
+     }
+    },
+    {
+     "t": 0.3,
+     "condition": {
+      "state": "valid",
+      "value": true
+     },
+     "expect": {
+      "value": 3
+     }
+    },
+    {
+     "t": 0.5,
+     "condition": {
+      "state": "valid",
+      "value": false
+     },
+     "expect": {
+      "value": -1,
+      "phase": "ended"
+     }
+    },
+    {
+     "t": 0.7,
+     "condition": {
+      "state": "valid",
+      "value": false
+     },
+     "expect": {
+      "value": -1,
+      "phase": "idle"
+     }
+    },
+    {
+     "t": 1.0,
+     "condition": {
+      "state": "valid",
+      "value": true
+     },
+     "expect": {
+      "value": 0,
+      "phase": "running"
+     }
+    },
+    {
+     "t": 1.2,
+     "condition": {
+      "state": "valid",
+      "value": true
+     },
+     "expect": {
+      "value": 2
+     }
+    }
+   ]
+  },
+  {
+   "id": "while-finish",
+   "description": "whileTrue, Durchlauf zu Ende",
+   "kind": "clip",
+   "base": -1,
+   "clip": {
+    "durationS": 1,
+    "repeat": "infinite",
+    "trigger": {
+     "mode": "whileTrue",
+     "condition": "c",
+     "onDeactivate": "finish"
+    },
+    "endState": "base",
+    "tracks": [
+     {
+      "element": "e_a",
+      "property": "x",
+      "keyframes": [
+       {
+        "t": 0,
+        "value": 0
+       },
+       {
+        "t": 1,
+        "value": 10
+       }
+      ]
+     }
+    ]
+   },
+   "frames": [
+    {
+     "t": 0,
+     "condition": {
+      "state": "valid",
+      "value": true
+     },
+     "expect": {
+      "value": 0
+     }
+    },
+    {
+     "t": 1.4,
+     "condition": {
+      "state": "valid",
+      "value": false
+     },
+     "expect": {
+      "value": 4,
+      "phase": "finishing"
+     }
+    },
+    {
+     "t": 1.8,
+     "condition": {
+      "state": "valid",
+      "value": false
+     },
+     "expect": {
+      "value": 8,
+      "phase": "finishing"
+     }
+    },
+    {
+     "t": 2.0,
+     "condition": {
+      "state": "valid",
+      "value": false
+     },
+     "expect": {
+      "value": -1,
+      "phase": "ended"
+     }
+    },
+    {
+     "t": 2.1,
+     "condition": {
+      "state": "valid",
+      "value": false
+     },
+     "expect": {
+      "value": -1
+     }
+    }
+   ]
+  },
+  {
+   "id": "while-finish-resume",
+   "description": "Bedingung wird beim Auslaufen wieder wahr (D23)",
+   "kind": "clip",
+   "base": -1,
+   "clip": {
+    "durationS": 1,
+    "repeat": "infinite",
+    "trigger": {
+     "mode": "whileTrue",
+     "condition": "c",
+     "onDeactivate": "finish"
+    },
+    "endState": "base",
+    "tracks": [
+     {
+      "element": "e_a",
+      "property": "x",
+      "keyframes": [
+       {
+        "t": 0,
+        "value": 0
+       },
+       {
+        "t": 1,
+        "value": 10
+       }
+      ]
+     }
+    ]
+   },
+   "frames": [
+    {
+     "t": 0,
+     "condition": {
+      "state": "valid",
+      "value": true
+     },
+     "expect": {
+      "value": 0
+     }
+    },
+    {
+     "t": 0.4,
+     "condition": {
+      "state": "valid",
+      "value": false
+     },
+     "expect": {
+      "value": 4,
+      "phase": "finishing"
+     }
+    },
+    {
+     "t": 0.6,
+     "condition": {
+      "state": "valid",
+      "value": true
+     },
+     "expect": {
+      "value": 6,
+      "phase": "running"
+     }
+    },
+    {
+     "t": 1.2,
+     "condition": {
+      "state": "valid",
+      "value": true
+     },
+     "expect": {
+      "value": 2,
+      "phase": "running"
+     }
+    }
+   ]
+  },
+  {
+   "id": "while-finite-stays-ended",
+   "description": "whileTrue, endlich: bleibt beendet bis false→true",
+   "kind": "clip",
+   "base": -1,
+   "clip": {
+    "durationS": 1,
+    "repeat": 1,
+    "trigger": {
+     "mode": "whileTrue",
+     "condition": "c"
+    },
+    "endState": "base",
+    "tracks": [
+     {
+      "element": "e_a",
+      "property": "x",
+      "keyframes": [
+       {
+        "t": 0,
+        "value": 0
+       },
+       {
+        "t": 1,
+        "value": 10
+       }
+      ]
+     }
+    ]
+   },
+   "frames": [
+    {
+     "t": 0,
+     "condition": {
+      "state": "valid",
+      "value": true
+     },
+     "expect": {
+      "value": 0
+     }
+    },
+    {
+     "t": 1.0,
+     "condition": {
+      "state": "valid",
+      "value": true
+     },
+     "expect": {
+      "value": -1,
+      "phase": "ended"
+     }
+    },
+    {
+     "t": 1.5,
+     "condition": {
+      "state": "valid",
+      "value": true
+     },
+     "expect": {
+      "value": -1,
+      "phase": "ended"
+     }
+    },
+    {
+     "t": 2.0,
+     "condition": {
+      "state": "valid",
+      "value": false
+     },
+     "expect": {
+      "value": -1,
+      "phase": "idle"
+     }
+    },
+    {
+     "t": 2.5,
+     "condition": {
+      "state": "valid",
+      "value": true
+     },
+     "expect": {
+      "value": 0,
+      "phase": "running"
+     }
+    },
+    {
+     "t": 2.7,
+     "condition": {
+      "state": "valid",
+      "value": true
+     },
+     "expect": {
+      "value": 2
+     }
+    }
+   ]
+  },
+  {
+   "id": "pulse-initially-true",
+   "description": "Puls: beim Start wahre Bedingung löst nicht aus (D10)",
+   "kind": "clip",
+   "base": -1,
+   "clip": {
+    "durationS": 1,
+    "repeat": 1,
+    "trigger": {
+     "mode": "pulse",
+     "condition": "c"
+    },
+    "endState": "base",
+    "tracks": [
+     {
+      "element": "e_a",
+      "property": "x",
+      "keyframes": [
+       {
+        "t": 0,
+        "value": 0
+       },
+       {
+        "t": 1,
+        "value": 10
+       }
+      ]
+     }
+    ]
+   },
+   "frames": [
+    {
+     "t": 0,
+     "condition": {
+      "state": "valid",
+      "value": true
+     },
+     "expect": {
+      "value": -1,
+      "phase": "idle"
+     }
+    },
+    {
+     "t": 0.5,
+     "condition": {
+      "state": "valid",
+      "value": true
+     },
+     "expect": {
+      "value": -1
+     }
+    },
+    {
+     "t": 1.0,
+     "condition": {
+      "state": "valid",
+      "value": false
+     },
+     "expect": {
+      "value": -1
+     }
+    },
+    {
+     "t": 1.5,
+     "condition": {
+      "state": "valid",
+      "value": true
+     },
+     "expect": {
+      "value": 0,
+      "phase": "running"
+     }
+    },
+    {
+     "t": 1.8,
+     "condition": {
+      "state": "valid",
+      "value": true
+     },
+     "expect": {
+      "value": 3
+     }
+    },
+    {
+     "t": 2.5,
+     "condition": {
+      "state": "valid",
+      "value": true
+     },
+     "expect": {
+      "value": -1,
+      "phase": "ended"
+     }
+    }
+   ]
+  },
+  {
+   "id": "pulse-retrigger-restart",
+   "description": "Puls: Neustart bei erneuter Flanke (D11)",
+   "kind": "clip",
+   "base": -1,
+   "clip": {
+    "durationS": 1,
+    "repeat": 1,
+    "trigger": {
+     "mode": "pulse",
+     "condition": "c",
+     "retrigger": "restart"
+    },
+    "endState": "base",
+    "tracks": [
+     {
+      "element": "e_a",
+      "property": "x",
+      "keyframes": [
+       {
+        "t": 0,
+        "value": 0
+       },
+       {
+        "t": 1,
+        "value": 10
+       }
+      ]
+     }
+    ]
+   },
+   "frames": [
+    {
+     "t": 0,
+     "condition": {
+      "state": "valid",
+      "value": false
+     },
+     "expect": {
+      "value": -1
+     }
+    },
+    {
+     "t": 1.0,
+     "condition": {
+      "state": "valid",
+      "value": true
+     },
+     "expect": {
+      "value": 0,
+      "phase": "running"
+     }
+    },
+    {
+     "t": 1.5,
+     "condition": {
+      "state": "valid",
+      "value": true
+     },
+     "expect": {
+      "value": 5
+     }
+    },
+    {
+     "t": 1.6,
+     "condition": {
+      "state": "valid",
+      "value": false
+     },
+     "expect": {
+      "value": 6,
+      "phase": "running"
+     }
+    },
+    {
+     "t": 1.7,
+     "condition": {
+      "state": "valid",
+      "value": true
+     },
+     "expect": {
+      "value": 0,
+      "phase": "running"
+     }
+    },
+    {
+     "t": 2.0,
+     "condition": {
+      "state": "valid",
+      "value": true
+     },
+     "expect": {
+      "value": 3
+     }
+    }
+   ]
+  },
+  {
+   "id": "pulse-retrigger-ignore",
+   "description": "Puls: erneute Flanke ignoriert (D11)",
+   "kind": "clip",
+   "base": -1,
+   "clip": {
+    "durationS": 1,
+    "repeat": 1,
+    "trigger": {
+     "mode": "pulse",
+     "condition": "c",
+     "retrigger": "ignore"
+    },
+    "endState": "base",
+    "tracks": [
+     {
+      "element": "e_a",
+      "property": "x",
+      "keyframes": [
+       {
+        "t": 0,
+        "value": 0
+       },
+       {
+        "t": 1,
+        "value": 10
+       }
+      ]
+     }
+    ]
+   },
+   "frames": [
+    {
+     "t": 0,
+     "condition": {
+      "state": "valid",
+      "value": false
+     },
+     "expect": {
+      "value": -1
+     }
+    },
+    {
+     "t": 1.0,
+     "condition": {
+      "state": "valid",
+      "value": true
+     },
+     "expect": {
+      "value": 0
+     }
+    },
+    {
+     "t": 1.6,
+     "condition": {
+      "state": "valid",
+      "value": false
+     },
+     "expect": {
+      "value": 6
+     }
+    },
+    {
+     "t": 1.7,
+     "condition": {
+      "state": "valid",
+      "value": true
+     },
+     "expect": {
+      "value": 7,
+      "phase": "running"
+     }
+    },
+    {
+     "t": 2.0,
+     "condition": {
+      "state": "valid",
+      "value": true
+     },
+     "expect": {
+      "value": -1,
+      "phase": "ended"
+     }
+    }
+   ]
+  },
+  {
+   "id": "pulse-invalid-resets-history",
+   "description": "Puls: ungültig dazwischen ist keine Flanke (D10, D14)",
+   "kind": "clip",
+   "base": -1,
+   "clip": {
+    "durationS": 1,
+    "repeat": 1,
+    "trigger": {
+     "mode": "pulse",
+     "condition": "c"
+    },
+    "endState": "base",
+    "tracks": [
+     {
+      "element": "e_a",
+      "property": "x",
+      "keyframes": [
+       {
+        "t": 0,
+        "value": 0
+       },
+       {
+        "t": 1,
+        "value": 10
+       }
+      ]
+     }
+    ]
+   },
+   "frames": [
+    {
+     "t": 0,
+     "condition": {
+      "state": "valid",
+      "value": false
+     },
+     "expect": {
+      "value": -1
+     }
+    },
+    {
+     "t": 0.5,
+     "condition": {
+      "state": "invalid"
+     },
+     "expect": {
+      "value": -1,
+      "marker": "invalid"
+     }
+    },
+    {
+     "t": 1.0,
+     "condition": {
+      "state": "valid",
+      "value": true
+     },
+     "expect": {
+      "value": -1,
+      "phase": "idle"
+     }
+    },
+    {
+     "t": 1.5,
+     "condition": {
+      "state": "valid",
+      "value": false
+     },
+     "expect": {
+      "value": -1
+     }
+    },
+    {
+     "t": 2.0,
+     "condition": {
+      "state": "valid",
+      "value": true
+     },
+     "expect": {
+      "value": 0,
+      "phase": "running"
+     }
+    }
+   ]
+  },
+  {
+   "id": "while-invalid-suspends",
+   "description": "whileTrue: ungültig hält an, Rückkehr startet frisch (D14)",
+   "kind": "clip",
+   "base": -1,
+   "clip": {
+    "durationS": 1,
+    "repeat": "infinite",
+    "trigger": {
+     "mode": "whileTrue",
+     "condition": "c"
+    },
+    "endState": "base",
+    "tracks": [
+     {
+      "element": "e_a",
+      "property": "x",
+      "keyframes": [
+       {
+        "t": 0,
+        "value": 0
+       },
+       {
+        "t": 1,
+        "value": 10
+       }
+      ]
+     }
+    ]
+   },
+   "frames": [
+    {
+     "t": 0,
+     "condition": {
+      "state": "valid",
+      "value": true
+     },
+     "expect": {
+      "value": 0
+     }
+    },
+    {
+     "t": 0.5,
+     "condition": {
+      "state": "valid",
+      "value": true
+     },
+     "expect": {
+      "value": 5
+     }
+    },
+    {
+     "t": 0.6,
+     "condition": {
+      "state": "invalid"
+     },
+     "expect": {
+      "value": 5,
+      "phase": "suspended",
+      "marker": "invalid"
+     }
+    },
+    {
+     "t": 0.9,
+     "condition": {
+      "state": "invalid"
+     },
+     "expect": {
+      "value": 5,
+      "phase": "suspended",
+      "marker": "invalid"
+     }
+    },
+    {
+     "t": 1.0,
+     "condition": {
+      "state": "valid",
+      "value": true
+     },
+     "expect": {
+      "value": 0,
+      "phase": "running"
+     }
+    },
+    {
+     "t": 1.3,
+     "condition": {
+      "state": "valid",
+      "value": true
+     },
+     "expect": {
+      "value": 3
+     }
+    }
+   ]
+  },
+  {
+   "id": "while-unchecked-suspends",
+   "description": "whileTrue: ungeprüfte Bedingung hält an wie ungültig",
+   "kind": "clip",
+   "base": -1,
+   "clip": {
+    "durationS": 1,
+    "repeat": "infinite",
+    "trigger": {
+     "mode": "whileTrue",
+     "condition": "c"
+    },
+    "endState": "base",
+    "tracks": [
+     {
+      "element": "e_a",
+      "property": "x",
+      "keyframes": [
+       {
+        "t": 0,
+        "value": 0
+       },
+       {
+        "t": 1,
+        "value": 10
+       }
+      ]
+     }
+    ]
+   },
+   "frames": [
+    {
+     "t": 0,
+     "condition": {
+      "state": "valid",
+      "value": true
+     },
+     "expect": {
+      "value": 0
+     }
+    },
+    {
+     "t": 0.4,
+     "condition": {
+      "state": "valid",
+      "value": true
+     },
+     "expect": {
+      "value": 4
+     }
+    },
+    {
+     "t": 0.5,
+     "condition": {
+      "state": "unchecked",
+      "value": true
+     },
+     "expect": {
+      "value": 4,
+      "phase": "suspended",
+      "marker": "unchecked"
+     }
+    },
+    {
+     "t": 1.0,
+     "condition": {
+      "state": "valid",
+      "value": true
+     },
+     "expect": {
+      "value": 0,
+      "phase": "running"
+     }
+    }
+   ]
+  },
+  {
+   "id": "easing-step",
+   "description": "Segment-Easing step",
+   "kind": "clip",
+   "base": -1,
+   "clip": {
+    "durationS": 1,
+    "repeat": 1,
+    "trigger": {
+     "mode": "auto"
+    },
+    "endState": "hold",
+    "tracks": [
+     {
+      "element": "e_a",
+      "property": "x",
+      "keyframes": [
+       {
+        "t": 0,
+        "value": 0,
+        "easing": "step"
+       },
+       {
+        "t": 0.5,
+        "value": 10
+       },
+       {
+        "t": 1,
+        "value": 0
+       }
+      ]
+     }
+    ]
+   },
+   "frames": [
+    {
+     "t": 0,
+     "expect": {
+      "value": 0
+     }
+    },
+    {
+     "t": 0.25,
+     "expect": {
+      "value": 0
+     }
+    },
+    {
+     "t": 0.5,
+     "expect": {
+      "value": 10
+     }
+    },
+    {
+     "t": 0.75,
+     "expect": {
+      "value": 5
+     }
+    }
+   ]
+  },
+  {
+   "id": "easing-ease-in-out-mid",
+   "description": "easeInOut ist bei der Hälfte symmetrisch",
+   "kind": "clip",
+   "base": -1,
+   "clip": {
+    "durationS": 1,
+    "repeat": 1,
+    "trigger": {
+     "mode": "auto"
+    },
+    "endState": "hold",
+    "tracks": [
+     {
+      "element": "e_a",
+      "property": "x",
+      "keyframes": [
+       {
+        "t": 0,
+        "value": 0,
+        "easing": "easeInOut"
+       },
+       {
+        "t": 1,
+        "value": 10
+       }
+      ]
+     }
+    ]
+   },
+   "frames": [
+    {
+     "t": 0.5,
+     "expect": {
+      "value": 5
+     }
+    }
+   ]
+  },
+  {
+   "id": "color-interpolation",
+   "description": "Farben je RGBA-Kanal linear, gerundet",
+   "kind": "clip",
+   "base": -1,
+   "clip": {
+    "durationS": 1,
+    "repeat": 1,
+    "trigger": {
+     "mode": "auto"
+    },
+    "endState": "hold",
+    "tracks": [
+     {
+      "element": "e_a",
+      "property": "fill",
+      "keyframes": [
+       {
+        "t": 0,
+        "value": "#000000"
+       },
+       {
+        "t": 1,
+        "value": "#ff8000"
+       }
+      ]
+     }
+    ]
+   },
+   "frames": [
+    {
+     "t": 0.5,
+     "expect": {
+      "value": "#804000ff"
+     }
+    }
+   ]
+  },
+  {
+   "id": "rate-wrap",
+   "description": "Rate mit wrap",
+   "kind": "rate",
+   "base": 0,
+   "rate": {
+    "expr": "r",
+    "wrap": {
+     "min": 0,
+     "max": 40
+    }
+   },
+   "frames": [
+    {
+     "t": 0,
+     "rate": {
+      "state": "valid",
+      "value": 100
+     },
+     "expect": {
+      "value": 0
+     }
+    },
+    {
+     "t": 0.25,
+     "rate": {
+      "state": "valid",
+      "value": 100
+     },
+     "expect": {
+      "value": 25
+     }
+    },
+    {
+     "t": 0.5,
+     "rate": {
+      "state": "valid",
+      "value": 100
+     },
+     "expect": {
+      "value": 10
+     }
+    }
+   ]
+  },
+  {
+   "id": "rate-negative-wrap",
+   "description": "negative Rate kehrt um",
+   "kind": "rate",
+   "base": 0,
+   "rate": {
+    "expr": "r",
+    "wrap": {
+     "min": 0,
+     "max": 40
+    }
+   },
+   "frames": [
+    {
+     "t": 0,
+     "rate": {
+      "state": "valid",
+      "value": -100
+     },
+     "expect": {
+      "value": 0
+     }
+    },
+    {
+     "t": 0.25,
+     "rate": {
+      "state": "valid",
+      "value": -100
+     },
+     "expect": {
+      "value": 15
+     }
+    }
+   ]
+  },
+  {
+   "id": "rate-dt-cap",
+   "description": "dt wird für Raten auf 0,25 s begrenzt",
+   "kind": "rate",
+   "base": 0,
+   "rate": {
+    "expr": "r"
+   },
+   "frames": [
+    {
+     "t": 0,
+     "rate": {
+      "state": "valid",
+      "value": 100
+     },
+     "expect": {
+      "value": 0
+     }
+    },
+    {
+     "t": 2.0,
+     "rate": {
+      "state": "valid",
+      "value": 100
+     },
+     "expect": {
+      "value": 25
+     }
+    }
+   ]
+  },
+  {
+   "id": "rate-invalid-fresh-start",
+   "description": "ungültig hält, Rückkehr startet beim Grundwert (D14)",
+   "kind": "rate",
+   "base": 0,
+   "rate": {
+    "expr": "r"
+   },
+   "frames": [
+    {
+     "t": 0,
+     "rate": {
+      "state": "valid",
+      "value": 100
+     },
+     "expect": {
+      "value": 0
+     }
+    },
+    {
+     "t": 0.25,
+     "rate": {
+      "state": "valid",
+      "value": 100
+     },
+     "expect": {
+      "value": 25
+     }
+    },
+    {
+     "t": 0.5,
+     "rate": {
+      "state": "invalid"
+     },
+     "expect": {
+      "value": 25,
+      "marker": "invalid"
+     }
+    },
+    {
+     "t": 0.75,
+     "rate": {
+      "state": "valid",
+      "value": 100
+     },
+     "expect": {
+      "value": 0
+     }
+    },
+    {
+     "t": 1.0,
+     "rate": {
+      "state": "valid",
+      "value": 100
+     },
+     "expect": {
+      "value": 25
+     }
+    }
+   ]
+  },
+  {
+   "id": "rate-unchecked-stops",
+   "description": "ungeprüfte Rate hält an",
+   "kind": "rate",
+   "base": 0,
+   "rate": {
+    "expr": "r"
+   },
+   "frames": [
+    {
+     "t": 0,
+     "rate": {
+      "state": "valid",
+      "value": 100
+     },
+     "expect": {
+      "value": 0
+     }
+    },
+    {
+     "t": 0.25,
+     "rate": {
+      "state": "valid",
+      "value": 100
+     },
+     "expect": {
+      "value": 25
+     }
+    },
+    {
+     "t": 0.5,
+     "rate": {
+      "state": "unchecked",
+      "value": 100
+     },
+     "expect": {
+      "value": 25,
+      "marker": "unchecked"
+     }
+    }
+   ]
+  },
+  {
+   "id": "smooth-first-value",
+   "description": "erster Wert ohne Einschwingen; danach exponentiell",
+   "kind": "binding",
+   "propertyKind": "number",
+   "base": 0,
+   "smoothing": {
+    "timeConstantS": 1
+   },
+   "frames": [
+    {
+     "t": 0,
+     "input": {
+      "state": "valid",
+      "value": 0
+     },
+     "expect": {
+      "value": 0
+     }
+    },
+    {
+     "t": 1,
+     "input": {
+      "state": "valid",
+      "value": 10
+     },
+     "expect": {
+      "value": 6.321205588285577
+     }
+    }
+   ]
+  },
+  {
+   "id": "smooth-angle-shortest",
+   "description": "Winkel über kürzesten Weg, ohne Wrap des Ergebnisses",
+   "kind": "binding",
+   "propertyKind": "angle",
+   "base": 0,
+   "smoothing": {
+    "timeConstantS": 1
+   },
+   "frames": [
+    {
+     "t": 0,
+     "input": {
+      "state": "valid",
+      "value": 350
+     },
+     "expect": {
+      "value": 350
+     }
+    },
+    {
+     "t": 1,
+     "input": {
+      "state": "valid",
+      "value": 10
+     },
+     "expect": {
+      "value": 362.64241117657116
+     }
+    }
+   ]
+  },
+  {
+   "id": "smooth-invalid-then-jump",
+   "description": "ungültig hält; Rückkehr übernimmt sofort (D14)",
+   "kind": "binding",
+   "propertyKind": "number",
+   "base": 0,
+   "smoothing": {
+    "timeConstantS": 1
+   },
+   "frames": [
+    {
+     "t": 0,
+     "input": {
+      "state": "valid",
+      "value": 0
+     },
+     "expect": {
+      "value": 0
+     }
+    },
+    {
+     "t": 1,
+     "input": {
+      "state": "invalid"
+     },
+     "expect": {
+      "value": 0,
+      "marker": "invalid"
+     }
+    },
+    {
+     "t": 2,
+     "input": {
+      "state": "valid",
+      "value": 50
+     },
+     "expect": {
+      "value": 50
+     }
+    }
+   ]
+  },
+  {
+   "id": "binding-never-valid",
+   "description": "ohne gültigen Wert: Grundwert mit Markierung",
+   "kind": "binding",
+   "propertyKind": "number",
+   "base": 7,
+   "frames": [
+    {
+     "t": 0,
+     "input": {
+      "state": "invalid"
+     },
+     "expect": {
+      "value": 7,
+      "marker": "invalid"
+     }
+    }
+   ]
+  }
+ ]
+}

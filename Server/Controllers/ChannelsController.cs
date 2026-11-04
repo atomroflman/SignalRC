@@ -23,6 +23,9 @@ public class ChannelsController : ControllerBase
     private readonly IHubContext<CarConnectionHub, IConnectionHubClient> _controlHub;
     private readonly AvailableTypesRegistry _availableTypes;
     private readonly CarAudioService _carAudio;
+    private readonly CarConnectionStore _connections;
+    private readonly VideoStreamReceiverService _streamService;
+    private readonly VideoStreamActivationService _streamActivation;
     private readonly ILogger<ChannelsController> _logger;
 
     public ChannelsController(
@@ -30,11 +33,17 @@ public class ChannelsController : ControllerBase
         IHubContext<CarConnectionHub, IConnectionHubClient> controlHub,
         AvailableTypesRegistry availableTypes,
         CarAudioService carAudio,
+        CarConnectionStore connections,
+        VideoStreamReceiverService streamService,
+        VideoStreamActivationService streamActivation,
         ILogger<ChannelsController> logger) : base(context)
     {
         _controlHub = controlHub;
         _availableTypes = availableTypes;
         _carAudio = carAudio;
+        _connections = connections;
+        _streamService = streamService;
+        _streamActivation = streamActivation;
         _logger = logger;
     }
 
@@ -293,6 +302,7 @@ public class ChannelsController : ControllerBase
 
         var sid = string.IsNullOrEmpty(body.StreamId) ? streamId : body.StreamId;
         var s = await _context.CarVideoStreams.FirstOrDefaultAsync(v => v.CarId == carId && v.StreamId == sid);
+        var wasEnabled = s?.Enabled ?? false;
         if (s == null)
         {
             s = new CarVideoStream
@@ -314,11 +324,11 @@ public class ChannelsController : ControllerBase
                     _context.CarVideoStreams.Remove(old);
             }
         }
+        var previousPort = s.Port;
         s.Name = body.Name ?? s.Name;
         s.Type = body.Type ?? s.Type;
         s.Location = body.Location;
         s.Enabled = body.Enabled;
-        s.IsActive = body.Enabled;
         if (body.Width.HasValue) s.Width = body.Width.Value;
         if (body.Height.HasValue) s.Height = body.Height.Value;
         if (body.Framerate.HasValue) s.Framerate = body.Framerate.Value;
@@ -339,9 +349,16 @@ public class ChannelsController : ControllerBase
         await _context.SaveChangesAsync();
         await UpdateCarChannelMapHashAsync(carId);
 
-        var mapItem = ToMapItem(s);
+        var mapItem = ChannelMapMapper.ToMapItem(s);
         await _controlHub.Clients.Group($"Car-{carId}").UpsertVideoStream(s.StreamId, mapItem);
         _logger.LogInformation("Upsert video stream {Stream} for car {CarId} by {User}", s.StreamId, carId, user.LoginName);
+
+        // The onboard applies everything else from the pushed item. Switching on/off or a new port
+        // also needs the Janus mountpoint (re)created or removed.
+        if (wasEnabled != s.Enabled || previousPort != s.Port)
+        {
+            await _streamActivation.ApplyAsync(s.Id);
+        }
         return Ok(mapItem);
     }
 
@@ -352,6 +369,8 @@ public class ChannelsController : ControllerBase
         if (user == null) return Unauthorized();
         var s = await _context.CarVideoStreams.FirstOrDefaultAsync(v => v.CarId == carId && v.StreamId == streamId);
         if (s == null) return NotFound();
+        // Before the row goes: tearing down the Janus mountpoint looks the stream up.
+        await _streamActivation.StopAsync(carId, s.StreamId, s.Id);
         _context.CarVideoStreams.Remove(s);
         await _context.SaveChangesAsync();
         await UpdateCarChannelMapHashAsync(carId);
@@ -387,6 +406,24 @@ public class ChannelsController : ControllerBase
         });
     }
 
+    // What the connected onboard made of the config: channels that failed to build or
+    // run, or run without some of their options. Null entries for an onboard build that
+    // does not report them yet.
+    [HttpGet("health")]
+    public async Task<IActionResult> GetHealth(int carId)
+    {
+        var user = await GetCurrentUserAsync();
+        if (user == null) return Unauthorized();
+        var connected = _connections.TryGetValue(carId.ToString(), out var info);
+        var report = connected ? info!.ChannelHealth : null;
+        return Ok(new
+        {
+            connected,
+            reportedAtUtc = report?.GeneratedAtUtc,
+            entries = report?.Entries,
+        });
+    }
+
     [HttpGet("available-control-types")]
     public async Task<IActionResult> GetAvailableControlTypes(int carId)
     {
@@ -401,6 +438,22 @@ public class ChannelsController : ControllerBase
         var user = await GetCurrentUserAsync();
         if (user == null) return Unauthorized();
         return Ok(_availableTypes.Get(carId)?.TelemetryTypes ?? Array.Empty<string>());
+    }
+
+    // Pin manager types and the options of every type, for the options editor. Empty until the
+    // vehicle has connected with a build that reports them.
+    [HttpGet("option-schemas")]
+    public async Task<IActionResult> GetOptionSchemas(int carId)
+    {
+        var user = await GetCurrentUserAsync();
+        if (user == null) return Unauthorized();
+        var types = _availableTypes.Get(carId);
+        return Ok(new
+        {
+            pinManagerTypes = types?.PinManagerTypes ?? Array.Empty<string>(),
+            schemas = types?.OptionSchemas ?? Array.Empty<ChannelTypeSchema>(),
+            boardModel = types?.BoardModel,
+        });
     }
 
     [HttpGet("available-audio-devices")]
@@ -457,14 +510,17 @@ public class ChannelsController : ControllerBase
         await _controlHub.Clients.Group($"Car-{carId}").ApplyChannelMap(map, hash);
     }
 
-    private static ControlChannelMapItem ToMapItem(CarChannel ch) => new()
+    // Public for tests: the pushed item must carry the server id.
+    public static ControlChannelMapItem ToMapItem(CarChannel ch) => new()
     {
         PinManager = ch.PinManager,
         Address = ch.Address,
         ControlType = ch.ControlType ?? string.Empty,
         MaxResendInterval = ch.MaxResendInterval,
         TestDisabled = ch.TestDisabled,
-        Options = DeserializeOptions(ch.OptionsJson),
+        Options = ChannelOptions.FromJson(ch.OptionsJson),
+        // Without it the onboard stores the channel without id and UpdateChannel(id) no longer finds it.
+        ServerId = ch.Id,
         ModifiedAt = ch.ModifiedAt,
     };
 
@@ -477,27 +533,13 @@ public class ChannelsController : ControllerBase
         DataType = t.DataType,
         Unit = t.Unit,
         Decimals = t.Decimals,
-        Options = DeserializeOptions(t.OptionsJson),
+        Options = ChannelOptions.FromJson(t.OptionsJson),
+        // Without it the onboard replaces its item and can no longer send the channel (TelemetryDelta uses ids).
+        ServerId = t.Id,
         ModifiedAt = t.ModifiedAt,
     };
 
-    private static VideoStreamMapItem ToMapItem(CarVideoStream s) => new()
-    {
-        StreamId = s.StreamId,
-        Name = s.Name,
-        Type = s.Type,
-        Location = s.Location,
-        Enabled = s.Enabled,
-        Width = s.Width,
-        Height = s.Height,
-        Framerate = s.Framerate,
-        Bitrate = s.Bitrate,
-        CameraDevice = s.CameraDevice,
-        RpiCamId = s.RpiCamId,
-        Options = DeserializeOptions(s.OptionsJson),
-        ModifiedAt = s.ModifiedAt,
-    };
-
+    // Browser DTOs keep JsonElement values; map items for the onboard use ChannelOptions.FromJson.
     private static Dictionary<string, object> DeserializeOptions(string? json)
     {
         if (string.IsNullOrEmpty(json)) return new();

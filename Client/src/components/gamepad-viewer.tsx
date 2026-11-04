@@ -13,10 +13,10 @@ export type GamepadUnifiedEvent = {
   gamepadId: string;
 };
 
-export default function GamepadViewer({ onUpdate, onRegisterInputChannelValue, hideFlowButtons }: { onUpdate?: (event: GamepadUnifiedEvent) => void, onRegisterInputChannelValue?: (input: { name: string, value: number, gamepadId: string }) => void, hideFlowButtons?: boolean }) {
+export default function GamepadViewer({ onUpdate, onRegisterInputChannelValue, hideFlowButtons, embedded }: { onUpdate?: (event: GamepadUnifiedEvent) => void, onRegisterInputChannelValue?: (input: { name: string, value: number, gamepadId: string }) => void, hideFlowButtons?: boolean, /** Inside a titled section: no own header. */ embedded?: boolean }) {
   const { messages } = useI18n();
   const [fps, setFps] = React.useState(15);
-  const [collapsed, setCollapsed] = React.useState(true);
+  const [collapsed, setCollapsed] = React.useState(!embedded);
   const [axesCollapsed, setAxesCollapsed] = useState<{ [gpId: string]: boolean }>({});
   const [buttonsCollapsed, setButtonsCollapsed] = useState<{ [gpId: string]: boolean }>({});
   const [calibCollapsed, setCalibCollapsed] = useState<{ [gpId: string]: boolean }>({});
@@ -48,8 +48,8 @@ export default function GamepadViewer({ onUpdate, onRegisterInputChannelValue, h
   }, [fps]);
 
   return (
-    <div className={collapsed ? "mt-2 bg-zinc-900 text-zinc-100 rounded-lg p-0 text-xs leading-tight" : "mt-2 bg-zinc-900 text-zinc-100 rounded-lg border border-zinc-800 text-xs leading-tight"}>
-      <button
+    <div className={embedded ? "text-zinc-100 text-xs leading-tight" : collapsed ? "mt-2 bg-zinc-900 text-zinc-100 rounded-lg p-0 text-xs leading-tight" : "mt-2 bg-zinc-900 text-zinc-100 rounded-lg border border-zinc-800 text-xs leading-tight"}>
+      {!embedded && <button
         className="mb-2 px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded text-xs border border-zinc-700 transition-colors duration-150 w-full flex items-center justify-between"
         onClick={() => setCollapsed(c => !c)}
         aria-label={collapsed ? messages.common.expandSection(messages.gamepadViewer.title) : messages.common.collapseSection(messages.gamepadViewer.title)}
@@ -57,7 +57,7 @@ export default function GamepadViewer({ onUpdate, onRegisterInputChannelValue, h
       >
         <span>{messages.gamepadViewer.title}</span>
         <span className="ml-2">{collapsed ? '▼' : '▲'}</span>
-      </button>
+      </button>}
       {!collapsed && (
         <>
           <div className="mt-2 mb-1 font-semibold text-zinc-200 text-xs">{messages.gamepadViewer.pollInterval}</div>
@@ -127,11 +127,11 @@ export default function GamepadViewer({ onUpdate, onRegisterInputChannelValue, h
                       const accuracy = typeof axis.accuracy === 'number' ? axis.accuracy : 2;
                       // Use .latestValue for live axis value
                       const value = typeof axis.latestValue === 'number' ? axis.latestValue : 0;
-                      const alreadyUsed = controlFlow.nodes.some(n => n.type === "input" && n.data?.gamepadId === gp.id && n.data?.name === `axis-${i}`);
+                      const alreadyUsed = controlFlow.nodes.some(n => n.type === "input" && n.representingId === axis.id);
                       return (
                         <GamepadAxisView
-                          key={i}
-                          index={i}
+                          key={axis.id}
+                          label={axis.name || `axis-${axis.channelId}`}
                           value={value}
                           accuracy={accuracy}
                           alreadyUsed={alreadyUsed}
@@ -152,11 +152,11 @@ export default function GamepadViewer({ onUpdate, onRegisterInputChannelValue, h
                     {gp.buttons.map((btn, i) => {
                       // Use .latestValue for live button value; pressed if > 0.5
                       const isPressed = typeof btn.latestValue === 'number' ? btn.latestValue > 0.5 : false;
-                      const alreadyUsed = controlFlow.nodes.some(n => n.type === "input" && n.data?.gamepadId === gp.id && n.data?.name === `button-${i}`);
+                      const alreadyUsed = controlFlow.nodes.some(n => n.type === "input" && n.representingId === btn.id);
                       return (
                         <GamepadButtonView
-                          key={i}
-                          index={i}
+                          key={btn.id}
+                          label={btn.name || `button-${btn.channelId}`}
                           isPressed={isPressed}
                           alreadyUsed={alreadyUsed}
                           hideFlowButtons={hideFlowButtons}

@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text.Json;
+using SignalRC.Onboard.Control;
 using SignalRC.Shared.Channels;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -9,7 +10,6 @@ namespace SignalRC.Onboard.Telemetry;
 
 public class TelemetryProbeTool
 {
-    private const string GroupKeyOption = "groupKey";
 
     private readonly ChannelMap _channelMap;
     private readonly IServiceProvider _services;
@@ -260,17 +260,11 @@ public class TelemetryProbeTool
         return table;
     }
 
-    private static string ResolveGroupKey(string channelName, TelemetryChannelMapItem definition)
+    private string ResolveGroupKey(string channelName, TelemetryChannelMapItem definition)
     {
-        if (definition.Options.TryGetValue(GroupKeyOption, out var raw) && raw != null)
-        {
-            var s = raw.ToString();
-            if (!string.IsNullOrWhiteSpace(s))
-            {
-                return s;
-            }
-        }
-        return channelName;
+        var key = ChannelOptionBinder.ResolveGroupKey(channelName, definition.Options, out var warning);
+        if (warning != null) _logger.LogWarning("{Warning}", warning);
+        return key;
     }
 
     private static bool TryResolveValue(string channelName, IReadOnlyDictionary<string, string> values, out string value)
@@ -310,51 +304,7 @@ public class TelemetryProbeTool
 
         reader.ReadIntervalTicks = Math.Max(1, definition.ReadIntervalTicks);
 
-        foreach (var option in definition.Options)
-        {
-            if (string.Equals(option.Key, GroupKeyOption, StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            var property = resolvedType.GetProperty(option.Key,
-                BindingFlags.IgnoreCase | BindingFlags.Public | BindingFlags.Instance);
-            if (property == null || !property.CanWrite)
-            {
-                _logger.LogWarning("Option {Option} not found or not writable on {Reader} for channel {Channel}",
-                    option.Key, resolvedType.Name, channelName);
-                continue;
-            }
-
-            try
-            {
-                if (option.Value is null)
-                {
-                    continue;
-                }
-
-                var targetType = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
-                object? converted;
-                if (option.Value is JsonElement jsonElement)
-                {
-                    converted = jsonElement.Deserialize(targetType);
-                }
-                else if (targetType.IsInstanceOfType(option.Value))
-                {
-                    converted = option.Value;
-                }
-                else
-                {
-                    converted = JsonSerializer.Deserialize(JsonSerializer.Serialize(option.Value), targetType);
-                }
-
-                property.SetValue(reader, converted);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to set option {Option} for channel {Channel}", option.Key, channelName);
-            }
-        }
+        ChannelOptionBinder.Apply(reader, definition.Options, _logger, $"channel {channelName}");
 
         return reader;
     }

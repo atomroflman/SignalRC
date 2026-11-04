@@ -1,5 +1,7 @@
 using CSharpVitamins;
 using SignalRC.Onboard.Data;
+using SignalRC.Onboard.Hardware;
+using SignalRC.Onboard.Services;
 using SignalRC.Onboard.Telemetry;
 using SignalRC.Shared;
 using SignalRC.Shared.Channels;
@@ -8,10 +10,12 @@ using SignalRC.Server.Hubs;
 using SignalRC.Shared.HubClients;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using TypedSignalR.Client;
 using SignalRC.Onboard;
 using System.Diagnostics;
+using System.Text.Json;
 
 namespace SignalRC.Onboard.Control;
 
@@ -27,6 +31,8 @@ public class ControlService : IControlClient, IHubConnectionObserver
     public ServerCarConfigurationService CarConfigurationService { get; }
     public OnboardChannelStore ChannelStore { get; }
     public ChannelMap ChannelMap { get; }
+    public IMediaMtxConfigurator MediaMtx { get; }
+    public ChannelHealthService Health { get; }
     public Process BashProcess { get; } = new Process();
 
     private string? _sessionId;
@@ -41,14 +47,43 @@ public class ControlService : IControlClient, IHubConnectionObserver
     public bool IsActiveSession(string? sessionId) => _sessionId != null && _sessionId == sessionId;
 
     /// <summary>
+    /// A driver holds the session and was active recently, by the same rule that keeps
+    /// another driver from taking it over. The automatic update waits while this is true.
+    /// </summary>
+    public bool HasLiveSession => _sessionId != null && _lastControlUpdate.AddSeconds(30) > DateTime.Now;
+
+    // Set while a self-update installs and restarts: controls stay neutral, no new session.
+    private volatile bool _lockedForUpdate;
+
+    public bool IsLockedForUpdate => _lockedForUpdate;
+
+    /// <summary>Puts all controls to neutral and ignores further control input until the restart.</summary>
+    public void LockForUpdate()
+    {
+        _lockedForUpdate = true;
+        Control.ReleaseControl();
+        Logger.LogWarning("Controls locked for the onboard update.");
+    }
+
+    /// <summary>The update failed before switching releases: controls work again, the driver has to take over anew.</summary>
+    public async Task UnlockAfterFailedUpdateAsync()
+    {
+        _lockedForUpdate = false;
+        if (_sessionId != null)
+            await ReleaseCarControl(_sessionId);
+        Logger.LogWarning("Controls unlocked after the failed onboard update.");
+    }
+
+    /// <summary>
     /// Counts non-channel activity (e.g. push-to-talk) as driver activity so the
     /// session isn't considered idle and taken over while the driver is talking.
     /// </summary>
     public void MarkSessionActivity() => _lastControlUpdate = DateTime.Now;
     private IConnectionHubServer _server = null!;
 
-    public ControlService(ILogger<ControlService> logger, TelemetryService telemetryService, ControlExecutionService control, IServiceProvider serviceProvider, IConfiguration configuration, ServerConnectionService serverConnectionService, SshKeyService sshKeyService, ServerCarConfigurationService carConfigurationService, OnboardChannelStore channelStore, ChannelMap channelMap)
+    public ControlService(ILogger<ControlService> logger, TelemetryService telemetryService, ControlExecutionService control, IServiceProvider serviceProvider, IConfiguration configuration, ServerConnectionService serverConnectionService, SshKeyService sshKeyService, ServerCarConfigurationService carConfigurationService, OnboardChannelStore channelStore, ChannelMap channelMap, IMediaMtxConfigurator mediaMtx, ChannelHealthService health)
     {
+        Health = health;
         Logger = logger;
         TelemetryService = telemetryService;
         Control = control;
@@ -59,6 +94,7 @@ public class ControlService : IControlClient, IHubConnectionObserver
         CarConfigurationService = carConfigurationService;
         ChannelStore = channelStore;
         ChannelMap = channelMap;
+        MediaMtx = mediaMtx;
         BashProcess.StartInfo.FileName = "/bin/bash";
         BashProcess.StartInfo.RedirectStandardInput = true;
         BashProcess.StartInfo.RedirectStandardOutput = true;
@@ -137,6 +173,10 @@ public class ControlService : IControlClient, IHubConnectionObserver
     
     public async Task<string?> AquireCarControl(SshAuthenticationRequest authRequest)
     {
+        if (_lockedForUpdate) {
+            Logger.LogError("Cannot aquire control: the onboard is updating.");
+            return null;
+        }
         if (_sessionId != null && _lastControlUpdate.AddSeconds(30) > DateTime.Now) {
             Logger.LogError("Cannot aquire control: Already connected to driver session.");
             return null;
@@ -179,7 +219,7 @@ public class ControlService : IControlClient, IHubConnectionObserver
 
     public Task UpdateChannel(string sessionId, string channelId, decimal value)
     {
-        if (_sessionId != sessionId)
+        if (_sessionId != sessionId || _lockedForUpdate)
             return Task.CompletedTask;
         Logger.LogDebug($"Update channel {channelId} to {value}");
         Control.SetControl(channelId, value);
@@ -317,9 +357,11 @@ public class ControlService : IControlClient, IHubConnectionObserver
     public async Task UpsertControlChannel(string dictKey, ControlChannelMapItem item)
     {
         if (string.IsNullOrEmpty(dictKey) || item == null) return;
+        item.Options = ChannelOptions.Normalize(item.Options);
         ChannelMap.ControlChannels[dictKey] = item;
         await ChannelStore.UpsertControlChannelAsync(dictKey, item);
         Logger.LogInformation("UpsertControlChannel {Key}", dictKey);
+        Control.Reload(dictKey);
     }
 
     public async Task DeleteControlChannel(string dictKey)
@@ -329,15 +371,18 @@ public class ControlService : IControlClient, IHubConnectionObserver
         {
             await ChannelStore.DeleteControlChannelAsync(dictKey);
             Logger.LogInformation("DeleteControlChannel {Key}", dictKey);
+            Control.Reload(dictKey);
         }
     }
 
     public async Task UpsertTelemetryChannel(string dictKey, TelemetryChannelMapItem item)
     {
         if (string.IsNullOrEmpty(dictKey) || item == null) return;
+        item.Options = ChannelOptions.Normalize(item.Options);
         ChannelMap.TelemetryChannels[dictKey] = item;
         await ChannelStore.UpsertTelemetryChannelAsync(dictKey, item);
         Logger.LogInformation("UpsertTelemetryChannel {Key}", dictKey);
+        TelemetryService.RequestReload(dictKey);
     }
 
     public async Task DeleteTelemetryChannel(string dictKey)
@@ -347,15 +392,18 @@ public class ControlService : IControlClient, IHubConnectionObserver
         {
             await ChannelStore.DeleteTelemetryChannelAsync(dictKey);
             Logger.LogInformation("DeleteTelemetryChannel {Key}", dictKey);
+            TelemetryService.RequestReload(dictKey);
         }
     }
 
     public async Task UpsertVideoStream(string dictKey, VideoStreamMapItem item)
     {
         if (string.IsNullOrEmpty(dictKey) || item == null) return;
+        item.Options = ChannelOptions.Normalize(item.Options);
         ChannelMap.VideoStreams[dictKey] = item;
         await ChannelStore.UpsertVideoStreamAsync(dictKey, item);
         Logger.LogInformation("UpsertVideoStream {Key}", dictKey);
+        await RegenerateVideoAsync();
     }
 
     public async Task DeleteVideoStream(string dictKey)
@@ -365,6 +413,8 @@ public class ControlService : IControlClient, IHubConnectionObserver
         {
             await ChannelStore.DeleteVideoStreamAsync(dictKey);
             Logger.LogInformation("DeleteVideoStream {Key}", dictKey);
+            Health.Ok(ChannelTypeSchema.Video, dictKey);
+            await RegenerateVideoAsync();
         }
     }
 
@@ -374,6 +424,15 @@ public class ControlService : IControlClient, IHubConnectionObserver
     public async Task ApplyChannelMap(ChannelMap channelMap, string channelMapHash)
     {
         if (channelMap == null) return;
+        ChannelOptions.Normalize(channelMap);
+
+        // Only what changed is rebuilt: OpenCarConnection both returns and pushes the
+        // map, and an unchanged channel must not be released while it is driven.
+        var changedPinManagers = Changed(ChannelMap.PinManagers, channelMap.PinManagers ?? new());
+        var changedControls = Changed(ChannelMap.ControlChannels, channelMap.ControlChannels ?? new());
+        var changedTelemetry = Changed(ChannelMap.TelemetryChannels, channelMap.TelemetryChannels ?? new());
+        foreach (var gone in ChannelMap.VideoStreams.Keys.Except(channelMap.VideoStreams?.Keys ?? Enumerable.Empty<string>()).ToList())
+            Health.Ok(ChannelTypeSchema.Video, gone);
 
         ChannelMap.PinManagers.Clear();
         foreach (var kv in channelMap?.PinManagers ?? new Dictionary<string, PinManagerMapItem>())
@@ -393,11 +452,64 @@ public class ControlService : IControlClient, IHubConnectionObserver
 
         await ChannelStore.ReplaceAllAsync(ChannelMap);
 
+        if (changedPinManagers.Count > 0)
+        {
+            // Controls and readers hold their pin manager: release all of them, replace
+            // the changed managers, then build everything against the new ones.
+            var factory = ServiceProvider.GetRequiredService<IModuleManagerFactory>();
+            Control.ReloadAll(() =>
+            {
+                foreach (var name in changedPinManagers)
+                {
+                    factory.Invalidate(name);
+                    Health.Ok(ChannelTypeSchema.PinManager, name);
+                }
+                TelemetryService.RequestReloadAll();
+            });
+        }
+        else
+        {
+            foreach (var name in changedControls)
+                Control.Reload(name);
+            foreach (var name in changedTelemetry)
+                TelemetryService.RequestReload(name);
+        }
+        await RegenerateVideoAsync();
+
         Logger.LogInformation("Applied server-pushed channel map (hash {Hash}) with {Control} control, {Telemetry} telemetry, {Video} video streams, {Pin} pin managers",
             channelMapHash,
             ChannelMap.ControlChannels.Count,
             ChannelMap.TelemetryChannels.Count,
             ChannelMap.VideoStreams.Count,
             ChannelMap.PinManagers.Count);
+    }
+
+    /// <summary>Keys added, removed or changed between the current and the pushed map.</summary>
+    private static List<string> Changed<T>(IReadOnlyDictionary<string, T> current, IReadOnlyDictionary<string, T> next)
+    {
+        return current.Keys.Union(next.Keys)
+            .Where(key => !current.TryGetValue(key, out var a) || !next.TryGetValue(key, out var b)
+                || JsonSerializer.Serialize(a) != JsonSerializer.Serialize(b))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Rewrites the MediaMTX config. A failure is reported on every stream, since the
+    /// config is written for all of them at once.
+    /// </summary>
+    private async Task RegenerateVideoAsync()
+    {
+        try
+        {
+            await MediaMtx.GenerateFromChannelMapAsync(ChannelMap);
+            foreach (var key in ChannelMap.VideoStreams.Keys.ToList())
+                Health.Ok(ChannelTypeSchema.Video, key);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Writing the MediaMTX config failed.");
+            foreach (var key in ChannelMap.VideoStreams.Keys.ToList())
+                Health.Error(ChannelTypeSchema.Video, key, $"MediaMTX config: {ChannelHealthService.Describe(ex)}");
+        }
     }
 }

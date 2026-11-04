@@ -1,7 +1,10 @@
 'use client';
 
-import { JSX, useEffect, useMemo, useState } from 'react';
-import VideoStream from './video-stream';
+import { JSX, useCallback, useEffect, useMemo, useState } from 'react';
+import VideoStream, { type VideoHudInput } from './video-stream';
+import { PublishedOverlay, type PublishedState } from './overlay/integration/published-overlay';
+import { hudConfigFor } from './overlay/integration/hud-config';
+import { isHudHidden, setHudHidden } from './overlay/integration/hud-visibility';
 import type { VideoStreamInfo } from '@/types/video-stream';
 import { useCarUiStore } from './car-ui-store';
 import { useI18n } from '@/i18n/provider';
@@ -38,6 +41,8 @@ export default function CarVideoPanel({ carId }: CarVideoPanelProps): JSX.Elemen
   const [documentVisible, setDocumentVisible] = useState(true);
   const [reconnectVersion, setReconnectVersion] = useState(0);
   const connectCarUi = useCarUiStore(state => state.connect);
+  const [published, setPublished] = useState<PublishedState | undefined>(undefined);
+  const [hudHidden, setHudHiddenState] = useState(false);
 
   useEffect(() => {
     void connectCarUi();
@@ -186,6 +191,52 @@ export default function CarVideoPanel({ carId }: CarVideoPanelProps): JSX.Elemen
     [selectedStreamId, streams],
   );
 
+  // Published HUD (AP13): events on the panel's hub connection; a new
+  // publication swaps the HUD only, the video element and Janus stay.
+  useEffect(() => {
+    if (!carId || !videoConnection) {
+      setPublished(undefined);
+      return;
+    }
+    const overlay = new PublishedOverlay({ carId, hub: videoConnection });
+    setPublished(overlay.state);
+    const unsubscribe = overlay.subscribe(() => setPublished(overlay.state));
+    return () => {
+      unsubscribe();
+      overlay.dispose();
+    };
+  }, [carId, videoConnection]);
+
+  useEffect(() => {
+    setHudHiddenState(carId ? isHudHidden(carId) : false);
+  }, [carId]);
+
+  const changeHudHidden = useCallback((hidden: boolean) => {
+    if (!carId) return;
+    setHudHidden(carId, hidden);
+    setHudHiddenState(hidden);
+  }, [carId]);
+
+  const hudConfig = useMemo(
+    () => hudConfigFor(published?.publication, selectedStream?.streamId),
+    [published?.publication, selectedStream?.streamId],
+  );
+
+  const hud = useMemo<VideoHudInput | undefined>(() => {
+    if (!carId || !published) return undefined;
+    const problem = published.problem
+      ? messages.overlay.hud.problem[published.problem] + (published.publication ? ` ${messages.overlay.hud.keepsRunning}` : '')
+      : undefined;
+    return {
+      carId,
+      config: hudConfig,
+      assets: published.publication?.assets ?? {},
+      hidden: hudHidden,
+      onHiddenChange: changeHudHidden,
+      problem,
+    };
+  }, [carId, published, hudConfig, hudHidden, changeHudHidden, messages]);
+
   // NOTE: Streams are no longer activated/deactivated automatically when the
   // panel mounts or the selection changes. Use the Video Settings panel to
   // start/stop a stream manually.
@@ -273,6 +324,7 @@ export default function CarVideoPanel({ carId }: CarVideoPanelProps): JSX.Elemen
             key={selectedStream.serverId}
             streamId={selectedStream.serverId}
             streamName={selectedStream.name}
+            hud={hud}
           />
         </div>
       )}

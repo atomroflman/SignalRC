@@ -65,8 +65,12 @@ public class VideoStreamReceiverService
             Logger.LogInformation("Stream '{StreamId}' is already active, recreating Janus mountpoint", stream.StreamId);
         }
         var protocol = stream.Protocol;
-        var port = (stream.Port > 0 && IsPortAvailable(stream.Port, stream.Protocol)) ? stream.Port : FindFreePort(stream.Protocol);
-        if (port == 0)
+        // Only the TCP relay listens on Port. For UDP Janus itself holds the port, so the availability
+        // check would fail on every restart and move the stream away from its mountpoint.
+        var port = stream.Protocol == StreamProtocol.UDP || (stream.Port > 0 && IsPortAvailable(stream.Port, stream.Protocol))
+            ? stream.Port
+            : FindFreePort(stream.Protocol);
+        if (port == 0 && stream.Protocol == StreamProtocol.TCP)
         {
             Logger.LogError($"No free port available for {protocol} stream");
             throw new InvalidOperationException("No free port available");
@@ -213,11 +217,18 @@ public class VideoStreamReceiverService
         }, Logger, $"Attaching streaming plugin for {label}: ");
         var handleId = pluginSession!.Data.Id;
 
-        // If Janus already knows a mountpoint with our id, destroy it so we can recreate it
-        // cleanly bound to the current session/handle.
+        // Destroy a mountpoint with our id so we can recreate it cleanly bound to the current
+        // session/handle, and any whose stream is gone from the database: replacing a car's channel
+        // map (template apply) recreates its streams under new ids, and the orphan would keep holding
+        // the Janus port the new mountpoint needs. Car audio mountpoints have no stream row and stay.
         try
         {
-            var listResponse = await client.PostJsonAsync<JanusMessageRequest<JanusMessageBody>, JanusPluginMessageResponse<JanusPluginMessageListResponseBody>>(
+            var knownIds = (await _serviceProvider.CreateScope().ServiceProvider
+                    .GetRequiredService<SignalRCContext>()
+                    .CarVideoStreams.Select(s => s.Id).ToListAsync())
+                .Select(id => (uint)id)
+                .ToHashSet();
+            var listResponse = await client.PostJsonAsync<JanusMessageRequest<JanusMessageBody>, JanusPluginMessageResponse<JanusPluginData<JanusPluginMessageListResponseBody>>>(
                 $"janus/{sessionId}/{handleId}",
                 new JanusMessageRequest<JanusMessageBody>()
                 {
@@ -231,8 +242,9 @@ public class VideoStreamReceiverService
                 Logger,
                 $"Checking existing mountpoints for {label}: ");
 
-            var stale = listResponse?.Body?.Streams?.FirstOrDefault(s => s.Id == body.Id);
-            if (stale != null)
+            var staleMountpoints = (listResponse?.Body?.Data?.Streams ?? new())
+                .Where(s => s.Id == body.Id || (s.Id < SignalRC.Server.Services.CarAudioService.MountpointIdOffset && !knownIds.Contains(s.Id)));
+            foreach (var stale in staleMountpoints)
             {
                 Logger.LogInformation(
                     $"Janus has stale mountpoint with id {stale.Id} (description='{stale.Description}'); destroying it before creating {label}");
@@ -258,7 +270,7 @@ public class VideoStreamReceiverService
         }
 
         // 3) Create RTP mountpoint
-        await client.PostJsonAsync<JanusMessageRequest<JanusCreateStreamRequestBody>, JanusPluginMessageResponse<object>>(
+        var created = await client.PostJsonAsync<JanusMessageRequest<JanusCreateStreamRequestBody>, JanusPluginMessageResponse<JanusPluginData<JanusPluginResult>>>(
             $"janus/{sessionId}/{handleId}",
             new JanusMessageRequest<JanusCreateStreamRequestBody>()
             {
@@ -268,6 +280,10 @@ public class VideoStreamReceiverService
             }, 
             Logger, 
             $"Creating Janus RTP endpoint for {label}: ");
+        var result = created?.Body?.Data;
+        if (result?.ErrorCode != null)
+            throw new InvalidOperationException(
+                $"Janus refused to create mountpoint {body.Id} for {label}: {result.ErrorCode} {result.Error}");
         Logger.LogDebug($"Created Janus mountpoint {body.Id} for {label} (session {sessionId}, handle {handleId})");
     }
 
@@ -512,15 +528,14 @@ public class VideoStreamReceiverService
             var stream = await ctx
                 .CarVideoStreams
                 .FirstOrDefaultAsync(s => s.Id == streamId);
-            if (stream == null)
+            // A deleted stream still has its mountpoint and relay to tear down.
+            if (stream != null)
             {
-                Logger.LogError($"Stream with ID {streamId} not found in database");
-                return;
+                stream.IsActive = false;
+                await ctx.SaveChangesAsync();
             }
-            stream.IsActive = false;
-            await ctx.SaveChangesAsync();
 
-            // Tear down the Janus mountpoint so the next ActivateStream can create it fresh.
+            // Tear down the Janus mountpoint so the next start can create it fresh.
             // We do this on a brand-new session/handle: the original one is gone after a
             // server restart, and even when the server is still alive the streaming plugin
             // accepts "destroy" on any handle attached to the same plugin.

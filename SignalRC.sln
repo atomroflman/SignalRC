@@ -6,6 +6,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SignalRC.Server", "Server\S
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SignalRC.Shared", "Shared\SignalRC.Shared.csproj", "{B7DE295C-94C6-4B1D-ADA4-B54BA8FF9991}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SignalRC.Overlay.Tests", "Tests\SignalRC.Overlay.Tests\SignalRC.Overlay.Tests.csproj", "{AE06A650-CD31-4493-B7DD-E1567DB360EF}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -24,5 +26,9 @@ Global
 		{B7DE295C-94C6-4B1D-ADA4-B54BA8FF9991}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B7DE295C-94C6-4B1D-ADA4-B54BA8FF9991}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B7DE295C-94C6-4B1D-ADA4-B54BA8FF9991}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AE06A650-CD31-4493-B7DD-E1567DB360EF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AE06A650-CD31-4493-B7DD-E1567DB360EF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AE06A650-CD31-4493-B7DD-E1567DB360EF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AE06A650-CD31-4493-B7DD-E1567DB360EF}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

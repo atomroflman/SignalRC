@@ -1,0 +1,274 @@
+# Overlay-Persistenz und API v1
+
+Status: **freigegeben** (AP00, 2026-11-01), Vertrag v1.1 (Autosave als Differenz und Kompression, D63). Grundlage:
+Produktplan (Berechtigungen, Entwurf, Veröffentlichung), D19, D25, D33–D35,
+D47, D53–D55. Zuständig: AP02 (Server), AP09 (Client-Adapter), AP13 (Verdrahtung).
+
+## 1. Berechtigungen
+
+| Rolle | Prüfung | Darf |
+| --- | --- | --- |
+| Betrachter | `CanViewCarAsync(carId)`; heute wie Video: jeder Client | veröffentlichten Stand, dessen Assets, Ereignisse lesen |
+| Verwalter | `RequireOverlayAdminAsync(carId)` | Entwurf, Verlauf, Speichern, Veröffentlichen, Wiederherstellen, Asset-Upload, LiDAR-Einrichtung |
+
+Verwalter ist genau der Sitzungsbenutzer, der die Steuerung des Fahrzeugs
+aktuell hält (D73). Die Webseite hat keine Benutzerkonten: Nutzer sind anonyme
+Sitzungsbenutzer (Cookie), den Fahrzeugzugang weist die SSH-Key-Challenge bei
+`AquireCarControl` nach. Geprüft wird live im `CarConnectionStore`:
+
+1. Sitzungsbenutzer der Anfrage vorhanden (sonst `OVL_API_SESSION_REQUIRED`),
+2. Onboard des Fahrzeugs verbunden und Steuersitzung aktiv,
+3. angekündigter Fahrer (`CarConnectionInfo.DriverId`, gesetzt bei
+   erfolgreichem `AquireCarControl`, geleert bei `ReleaseCarControl`, ersetzt
+   bei Übernahme, verworfen mit der Onboard-Verbindung) ist dieser Benutzer.
+
+Kein Login (`LoginName`) und kein `UserSetup` nötig. Fahrzeug offline oder
+Steuerung freigegeben/übernommen: `OVL_API_NOT_DRIVER`; der Editor bearbeitet
+dann nur lokal und speichert, sobald die Steuerung zurück ist.
+
+Beide Prüfungen liegen im gemeinsamen Dienst `Server/Overlay/OverlayAccess.cs`.
+Hub und Controller rufen ihn auf, ebenso die Stream-Freigabe
+`EnsureDriverCanManageStreamAsync`. Jede Verwaltungsanfrage wird einzeln geprüft
+(keine Sitzungs-Caches).
+
+## 2. Datenmodell (EF Core, PostgreSQL; nur AP02 schreibt Migrationen)
+
+| Entität | Felder (Auszug) | Regeln |
+| --- | --- | --- |
+| `OverlayDraft` | `CarId` (unique), `Revision` (long), `DocumentJson` (text), `UpdatedAt`, `UpdatedByUserId` | genau ein Entwurf je Fahrzeug |
+| `OverlayDraftRevision` | `CarId`, `Revision`, `DocumentJson`, `CreatedAt`, `UserId` | die letzten 50 je Fahrzeug (D35) |
+| `OverlayPublication` | `Id`, `CarId`, `Number` (fortlaufend je Fahrzeug), `DocumentJson`, `SchemaVersion`, `PublishedAt`, `PublishedByUserId`, `Note` (≤ 500, D54), `SourceDraftRevision` | unveränderlich, unbegrenzt |
+| `OverlayPublicationAsset` | `PublicationId`, `AssetId` | Asset-Menge der Veröffentlichung |
+| `OverlayAsset` | `CarId`, `AssetId` (unique je Fahrzeug), `Svg` (text), `MetadataJson`, `Status` (`pending`/`active`), `CreatedAt`, `CreatedByUserId` | unveränderlich; Upload-Duplikate liefern das bestehende Asset |
+
+Dokumente werden als `text` gespeichert, nicht als `jsonb`: `jsonb` ordnet
+Schlüssel um, der Client vergleicht aber gegen das exakt gespeicherte Dokument
+(PATCH, D63).
+
+Der aktuell veröffentlichte Stand ist die `OverlayPublication` mit der höchsten
+`Number`.
+
+Asset-Aufräumen (täglicher Job und beim Speichern): `pending` älter als 24 h und
+nirgends referenziert, sowie `active` ohne Referenz aus dem Entwurf, den
+gehaltenen Revisionen oder einer Veröffentlichung, werden gelöscht.
+
+## 3. REST (`[Route("api/cars/{carId:int}/overlay")]`, Stil wie `ChannelsController`)
+
+| Methode | Pfad | Rolle | Ergebnis |
+| --- | --- | --- | --- |
+| GET | `published` | Betrachter | `200 { publicationId, number, publishedAt, document, assets }` oder `204`; `assets`: `{ [assetId]: metadata }` der Asset-Menge der Veröffentlichung (siehe unten) |
+| GET | `assets/{assetId}` | Betrachter* | `200 image/svg+xml` |
+| GET | `draft` | Verwalter | `200 { revision, document, updatedAt, updatedBy, assets }`; ohne Entwurf `revision: 0`, Startdokument (D22) und leeres `assets`. `assets`: `{ [assetId]: metadata }` der im Entwurf referenzierten Assets dieses Fahrzeugs (wie bei `published`) |
+| PUT | `draft` | Verwalter | Header `If-Match: "<revision>"`, Body Dokument → `200 { revision }` |
+| PATCH | `draft` | Verwalter | Header `If-Match: "<revision>"`, Body `application/json-patch+json` (RFC 6902) → `200 { revision }` |
+| GET | `publications` | Verwalter | `200 [{ id, number, publishedAt, publishedBy, note }]`, neueste zuerst |
+| GET | `publications/{id}` | Verwalter | `200 { …, document, assets }` (wie `published`) |
+| POST | `publications` | Verwalter | `{ baseRevision, note? }` → `201 { publicationId, number, warnings }` |
+| POST | `draft/restore` | Verwalter | `{ publicationId, baseRevision }` → `200 { revision }` |
+| POST | `assets` | Verwalter | `multipart/form-data` (`file`) → `200 { assetId, metadata, svg, report }` |
+| GET | `dependencies?channel=<name>` | Verwalter | `200 { draft: [{ kind, location }], published: [{ kind, location }] }` für Warnungen der Kanalverwaltung. `kind`: `telemetry` (`tel()`, LiDAR-Quelle, Fristüberschreibung) oder `output` (`out()`); `location` wie bei Diagnosen. Deaktivierte Teile zählen mit; historische Veröffentlichungen nicht. |
+| GET | `sources` | Betrachter | `200 { telemetry: [{ id, channelName, dataType, unit, decimals, readIntervalTicks, zoneLimitsMm }], outputs: [{ id, channelName }] }`, sonst `404`. Quellkatalog für das Live-HUD (D69, D70): ohne Login und ohne `UserSetup`, ohne personenbezogene Felder. `dataType` wie in `GET /api/car/{id}/telemetry` (Enum-Name klein); `zoneLimitsMm` nur, wenn in den Kanaloptionen fünf positive Werte stehen, sonst `null`. `outputs` ordnet die `CarChannel.Id` aus `Ctl` den `out()`-Namen zu. |
+| POST | `lidar-grid-source` | Verwalter | richtet den LiDAR-Rasterkanal ein (LiDAR-Vertrag §7): `200 { created: bool }`; Umsetzung in AP04 |
+| GET | `telemetry-debug` | Verwalter | Diagnose des Telemetrie-Relays (Telemetrie-Vertrag §5 „Diagnose“): `200 { carId, onboardConnected, epoch, seq, lastMessageAgoMs, acceptedDeltas, droppedOldSeq, demand, demandSentAgoMs, interestedConnections, legacyClients, channels, traffic }`, `Cache-Control: no-store`; ohne Sitzung `401`, ohne Steuerung `403` (D73), unbekanntes Fahrzeug `404` (siehe unten) |
+
+**Telemetrie-Diagnose (`GET telemetry-debug`):** zeigt, was der Server vom
+Fahrzeug hat, damit sich „kommt nicht am Server an“ von „kommt nicht im Client
+an“ trennen lässt. Nur lesend; der Aufruf ändert weder Bedarf noch Interessen.
+
+- `onboardConnected`: Das Relay kennt eine Onboard-Verbindung des Fahrzeugs.
+  `epoch`/`seq`: Epoche und letzte angenommene `seq` des Onboards (`seq: null`
+  vor dem ersten Delta). `lastMessageAgoMs`: Zeit seit der letzten
+  Onboard-Nachricht (Delta, auch verworfenes, oder Altpfad-Wert), sonst `null`.
+- `acceptedDeltas`, `droppedOldSeq`: Zähler seit der letzten Onboard-Verbindung.
+- `demand`: zuletzt per `SetTelemetryDemand` gemeldete Kanal-IDs,
+  `demandSentAgoMs` Zeit seit dieser Meldung. `interestedConnections`: Anzahl
+  Verbindungen mit Interesse, `legacyClients`: Anzahl Altclients. Keine
+  Verbindungs-IDs, keine Benutzer.
+- `channels`: je Kanal (Vereinigung aus `CarTelemetry` und Relay-Cache)
+  `{ id, name, dataType, value, valueLength, state, ageMs, receivedAgoMs,
+  inDemand, interested, changes, touches, lidar }`. `value` ist auf 64 Zeichen
+  gekürzt (mit `…`), `valueLength` die volle Länge; `state` als Name
+  (`Valid`, `Unchecked`, `Stale`, `Error`, `NoData`); `ageMs` = Messalter plus
+  Verweildauer im Server; `interested` = Anzahl Verbindungen, die den Kanal
+  wollen; `changes`/`touches` = empfangene Änderungen/Bestätigungen. Ohne Wert
+  im Cache sind `value`, `state`, `ageMs` `null`.
+- `lidar` nur bei `dataType: "LidarGrid"` mit Wert:
+  `{ length, complete, encoding: "dense"|"sparse", occupied, error }`;
+  `occupied` = belegte Felder (≠ `0xFFFF`) von 480, `error` die erste verletzte
+  Regel des LiDAR-Vertrags §4/§5 (`format`, `base64`, `length`, `index`) oder
+  `null`. Der Client dekodiert mit denselben Regeln.
+- `traffic`: Datenraten des Fahrzeugs (Telemetrie-Vertrag §5 „Datenrate“):
+  `{ windowMs, measuring, measuringSinceAgoMs, incoming, outgoing, clients,
+  incomingMeasure, outgoingMeasure, compression }`. `incoming` (Onboard →
+  Server, `UpdateTelemetrySamples`) und `outgoing` (Server → alle Browser,
+  `Tlm`) jeweils `{ perSecond, bytesPerSecond, realBytesPerSecond, total:
+  { messages, measuredMessages, bytes, realBytes } }`; Raten über die letzten
+  5 s, Summen seit dem ersten Kontakt des Relays mit dem Fahrzeug (Bytes nur
+  der gemessenen Nachrichten). `bytesPerSecond`/`realBytesPerSecond` sind
+  `null`, solange im Fenster nichts gemessen wurde. `clients`: je
+  Browser-Verbindung anonym `{ perSecond, bytesPerSecond, messages, bytes }`,
+  meiste Nachrichten zuerst, ohne Kennung. `incomingMeasure`
+  `"messagepack-reserialized"`, `outgoingMeasure` `"json-reserialized"`,
+  `compression` `"none"`. Der Abruf schaltet die Byte-Messung für 30 s ein.
+
+**Asset-Metadaten in Veröffentlichungen:** `assets` enthält für jedes Asset der
+Veröffentlichung die gespeicherten normalisierten Metadaten (`OverlayAsset.MetadataJson`,
+SVG-Vertrag §4: `width`, `height`, `parts` mit `bbox`). `GET assets/{assetId}` liefert
+nur das SVG; ohne die Metadaten könnten Betrachter den Pivot `"center"` von Teilen
+nicht bestimmen. Fehlende oder unlesbare Metadaten werden ausgelassen; der Client
+verwendet dann die `viewBox` des SVG.
+
+**Asset-Metadaten im Entwurf:** `GET draft` liefert `assets` in derselben Form für
+die im Entwurf (Standard und Varianten) referenzierten Assets dieses Fahrzeugs;
+fehlende, fremde oder unlesbare Einträge werden ausgelassen. Der Editor lädt damit
+nur noch die SVG-Texte über `GET assets/{assetId}`; neu hochgeladene Assets bringen
+ihre Metadaten mit der Upload-Antwort mit.
+
+\* Ein Asset ist für Betrachter nur lesbar, wenn eine Veröffentlichung des
+Fahrzeugs es referenziert; Verwalter lesen jedes Asset des Fahrzeugs. Asset-Antworten:
+
+- `Cache-Control: public, max-age=31536000, immutable`,
+- `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'`,
+- `X-Content-Type-Options: nosniff`.
+
+**Kompression (D63):** Der Server komprimiert Antworten dieser Endpunkte mit
+Brotli oder gzip (`application/json`, `application/problem+json`, `image/svg+xml`).
+Anfragen mit `Content-Encoding: gzip` werden für `PUT`/`PATCH draft` und den
+Asset-Upload angenommen. Websocket-Nachrichten bleiben unkomprimiert; dort sorgt
+das kompakte Format des Telemetrievertrags für kleine Mengen.
+
+**Speichern (PUT draft):**
+
+1. Prüfung der Verwalterrolle.
+2. Größe ≤ 2 MB (sonst `413`).
+3. Schema und `structure`-Diagnosen. `publish`-Diagnosen sind erlaubt
+   (Produktplan).
+4. `If-Match` = aktuelle Revision, sonst `409`.
+5. Speichern mit `Revision + 1`, Revisionshistorie fortschreiben, Ereignis senden.
+
+Ein fehlendes `If-Match` ist `428`.
+
+**Speichern als Differenz (PATCH draft, D63):**
+
+- Der Client sendet nur die JSON-Patch-Operationen zwischen dem zuletzt
+  bestätigten Stand und dem aktuellen Entwurf. Erlaubt sind `add`, `remove`
+  und `replace`; Arrays werden als Ganzes ersetzt.
+- Der Server wendet sie auf das Dokument der Revision `If-Match` an und prüft
+  das Ergebnis wie bei `PUT`. Danach speichert er das vollständige Dokument;
+  Historie und Veröffentlichungen enthalten immer ganze Dokumente.
+- Lässt sich ein Patch nicht anwenden, antwortet der Server mit `422`
+  `OVL_API_PATCH_FAILED`. Der Client sendet dann einmal per `PUT` das ganze
+  Dokument.
+- Der Client verwendet `PUT` statt `PATCH`, wenn der Patch größer als die
+  Hälfte des Dokuments ist, sowie beim ersten Speichern nach Laden,
+  Wiederherstellung oder Import.
+
+**Veröffentlichen:**
+
+1. `baseRevision` muss der aktuellen Revision entsprechen (sonst `409`).
+2. Volle Prüfung (Resolver, Ausdrücke, Assets vorhanden). `publish`-Fehler in
+   aktiven Teilen führen zu `422` mit Diagnosen.
+3. Die Veröffentlichung entsteht atomar in einer Transaktion. Dokument und
+   Asset-Menge werden kopiert; referenzierte Assets werden `active`.
+4. Ereignis senden.
+
+**Wiederherstellen:** Ersetzt den Entwurf durch das Dokument der gewählten
+Veröffentlichung (neue Revision). Das aktuell angezeigte HUD bleibt unverändert.
+
+**Fehlerformat:** `application/problem+json`
+
+```
+{ type, title, status, code, diagnostics?, currentRevision? }
+```
+
+| Code | Status |
+| --- | --- |
+| `OVL_API_SESSION_REQUIRED` | 401 (kein Sitzungsbenutzer) |
+| `OVL_API_NOT_DRIVER` | 403 |
+| `OVL_API_PRECONDITION_REQUIRED` | 428 |
+| `OVL_API_REVISION_CONFLICT` | 409, mit `currentRevision` |
+| `OVL_API_INVALID_DOCUMENT` | 422, mit `structure`-Diagnosen |
+| `OVL_API_SCHEMA_UNSUPPORTED` | 422 |
+| `OVL_API_PUBLISH_BLOCKED` | 422, mit Diagnosen |
+| `OVL_API_TOO_LARGE` | 413 |
+| `OVL_API_ASSET_REJECTED` | 422, mit SVG-Bericht |
+| `OVL_API_NOT_FOUND` | 404 |
+| `OVL_API_PATCH_FAILED` | 422 |
+| `OVL_API_INVALID_REQUEST` | 400 (z. B. Notiz zu lang, Datei fehlt) |
+| `OVL_API_NOT_AVAILABLE` | 501 (SVG-Import ohne Bereinigung, D67) |
+
+## 4. Ereignisse (CarConnectionHub)
+
+| Aufruf/Nachricht | Gruppe | Inhalt |
+| --- | --- | --- |
+| `SubscribeToOverlay(carId)` | tritt `overlay:{carId}` bei | `CanViewCarAsync` |
+| `SetTelemetryInterest(carId, ids)`, `SetControlDisplayInterest(carId, bool)` | – | `CanViewCarAsync` beim Anmelden von Interesse (nichtleere Liste bzw. `true`); das Zurückziehen wird nie geprüft (D70) |
+| `OverlayPublished` | `overlay:{carId}` | `{ carId, publicationId, number }` |
+| `OverlayDraftChanged` | `overlay:{carId}` | `{ carId, revision }` (keine Inhalte, keine Benutzerdaten) |
+| `HudInput(carId, elementId, part, action, value) → bool` | – | Zuschauer-Klick auf eine öffentliche Interaktion (D75): `CanViewCarAsync`, höchstens 30 je Verbindung und Sekunde. `action` ist `press`/`release` (Taster), `toggle` (Schalter) oder `set` (fester Wert, Regler). Der Server nimmt `input` und Wert aus dem veröffentlichten Dokument (Regler: `value` auf `min` … `max` begrenzt) und sendet `HudInput(carId, input, action, value)` an die Fahrerverbindung; `false`, wenn nicht öffentlich, unpassend oder kein Fahrer verbunden |
+
+- Clients laden nach `OverlayPublished` den Stand per `GET published` und
+  übernehmen ihn als Ganzes. Assets werden vor der Übernahme geladen; erst
+  danach wird umgeschaltet. Es gibt keine Mischstände.
+- Nach SignalR-Reconnect: erneut beitreten, `GET published`; wenn sich
+  `publicationId` unterscheidet, übernehmen.
+- Ist das neue Dokument nicht verwendbar (unbekannte Schema-Version, Fehler),
+  läuft der bisherige Stand mit Fehlerhinweis weiter. Ohne verwendbaren Stand
+  bleibt das HUD aus.
+- Editor-Tabs vergleichen `OverlayDraftChanged.revision` mit ihrer Basis. Bei
+  Abweichung gehen sie sofort in den Konfliktzustand, nicht erst beim nächsten
+  Speichern.
+
+## 5. Client-Speicherverhalten (AP09)
+
+- **Autosave (D25):** 2 s nach der letzten Änderung, spätestens 30 s bei
+  andauernder Bearbeitung. Es läuft höchstens eine Anfrage gleichzeitig.
+  Übertragen wird per `PATCH` nur die Differenz (D63); ohne Änderung seit dem
+  letzten bestätigten Stand wird nichts gesendet.
+  Statusanzeige: `ungespeichert`, `speichert`, `gespeichert`, `fehler`,
+  `konflikt`, `nur lokal` (ohne Kontrolle).
+- **Lokale Sicherung:**
+  - IndexedDB-Datenbank `signalrc-overlay`, Store `backups`, Schlüssel
+    `[carId, savedAt]`.
+  - Eintrag im Format des Austauschpakets mit `kind: "backup"`, `baseRevision`
+    und den Texten der referenzierten Assets.
+  - Geschrieben bei jeder Änderung, gedrosselt auf höchstens eine Schreibung je
+    Sekunde.
+  - Rotation (D72): Je Editor-Sitzung (Feld `sessionId`) wird nur die neueste
+    Sicherung überschrieben, auch über gespeicherte Revisionen hinweg. Die
+    Sicherung beim Konflikt (`conflict: true`) bildet je Sitzung und
+    `baseRevision` einen eigenen Eintrag und überlebt weiteres Bearbeiten.
+    Je Fahrzeug bleiben die Einträge der letzten 5 Sitzungen erhalten.
+    Einträge ohne `sessionId` (vor D72) zählen je als eigene Sitzung;
+    unlesbare Einträge werden nicht angeboten und nur durch die Rotation entfernt.
+- **Wiederherstellung nach Neuladen:**
+  - Weiterarbeiten wird nur angeboten, wenn `baseRevision` gleich der aktuellen
+    Serverrevision ist.
+  - Sonst ist die Sicherung nur als Download verfügbar.
+  - Sicherungen werden nie stillschweigend gelöscht; verworfen werden nur der
+    überschriebene Vorgänger derselben Sitzung und Sitzungen jenseits der
+    letzten 5 (D72).
+- **Konflikt (`409` oder `OverlayDraftChanged` mit fremder Revision):**
+  1. Autosave pausiert; der Serverstand hat Vorrang.
+  2. Angeboten werden der Download des lokalen Stands und das Laden des
+     Serverstands.
+  3. Es gibt kein automatisches Zusammenführen.
+- **Kontrollverlust** (`403 OVL_API_NOT_DRIVER`, `CarStateUpdated` mit anderem
+  Fahrer):
+  - Es wird nicht mehr auf den Server geschrieben; lokal wird weitergearbeitet.
+  - Nach erneuter Kontrolle wird zuerst `GET draft` geprüft: Bei gleicher
+    Revision geht es weiter, sonst gilt der Konfliktablauf.
+- **Undo/Redo (D55):** 200 Schritte, im Speicher des Tabs. Speichern ändert den
+  Undo-Stapel nicht.
+
+## 6. Steuerungspause im Editor (AP13)
+
+- Beim Öffnen der Editorroute `/car/[carId]/overlay` wird
+  `setUpdatesEnabled(false)` gesetzt, inklusive Löschen der Resend-Timer.
+- Beim Verlassen wird **nicht** reaktiviert. Das gilt auch dann, wenn die
+  bestehende Konfigurationsseite `setConfigMode(false)` aufruft; der Editor
+  verwendet `setConfigMode` nicht.
+- Live-Test-Freigabe nur über eine ausdrückliche Schaltfläche mit deutlicher
+  Statusanzeige.
+- Tastatureingaben in Editorfeldern werden nicht an die
+  Gamepad-/Tastatursteuerung weitergereicht.

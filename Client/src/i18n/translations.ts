@@ -1,4 +1,25 @@
+import { integrationMessages } from '@/components/overlay/integration/messages';
+import { lidarSourceMessages } from '@/components/overlay/lidar-source/messages';
+import { assetMessages } from '@/components/overlay/assets/messages';
+import { editorMessages } from '@/components/overlay/editor/canvas/messages';
+import { dynamicsMessages } from '@/components/overlay/editor/inspector/messages';
+import { previewMessages } from '@/components/overlay/preview/messages';
+import { exchangeMessages } from '@/components/overlay/exchange/messages';
+import { templateMessages } from '@/components/overlay/templates/messages';
+
 export type Locale = 'de' | 'en';
+
+// Overlay texts come as part files from their packages (modules/README.md §2).
+const overlayMessages = (locale: Locale) => ({
+  ...integrationMessages[locale],
+  lidarSource: lidarSourceMessages[locale],
+  assets: assetMessages[locale],
+  editor: editorMessages[locale],
+  dynamics: dynamicsMessages[locale],
+  preview: previewMessages[locale],
+  exchange: exchangeMessages[locale],
+  templates: templateMessages[locale],
+});
 
 const deMessages = {
   languageSwitcher: {
@@ -89,6 +110,7 @@ const deMessages = {
     vehicleOnline: 'Fahrzeug online',
     vehicleOffline: 'Keine Verbindung',
     vehicleOfflineHint: 'Die Verbindung zum Onboard-Dienst ist unterbrochen. Streams und Steuerung werden automatisch wieder aktiv, sobald die Verbindung zuruckkehrt.',
+    onboardUpdatingHint: 'Das Onboard wird aktualisiert. Die Steuerung ist gesperrt und muss nach dem Neustart neu übernommen werden.',
     acquireControl: 'Steuerung ubernehmen',
     acquiringControl: 'Steuerung wird ubernommen...',
     noCarsAvailable: 'Keine Fahrzeuge verfugbar. Bitte zuerst ein Fahrzeug registrieren.',
@@ -141,14 +163,9 @@ const deMessages = {
     noSettingsForStream: 'Keine Einstellungen fur den Stream vorhanden.',
     toggleEnabledFailed: 'Aktivieren oder Deaktivieren ist nur fur den angemeldeten Fahrer mit aktiver Fahrersitzung erlaubt.',
     toggleEnabledHint: 'Aktivieren oder Deaktivieren ist nur als angemeldeter Fahrer mit aktiver Fahrersitzung verfugbar.',
-    viewers: (count: number) => `${count} ${count === 1 ? 'Zuschauer' : 'Zuschauer'}`,
     save: 'Speichern',
     enable: 'Aktivieren',
     disable: 'Deaktivieren',
-    startStream: 'Stream starten',
-    stopStream: 'Stream stoppen',
-    startStreamFailed: 'Stream konnte nicht gestartet werden.',
-    stopStreamFailed: 'Stream konnte nicht gestoppt werden.',
   },
   sessionTransfer: {
     title: 'Sitzung ubertragen',
@@ -182,6 +199,8 @@ const deMessages = {
     titleStored: 'SSH-Schlussel (gespeichert)',
     titleMissing: 'SSH-Schlussel (kein Schlussel)',
     sectionTitle: 'SSH-Schlussel',
+    keyStored: 'Schlüssel gespeichert',
+    keyMissing: 'Kein Schlüssel gespeichert',
     enterVehicleIp: 'Bitte die IP-Adresse des Fahrzeugs eingeben',
     downloadSaved: 'SSH-Schlussel vom Fahrzeug geladen und im Browser gespeichert.',
     saveToBrowserFailed: 'SSH-Schlussel konnte nicht im Browser gespeichert werden.',
@@ -329,6 +348,7 @@ const deMessages = {
   },
   controlFlowPage: {
     loadingFlow: 'Control Flow wird geladen...',
+    back: 'Zurück zur Fahransicht',
   },
   configGuard: {
     checkingAccess: 'Zugriffsrechte werden gepruft...',
@@ -360,8 +380,16 @@ const deMessages = {
   },
   flowNode: {
     loading: 'Laden...',
-    deleteNode: 'Knoten loschen',
+    deleteNode: 'Knoten löschen',
     functionNotFound: 'Funktion nicht gefunden.',
+    info: 'Beschreibung',
+    arrange: 'Automatisch anordnen',
+    arranging: 'Ordne an …',
+    undoArrange: 'Anordnung rückgängig',
+    arrangeFailed: 'Anordnen fehlgeschlagen',
+    unconnected: 'Unverbunden',
+    deleteEdge: 'Verbindung löschen',
+    example: 'Beispiel',
   },
   updateControl: {
     title: 'Update-Steuerung',
@@ -383,9 +411,35 @@ const deMessages = {
     title: 'Version-Mismatch',
     mismatchDetail: (serverBranch: string, serverCommit: string, onboardBranch: string, onboardCommit: string) =>
       `Server (${serverBranch} @ ${serverCommit.slice(0, 7)}) und Onboard (${onboardBranch} @ ${onboardCommit.slice(0, 7)}) laufen auf unterschiedlichen Versionen.`,
-    hint: 'Auf dem Onboard-Client `dotnet run -- update` ausfuhren, um die Version zu aktualisieren.',
+    hint: 'Mit aktivem Auto-Update aktualisiert sich das Onboard selbst, sobald kein Fahrer verbunden ist. Sonst als Fahrer „Jetzt aktualisieren“ wählen oder auf dem Fahrzeug `sudo ./update.sh` ausführen.',
     unknownOnboard: 'Onboard hat seine Version noch nicht gemeldet.',
     dismiss: 'Hinweis schliessen',
+    autoUpdateOn: 'Auto-Update an',
+    autoUpdateOff: 'Auto-Update aus',
+    updateState: {
+      disabled: 'Selbst-Update nicht verfügbar.',
+      upToDate: 'Onboard ist aktuell.',
+      available: 'Neuer Stand verfügbar.',
+      waitingForDriver: 'Neuer Stand verfügbar, wartet bis kein Fahrer mehr verbunden ist.',
+      downloading: 'Update wird geladen …',
+      installing: 'Update wird installiert …',
+      restarting: 'Onboard startet neu …',
+      failed: 'Update fehlgeschlagen.',
+      rolledBack: 'Neuer Stand kam nicht hoch und wurde zurückgerollt.',
+      blocked: 'Dieser Stand wurde zurückgerollt und wird nicht automatisch erneut installiert.',
+      noPackage: 'Kein Onboard-Paket für diese Architektur.',
+      runtimeMissing: 'Passende .NET-Runtime fehlt auf dem Fahrzeug.',
+    } as Record<string, string>,
+    updateNow: 'Jetzt aktualisieren',
+    updateNowHint: 'Steuerung wird gesperrt, das Fahrzeug startet neu. Danach die Steuerung neu übernehmen.',
+    updateRefused: (reason: string) => `Update abgelehnt: ${reason}`,
+    updateRequestFailed: 'Update-Anfrage fehlgeschlagen.',
+    badgeSynced: (commit: string) => `✓ ${commit}`,
+    badgeMismatch: 'Version abweichend',
+    badgeUnknown: 'Version unbekannt',
+    badgeUpdating: 'Update läuft',
+    badgeTitle: (server: string, onboard: string) => `Server: ${server}\nOnboard: ${onboard}`,
+    badgeShowBanner: 'Klicken, um die Update-Meldung wieder anzuzeigen',
   },
   setupTemplate: {
     title: 'Setup-Vorlage',
@@ -417,6 +471,7 @@ const deMessages = {
     assignedSummary: (assigned: number, total: number) => `${assigned} von ${total} Eingangsknoten zugeordnet`,
     missing: 'fehlend',
   },
+  overlay: overlayMessages('de'),
 };
 
 export type Messages = typeof deMessages;
@@ -510,6 +565,7 @@ const enMessages: Messages = {
     vehicleOnline: 'Vehicle online',
     vehicleOffline: 'No connection',
     vehicleOfflineHint: 'Connection to the onboard service is interrupted. Streams and control will resume automatically once the connection returns.',
+    onboardUpdatingHint: 'The onboard is updating. Controls are locked; take over control again after the restart.',
     acquireControl: 'Acquire Control',
     acquiringControl: 'Acquiring Control...',
     noCarsAvailable: 'No cars available. Please register a car first.',
@@ -562,14 +618,9 @@ const enMessages: Messages = {
     noSettingsForStream: 'No settings available for this stream.',
     toggleEnabledFailed: 'Enabling or disabling is allowed only for the signed-in driver with an active control session.',
     toggleEnabledHint: 'Enabling or disabling is available only for the signed-in driver with an active control session.',
-    viewers: (count: number) => `${count} ${count === 1 ? 'viewer' : 'viewers'}`,
     save: 'Save',
     enable: 'Enable',
     disable: 'Disable',
-    startStream: 'Start stream',
-    stopStream: 'Stop stream',
-    startStreamFailed: 'Failed to start stream.',
-    stopStreamFailed: 'Failed to stop stream.',
   },
   sessionTransfer: {
     title: 'Session Transfer',
@@ -603,6 +654,8 @@ const enMessages: Messages = {
     titleStored: 'SSH Key (stored)',
     titleMissing: 'SSH Key (no key)',
     sectionTitle: 'SSH key',
+    keyStored: 'Key stored',
+    keyMissing: 'No key stored',
     enterVehicleIp: 'Please enter the vehicle IP address',
     downloadSaved: 'SSH key downloaded from vehicle and saved to browser.',
     saveToBrowserFailed: 'Failed to save SSH key to browser storage.',
@@ -750,6 +803,7 @@ const enMessages: Messages = {
   },
   controlFlowPage: {
     loadingFlow: 'Loading control flow...',
+    back: 'Back to driving view',
   },
   configGuard: {
     checkingAccess: 'Checking access permissions...',
@@ -783,6 +837,14 @@ const enMessages: Messages = {
     loading: 'Loading...',
     deleteNode: 'Delete node',
     functionNotFound: 'Function not found.',
+    info: 'Description',
+    arrange: 'Arrange automatically',
+    arranging: 'Arranging …',
+    undoArrange: 'Undo arrangement',
+    arrangeFailed: 'Arranging failed',
+    unconnected: 'Unconnected',
+    deleteEdge: 'Delete connection',
+    example: 'Example',
   },
   updateControl: {
     title: 'Update Control',
@@ -804,9 +866,35 @@ const enMessages: Messages = {
     title: 'Version mismatch',
     mismatchDetail: (serverBranch: string, serverCommit: string, onboardBranch: string, onboardCommit: string) =>
       `Server (${serverBranch} @ ${serverCommit.slice(0, 7)}) and onboard (${onboardBranch} @ ${onboardCommit.slice(0, 7)}) are running different versions.`,
-    hint: 'Run `dotnet run -- update` on the onboard client to bring it up to date.',
+    hint: 'With auto-update on, the onboard updates itself once no driver is connected. Otherwise choose “Update now” as the driver or run `sudo ./update.sh` on the vehicle.',
     unknownOnboard: 'Onboard has not reported its version yet.',
     dismiss: 'Dismiss notice',
+    autoUpdateOn: 'Auto-update on',
+    autoUpdateOff: 'Auto-update off',
+    updateState: {
+      disabled: 'Self-update not available.',
+      upToDate: 'Onboard is up to date.',
+      available: 'New version available.',
+      waitingForDriver: 'New version available, waiting until no driver is connected.',
+      downloading: 'Downloading update …',
+      installing: 'Installing update …',
+      restarting: 'Onboard is restarting …',
+      failed: 'Update failed.',
+      rolledBack: 'The new version did not come up and was rolled back.',
+      blocked: 'This version was rolled back and is not installed automatically again.',
+      noPackage: 'No onboard package for this architecture.',
+      runtimeMissing: 'The vehicle lacks the required .NET runtime.',
+    } as Record<string, string>,
+    updateNow: 'Update now',
+    updateNowHint: 'Controls are locked and the vehicle restarts. Take over control again afterwards.',
+    updateRefused: (reason: string) => `Update refused: ${reason}`,
+    updateRequestFailed: 'Update request failed.',
+    badgeSynced: (commit: string) => `✓ ${commit}`,
+    badgeMismatch: 'Version mismatch',
+    badgeUnknown: 'Version unknown',
+    badgeUpdating: 'Updating',
+    badgeTitle: (server: string, onboard: string) => `Server: ${server}\nOnboard: ${onboard}`,
+    badgeShowBanner: 'Click to show the update notice again',
   },
   setupTemplate: {
     title: 'Setup template',
@@ -838,6 +926,7 @@ const enMessages: Messages = {
     assignedSummary: (assigned: number, total: number) => `${assigned} of ${total} input nodes assigned`,
     missing: 'missing',
   },
+  overlay: overlayMessages('en'),
 };
 
 export const messagesByLocale: Record<Locale, Messages> = {

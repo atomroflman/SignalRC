@@ -23,6 +23,22 @@ Located in the config directory (see [Config Directory](#config-directory) below
 
 Optional feature-flag keys (`webSetup`, `bashTool`, `channelTester`, `audio`, `video`) can also be set here — see [Feature Flags](#feature-flags) for which of them actually do anything.
 
+#### `AutoUpdate` (self-update from the server)
+
+```json
+"AutoUpdate": {
+  "Enabled": false,
+  "ConfirmTimeoutMinutes": 10
+}
+```
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `Enabled` | `false` (also when the section is missing) | Install newer server builds automatically while no driver holds the control session. A driver can update from the GUI regardless. |
+| `ConfirmTimeoutMinutes` | `10` | A freshly installed release that does not reach the server within this time exits; after three such starts it is rolled back. |
+
+`install.sh` asks for `Enabled`; the shipped `Onboard/appSettings.json` leaves the section out so that `git pull` on vehicles with a locally edited file does not conflict. Changes take effect after restarting `signalrc-onboard.service`. Only installations in the release layout (`Onboard/current`) update themselves; `dotnet run` reports the self-update as disabled. See [OnboardAutoUpdate.md](OnboardAutoUpdate.md).
+
 Audio devices, volumes and sound files are not configured here but per vehicle in the web UI — see [FEATURES.md](FEATURES.md#audio-chat).
 
 ### channelMap.json (Onboard)
@@ -74,6 +90,12 @@ Defines all hardware channels, telemetry, and video streams (`Shared/Channels/Ch
 ```
 
 There's no `minPulse`/`maxPulse`/`centerPulse` or `priority` field on channel items — servo calibration lives in the pin manager's own `options`/hardware configuration, not per-channel, and there's no stream priority field. `telemetryChannels` use a `telemetryType` key (not `type` — that's only the discriminator field name for `pinManagers`).
+
+#### `options`
+
+The `options` of pin managers, control channels and telemetry channels are set on the public writable properties of the type with the same name (case-insensitive, `ChannelOptionBinder`); unknown keys are logged and skipped. Control properties that come from the channel itself (`name`, `address`, `pinManager`, …) cannot be overridden through `options`. Video stream `options` are read by `MediaMtxConfigurator` (`inputFormat`, `hwEncoder` for V4L2 webcams).
+
+The onboard reports these options per type when it connects (`OptionSchemaBuilder`: JSON type, default of a fresh instance, XML doc summary as description); the server serves them at `GET /api/cars/{carId}/channels/option-schemas`. The channel config page uses them in its options editor: Ctrl+Space completes keys and values, hovering a key shows its description, and unknown keys, wrong types and unknown pin manager names are flagged. A new option property only needs a `/// <summary>` to be documented there.
 
 ---
 
@@ -168,14 +190,16 @@ There is no `LTE_USE_NEW_CONNECTION_MODEL` variable in the current code — it d
 |----------|-------------|
 | `ASPNETCORE_ENVIRONMENT` | Development/Production |
 | `ConnectionStrings__DefaultConnection` | PostgreSQL connection string |
-| `JanusConfiguration__HostName` | Janus host name or IP |
+| `JanusConfiguration__HostName` | Janus host name or IP, as the server reaches it (HTTP API) |
+| `JanusConfiguration__PublicHostName` | Host the vehicles send their RTP video to; empty = the vehicle's `ServerName` |
 | `JanusConfiguration__PortRangeStart` | First UDP video port |
 | `JanusConfiguration__PortRangeEnd` | Last UDP video port |
 | `FileTransfer__StoragePath` | Local file storage path |
 | `WebRtc__Username` / `WebRtc__Credential` | TURN credentials handed out by `/api/webrtc/ice-servers` |
 | `COTURN_EXTERNAL_IP` / `COTURN_USERNAME` / `COTURN_CREDENTIAL` | Compose-level TURN setup — feeds both the `server` and `turn` (coturn) containers; falls back to an Azure IMDS public-IP lookup if `COTURN_EXTERNAL_IP` is unset |
 | `JANUS_NAT_1_1` | Public IP Janus advertises for WebRTC NAT traversal (Compose); also falls back to Azure IMDS if unset, and the container hard-fails to start if neither resolves |
-| `GIT_BRANCH` / `GIT_COMMIT` | Baked into the server image at build time; surfaced back out via the onboard-install-command endpoint |
+| `GIT_BRANCH` / `GIT_COMMIT` | Baked into the server image and its onboard packages at build time; surfaced back out via `/api/version`, the onboard-install-command endpoint and the self-update manifest. Set by `scripts/build-images.sh` from the checkout (never a fixed value: the commit is the version the onboards compare) |
+| `OnboardPackages__Path` | Folder with the onboard packages `<rid>.zip`; default `onboard-packages` next to the server (`/app/onboard-packages` in the image) |
 
 There is no `RunJanusServer` variable — the server never runs Janus in-process; it's always a separate process/container.
 
@@ -273,8 +297,41 @@ The vehicle has no other inbound ports — it only makes outbound connections to
 
 | Type | Description |
 |------|-------------|
-| `Pca9685PwmExtension` | 16-channel PWM controller via I2C |
-| `RaspberryPiGpioManager` | Native GPIO pins (via `System.Device.Gpio`, no `pigpio` daemon) |
+| `Pca9685PwmExtension` | 16-channel PWM controller via I2C; addresses 0–15 are the channels |
+| `RaspberryPiGpioManager` | The Pi's own 40-pin header via `System.Device.Gpio` (libgpiod, no `pigpio` daemon); addresses are **physical** pins 1–40 |
+
+`default` is a `RaspberryPiGpioManager` every vehicle has without an entry. Add an entry named `default` (or any other name) of that type to configure its pins:
+
+```json
+"pinManagers": {
+  "default": {
+    "type": "RaspberryPiGpioManager",
+    "options": {
+      "pins": [
+        { "pin": 11, "mode": "Input", "pull": "Up", "activeLow": true, "debounceMs": 20, "label": "door" },
+        { "pin": 13, "mode": "Output", "initialState": false },
+        { "pin": 12, "mode": "Pwm" }
+      ]
+    }
+  }
+}
+```
+
+| Pin option | Meaning |
+|------|-------------|
+| `pin` | Physical header pin (1–40). The BCM number is looked up (`RaspberryPiPinMap`). |
+| `mode` | `Output`, `Input` or `Pwm` (hardware PWM only on pins 12, 32, 33, 35). |
+| `pull` | Inputs: `None`, `Up` (switch to GND) or `Down` (switch to 3.3 V). |
+| `activeLow` | Logical "on" is electrical low; applies to reads and writes. |
+| `debounceMs` | Inputs: a level counts once it was stable this long (from edge timestamps). |
+| `initialState` | Outputs: logical level when the pin is opened. |
+| `label` | Free text for the pin editor. |
+
+Manager options: `driver` (`Auto`, `LibGpiod`, `LibGpiodV2`, `SysFs`; `Auto` lets `System.Device.Gpio` pick libgpiod v1/v2 and the header's `pinctrl` chip, Pi 5 included) and `gpioChip` (force a gpiochip number). Unconfigured pins become an output on the first write and an input on the first read. Problems (power pin, PWM on a non-PWM pin, duplicate pins) show up as channel health warnings.
+
+The channel page draws the board for these two types: the Raspberry Pi matching the model the onboard reports (`/proc/device-tree/model`, sent as `boardModel` with the available channel types) or the PCA9685 breakout. Pins are hoverable and clickable; the selected pin is configured in place and can prefill a new control or telemetry channel.
+
+**Wiring diagram** (`/car/{id}/wiring`, button on the channel page): generated from the channel map. The Pi with the parts on its header, the PCA9685 boards on the I²C bus (chained when several share bus 1), BECs for servo power and CAN/serial managers as external boxes. Parts follow the control type (`Steering`/`ServoOnOff`/`OnOffServo` → servo, `Throttle` → ESC + motor, `PwmLight`/`PwmBlinker`/`RotaryLight` → LED); a `GpioOutput` becomes a relay or buzzer when its name says so (relay, pump, horn …), otherwise an LED; input pins become buttons with the pull resistor drawn. To say what is really wired there, set `device` (`Auto`, `Led`, `Relay`, `Buzzer`, `Servo`, `Esc`, `Button`, `Sensor`, `Other`) on a pin of `RaspberryPiGpioManager` (`pins[].device`) or in the PCA9685 option `channels` (`[{ "channel": 4, "device": "Led", "label": "Blinker links" }]`); both board editors and the wiring page (click a part) have a select for it. The onboard only stores it. `GpioPinReader`/`PwmOutputReader` channels light the LEDs and turn the servo horns live. Also shows wiring warnings (servo on a non-PWM pin, I²C address clash, SDA/SCL in use), a parts list and a wire list; exports as SVG or print.
 
 ### Control Types
 
@@ -290,6 +347,7 @@ Discriminated by the `[ControlType("...")]` attribute on each class (`Onboard/Co
 | `PwmLight` / `PwmBlinker` | PWM-driven light / blinking light |
 | `CustomBash` | Runs a fixed shell command on activation |
 | `LoopbackToTelemetry` | Feeds a control value straight back out as telemetry |
+| `GpioOutput` | Switches a digital pin: on at or above `threshold` (0.5); `releaseState` `Off`/`On`/`Keep` |
 | `LoggingOnly` | No hardware effect — logs the value (also the fallback when a `controlType` string doesn't match anything) |
 
 There is no `ServoControl` or `GearControl` type in the current code.
@@ -301,3 +359,7 @@ There is no `ServoControl` or `GearControl` type in the current code.
 | `CpuTemperatureReader` | CPU temperature |
 | `ApplicationLifetimeReader` | App uptime |
 | `JbdBmsTelemetryReader` | Battery BMS via UART |
+| `GpioPinReader` | State of a digital pin (`1`/`0`, data type Boolean) from the channel's `pinManager` + `address`. `latch` (default true) keeps a pulse shorter than the read interval for one read; `report: Edges` counts debounced edges instead. Works for inputs and outputs. |
+| `PwmOutputReader` | What a PWM output drives. PCA9685: read back from the chip registers (`Valid`; `Error` when the chip was reset and sleeps); Pi hardware PWM: last write (`Unchecked`). `report`: `Percent` (default), `DutyCycle`, `PulseWidthMs`, `PulseWidthUs`, `Counts`. |
+
+Both pin readers take `pinManager` and `address` from the channel itself and share the module instance of the control on the same pin. In flows the node **Telemetry** (`channel`, `fallback`; outputs `value`, `valid`) turns any telemetry channel into a flow input; it runs in the driver's browser, so end stops and e-stops belong on the vehicle.

@@ -37,7 +37,7 @@ function initLatestValues(gp: UserGamepadDatabase): UserGamepadDatabase {
     axes.forEach((axis, i) => {
         axis.latestValue = 0; // Initialize latest value for axes
     });
-    const buttons = gp.buttons.sort();
+    const buttons = gp.buttons.sort((a, b) => a.channelId - b.channelId);
     buttons.forEach((button, i) => {
         button.latestValue = 0; // Initialize latest value for buttons
     });

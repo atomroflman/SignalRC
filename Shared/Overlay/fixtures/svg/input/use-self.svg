@@ -1,0 +1,3 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">
+  <g id="self"><rect width="1" height="1"/><use href="#self" x="2"/></g>
+</svg>

@@ -7,10 +7,18 @@ using Microsoft.Extensions.Logging;
 namespace SignalRC.Onboard.Hardware
 {
     /// <summary>
-    /// Maps normalized float values (-1 to 1) to PCA9685 PWM outputs using direct I2C access.
+    /// PCA9685 16-channel PWM board over I2C (addresses 0–15 are the channels). Runs at 50 Hz
+    /// for servos; outputs can be read back from the chip registers for telemetry.
     /// </summary>
-    public class Pca9685PwmExtension : IModuleManager, IDisposable
+    public class Pca9685PwmExtension : IModuleManager, IValidatingModuleManager, IDisposable
     {
+        public const int ChannelCount = 16;
+        public const int Resolution = 4096;
+        private const byte Prescale = 0x79;
+        /// <summary>25 MHz internal clock / (4096 × (prescale + 1)).</summary>
+        public const float FrequencyHz = 25_000_000f / (Resolution * (Prescale + 1));
+
+        private readonly Dictionary<int, Pca9685PwmExtensionPwmModule> _modules = new();
         private bool _initialized;
         private I2cDevice? _device;
         private readonly object _initLock = new();
@@ -18,9 +26,13 @@ namespace SignalRC.Onboard.Hardware
         private const int PCA9685_DEFAULT_ADDRESS = 0x40; // Default I2C address for PCA9685
 
         public ILogger<Pca9685PwmExtension> Logger { get; }
+        /// <summary>Address offset set by the board's solder jumpers; the I2C address is 0x40 + this.</summary>
         public int BoardAddress { get; set; }
-        public int I2cBus { get; set; } = 1; // Default I2C bus
+        /// <summary>I2C bus number (/dev/i2c-N).</summary>
+        public int I2cBus { get; set; } = 1;
         public int BoardI2cAddress => BoardAddress + PCA9685_DEFAULT_ADDRESS;
+        /// <summary>What is plugged into the channels (label, device); only used by the wiring diagram.</summary>
+        public List<PcaChannelConfig> Channels { get; set; } = new();
 
         public Pca9685PwmExtension(IServiceProvider provider)
         {
@@ -48,7 +60,7 @@ namespace SignalRC.Onboard.Hardware
                 _device = I2cDevice.Create(settings);
 
                 WriteRegisterUnchecked(0x00, 0x10); // Sleep
-                WriteRegisterUnchecked(0xFE, 0x79); // Prescale for ~50Hz
+                WriteRegisterUnchecked(0xFE, Prescale); // ~50 Hz
                 WriteRegisterUnchecked(0x00, 0x20); // Wake up, auto increment
 
                 _initialized = true;
@@ -85,17 +97,59 @@ namespace SignalRC.Onboard.Hardware
             }
         }
 
-        public T GetModule<T>(int address) where T : class, IModule
+        /// <summary>
+        /// Reads the four channel registers and MODE1. MODE1 bit 4 (SLEEP) set means the chip lost
+        /// its configuration, typically a brown-out reset: the outputs are off whatever was written.
+        /// </summary>
+        internal (int On, int Off, bool FullOn, bool FullOff, bool Asleep) ReadChannelRegisters(int regBase)
         {
             EnsureInitialized();
+            Span<byte> channel = stackalloc byte[4];
+            Span<byte> mode1 = stackalloc byte[1];
+            lock (_deviceLock)
+            {
+                Device.WriteRead(stackalloc byte[] { (byte)regBase }, channel);
+                Device.WriteRead(stackalloc byte[] { 0x00 }, mode1);
+            }
+            return (
+                channel[0] | (channel[1] & 0x0F) << 8,
+                channel[2] | (channel[3] & 0x0F) << 8,
+                (channel[1] & 0x10) != 0,
+                (channel[3] & 0x10) != 0,
+                (mode1[0] & 0x10) != 0);
+        }
 
-            Logger.LogInformation("Creating PWM module of type {ModuleType} at address {Address}", typeof(T).Name, address);
+        public IEnumerable<string> Validate()
+        {
+            var seen = new HashSet<int>();
+            foreach (var c in Channels)
+            {
+                if (c.Channel < 0 || c.Channel >= ChannelCount)
+                    yield return $"Channel config {c.Channel}: the PCA9685 has channels 0-15.";
+                else if (!seen.Add(c.Channel))
+                    yield return $"Channel {c.Channel} is configured more than once.";
+            }
+        }
+
+        public T GetModule<T>(int address) where T : class, IModule
+        {
             if (!typeof(T).IsAssignableTo(typeof(IPwmModule)))
                 throw new InvalidOperationException($"Module type {typeof(T).Name} is not a PWM module. Only IPwmModule is supported.");
-            if (address < 0 || address > 15)
+            if (address < 0 || address >= ChannelCount)
                 throw new ArgumentOutOfRangeException(nameof(address), "Address must be between 0 and 15.");
+            EnsureInitialized();
 
-            return new Pca9685PwmExtensionPwmModule(this, address) as T ?? throw new InvalidOperationException("Failed to create PWM module.");
+            // One module per channel: a control and a telemetry reader on the same channel share it.
+            lock (_modules)
+            {
+                if (!_modules.TryGetValue(address, out var module))
+                {
+                    Logger.LogInformation("Creating PWM module for channel {Address}", address);
+                    module = new Pca9685PwmExtensionPwmModule(this, address);
+                    _modules[address] = module;
+                }
+                return module as T ?? throw new InvalidOperationException("Failed to create PWM module.");
+            }
         }
 
         public void Dispose()
@@ -113,13 +167,12 @@ namespace SignalRC.Onboard.Hardware
     {
         private const int SERVO_MIN_PULSE = 105; // Minimum pulse width in counts
         private const int SERVO_MAX_PULSE = 550; // Maximum pulse width in counts
-        private const int PWM_RESOLUTION = 4096;
-        private const float PWM_FREQUENCY = 50f; // PWM frequency in Hz
+        private const int PWM_RESOLUTION = Pca9685PwmExtension.Resolution;
 
         private readonly Pca9685PwmExtension _extension;
         private readonly int _channel;
         private readonly int _regBase;
-        private float _lastValue;
+        private int _lastCounts;
 
         public Pca9685PwmExtensionPwmModule(Pca9685PwmExtension extension, int channel)
         {
@@ -128,12 +181,13 @@ namespace SignalRC.Onboard.Hardware
             _regBase = 0x06 + 4 * channel; // Base register for the channel
         }
 
+        public override string ToString() => $"PCA9685 channel {_channel}";
+
         public Task SetServoPosition(float position)
         {
             position = Math.Clamp(position, -1f, 1f);
             var pwmValue = (int)Math.Round((SERVO_MAX_PULSE - SERVO_MIN_PULSE) * ((position + 1f) / 2f) + SERVO_MIN_PULSE);
             SendPwmUpdate(pwmValue);
-            _lastValue = position;
             return Task.CompletedTask;
         }
 
@@ -142,19 +196,17 @@ namespace SignalRC.Onboard.Hardware
             value = Math.Clamp(value, 0f, 1f);
             int pwmValue = (int)Math.Round(value * (PWM_RESOLUTION - 1));
             SendPwmUpdate(pwmValue);
-            _lastValue = value;
             return Task.CompletedTask;
         }
 
         public Task SetPulseWidthMilliseconds(float pulseWidthMs)
         {
-            float periodMs = 1000f / PWM_FREQUENCY;
+            float periodMs = 1000f / Pca9685PwmExtension.FrequencyHz;
             if (pulseWidthMs < 0 || pulseWidthMs > periodMs)
                 throw new ArgumentOutOfRangeException(nameof(pulseWidthMs), $"Pulse width must be between 0 and {periodMs} ms.");
 
             int pwmValue = (int)Math.Round((PWM_RESOLUTION - 1) * (pulseWidthMs / periodMs));
             SendPwmUpdate(pwmValue);
-            _lastValue = pwmValue / (PWM_RESOLUTION - 1f);
             return Task.CompletedTask;
         }
 
@@ -167,16 +219,25 @@ namespace SignalRC.Onboard.Hardware
             byte offHigh = (byte)((pwmValue >> 8) & 0x0F);
 
             _extension.Logger?.LogDebug(
-               "Setting channel {Channel} to PWM {PWM} (Input={Input}) on Register 0x{Reg:X2}",
+               "Setting channel {Channel} to PWM {PWM} on Register 0x{Reg:X2}",
                _channel,
-               pwmValue,
                pwmValue,
                _regBase
            );
 
             _extension.WriteChannelRegisters(_regBase, onLow, onHigh, offLow, offHigh);
+            _lastCounts = pwmValue;
         }
 
-        public Task<float> GetPwmValue() => Task.FromResult(_lastValue);
+        /// <summary>Duty cycle 0–1 of the last write.</summary>
+        public Task<float> GetPwmValue() => Task.FromResult(_lastCounts / (float)PWM_RESOLUTION);
+
+        public Task<PwmReadback> ReadOutputAsync()
+        {
+            var r = _extension.ReadChannelRegisters(_regBase);
+            var counts = r.FullOff ? 0 : r.FullOn ? PWM_RESOLUTION : ((r.Off - r.On) % PWM_RESOLUTION + PWM_RESOLUTION) % PWM_RESOLUTION;
+            var fault = r.Asleep ? "PCA9685 is in sleep mode (reset, e.g. by a brown-out): outputs are off" : null;
+            return Task.FromResult(new PwmReadback(counts, PWM_RESOLUTION, Pca9685PwmExtension.FrequencyHz, true, fault));
+        }
     }
 }

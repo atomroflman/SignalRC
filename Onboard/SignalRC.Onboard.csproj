@@ -5,24 +5,32 @@
         <TargetFramework>net10.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
+        <!-- Doc summaries describe the channel options in the config UI (OptionSchemaBuilder). -->
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <NoWarn>$(NoWarn);CS1591;CS1572;CS1573;CS1574;CS1584;CS1658;CS1570;CS1587;CS1734</NoWarn>
       <UserSecretsId>a4995393-a0b4-4060-8810-10aedec03387</UserSecretsId>
+        <!-- Installed releases of the self-update live inside the project folder on the vehicle
+             (Docs/OnboardAutoUpdate.md); they must not become items of the next build. -->
+        <DefaultItemExcludes>$(DefaultItemExcludes);releases/**;current/**</DefaultItemExcludes>
   </PropertyGroup>
 
     <ItemGroup>
       <PackageReference Include="CSharpVitamins.ShortGuid" Version="2.0.0" />
-      <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="9.0.3" />
-      <PackageReference Include="Microsoft.AspNetCore.SignalR.Client.Core" Version="9.0.3" />
-      <PackageReference Include="Microsoft.AspNetCore.SignalR.Protocols.Json" Version="9.0.3" />
-      <PackageReference Include="MessagePack" Version="2.5.187" />
-      <PackageReference Include="Microsoft.AspNetCore.SignalR.Protocols.MessagePack" Version="9.0.3" />
-      <PackageReference Include="Microsoft.Extensions.Configuration" Version="9.0.0" />
-      <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="9.0.0" />
-      <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="9.0.0" />
-      <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="9.0.0" />
-      <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.0" />
-      <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.0" />
+      <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.14" />
+      <PackageReference Include="Microsoft.AspNetCore.SignalR.Client.Core" Version="10.0.14" />
+      <PackageReference Include="Microsoft.AspNetCore.SignalR.Protocols.Json" Version="10.0.14" />
+      <PackageReference Include="MessagePack" Version="2.5.307" />
+      <PackageReference Include="Microsoft.AspNetCore.SignalR.Protocols.MessagePack" Version="10.0.14" />
+      <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.14" />
+      <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.14" />
+      <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.14" />
+      <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.14" />
+      <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.14" />
+      <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.14" />
+      <PackageReference Include="SocketCANSharp" Version="0.13.0" />
       <PackageReference Include="Spectre.Console" Version="0.50.0" />
       <PackageReference Include="System.Device.Gpio" Version="4.0.1" />
+      <PackageReference Include="System.IO.Ports" Version="10.0.14" />
       <PackageReference Include="TypedSignalR.Client" Version="3.6.0">
         <PrivateAssets>all</PrivateAssets>
         <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -40,9 +48,11 @@
       <None Update="Extern/mediamtx.yml">
         <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       </None>
+      <!-- Not published: the onboard finds mediamtx via ./Extern of its working directory, so a
+           copy in every release folder would only fill the SD card. -->
       <None Update="Extern/mediamtx">
         <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-        <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+        <CopyToPublishDirectory>Never</CopyToPublishDirectory>
         <UnixFileMode>Executable</UnixFileMode>
       </None>
     </ItemGroup>
@@ -67,17 +77,11 @@
   <Target Name="GenerateOnboardBuildInfo" BeforeTargets="BeforeBuild">
     <MakeDir Directories="$(MSBuildProjectDirectory)/Generated" />
 
-    <Exec Condition="'$(BuildInfoBranch)' == ''"
-          Command="git -C &quot;$(MSBuildProjectDirectory)/..&quot; branch --show-current"
-          ConsoleToMSBuild="true"
-          IgnoreExitCode="true">
+    <Exec Condition="'$(BuildInfoBranch)' == ''" Command="git -C &quot;$(MSBuildProjectDirectory)/..&quot; branch --show-current" ConsoleToMSBuild="true" IgnoreExitCode="true">
       <Output TaskParameter="ConsoleOutput" ItemName="_BuildBranchOutput" />
     </Exec>
 
-    <Exec Condition="'$(BuildInfoCommit)' == ''"
-          Command="git -C &quot;$(MSBuildProjectDirectory)/..&quot; rev-parse HEAD"
-          ConsoleToMSBuild="true"
-          IgnoreExitCode="true">
+    <Exec Condition="'$(BuildInfoCommit)' == ''" Command="git -C &quot;$(MSBuildProjectDirectory)/..&quot; rev-parse HEAD" ConsoleToMSBuild="true" IgnoreExitCode="true">
       <Output TaskParameter="ConsoleOutput" ItemName="_BuildCommitOutput" />
     </Exec>
 
@@ -95,11 +99,7 @@
       <_BuildInfoLines Include="Commit=$(ResolvedBuildCommit)" />
     </ItemGroup>
 
-    <WriteLinesToFile
-      File="$(MSBuildProjectDirectory)/Generated/onboard-build-info.txt"
-      Lines="@(_BuildInfoLines)"
-      Overwrite="true"
-      Encoding="UTF-8" />
+    <WriteLinesToFile File="$(MSBuildProjectDirectory)/Generated/onboard-build-info.txt" Lines="@(_BuildInfoLines)" Overwrite="true" Encoding="UTF-8" />
   </Target>
 
 </Project>

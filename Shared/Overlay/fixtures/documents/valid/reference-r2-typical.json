@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "workspace": { "width": 1280, "height": 720 },
+  "elements": {
+    "e_compass": {
+      "type": "group", "name": "Kompass", "children": ["e_compass_ring", "e_compass_n", "e_compass_e", "e_compass_s", "e_compass_w"],
+      "props": { "x": 1140, "y": 30, "pivotX": 50, "pivotY": 50,
+        "rotation": { "base": 0, "binding": { "expr": "-tel(\"odoHeading\")", "smoothing": { "timeConstantS": 0.2 } } } }
+    },
+    "e_compass_ring": { "type": "ellipse", "props": { "width": 100, "height": 100, "fill": "#00000066", "stroke": "#ffffff", "strokeWidth": 2 } },
+    "e_compass_n": { "type": "text", "props": { "x": 50, "y": 20, "text": "N", "align": "middle", "fontSize": 16, "fontWeight": "bold", "fill": "#ff3030" } },
+    "e_compass_e": { "type": "text", "props": { "x": 88, "y": 56, "text": "O", "align": "middle", "fontSize": 14 } },
+    "e_compass_s": { "type": "text", "props": { "x": 50, "y": 94, "text": "S", "align": "middle", "fontSize": 14 } },
+    "e_compass_w": { "type": "text", "props": { "x": 12, "y": 56, "text": "W", "align": "middle", "fontSize": 14 } },
+
+    "e_attitude": {
+      "type": "group", "name": "Lage", "children": ["e_horizon"],
+      "props": { "x": 590, "y": 310, "pivotX": 50, "pivotY": 50,
+        "rotation": { "base": 0, "binding": { "expr": "-tel(\"roll\")" } } }
+    },
+    "e_horizon": {
+      "type": "line",
+      "props": { "x": 0, "x2": 100, "stroke": "#00ff80", "strokeWidth": 3,
+        "y": { "base": 50, "binding": { "expr": "50 + clamp(tel(\"pitch\"), -30, 30) * 1.5" } } }
+    },
+
+    "e_belt_left": {
+      "type": "rect", "name": "Kette links",
+      "props": { "y": 640, "width": 400, "height": 16, "fill": "#909090",
+        "x": { "base": 0, "rate": { "expr": "tel(\"leftSpeed\") * 40", "wrap": { "min": 0, "max": 20 } } } }
+    },
+    "e_belt_right": {
+      "type": "rect", "name": "Kette rechts",
+      "props": { "y": 664, "width": 400, "height": 16, "fill": "#909090",
+        "x": { "base": 0, "rate": { "expr": "tel(\"rightSpeed\") * 40", "wrap": { "min": 0, "max": 20 } } } }
+    },
+
+    "e_speed_gauge": {
+      "type": "linearGauge",
+      "props": { "x": 40, "y": 600, "width": 240, "height": 16, "min": 0, "max": 3,
+        "value": { "base": 0, "binding": { "expr": "abs(tel(\"odoSpeed\"))" } } }
+    },
+    "e_battery_gauge": {
+      "type": "radialGauge",
+      "props": { "x": 40, "y": 30, "radius": 50, "min": 10, "max": 12.6, "tickCount": 5,
+        "value": { "base": 10, "binding": { "expr": "tel(\"batteryVoltage\")" } },
+        "barColor": { "base": "#00ff00", "binding": { "expr": "if(tel(\"batteryVoltage\") < 10.8, \"#ff0000\", \"#00ff00\")" } } }
+    },
+
+    "e_val_speed":   { "type": "valueText", "props": { "x": 40, "y": 590, "value": { "base": null, "binding": { "expr": "tel(\"odoSpeed\")" } } } },
+    "e_val_battery": { "type": "valueText", "props": { "x": 60, "y": 150, "value": { "base": null, "binding": { "expr": "tel(\"batteryVoltage\")" } } } },
+    "e_val_heading": { "type": "valueText", "props": { "x": 1190, "y": 160, "align": "middle", "decimals": 0, "unit": "°", "value": { "base": null, "binding": { "expr": "wrap(tel(\"odoHeading\"), 0, 360)" } } } },
+    "e_val_steer":   { "type": "valueText", "props": { "x": 640, "y": 700, "align": "middle", "decimals": 0, "unit": "%", "value": { "base": null, "binding": { "expr": "out(\"steering\") * 100" } } } },
+
+    "e_warning": {
+      "type": "text", "name": "Unterspannung",
+      "props": { "x": 640, "y": 120, "text": "AKKU NIEDRIG", "align": "middle", "fontSize": 40, "fontWeight": "bold", "fill": "#ff0000", "opacity": 0 }
+    },
+    "e_lidar": {
+      "type": "lidarWidget", "source": "lidarGrid",
+      "props": { "x": 1000, "y": 420, "radius": 120, "sectors": 8, "sweepEnabled": true }
+    }
+  },
+  "children": ["e_belt_left", "e_belt_right", "e_attitude", "e_compass", "e_speed_gauge", "e_battery_gauge",
+               "e_val_speed", "e_val_battery", "e_val_heading", "e_val_steer", "e_lidar", "e_warning"],
+  "clips": {
+    "c_low_battery": {
+      "name": "Unterspannung blinken",
+      "durationS": 1, "repeat": "infinite",
+      "trigger": { "mode": "whileTrue", "condition": "tel(\"batteryVoltage\") < 10.8", "onDeactivate": "finish" },
+      "tracks": [
+        { "element": "e_warning", "property": "opacity",
+          "keyframes": [ { "t": 0, "value": 0, "easing": "easeInOut" }, { "t": 0.5, "value": 1, "easing": "easeInOut" }, { "t": 1, "value": 0 } ] }
+      ]
+    }
+  }
+}

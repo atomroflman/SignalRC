@@ -1,0 +1,132 @@
+{
+  "description": "Erwartete Auflösung (README.md §7) für Dokument-Fixtures. stream null = Standard. expect wird als Teilmenge verglichen: genannte Felder müssen gleich sein, Listen vollständig und in Reihenfolge; null bedeutet „nicht vorhanden“.",
+  "cases": [
+    {
+      "id": "standard-tree",
+      "file": "valid/variants-clips-lidar.json",
+      "stream": null,
+      "expect": {
+        "kind": "hud",
+        "workspace": { "width": 1280, "height": 720 },
+        "root": ["e_belt", "e_steer", "e_logo", "e_lidar", "e_warning", "e_driver_hint"],
+        "elements": {
+          "e_steer": { "parent": "root", "origin": "standard", "effectiveDisabled": false },
+          "e_logo": { "effectiveDisabled": false, "lockAspect": true },
+          "e_lidar": { "props": { "sectors": 12 }, "propOrigins": { "sectors": "standard" } }
+        },
+        "clips": { "c_low_battery": { "overridden": [], "origin": "standard" } }
+      }
+    },
+    {
+      "id": "stream-without-variant-uses-standard",
+      "file": "valid/variants-clips-lidar.json",
+      "stream": "unknown-stream",
+      "expect": {
+        "kind": "hud",
+        "root": ["e_belt", "e_steer", "e_logo", "e_lidar", "e_warning", "e_driver_hint"]
+      }
+    },
+    {
+      "id": "disabled-variant-shows-nothing",
+      "file": "valid/variants-clips-lidar.json",
+      "stream": "rear",
+      "expect": { "kind": "none", "reason": "variantDisabled" }
+    },
+    {
+      "id": "variant-regrouping-and-order",
+      "file": "valid/variants-clips-lidar.json",
+      "stream": "front-wide",
+      "expect": {
+        "kind": "hud",
+        "workspace": { "width": 1920, "height": 1080 },
+        "rootTransform": { "scale": 1.5, "offsetX": 0, "offsetY": 0 },
+        "root": ["e_front_box", "e_belt", "e_lidar", "e_logo", "e_warning", "e_driver_hint"],
+        "elements": {
+          "e_front_box": { "parent": "root", "origin": "variant", "children": ["e_front_label", "e_steer"] },
+          "e_front_label": { "parent": "e_front_box", "origin": "variant" },
+          "e_steer": { "parent": "e_front_box", "origin": "standard" },
+          "e_logo": { "disabled": true, "effectiveDisabled": true },
+          "e_lidar": { "props": { "sectors": 8 }, "propOrigins": { "sectors": "variant", "radius": "standard" } }
+        },
+        "clips": {
+          "c_low_battery": {
+            "overridden": ["trigger"],
+            "durationS": 1,
+            "trigger": { "mode": "whileTrue", "condition": "tel(\"batteryVoltage\") < 11", "onDeactivate": "finish" }
+          },
+          "c_hint_pulse": { "overridden": [] }
+        }
+      }
+    },
+    {
+      "id": "vehicle-disabled",
+      "inline": { "schemaVersion": 1, "disabled": true, "workspace": { "width": 100, "height": 100 }, "elements": {}, "children": [] },
+      "stream": "any",
+      "expect": { "kind": "none", "reason": "vehicleDisabled" }
+    },
+    {
+      "id": "disabled-group-disables-subtree",
+      "inline": {
+        "schemaVersion": 1, "workspace": { "width": 100, "height": 100 },
+        "elements": {
+          "e_g": { "type": "group", "children": ["e_a"], "disabled": true },
+          "e_a": { "type": "rect" }
+        },
+        "children": ["e_g"],
+        "variants": { "cam": { "elements": { "e_g": { "disabled": false } } } }
+      },
+      "stream": null,
+      "expect": { "kind": "hud", "elements": { "e_g": { "effectiveDisabled": true }, "e_a": { "disabled": false, "effectiveDisabled": true } } }
+    },
+    {
+      "id": "variant-reenables-group",
+      "inline": {
+        "schemaVersion": 1, "workspace": { "width": 100, "height": 100 },
+        "elements": {
+          "e_g": { "type": "group", "children": ["e_a"], "disabled": true },
+          "e_a": { "type": "rect" }
+        },
+        "children": ["e_g"],
+        "variants": { "cam": { "elements": { "e_g": { "disabled": false } } } }
+      },
+      "stream": "cam",
+      "expect": { "kind": "hud", "elements": { "e_g": { "effectiveDisabled": false }, "e_a": { "effectiveDisabled": false } } }
+    },
+    {
+      "id": "moved-in-sorted-by-id",
+      "inline": {
+        "schemaVersion": 1, "workspace": { "width": 100, "height": 100 },
+        "elements": {
+          "e_g": { "type": "group", "children": ["e_m"] },
+          "e_m": { "type": "rect" }, "e_z": { "type": "rect" }, "e_b": { "type": "rect" }
+        },
+        "children": ["e_g", "e_z", "e_b"],
+        "variants": { "cam": { "structure": { "parents": { "e_z": "e_g", "e_b": "e_g" } } } }
+      },
+      "stream": "cam",
+      "expect": { "kind": "hud", "root": ["e_g"], "elements": { "e_g": { "children": ["e_m", "e_b", "e_z"] } } }
+    },
+    {
+      "id": "variant-workspace-without-root-transform-drops-standard-one",
+      "inline": {
+        "schemaVersion": 1, "workspace": { "width": 100, "height": 100 },
+        "rootTransform": { "scale": 2, "offsetX": 0, "offsetY": 0 },
+        "elements": {}, "children": [],
+        "variants": { "cam": { "workspace": { "width": 50, "height": 50 } }, "same": {} }
+      },
+      "stream": "cam",
+      "expect": { "kind": "hud", "workspace": { "width": 50, "height": 50 }, "rootTransform": null }
+    },
+    {
+      "id": "variant-without-workspace-keeps-standard-root-transform",
+      "inline": {
+        "schemaVersion": 1, "workspace": { "width": 100, "height": 100 },
+        "rootTransform": { "scale": 2, "offsetX": 0, "offsetY": 0 },
+        "elements": {}, "children": [],
+        "variants": { "same": {} }
+      },
+      "stream": "same",
+      "expect": { "kind": "hud", "workspace": { "width": 100, "height": 100 }, "rootTransform": { "scale": 2, "offsetX": 0, "offsetY": 0 } }
+    }
+  ]
+}

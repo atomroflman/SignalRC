@@ -32,6 +32,13 @@ public class JanusConfiguration
     [MinLength(1)]
     public string HostName { get; set; } = "localhost";
 
+    /// <summary>
+    /// Host the vehicles send their RTP to. <see cref="HostName"/> is how the server reaches Janus
+    /// (in Compose the container name), which a vehicle usually can't resolve. Empty: vehicles keep
+    /// sending to their own ServerName.
+    /// </summary>
+    public string? PublicHostName { get; set; }
+
     [Range(1024, 65535)]
     public int PortRangeStart { get; set; } = 10000;
     [Range(1024, 65535)]

@@ -1,3 +1,5 @@
+using SignalRC.Server.Telemetry;
+using SignalRC.Server.Overlay;
 using SignalRC.Server;
 using SignalRC.Server.Configuration;
 using SignalRC.Server.Data;
@@ -10,6 +12,7 @@ using Microsoft.AspNetCore.DataProtection;
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration
     .AddJsonFile("appSettings.json")
+    .AddJsonFile($"appSettings.{builder.Environment.EnvironmentName}.json", optional: true)
     .AddEnvironmentVariables()
     .AddCommandLine(args)
     .AddUserSecrets<Program>();
@@ -52,14 +55,18 @@ builder.Services.AddSingleton(sqids);
 builder.Services.AddKeyedSingleton("transfer", transferSqids);
 
 builder.Services.AddSingleton<VideoStreamReceiverService>();
-builder.Services.AddSingleton<ActiveVideoStreamViewerRegistry>();
+builder.Services.AddSingleton<VideoStreamActivationService>();
 builder.Services.AddSingleton<PushToTalkRegistry>();
 builder.Services.AddSingleton<CarAudioService>();
 builder.Services.AddSingleton<CarConnectionStore>();
+builder.Services.AddSingleton<OnboardLogStore>();
 builder.Services.AddSingleton<AvailableTypesRegistry>();
 builder.Services.AddSingleton<IServerBuildInfoService, ServerBuildInfoService>();
+builder.Services.AddSingleton<OnboardPackageService>();
 builder.Services.AddSingleton<IOnboardInstallScriptService, OnboardInstallScriptService>();
 builder.Services.AddSingleton<ChannelTemplateService>();
+builder.Services.AddOverlay();
+builder.Services.AddTelemetryRelay();
 builder.Services.AddDbContext<SignalRCContext>((serviceProvider, options) =>
 {
     var configService = serviceProvider.GetRequiredService<IConfigurationService>();
@@ -129,6 +136,7 @@ if (app.Environment.IsDevelopment())
     app.UseDeveloperExceptionPage();
 }
 
+app.UseOverlay();
 app.UseRouting();
 
 app.UseAuthentication();

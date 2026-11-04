@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <line id="pole" x1="4" y1="22" x2="4" y2="3"/>
+  <rect id="cloth" x="4" y="3" width="16" height="11"/>
+  <g id="checks" fill="#ffffff" stroke="none">
+    <rect x="4" y="3" width="4" height="3.7"/><rect x="12" y="3" width="4" height="3.7"/>
+    <rect x="8" y="6.7" width="4" height="3.7"/><rect x="16" y="6.7" width="4" height="3.7"/>
+    <rect x="4" y="10.3" width="4" height="3.7"/><rect x="12" y="10.3" width="4" height="3.7"/>
+  </g>
+</svg>

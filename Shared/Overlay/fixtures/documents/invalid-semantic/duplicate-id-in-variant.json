@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1, "workspace": { "width": 1280, "height": 720 },
+  "elements": { "e_a": { "type": "rect" } },
+  "children": ["e_a"],
+  "variants": { "cam1": { "addedElements": { "e_a": { "type": "ellipse" } }, "structure": { "parents": { "e_a": "root" } } } }
+}

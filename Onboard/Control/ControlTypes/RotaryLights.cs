@@ -25,7 +25,7 @@ namespace SignalRC.Onboard.Control.ControlTypes
         {
             base.Initialize();
             _pwm = PinManager.GetModule<IPwmModule>(Address ?? 0);
-            _pwm.SetPulseWidthMilliseconds(LOW_PWM);
+            Observe(_pwm.SetPulseWidthMilliseconds(LOW_PWM));
         }
 
         public override void OnControlRecived(decimal newValue)
@@ -37,7 +37,7 @@ namespace SignalRC.Onboard.Control.ControlTypes
             }
             var res = (int)Math.Round(newValue, 0);
             var selectedMode = (byte)(res % AvailableModes);
-            Task.Run(() => SetModeAsync(selectedMode));
+            Observe(Task.Run(() => SetModeAsync(selectedMode)));
         }
 
         async Task SetModeAsync(int selectedMode)
@@ -54,9 +54,8 @@ namespace SignalRC.Onboard.Control.ControlTypes
             _currentMode = (byte)((_currentMode + 1) % AvailableModes);
             _isHigh = !_isHigh;
             var pulseWidth = _isHigh ? HIGH_PWM : LOW_PWM;
-            _pwm?.SetPulseWidthMilliseconds(pulseWidth);
             Logger.LogDebug($"RotaryLight: Set mode {_currentMode} with pulse width {pulseWidth}ms");
-            return Task.CompletedTask;
+            return _pwm?.SetPulseWidthMilliseconds(pulseWidth) ?? Task.CompletedTask;
         }
 
         protected override async Task RunTestInternalAsync()
@@ -71,7 +70,7 @@ namespace SignalRC.Onboard.Control.ControlTypes
         public override void OnControlReleased()
         {
             if (_pwm != null)
-                _pwm.SetPwmCyclePercentage(0);
+                Observe(_pwm.SetPwmCyclePercentage(0));
         }
     }
 }

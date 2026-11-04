@@ -13,7 +13,7 @@ namespace SignalRC.Onboard.Telemetry
     {
         private readonly string? _vcgencmdPath;
 
-        public CpuTemperatureReader(ILogger logger) : base(logger)
+        public CpuTemperatureReader(ILogger<CpuTemperatureReader> logger) : base(logger)
         {
             _vcgencmdPath = FindVcgencmd();
 
@@ -26,6 +26,22 @@ namespace SignalRC.Onboard.Telemetry
             {
                 Logger.LogWarning("CPU temperature sysfs path not found. Falling back to `vcgencmd` at {Path}.", _vcgencmdPath);
             }
+        }
+
+        /// <summary>
+        /// Reads the sensor directly, so the value is as old as the read:
+        /// <c>Valid</c> with the read duration as age. The two failure strings
+        /// <see cref="ReadTelemetry"/> returns are source errors.
+        /// </summary>
+        public override async Task<IReadOnlyDictionary<string, TelemetrySample>?> ReadAllSamplesAsync(string channelKey)
+        {
+            var started = Stopwatch.GetTimestamp();
+            var value = await ReadTelemetry();
+            var ageMs = (int)Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+            var state = value is "error" or "parse error"
+                ? SignalRC.Shared.Telemetry.TelemetrySampleState.Error
+                : SignalRC.Shared.Telemetry.TelemetrySampleState.Valid;
+            return new Dictionary<string, TelemetrySample> { [channelKey] = new(value, state, ageMs) };
         }
 
         public override async Task<string> ReadTelemetry()
@@ -77,7 +93,7 @@ namespace SignalRC.Onboard.Telemetry
                 if (int.TryParse(content.Trim(), out var tempMilliC))
                 {
                     var tempC = tempMilliC / 1000.0;
-                    Logger.LogDebug("CPU Temperature from sysfs: {Temp}°C", tempC);
+                    Logger.LogTrace("CPU Temperature from sysfs: {Temp}°C", tempC);
                     return tempC.ToString("F2", CultureInfo.InvariantCulture) + "°C";
                 }
             }
@@ -154,7 +170,7 @@ namespace SignalRC.Onboard.Telemetry
                 return null;
             }
 
-            Logger.LogDebug("CPU Temperature from vcgencmd: {Temp}°C", tempC);
+            Logger.LogTrace("CPU Temperature from vcgencmd: {Temp}°C", tempC);
             return tempC.ToString("F2", CultureInfo.InvariantCulture) + "°C";
         }
     }

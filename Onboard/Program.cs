@@ -13,6 +13,7 @@ using SignalRC.Onboard.Data;
 using SignalRC.Onboard.Hardware;
 using SignalRC.Onboard.Services;
 using SignalRC.Onboard.Telemetry;
+using SignalRC.Onboard.Update;
 using SignalRC.Onboard.Video;
 using SignalRC.Shared.Channels;
 using Microsoft.Extensions.Configuration;
@@ -103,7 +104,9 @@ serviceCollection.AddSingleton<BashToolService>();
 serviceCollection.AddSingleton<OnboardDiagnosticsService>();
 serviceCollection.AddSingleton<AudioMixer>();
 serviceCollection.AddSingleton<SoundLibrary>();
+serviceCollection.AddSingleton<ChannelHealthService>();
 serviceCollection.AddSingleton<AudioService>();
+serviceCollection.AddSingleton<OnboardUpdateService>();
 
 serviceCollection.AddSingleton<SshKeyService>();
 serviceCollection.AddSingleton<TlsCertificateService>();
@@ -114,13 +117,17 @@ serviceCollection.AddSingleton<IModuleManagerFactory, ModuleManagerFactory>();
 serviceCollection.AddAllTransient(typeof(TelemetryReaderBase));
 serviceCollection.AddAllTransient(typeof(ControlTypeBase));
 serviceCollection.AddAllTransient(typeof(IPwmModule));
-serviceCollection.AddAllTransient(typeof(IGpioModule));
+// The log also goes to the server for the GUI (car page → Logs), buffered until connected.
+var logForwarder = new ServerLogForwarder(configuration.GetValue("LogForwarding:MinLevel", LogLevel.Information));
+serviceCollection.AddSingleton(logForwarder);
 serviceCollection.AddLogging(c => {
     c.AddConsole(); 
+    c.AddProvider(logForwarder);
     c.AddConfiguration(configuration.GetSection("Logging"));
 });
 
 var serviceProvider = serviceCollection.BuildServiceProvider();
+logForwarder.Start(serviceProvider.GetRequiredService<ServerConnectionService>());
 var logger = serviceProvider.GetRequiredService<ILogger<Program>>();
 logger.LogDebug("Debug log enabled...");
 
@@ -148,6 +155,9 @@ if (configuration.GetValue<bool>("EnableChannelTest"))
     logger.LogInformation("Running channel test...");
     await carControlService.TestControlsAsync();
 }
+
+// Before connecting: an unconfirmed release has to reach the server within a timeout.
+serviceProvider.GetRequiredService<OnboardUpdateService>().Initialize();
 
 await connectionService.ConnectToServer(carIdentityKey);
 
@@ -431,7 +441,16 @@ await Task.Run(async () =>
 {
     while (true)
     {
-        await Task.WhenAll(telemetryService.Tick(), Task.Delay(100));
+        try
+        {
+            await Task.WhenAll(telemetryService.Tick(), Task.Delay(100));
+        }
+        catch (Exception ex)
+        {
+            // The loop is the process: whatever a tick throws must not end it.
+            logger.LogError(ex, "Telemetry tick failed.");
+            await Task.Delay(100);
+        }
     }
 });
 

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">
+  <defs>
+    <rect id="l0" width="1" height="1"/>
+    <g id="l1"><use href="#l0"/><use href="#l0"/><use href="#l0"/><use href="#l0"/><use href="#l0"/><use href="#l0"/><use href="#l0"/><use href="#l0"/><use href="#l0"/><use href="#l0"/></g>
+    <g id="l2"><use href="#l1"/><use href="#l1"/><use href="#l1"/><use href="#l1"/><use href="#l1"/><use href="#l1"/><use href="#l1"/><use href="#l1"/><use href="#l1"/><use href="#l1"/></g>
+    <g id="l3"><use href="#l2"/><use href="#l2"/><use href="#l2"/><use href="#l2"/><use href="#l2"/><use href="#l2"/><use href="#l2"/><use href="#l2"/><use href="#l2"/><use href="#l2"/></g>
+    <g id="l4"><use href="#l3"/><use href="#l3"/><use href="#l3"/><use href="#l3"/><use href="#l3"/><use href="#l3"/><use href="#l3"/><use href="#l3"/><use href="#l3"/><use href="#l3"/></g>
+    <g id="l5"><use href="#l4"/><use href="#l4"/><use href="#l4"/><use href="#l4"/><use href="#l4"/><use href="#l4"/><use href="#l4"/><use href="#l4"/><use href="#l4"/><use href="#l4"/></g>
+    <g id="l6"><use href="#l5"/><use href="#l5"/><use href="#l5"/><use href="#l5"/><use href="#l5"/><use href="#l5"/><use href="#l5"/><use href="#l5"/><use href="#l5"/><use href="#l5"/></g>
+    <g id="l7"><use href="#l6"/><use href="#l6"/><use href="#l6"/><use href="#l6"/><use href="#l6"/><use href="#l6"/><use href="#l6"/><use href="#l6"/><use href="#l6"/><use href="#l6"/></g>
+    <g id="l8"><use href="#l7"/><use href="#l7"/><use href="#l7"/><use href="#l7"/><use href="#l7"/><use href="#l7"/><use href="#l7"/><use href="#l7"/><use href="#l7"/><use href="#l7"/></g>
+  </defs>
+  <use href="#l8"/>
+</svg>

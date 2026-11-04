@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path id="lamp" d="M10 5C6 5 3 8 3 12s3 7 7 7z"/>
+  <path id="beams" d="M14 6h7M14 10h7M14 14h7M14 18h7"/>
+</svg>

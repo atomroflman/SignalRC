@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using System.Reflection;
+using SignalRC.Onboard.Control;
 using SignalRC.Onboard.Control.ControlTypes;
+using SignalRC.Onboard.Hardware;
 using SignalRC.Onboard.Telemetry;
 using SignalRC.Shared.Channels;
 
@@ -20,9 +22,30 @@ public class AvailableChannelTypesService
     {
         ControlTypes = _cache.Value.ControlTypes,
         TelemetryTypes = _cache.Value.TelemetryTypes,
+        PinManagerTypes = _cache.Value.PinManagerTypes,
+        OptionSchemas = _cache.Value.OptionSchemas,
         AudioInputDevices = ListAlsaDevices("arecord"),
         AudioOutputDevices = ListAlsaDevices("aplay"),
+        BoardModel = _boardModel.Value,
     };
+
+    private static readonly Lazy<string?> _boardModel = new(ReadBoardModel);
+
+    /// <summary>The device tree model string, without its trailing NUL; null where there is none.</summary>
+    internal static string? ReadBoardModel()
+    {
+        try
+        {
+            const string path = "/proc/device-tree/model";
+            if (!File.Exists(path)) return null;
+            var model = File.ReadAllText(path).TrimEnd('\0', ' ', '\n');
+            return string.IsNullOrWhiteSpace(model) ? null : model;
+        }
+        catch
+        {
+            return null;
+        }
+    }
 
     /// <summary>
     /// Hardware devices first as <c>plughw:CARD=…,DEV=…</c> (from <c>-l</c>; plughw converts sample
@@ -112,28 +135,52 @@ public class AvailableChannelTypesService
     private static AvailableChannelTypes BuildTypes()
     {
         var asm = typeof(AvailableChannelTypesService).Assembly;
-        var baseType = typeof(ControlTypeBase);
-        var controlTypes = asm.GetTypes()
-            .Where(t => t.IsClass && !t.IsAbstract && baseType.IsAssignableFrom(t))
-            .Select(t => t.GetCustomAttribute<ControlTypeAttribute>()?.TypeName)
-            .Where(name => !string.IsNullOrEmpty(name))
-            .Cast<string>()
-            .Distinct()
-            .OrderBy(s => s, StringComparer.Ordinal)
+        var docs = XmlDocs.Load(asm);
+        var types = asm.GetTypes().Where(t => t.IsClass && !t.IsAbstract && (t.IsPublic || t.IsNestedPublic)).ToArray();
+
+        var controls = types
+            .Where(t => typeof(ControlTypeBase).IsAssignableFrom(t))
+            .Select(t => (Type: t, Name: t.GetCustomAttribute<ControlTypeAttribute>()?.TypeName))
+            .Where(c => !string.IsNullOrEmpty(c.Name))
+            .GroupBy(c => c.Name!, StringComparer.Ordinal)
+            .Select(g => (Name: g.Key, g.First().Type))
+            .OrderBy(c => c.Name, StringComparer.Ordinal)
             .ToArray();
 
-        var telemetryBase = typeof(TelemetryReaderBase);
-        var telemetryTypes = asm.GetTypes()
-            .Where(t => t.IsClass && !t.IsAbstract && telemetryBase.IsAssignableFrom(t))
-            .Select(t => t.FullName ?? t.Name)
-            .Distinct()
-            .OrderBy(s => s, StringComparer.Ordinal)
+        var telemetry = types
+            .Where(t => typeof(TelemetryReaderBase).IsAssignableFrom(t))
+            .Select(t => (Name: t.FullName ?? t.Name, Type: t))
+            .DistinctBy(t => t.Name)
+            .OrderBy(t => t.Name, StringComparer.Ordinal)
             .ToArray();
+
+        // ModuleManagerFactory resolves the "type" of a pin manager by class name.
+        var pinManagers = types
+            .Where(t => typeof(IModuleManager).IsAssignableFrom(t))
+            .Select(t => (t.Name, Type: t))
+            .DistinctBy(t => t.Name)
+            .OrderBy(t => t.Name, StringComparer.Ordinal)
+            .ToArray();
+
+        var schemas = new List<ChannelTypeSchema>();
+        schemas.AddRange(pinManagers.Select(p => OptionSchemaBuilder.Build(ChannelTypeSchema.PinManager, p.Name, p.Type, docs)));
+        schemas.AddRange(controls.Select(c => OptionSchemaBuilder.Build(ChannelTypeSchema.Control, c.Name, c.Type, docs)));
+        schemas.AddRange(telemetry.Select(t => OptionSchemaBuilder.Build(ChannelTypeSchema.Telemetry, t.Name, t.Type, docs, [GroupKeyOption])));
+        schemas.AddRange(MediaMtxConfigurator.OptionSchemas());
 
         return new AvailableChannelTypes
         {
-            ControlTypes = controlTypes,
-            TelemetryTypes = telemetryTypes,
+            ControlTypes = controls.Select(c => c.Name).ToArray(),
+            TelemetryTypes = telemetry.Select(t => t.Name).ToArray(),
+            PinManagerTypes = pinManagers.Select(p => p.Name).ToArray(),
+            OptionSchemas = schemas.ToArray(),
         };
     }
+
+    private static readonly OptionSchema GroupKeyOption = new()
+    {
+        Name = ChannelOptionBinder.GroupKeyOption,
+        Type = "string",
+        Description = "Telemetry channels with the same group key share one reader instance; defaults to the channel name.",
+    };
 }

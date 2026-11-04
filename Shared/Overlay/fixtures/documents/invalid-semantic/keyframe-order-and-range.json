@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1, "workspace": { "width": 1280, "height": 720 },
+  "elements": { "e_a": { "type": "rect" } },
+  "children": ["e_a"],
+  "clips": {
+    "c_1": { "durationS": 1, "trigger": { "mode": "auto" }, "tracks": [ { "element": "e_a", "property": "x", "keyframes": [ { "t": 0.5, "value": 0 }, { "t": 0.2, "value": 10 }, { "t": 1.5, "value": 20 } ] } ] }
+  }
+}
