@@ -259,7 +259,9 @@ public TelemetryService(ChannelMap channelMap, ServerConnectionService serverCon
                 {
                     continue;
                 }
-                Logger.LogDebug("Telemetry {Channel}: {Value} ({State}, {AgeMs} ms)", channelName, sample.Value, sample.State, sample.AgeMs);
+                // Every value every tick: Trace, so the default Debug level does not fill the
+                // log (2.6 GB on the vehicle). Enable via Logging:LogLevel:SignalRC.Onboard.Telemetry = Trace.
+                Logger.LogTrace("Telemetry {Channel}: {Value} ({State}, {AgeMs} ms)", channelName, sample.Value, sample.State, sample.AgeMs);
                 read[serverId] = sample;
             }
         }

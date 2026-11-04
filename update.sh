@@ -120,6 +120,11 @@ elif [ "$DEPLOY_TYPE" = "onboard" ]; then
         systemctl daemon-reload
         echo "Alte Unit gesichert unter $ONBOARD_SERVICE.bak"
     fi
+
+    # Logrotate für die append:-Logs der Units, auch auf älteren Installationen.
+    LOG_DIR="$(grep -oP '^StandardOutput=append:\K.*(?=/onboard.log)' "$ONBOARD_SERVICE" | head -1 || true)"
+    [ -n "$LOG_DIR" ] || LOG_DIR="/var/log/signalrc"
+    bash "$SCRIPT_DIR/scripts/onboard-write-logrotate.sh" "$LOG_DIR"
 fi
 
 # ── 3. Service stoppen ───────────────────────────────────────────────

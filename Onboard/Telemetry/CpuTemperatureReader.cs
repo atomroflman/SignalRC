@@ -93,7 +93,7 @@ namespace SignalRC.Onboard.Telemetry
                 if (int.TryParse(content.Trim(), out var tempMilliC))
                 {
                     var tempC = tempMilliC / 1000.0;
-                    Logger.LogDebug("CPU Temperature from sysfs: {Temp}°C", tempC);
+                    Logger.LogTrace("CPU Temperature from sysfs: {Temp}°C", tempC);
                     return tempC.ToString("F2", CultureInfo.InvariantCulture) + "°C";
                 }
             }
@@ -170,7 +170,7 @@ namespace SignalRC.Onboard.Telemetry
                 return null;
             }
 
-            Logger.LogDebug("CPU Temperature from vcgencmd: {Temp}°C", tempC);
+            Logger.LogTrace("CPU Temperature from vcgencmd: {Temp}°C", tempC);
             return tempC.ToString("F2", CultureInfo.InvariantCulture) + "°C";
         }
     }

@@ -676,6 +676,7 @@ if [ "$DEPLOY_MODE" = "onboard" ]; then
     chown "$RUN_USER:$RUN_USER" "$LOG_DIR"
 
     bash "$REPO_DIR/scripts/onboard-write-service.sh" "$REPO_DIR" "$DOTNET_ROOT" "$RUN_USER" "$LOG_DIR"
+    bash "$REPO_DIR/scripts/onboard-write-logrotate.sh" "$LOG_DIR"
 
    cat > /etc/systemd/system/signalrc-mediamtx.service <<EOF
 [Unit]
