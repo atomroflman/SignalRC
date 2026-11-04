@@ -11,6 +11,7 @@ set -euo pipefail
 #
 # Unterstützte Installationen (von install.sh angelegt):
 #   - /etc/systemd/system/signalrc.service        -> Server (Docker/Podman Compose)
+#   - /etc/systemd/system/ltecar.service          -> Server, ältere Installation
 #   - /etc/systemd/system/signalrc-onboard.service -> Onboard (Vehicle Client)
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -37,9 +38,13 @@ run_as_user() {
 SERVER_SERVICE="/etc/systemd/system/signalrc.service"
 ONBOARD_SERVICE="/etc/systemd/system/signalrc-onboard.service"
 
+if [ ! -f "$SERVER_SERVICE" ] && [ -f /etc/systemd/system/ltecar.service ]; then
+    SERVER_SERVICE="/etc/systemd/system/ltecar.service"
+fi
+
 if [ -f "$SERVER_SERVICE" ]; then
     DEPLOY_TYPE="server"
-    SERVICE_NAME="signalrc.service"
+    SERVICE_NAME="$(basename "$SERVER_SERVICE")"
 elif [ -f "$ONBOARD_SERVICE" ]; then
     DEPLOY_TYPE="onboard"
     SERVICE_NAME="signalrc-onboard.service"
@@ -152,6 +157,14 @@ echo "[4/4] Service starten: $SERVICE_NAME ..."
 systemctl start "$SERVICE_NAME"
 
 systemctl status "$SERVICE_NAME" --no-pager || true
+
+# Jeder Build hinterlässt namenlose Images; ohne Aufräumen läuft die Platte voll.
+# Getaggte Images und Volumes bleiben. Ein Fehler hier macht das Update nicht ungültig.
+if [ "$DEPLOY_TYPE" = "server" ]; then
+    echo "Alte Build-Images entfernen ..."
+    run_as_user "${COMPOSE_CMD%% *}" image prune -f >/dev/null \
+        || echo "Warnung: Build-Images konnten nicht entfernt werden."
+fi
 
 echo ""
 echo "============================================"
