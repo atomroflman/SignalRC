@@ -96,8 +96,13 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
     public int FaultResetHoldMs { get; set; } = 250;
 
     /// <summary>
-    /// Switch the nodes to Coast, driver off, once the tracks stand still and
-    /// nothing asks them to move. Disable only to test the firmware's Stop.
+    /// Switch the nodes to Brake or Coast (<see cref="BrakeAtStandstill"/>)
+    /// once the tracks stand still and nothing asks them to move. Disable only
+    /// to test the firmware's Stop.
+    ///
+    /// The reasoning below is the original one, for firmware before
+    /// 2026-11-04. It no longer holds for current firmware, which is why the
+    /// default is now Brake rather than Coast.
     ///
     /// The firmware's Stop keeps the driver on and regulates to zero speed,
     /// and at standstill that is unstable: the gate edges put roughly 85
@@ -114,6 +119,24 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
     /// it brakes.
     /// </summary>
     public bool CoastAtStandstill { get; set; } = true;
+
+    /// <summary>
+    /// What the standstill logic of <see cref="CoastAtStandstill"/> sends:
+    /// Brake (true) or Coast (false).
+    ///
+    /// Firmware from 2026-11-04 on no longer needs the guard against the Stop
+    /// oscillation - it reads the Hall sensors in step with the PWM, measures
+    /// speed from edge timing and parks by itself in Stop. Coast now only
+    /// costs: the gate driver goes into standby and the wheels turn freely,
+    /// so a vehicle on a slope rolls away. Brake parks instead and shorts the
+    /// windings below 2 rad/s, which brakes by back-EMF alone. Older firmware
+    /// treats Brake like Velocity at zero, i.e. like Stop.
+    /// </summary>
+    public bool BrakeAtStandstill { get; set; } = true;
+
+    private CanTrackProtocol.DriveMode StandstillMode => BrakeAtStandstill
+        ? CanTrackProtocol.DriveMode.Brake
+        : CanTrackProtocol.DriveMode.Coast;
 
     /// <summary>Below this reported speed a track counts as standing. Matches
     /// the firmware's own coast threshold; the Hall velocity is blind below
@@ -893,8 +916,9 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
     }
 
     /// <summary>
-    /// Replaces the mode with Coast once nothing is commanded and the tracks
-    /// stand, see <see cref="CoastAtStandstill"/>. Latches until a nonzero
+    /// Replaces the mode with Brake or Coast (<see cref="BrakeAtStandstill"/>)
+    /// once nothing is commanded and the tracks stand, see
+    /// <see cref="CoastAtStandstill"/>. Latches until a nonzero
     /// command arrives, so a track nudged by hand does not switch the driver
     /// back on. Must be called under _stateLock, after the commanded speeds
     /// are set.
@@ -909,7 +933,7 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
             return mode;
         }
         if (!CoastAtStandstill) return mode;
-        if (_coasting) return CanTrackProtocol.DriveMode.Coast;
+        if (_coasting) return StandstillMode;
 
         if (_idleSinceMs < 0) _idleSinceMs = nowMs;
 
@@ -922,7 +946,7 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
 
         _coasting = (_standingSinceMs >= 0 && nowMs - _standingSinceMs >= StandstillCoastMs)
                     || nowMs - _idleSinceMs >= MaxStopMs;
-        return _coasting ? CanTrackProtocol.DriveMode.Coast : mode;
+        return _coasting ? StandstillMode : mode;
     }
 
     /// <summary>

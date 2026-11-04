@@ -36,11 +36,17 @@ public static class CanTrackProtocol
 
     public enum DriveMode : byte
     {
-        /// <summary>Target zero, driver stays enabled, actively holds standstill.</summary>
+        /// <summary>Target zero. The velocity loop brakes to standstill; since
+        /// firmware 2026-11-04 the node then parks by itself (bridge off, gate
+        /// driver awake, short-circuit brake if enabled locally).</summary>
         Stop = 0,
         Velocity = 1,
-        /// <summary>Driver off, wheels free.</summary>
+        /// <summary>Driver off, gate driver in standby, wheels free. No brake.</summary>
         Coast = 2,
+        /// <summary>Park at once without the velocity loop; below 2 rad/s the
+        /// low sides short the windings. Firmware 2026-11-04 and later; older
+        /// firmware treats it like Velocity with the frame's target.</summary>
+        Brake = 3,
     }
 
     /// <summary>Bit 0 of the command frame's flag byte: unlatch a fault.
@@ -58,6 +64,11 @@ public static class CanTrackProtocol
         UnderVoltageWarning = 0x08,
         ThermalDerating = 0x10,
         TemperatureWarning = 0x20,
+        /// <summary>The short-circuit brake is engaged right now.</summary>
+        ShortBrake = 0x40,
+        /// <summary>The short-circuit brake let go on overcurrent; the wheel
+        /// free-wheels until the next drive command.</summary>
+        BrakeTripped = 0x80,
     }
 
     public enum NodeState : byte

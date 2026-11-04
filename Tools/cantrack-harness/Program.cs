@@ -44,6 +44,14 @@ Check("right power 0x192", P.PowerId(P.RightNode) == 0x192);
 Check("right fault 0x193", P.FaultId(P.RightNode) == 0x193);
 Check("estop below command", P.EmergencyStopId < P.CommandId);
 
+Console.WriteLine("Modes and status flags match the firmware");
+Check("stop 0", (byte)P.DriveMode.Stop == 0);
+Check("velocity 1", (byte)P.DriveMode.Velocity == 1);
+Check("coast 2", (byte)P.DriveMode.Coast == 2);
+Check("brake 3", (byte)P.DriveMode.Brake == 3);
+Check("short brake flag bit 6", (byte)P.StatusFlags.ShortBrake == 0x40);
+Check("brake tripped flag bit 7", (byte)P.StatusFlags.BrakeTripped == 0x80);
+
 Console.WriteLine("Little endian round trip");
 {
     var d = new byte[8];
@@ -486,13 +494,17 @@ var pump = new Thread(() =>
 { IsBackground = true };
 pump.Start();
 
+// Status flags the simulated left node reports; declared here because
+// SendStatus reads it.
+var simLeftFlags = P.StatusFlags.None;
+
 void SendStatus(int n, double speed, double target, P.FaultCode fault)
 {
     var d = new byte[8];
     P.WriteInt16(d, 0, P.ToWire(speed * 100));
     P.WriteInt16(d, 2, P.ToWire(target * 100));
     d[4] = (byte)P.NodeState.Driving;
-    d[5] = 0;
+    d[5] = (byte)(n == P.LeftNode ? simLeftFlags : P.StatusFlags.None);
     P.WriteInt16(d, 6, P.ToWire(2.5 * 100));
     node.Write(new CanFrame(P.StatusId(n), d));
 
@@ -537,9 +549,9 @@ Thread.Sleep(200);
 var snap = manager.GetSnapshot();
 Check("command frames are sent", seenCommands > 5, $"{seenCommands} in 200 ms");
 Check("no nodes -> drive inhibited", !snap.DriveEnabled, snap.InhibitReason);
-// Coast, not Stop: nothing is moving, and the firmware's Stop keeps the
-// driver on, which oscillates at standstill.
-Check("no nodes -> mode coast", lastMode == (byte)P.DriveMode.Coast, $"mode {lastMode}");
+// The standstill mode, not Stop: nothing is moving. Brake by default
+// (BrakeAtStandstill); old firmware's Stop kept the driver on and oscillated.
+Check("no nodes -> mode brake", lastMode == (byte)P.DriveMode.Brake, $"mode {lastMode}");
 Check("no nodes -> zero target", lastLeft == 0 && lastRight == 0, $"{lastLeft}/{lastRight}");
 
 // 2. Both nodes report in. Now full throttle has to reach the wire.
@@ -617,24 +629,50 @@ Check("silent node -> mode stop", lastMode == (byte)P.DriveMode.Stop, $"mode {la
 simLeftAlive = true;
 Thread.Sleep(200);
 
-// 5b. Standstill. The firmware's Stop holds the driver on and swings the
-// wheel at zero speed, so once nothing is commanded and both tracks stand the
-// nodes have to be told to coast - but not while they are still braking.
+// 5b. Standstill. Once nothing is commanded and both tracks stand, the nodes
+// are told to brake (BrakeAtStandstill, default) - but not while the velocity
+// loop is still bringing them down, because Stop is what brakes from speed.
 throttle.SetValue(0f);
 steering.SetValue(0f);
 Thread.Sleep(100);
-Check("zero command while moving -> not coast yet", lastMode != (byte)P.DriveMode.Coast,
+Check("zero command while moving -> not brake yet", lastMode != (byte)P.DriveMode.Brake,
       $"mode {lastMode}");
 simLeftSpeed = simRightSpeed = 0.0;
 Thread.Sleep(400);
-Check("zero command and standing -> coast", lastMode == (byte)P.DriveMode.Coast, $"mode {lastMode}");
-simLeftSpeed = 5.0;            // pushed by hand: stays off, nothing asked for torque
+Check("zero command and standing -> brake", lastMode == (byte)P.DriveMode.Brake, $"mode {lastMode}");
+simLeftSpeed = 5.0;            // pushed by hand: stays parked, nothing asked for torque
 Thread.Sleep(150);
-Check("coast latches against a nudge", lastMode == (byte)P.DriveMode.Coast, $"mode {lastMode}");
+Check("brake latches against a nudge", lastMode == (byte)P.DriveMode.Brake, $"mode {lastMode}");
+
+// The node reports the short-circuit brake in its status flags.
+simLeftFlags = P.StatusFlags.ShortBrake;
+Thread.Sleep(150);
+snap = manager.GetSnapshot();
+Check("short brake flag decoded", snap.Left.Flags.HasFlag(P.StatusFlags.ShortBrake)
+      && !snap.Left.Flags.HasFlag(P.StatusFlags.BrakeTripped), snap.Left.Flags.ToString());
+simLeftFlags = P.StatusFlags.BrakeTripped;
+Thread.Sleep(150);
+snap = manager.GetSnapshot();
+Check("brake tripped flag decoded", snap.Left.Flags.HasFlag(P.StatusFlags.BrakeTripped)
+      && !snap.Left.Flags.HasFlag(P.StatusFlags.ShortBrake), snap.Left.Flags.ToString());
+simLeftFlags = P.StatusFlags.None;
+
+throttle.SetValue(1.0f);
+Thread.Sleep(100);
+Check("nonzero command leaves brake", lastMode == (byte)P.DriveMode.Velocity && lastLeft == 2000,
+      $"mode {lastMode}, {lastLeft}/{lastRight}");
+
+// The old behaviour is still there for old firmware: Coast instead of Brake.
+manager.BrakeAtStandstill = false;
+throttle.SetValue(0f);
+simLeftSpeed = simRightSpeed = 0.0;
+Thread.Sleep(400);
+Check("BrakeAtStandstill off -> coast", lastMode == (byte)P.DriveMode.Coast, $"mode {lastMode}");
 throttle.SetValue(1.0f);
 Thread.Sleep(100);
 Check("nonzero command leaves coast", lastMode == (byte)P.DriveMode.Velocity && lastLeft == 2000,
       $"mode {lastMode}, {lastLeft}/{lastRight}");
+manager.BrakeAtStandstill = true;
 simLeftSpeed = 7.9;
 simRightSpeed = 8.1;
 

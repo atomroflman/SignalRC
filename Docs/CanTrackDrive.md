@@ -157,6 +157,64 @@ anyway - the firmware empties the velocity integrator below 1 rad/s.
 The proper fix belongs in the firmware: drop the driver in Stop once the motor
 stands. Until that is flashed on every node, this is the guard.
 
+**Firmware state since 2026-11-04.** The fix is in, and the diagnosis above
+turned out to be only half the story:
+
+- The Hall noise is gone at the source. The firmware samples the Hall pins at
+  a fixed point of the PWM period instead of at a random phase, and with the
+  driver switching it now sees no false edges at standstill.
+- The swinging was mainly the velocity loop itself, a limit cycle: P 1.0 /
+  I 10 against a speed estimate with 1.4 rad/s steps. Hall noise only kicked
+  it off. With speed from edge timing and P 0.3 / I 1.0, a stop from 6 rad/s
+  settles in 0.25 to 0.5 s without overshoot (bench, free wheel, 2 A).
+- Stop now parks the node by itself: 200 ms at standstill, then the bridge
+  goes off with the gate driver kept awake, and the windings are shorted
+  (short-circuit brake, see below). The status still says `Ready`.
+
+So with current firmware, Coast at standstill is no longer needed against the
+oscillation - and it costs something: Coast puts the gate driver into standby
+and the wheel turns freely, with no brake on a slope.
+
+### Brake mode
+
+Mode 3, `Brake`, asks a node to park at once, without the velocity loop:
+
+- Bridge off immediately, whatever the speed.
+- Below 2 rad/s all three low-side FETs conduct and short the windings. The
+  back-EMF brakes the wheel by itself, with no angle, sensor or controller
+  involved, and there is no switching, so the Hall lines stay clean.
+- The braking torque grows with speed, and so does the current: about 1.4 A
+  per rad/s on the bench, 6 A at 4 rad/s. That is why it only engages below
+  2 rad/s; above that the wheel free-wheels until it is slow enough. Once
+  engaged it stays on even if the vehicle speeds up on a slope, and above
+  10 A it lets go until the next drive command.
+- It holds nothing at standstill - the torque is zero at zero speed - but a
+  vehicle on a slope only creeps. On the bench the wheel was hard to turn by
+  hand.
+- A nonzero target wakes the node at once. From Coast instead, enabling
+  takes about 60 ms, because the gate driver has to be woken and reconfigured
+  before the current readings are valid.
+
+Status flag bit 6 says the short-circuit brake is engaged right now, bit 7
+that it was released on overcurrent and the wheel is free-wheeling.
+
+**What the manager sends.** The standstill logic above is unchanged - zero
+command, both tracks below `standstillSpeedRadPerSecond` for
+`standstillCoastMs`, or `maxStopMs` as the backstop, latching until a nonzero
+command - but with `brakeAtStandstill` (default `true`) it sends `Brake`
+instead of `Coast`. Set it to `false` for the old behaviour. Firmware older
+than 2026-11-04 treats mode 3 like `Velocity` with the target in the frame,
+which is zero at standstill, so it then behaves like Stop - no harm, just no
+brake.
+
+`maxStopMs` deserves a second look with current firmware. It was the
+backstop against the oscillation: a track still reporting motion after two
+seconds at zero command was taken to be swinging. With the oscillation gone,
+the same condition can be a vehicle rolling on a slope that the velocity loop
+is holding back, and switching to Brake there releases the loop - the wheel
+free-wheels until it is below 2 rad/s. Not changed yet, because nothing has
+been measured in the vehicle.
+
 ### The network link
 
 The control path runs over a network, and it can fail in two ways of which only
@@ -225,7 +283,8 @@ All on the `pinManagers` entry.
 | `nodeTimeoutMs` | `250` | Status arrives at 20 Hz, so this is five missed frames. |
 | `expectedNodes` | `2` | Set to 1 for bench work with one board. |
 | `faultResetHoldMs` | `250` | How long the unlatch flag stays set. |
-| `coastAtStandstill` | `true` | Send Coast instead of Stop once nothing is commanded and the tracks stand. See [Coasting at standstill](#coasting-at-standstill). |
+| `coastAtStandstill` | `true` | Replace Stop once nothing is commanded and the tracks stand. See [Coasting at standstill](#coasting-at-standstill). |
+| `brakeAtStandstill` | `true` | What replaces it: `Brake` (short-circuit brake, firmware 2026-11-04 and later) or, if `false`, `Coast`. See [Brake mode](#brake-mode). |
 | `standstillSpeedRadPerSecond` | `1.0` | Below this a track counts as standing. |
 | `standstillCoastMs` | `200` | How long both have to stand before the driver goes off. |
 | `maxStopMs` | `2000` | Coast after this long at zero command even if a track still reports motion. |
@@ -259,7 +318,9 @@ pinManager by name - the factory caches by name, so no second socket is opened.
 
 Per node, prefixed `left` or `right`: `Present`, `Speed`, `Target`, `State`,
 `Current`, `BusVolts`, `BusAmps`, `Power`, `Temperature`, `Thermal`, `Fault`,
-`FaultCode`, `Derating`, `CurrentLimited`, `UnderVoltageWarning`.
+`FaultCode`, `Derating`, `CurrentLimited`, `UnderVoltageWarning`,
+`ShortBrake` (status bit 6, brake engaged now), `BrakeTripped` (bit 7,
+released on overcurrent).
 
 Bus-wide: `busUp`, `nodesPresent`, `driveEnabled`, `inhibit`, `controlAge`,
 `mode`, `commandLeft`, `commandRight`, `framesSent`, `framesReceived`,
@@ -275,7 +336,12 @@ The channels share the `groupKey`, so they still share one reader.
 `State` answers "is the driver on": `Off` means the driver is disabled
 (Coast, or never enabled), `Ready` enabled at zero target, `Driving` enabled
 with a target, `Faulted` latched. `Fault` names the latched fault, `none`
-otherwise. `mode` is what the master sends - `Stop`, `Velocity` or `Coast`.
+otherwise. `mode` is what the master sends - `Stop`, `Velocity`, `Coast`
+or `Brake`, see [Brake mode](#brake-mode).
+
+A parked node reports `Ready` although its bridge is off: from the master's
+point of view it answers the next command at once. Whether the short-circuit
+brake holds is in `ShortBrake`.
 
 `Temperature` comes back **empty**, not as a number, when the node reports no
 valid reading. The board's thermistor node can read open or shorted and the

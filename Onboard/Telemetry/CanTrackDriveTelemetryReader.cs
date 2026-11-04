@@ -265,6 +265,10 @@ public class CanTrackDriveTelemetryReader : TelemetryReaderBase
             node.Flags.HasFlag(CanTrackProtocol.StatusFlags.CurrentLimited) ? "1" : "0";
         values[$"{prefix}UnderVoltageWarning"] =
             node.Flags.HasFlag(CanTrackProtocol.StatusFlags.UnderVoltageWarning) ? "1" : "0";
+        values[$"{prefix}ShortBrake"] =
+            node.Flags.HasFlag(CanTrackProtocol.StatusFlags.ShortBrake) ? "1" : "0";
+        values[$"{prefix}BrakeTripped"] =
+            node.Flags.HasFlag(CanTrackProtocol.StatusFlags.BrakeTripped) ? "1" : "0";
     }
 
     private static string Num(double value)
