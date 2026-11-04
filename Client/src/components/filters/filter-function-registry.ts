@@ -1,6 +1,7 @@
 import { AbsFunction } from "./AbsFunction";
 import { AddFunction } from "./AddFunction";
 import { ClampFunction } from "./ClampFunction";
+import { DeadZoneFunction } from "./DeadZoneFunction";
 import { DivideFunction } from "./DivideFunction";
 import { FloatValueFunction } from "./FloatValueFunction";
 import { GearboxFunction } from "./GearboxFunction";
@@ -44,6 +45,7 @@ export type FilterFunctionDef<TInputs extends ReadonlyArray<string>> = {
 export const filterFunctionRegistry = {
   Abs: new AbsFunction(),
   Clamp: new ClampFunction(),
+  DeadZone: new DeadZoneFunction(),
   Reverse: new ReverseFunction(),
   Add: new AddFunction(),
   Subtract: new SubtractFunction(),

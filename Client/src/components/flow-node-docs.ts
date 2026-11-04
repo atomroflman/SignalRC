@@ -29,6 +29,14 @@ const de: Record<string, FlowNodeDoc> = {
     summary: "Begrenzt den Eingang auf den Bereich min … max.",
     example: "min −0,5, max 0,5: 0,8 → 0,5; −0,2 → −0,2",
   },
+  DeadZone: {
+    summary: "Tote Zone: kleine Ausschläge um die Mitte werden zu 0, z. B. gegen Zittern einer Achse in Ruhelage.",
+    details: [
+      "deadzone: Größe der toten Zone, innerhalb von −deadzone … deadzone ist der Ausgang 0.",
+      "rescale 1: der restliche Weg wird auf den vollen Bereich gestreckt, der Ausgang beginnt am Rand der Zone bei 0 und erreicht bei Vollausschlag ±1. rescale 0: außerhalb der Zone wird der Eingang unverändert durchgereicht (Sprung am Rand).",
+    ],
+    example: "deadzone 0,1, rescale 1: 0,05 → 0; 0,55 → 0,5; −1 → −1",
+  },
   Reverse: {
     summary: "Kehrt das Vorzeichen um, z. B. für eine verkehrt herum eingebaute Lenkung.",
     example: "0,3 → −0,3; −1 → 1",
@@ -165,6 +173,14 @@ const en: Record<string, FlowNodeDoc> = {
   Clamp: {
     summary: "Limits the input to the range min … max.",
     example: "min −0.5, max 0.5: 0.8 → 0.5; −0.2 → −0.2",
+  },
+  DeadZone: {
+    summary: "Dead zone: small deflections around the centre become 0, e.g. against a jittering axis at rest.",
+    details: [
+      "deadzone: size of the dead zone; within −deadzone … deadzone the output is 0.",
+      "rescale 1: the remaining travel is stretched to the full range, the output starts at 0 on the edge of the zone and reaches ±1 at full deflection. rescale 0: outside the zone the input passes unchanged (jump at the edge).",
+    ],
+    example: "deadzone 0.1, rescale 1: 0.05 → 0; 0.55 → 0.5; −1 → −1",
   },
   Reverse: {
     summary: "Inverts the sign, e.g. for a steering servo mounted the other way round.",
