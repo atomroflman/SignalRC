@@ -140,7 +140,7 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator
             var cameraDevice = string.IsNullOrWhiteSpace(stream.Value.CameraDevice) ? "/dev/video0" : stream.Value.CameraDevice;
 
             generatedPaths.AppendLine($"  {stream.Key}:");
-            var forwardToServer = $"ffmpeg -t 2147483647 -i rtsp://localhost:8554/{stream.Key} -c copy -f rtp rtp://{sourceHost}:{stream.Value.Port}?pkt_size=1300";
+            var forwardToServer = $"ffmpeg{FfmpegLogArgs(stream.Value)} -t 2147483647 -i rtsp://localhost:8554/{stream.Key} -c copy -f rtp rtp://{sourceHost}:{stream.Value.Port}?pkt_size=1300";
 
             if (IsV4l2Camera(stream.Value))
             {
@@ -179,7 +179,17 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator
 
     private static readonly string[] V4l2Types = ["v4l2", "webcam", "usb"];
 
-    /// <summary>The stream options read in <see cref="BuildV4l2Command"/>, for the options editor.</summary>
+    /// <summary>ffmpeg -loglevel values, quietest first.</summary>
+    private static readonly string[] FfmpegLogLevels = ["quiet", "panic", "fatal", "error", "warning", "info", "verbose", "debug"];
+    private const string DefaultFfmpegLogLevel = "warning";
+
+    private static readonly OptionSchema FfmpegLogLevelOption = new()
+    {
+        Name = "ffmpegLogLevel", Type = "string", Values = FfmpegLogLevels, DefaultJson = $"\"{DefaultFfmpegLogLevel}\"",
+        Description = "How much ffmpeg writes to mediamtx.err (ffmpeg -loglevel). From \"info\" on it also prints the frame/fps progress line, about 17 MB a day - only for debugging.",
+    };
+
+    /// <summary>The stream options read in <see cref="BuildV4l2Command"/> and <see cref="FfmpegLogArgs"/>, for the options editor.</summary>
     public static IEnumerable<ChannelTypeSchema> OptionSchemas() => V4l2Types.Select(type => new ChannelTypeSchema
     {
         Kind = ChannelTypeSchema.Video,
@@ -187,6 +197,7 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator
         Description = "USB webcam captured with ffmpeg (V4L2).",
         Options =
         [
+            FfmpegLogLevelOption,
             new OptionSchema
             {
                 Name = "inputFormat", Type = "string", Values = ["mjpeg", "yuyv422", "h264"],
@@ -198,7 +209,30 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator
                 Description = "Encode with the SoC's H.264 block (h264_v4l2m2m) instead of libx264, which takes most of a Pi 3's CPU at 720p and above.",
             },
         ],
+    }).Append(new ChannelTypeSchema
+    {
+        Kind = ChannelTypeSchema.Video,
+        TypeName = "camera",
+        Description = "Raspberry Pi camera; mediamtx captures, ffmpeg forwards the stream to the server.",
+        Options = [FfmpegLogLevelOption],
     });
+
+    /// <summary>
+    /// " -hide_banner -loglevel X" plus " -nostats" below "info". An unknown value falls back to
+    /// the default rather than reaching the command line, which mediamtx runs through a shell-like split.
+    /// </summary>
+    public static string FfmpegLogArgs(VideoStreamMapItem stream)
+    {
+        var level = stream.Options.TryGetValue("ffmpegLogLevel", out var raw) ? raw?.ToString()?.Trim().ToLowerInvariant() : null;
+        var index = Array.IndexOf(FfmpegLogLevels, level ?? string.Empty);
+        if (index < 0)
+        {
+            level = DefaultFfmpegLogLevel;
+            index = Array.IndexOf(FfmpegLogLevels, level);
+        }
+        var quietStats = index < Array.IndexOf(FfmpegLogLevels, "info");
+        return $" -hide_banner -loglevel {level}" + (quietStats ? " -nostats" : string.Empty);
+    }
 
     /// <summary>
     /// The stream's <c>Type</c> picks the capture path: "v4l2"/"webcam"/"usb" is a plain V4L2 device
@@ -210,7 +244,7 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator
     private static string BuildV4l2Command(VideoStreamMapItem stream, string cameraDevice, string target)
     {
         var inv = CultureInfo.InvariantCulture;
-        var cmd = new StringBuilder("ffmpeg -f v4l2");
+        var cmd = new StringBuilder("ffmpeg").Append(FfmpegLogArgs(stream)).Append(" -f v4l2");
         // Optional capture format, e.g. {"inputFormat":"mjpeg"}: many webcams only reach higher
         // resolutions/framerates in MJPEG.
         if (stream.Options.TryGetValue("inputFormat", out var inputFormat) && !string.IsNullOrWhiteSpace(inputFormat?.ToString()))
