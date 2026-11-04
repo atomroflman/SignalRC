@@ -168,7 +168,7 @@ services:
           IP=$$(curl -fsS -H "Metadata: true" "http://169.254.169.254/metadata/instance/network/interface/0/ipv4/ipAddress/0/publicIpAddress?api-version=2021-02-01&format=text" 2>/dev/null);
         fi;
         if [ -z "$$IP" ] || [ -z "$$COTURN_CREDENTIAL" ]; then echo "Need COTURN_CREDENTIAL and either COTURN_EXTERNAL_IP or Azure IMDS public IP"; exit 1; fi;
-        exec turnserver --no-tls --no-dtls --realm=signalrc.local --external-ip="$$IP" --lt-cred-mech --user="$$COTURN_USERNAME:$$COTURN_CREDENTIAL" --fingerprint --no-loopback-stun --no-multicast-peers --listening-port=3478 --min-port=49152 --max-port=50152
+        exec turnserver --no-tls --realm=signalrc.local --external-ip="$$IP" --lt-cred-mech --user="$$COTURN_USERNAME:$$COTURN_CREDENTIAL" --fingerprint --no-multicast-peers --listening-port=3478 --min-port=49152 --max-port=50152
     ports:
       - "3478:3478/udp"
       - "3478:3478/tcp"
