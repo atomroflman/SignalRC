@@ -53,7 +53,7 @@ public class AvailableChannelTypesService
     /// the named PCMs from <c>-L</c>. Plugin aliases without a real card (null, surround*, iec958, …)
     /// are skipped — they only clutter the picker.
     /// </summary>
-    private static AudioDeviceInfo[] ListAlsaDevices(string tool)
+    internal static AudioDeviceInfo[] ListAlsaDevices(string tool)
     {
         var devices = ListHardwareDevices(Run(tool, "-l"));
         foreach (var named in ListNamedDevices(Run(tool, "-L")))
@@ -93,7 +93,7 @@ public class AvailableChannelTypesService
     private static readonly System.Text.RegularExpressions.Regex HardwareLine =
         new(@"^card \d+: (?<card>\S+) \[(?<cardName>[^\]]*)\], device (?<dev>\d+): [^\[]*\[(?<devName>[^\]]*)\]");
 
-    private static List<AudioDeviceInfo> ListHardwareDevices(string output)
+    internal static List<AudioDeviceInfo> ListHardwareDevices(string output)
     {
         var devices = new List<AudioDeviceInfo>();
         foreach (var line in output.Split('\n'))
@@ -109,7 +109,7 @@ public class AvailableChannelTypesService
         return devices;
     }
 
-    private static List<AudioDeviceInfo> ListNamedDevices(string output)
+    internal static List<AudioDeviceInfo> ListNamedDevices(string output)
     {
         var skipped = new[] { "null", "surround", "iec958", "front:", "rear:", "center_lfe:", "side:", "dmix:", "dsnoop:", "usbstream:", "lavrate", "samplerate", "speexrate", "speex", "jack", "oss", "upmix", "vdownmix" };
         var devices = new List<AudioDeviceInfo>();

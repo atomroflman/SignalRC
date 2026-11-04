@@ -127,7 +127,7 @@ export default function WiringPage() {
       <div className="min-h-screen bg-zinc-950 text-zinc-100 p-4 print:bg-white print:text-black">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3 print:hidden">
           <div className="flex items-center gap-3">
-            <Link href={`/car/${carId}/channels`} className="text-blue-400 hover:underline text-sm">&larr; Channels</Link>
+            <Link href={`/car/${carId}/setup?tab=hardware`} className="text-blue-400 hover:underline text-sm">&larr; Setup</Link>
             <h1 className="text-lg">Wiring diagram — car {carId}</h1>
           </div>
           <div className="flex flex-wrap items-center gap-2">

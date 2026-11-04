@@ -92,7 +92,7 @@ export default function LogsPage() {
           <div className="flex items-center gap-3">
             <Link href={`/car/${carIdNum}`} className="text-blue-400 hover:underline text-sm">&larr; Back</Link>
             <h1 className="text-lg">Onboard log — car {carIdNum}</h1>
-            <Link href={`/car/${carIdNum}/channels`} className="text-blue-400 hover:underline text-xs">Channels</Link>
+            <Link href={`/car/${carIdNum}/setup`} className="text-blue-400 hover:underline text-xs">Setup</Link>
           </div>
           <LanguageSwitcher />
         </div>

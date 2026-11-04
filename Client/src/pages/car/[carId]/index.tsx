@@ -149,14 +149,11 @@ export default function CarControlFlowPage() {
           {carIdNum && <CarFunctionsView carId={carIdNum} hideFlowButtons={false} />}
           {carIdNum && (
             <div className="bg-zinc-900 rounded-lg p-2 border border-zinc-800 text-xs space-y-1">
-              <Link href={`/car/${carIdNum}/channels`} className="text-blue-400 hover:underline block">
-                Channels (control / telemetry / video)
+              <Link href={`/car/${carIdNum}/setup`} className="text-blue-400 hover:underline block">
+                {messages.setupPage.link}
               </Link>
               <Link href={`/car/${carIdNum}/logs`} className="text-blue-400 hover:underline block">
                 Onboard log
-              </Link>
-              <Link href={`/car/${carIdNum}/test`} className="text-blue-400 hover:underline block">
-                Test inputs / telemetry / video / audio
               </Link>
               <Link href={`/car/${carIdNum}/overlay`} className="text-blue-400 hover:underline block">
                 {messages.overlay.editorPage.open}

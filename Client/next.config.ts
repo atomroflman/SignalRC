@@ -5,6 +5,13 @@ const nextConfig: NextConfig = {
   distDir: 'out', // Ordnername für den Build
   reactStrictMode: true,
   output: 'standalone',
+  async redirects() {
+    // Both pages became the tabs of the setup page; old links and bookmarks keep working.
+    return [
+      { source: '/car/:carId/channels', destination: '/car/:carId/setup', permanent: false },
+      { source: '/car/:carId/test', destination: '/car/:carId/setup', permanent: false },
+    ];
+  },
   async rewrites() {
     const serverOrigin = process.env.SERVER_ORIGIN ?? 'http://localhost:5000';
     const janusHttpOrigin = process.env.JANUS_HTTP_ORIGIN ?? 'http://localhost:8088';

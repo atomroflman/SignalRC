@@ -466,7 +466,44 @@ public class ChannelsController : ControllerBase
         {
             inputs = types?.AudioInputDevices ?? Array.Empty<AudioDeviceInfo>(),
             outputs = types?.AudioOutputDevices ?? Array.Empty<AudioDeviceInfo>(),
+            live = false,
         });
+    }
+
+    // Asks the vehicle directly. The list above is from its last connect and misses a later replug.
+    [HttpPost("available-audio-devices/scan")]
+    public async Task<IActionResult> ScanAudioDevices(int carId)
+    {
+        var user = await GetCurrentUserAsync();
+        if (user == null) return Unauthorized();
+        var scan = await _carAudio.ScanDevicesAsync(carId);
+        var types = _availableTypes.Get(carId);
+        if (scan != null && types != null)
+        {
+            types.AudioInputDevices = scan.Inputs;
+            types.AudioOutputDevices = scan.Outputs;
+        }
+        return Ok(new
+        {
+            inputs = scan?.Inputs ?? types?.AudioInputDevices ?? Array.Empty<AudioDeviceInfo>(),
+            outputs = scan?.Outputs ?? types?.AudioOutputDevices ?? Array.Empty<AudioDeviceInfo>(),
+            live = scan != null,
+        });
+    }
+
+    public class AudioDeviceTestRequest
+    {
+        public string? Device { get; set; }
+        public bool Output { get; set; }
+    }
+
+    [HttpPost("audio-device-test")]
+    public async Task<IActionResult> TestAudioDevice(int carId, [FromBody] AudioDeviceTestRequest body)
+    {
+        var user = await GetCurrentUserAsync();
+        if (user == null) return Unauthorized();
+        if (string.IsNullOrWhiteSpace(body.Device)) return BadRequest("Device is required");
+        return Ok(await _carAudio.TestDeviceAsync(carId, body.Device.Trim(), body.Output));
     }
 
     // Car-level audio: one microphone (listening) and one speaker (push-to-talk, sound channels).

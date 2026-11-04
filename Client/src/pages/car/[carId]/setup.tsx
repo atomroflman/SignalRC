@@ -6,6 +6,13 @@ import LanguageSwitcher from "@/components/language-switcher";
 import ConfigGuard from "@/components/config-guard";
 import { useI18n } from "@/i18n/provider";
 import { CarAudioSettings, DEFAULT_CAR_AUDIO_SETTINGS } from "@/components/audio-store";
+import AudioChat from "@/components/audio-chat";
+import CarVideoPanel from "@/components/car-video-panel";
+import OnboardDiagnostics from "@/components/onboard-diagnostics";
+import VehicleAudio from "@/components/vehicle-audio";
+import AudioDeviceManager from "@/components/setup/audio-device-manager";
+import ControlTestPanel from "@/components/setup/control-test-panel";
+import TelemetryTestPanel from "@/components/setup/telemetry-test-panel";
 import LidarSourceSetup from "@/components/overlay/lidar-source/lidar-source-setup";
 import { confirmationText, dependencyWarning, loadChannelDependencies } from "@/components/overlay/integration/channel-dependencies";
 import OptionsJsonField from "@/components/config/options-json-field";
@@ -64,7 +71,6 @@ type VideoStream = {
   modifiedAt?: string | null;
 };
 
-type AudioDevice = { name: string; description?: string | null };
 
 /** One problem the onboard reported (Shared/Channels/ChannelHealth.cs); OK channels have none. */
 type HealthEntry = { kind: "pinManager" | "control" | "telemetry" | "video"; name: string; state: "warning" | "error"; message: string; sinceUtc: string };
@@ -259,7 +265,7 @@ function SoundPlayerOptionsEditor({
   return (
     <div className="col-span-2 grid grid-cols-2 gap-2 p-2 border border-sky-900 rounded bg-sky-950/30">
       <div className="col-span-2 text-sky-200">Sound</div>
-      {!hasSpeaker && <div className="col-span-2 text-amber-400">No speaker configured for this vehicle (Audio section) — the channel stays silent.</div>}
+      {!hasSpeaker && <div className="col-span-2 text-amber-400">No speaker configured for this vehicle (Audio tab) — the channel stays silent.</div>}
       <Field label="File" className="col-span-2">
         <select className={inputClass} value={options.file ?? ""} onChange={e => set("file", e.target.value)}>
           <option value="">-- select sound --</option>
@@ -424,7 +430,7 @@ function SoundLibraryEditor({
   return (
     <div className="space-y-2 text-xs text-zinc-400">
       <p>Sound files for control channels of type <span className="font-mono text-zinc-200">SoundPlayer</span> (horn, sirens, music …). The vehicle downloads them automatically; up to 20 MB per file.</p>
-      {!hasSpeaker && <p className="text-amber-400">No speaker configured yet (Audio section) — sounds can be uploaded but won&apos;t play.</p>}
+      {!hasSpeaker && <p className="text-amber-400">No speaker configured yet (Audio tab) — sounds can be uploaded but won&apos;t play.</p>}
       <label className={btnPrimary + " inline-block cursor-pointer"}>
         {uploading ? "Uploading…" : "+ Upload sounds"}
         <input type="file" multiple accept={SOUND_EXTENSIONS.join(",")} className="hidden" disabled={uploading} onChange={e => { void upload(e.target.files); e.target.value = ""; }} />
@@ -445,77 +451,22 @@ function SoundLibraryEditor({
   );
 }
 
-const BITRATES_KBPS = [16, 24, 32, 48, 64, 96];
+const SETUP_TABS = ["control", "telemetry", "video", "audio", "hardware", "diagnostics"] as const;
+type SetupTab = typeof SETUP_TABS[number];
 
-function percent(value: number) {
-  return `${Math.round(value * 100)} %`;
-}
-
-// Car-level audio: one microphone (listening) and one speaker (push-to-talk, sound channels).
-// Volumes here are the defaults; the driver can change the speaker volume live in the control UI.
-function AudioSettingsEditor({
-  settings, onChange, dirty, onSave, onReset, noDevicesReported,
-}: {
-  settings: CarAudioSettings;
-  onChange: (patch: Partial<CarAudioSettings>) => void;
-  dirty: boolean;
-  onSave: () => Promise<void>;
-  onReset: () => void;
-  noDevicesReported: boolean;
-}) {
-  const hasInput = !!settings.inputDevice?.trim();
-  const hasOutput = !!settings.outputDevice?.trim();
+/** Configuration on the left, its live test on the right; stacked on narrow screens. */
+function ConfigAndTest({ config, test, testTitle }: { config: React.ReactNode; test: React.ReactNode; testTitle: string }) {
   return (
-    <div className="space-y-3 text-xs text-zinc-400">
-      <p>The microphone is heard by everyone who listens to the vehicle (independent of video). The speaker plays the driver&apos;s push-to-talk and sound channels. Leave a device empty to switch that direction off.</p>
-      {noDevicesReported && (
-        <p className="text-amber-400">The vehicle reported no ALSA devices (offline, alsa-utils missing, or no sound card).</p>
-      )}
-      <div className="grid grid-cols-2 gap-2 p-2 border border-zinc-700 rounded bg-zinc-950">
-        <div className="col-span-2 text-zinc-200">Microphone (vehicle → browser)</div>
-        <Field label="Input device (ALSA)" hint="Prefer plughw:CARD=…,DEV=… entries" className="col-span-2">
-          <input className={inputClass + " font-mono w-full"} value={settings.inputDevice ?? ""} onChange={e => onChange({ inputDevice: e.target.value })} list="audio-input-options" placeholder="e.g. plughw:CARD=Device,DEV=0" />
-        </Field>
-        <Field label="Channel" hint="One side of a stereo card, or both mixed">
-          <select className={inputClass} value={settings.inputChannel} disabled={!hasInput} onChange={e => onChange({ inputChannel: e.target.value as CarAudioSettings["inputChannel"] })}>
-            <option value="mix">Mix (all channels)</option>
-            <option value="left">Left</option>
-            <option value="right">Right</option>
-          </select>
-        </Field>
-        <Field label="Bitrate">
-          <select className={inputClass} value={settings.bitrateKbps} disabled={!hasInput} onChange={e => onChange({ bitrateKbps: Number(e.target.value) })}>
-            {BITRATES_KBPS.map(b => <option key={b} value={b}>{b} kbit/s</option>)}
-          </select>
-        </Field>
-        <Field label={`Recording gain: ${percent(settings.inputGain)}`}>
-          <input type="range" min={0} max={4} step={0.05} value={settings.inputGain} disabled={!hasInput} onChange={e => onChange({ inputGain: Number(e.target.value) })} />
-        </Field>
-        <Field label="Noise filter" hint="Against wind and steady motor noise">
-          <input type="checkbox" checked={settings.denoise} disabled={!hasInput} onChange={e => onChange({ denoise: e.target.checked })} />
-        </Field>
-
-        <div className="col-span-2 mt-2 text-zinc-200">Speaker (browser → vehicle)</div>
-        <Field label="Output device (ALSA)" className="col-span-2">
-          <input className={inputClass + " font-mono w-full"} value={settings.outputDevice ?? ""} onChange={e => onChange({ outputDevice: e.target.value })} list="audio-output-options" placeholder="e.g. plughw:CARD=Device,DEV=0" />
-        </Field>
-        <Field label={`Speaker volume: ${percent(settings.outputVolume)}`}>
-          <input type="range" min={0} max={2} step={0.05} value={settings.outputVolume} disabled={!hasOutput} onChange={e => onChange({ outputVolume: Number(e.target.value) })} />
-        </Field>
-        <Field label="Mute microphone while talking" hint="Listeners don't hear the driver as echo">
-          <input type="checkbox" checked={settings.muteInputWhileTalking} disabled={!hasInput || !hasOutput} onChange={e => onChange({ muteInputWhileTalking: e.target.checked })} />
-        </Field>
-
-        <div className="col-span-2 flex gap-2 justify-end">
-          <button className={btnGhost} disabled={!dirty} onClick={onReset}>Reset</button>
-          <button className={btnPrimary} disabled={!dirty} onClick={onSave}>Save</button>
-        </div>
+    <div className="grid gap-x-4 lg:grid-cols-2 items-start">
+      <div className="min-w-0">{config}</div>
+      <div className="min-w-0 lg:sticky lg:top-2">
+        <CollapsibleSection title={testTitle} defaultCollapsed={false} className="px-2 pb-2">{test}</CollapsibleSection>
       </div>
     </div>
   );
 }
 
-export default function ChannelsPage() {
+export default function SetupPage() {
   const { messages } = useI18n();
   const router = useRouter();
   const carId = router.query.carId as string;
@@ -531,9 +482,7 @@ export default function ChannelsPage() {
   const [availableControlTypes, setAvailableControlTypes] = useState<string[]>([]);
   const [availableTelemetryTypes, setAvailableTelemetryTypes] = useState<string[]>([]);
   const [optionSchemas, setOptionSchemas] = useState(parseOptionSchemas(undefined));
-  const [audioInputs, setAudioInputs] = useState<AudioDevice[]>([]);
-  const [audioOutputs, setAudioOutputs] = useState<AudioDevice[]>([]);
-  const [audioSettings, setAudioSettings] = useState<CarAudioSettings>(DEFAULT_CAR_AUDIO_SETTINGS);
+  const [activeTab, setActiveTab] = useState<SetupTab>("control");
   const [savedAudioSettings, setSavedAudioSettings] = useState<CarAudioSettings>(DEFAULT_CAR_AUDIO_SETTINGS);
   const [soundFiles, setSoundFiles] = useState<SoundFile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -619,6 +568,7 @@ export default function ChannelsPage() {
   ], [controls, telemetries]);
   // A pin in the board editor prefills a new channel; the editor opens below and is scrolled to.
   const createChannelFromBoard = useCallback((r: NewChannelRequest) => {
+    setActiveTab(r.kind === "control" ? "control" : "telemetry");
     if (r.kind === "control") {
       setEditingControl({ key: "__new__", isNew: true, channel: {
         channelName: r.channelName, displayName: "", isEnabled: true, requiresAxis: false, maxResendInterval: null,
@@ -677,18 +627,22 @@ export default function ChannelsPage() {
 
   useEffect(() => {
     if (!carIdNum) return;
-    (async () => {
-      const [devices, settings] = await Promise.all([
-        fetch(`/api/cars/${carIdNum}/channels/available-audio-devices`).then(r => r.ok ? r.json() : null),
-        fetch(`/api/cars/${carIdNum}/channels/audio-settings`).then(r => r.ok ? r.json() : null),
-      ]);
-      setAudioInputs(Array.isArray(devices?.inputs) ? devices.inputs : []);
-      setAudioOutputs(Array.isArray(devices?.outputs) ? devices.outputs : []);
-      const loaded = { ...DEFAULT_CAR_AUDIO_SETTINGS, ...(settings ?? {}) };
-      setAudioSettings(loaded);
-      setSavedAudioSettings(loaded);
-    })();
+    fetch(`/api/cars/${carIdNum}/channels/audio-settings`)
+      .then(r => r.ok ? r.json() : null)
+      .then(settings => setSavedAudioSettings({ ...DEFAULT_CAR_AUDIO_SETTINGS, ...(settings ?? {}) }))
+      .catch(() => { /* stays at the defaults: no devices */ });
   }, [carIdNum]);
+
+  // ?tab= opens a tab directly and survives a reload.
+  const requestedTab = router.query.tab;
+  useEffect(() => {
+    if (typeof requestedTab === "string" && (SETUP_TABS as readonly string[]).includes(requestedTab))
+      setActiveTab(requestedTab as SetupTab);
+  }, [requestedTab]);
+  const selectTab = useCallback((tab: SetupTab) => {
+    setActiveTab(tab);
+    void router.replace({ pathname: router.pathname, query: { ...router.query, tab } }, undefined, { shallow: true });
+  }, [router]);
 
   const reloadSounds = useCallback(async () => {
     if (!carIdNum) return;
@@ -697,17 +651,6 @@ export default function ChannelsPage() {
   }, [carIdNum]);
 
   useEffect(() => { void reloadSounds(); }, [reloadSounds]);
-
-  const saveAudioSettings = async () => {
-    if (!carIdNum) return;
-    const r = await fetch(`/api/cars/${carIdNum}/channels/audio-settings`, {
-      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(audioSettings),
-    });
-    if (!r.ok) { alert(await r.text()); return; }
-    const saved = { ...DEFAULT_CAR_AUDIO_SETTINGS, ...(await r.json()) };
-    setAudioSettings(saved);
-    setSavedAudioSettings(saved);
-  };
 
   const savePinManager = async (origKey: string, p: PinManager, isNew: boolean) => {
     if (!carIdNum) return;
@@ -852,25 +795,193 @@ export default function ChannelsPage() {
   if (!carIdNum) return <div className="p-8 text-zinc-300">{messages.common.loading}</div>;
   if (loading) return <div className="p-8 text-zinc-300">{messages.common.loading}</div>;
 
+  const sp = messages.setupPage;
+  const countOf = (tab: SetupTab): number | null => {
+    switch (tab) {
+      case "control": return controls.length;
+      case "telemetry": return telemetries.length;
+      case "video": return videos.length;
+      case "audio": return (savedAudioSettings.inputDevice ? 1 : 0) + (savedAudioSettings.outputDevice ? 1 : 0);
+      case "hardware": return pinManagers.length;
+      default: return null;
+    }
+  };
+  const HEALTH_KIND_OF_TAB: Partial<Record<SetupTab, HealthEntry["kind"]>> = { control: "control", telemetry: "telemetry", video: "video", hardware: "pinManager" };
+  const problemsOf = (tab: SetupTab) => health?.entries?.filter(e => e.kind === HEALTH_KIND_OF_TAB[tab]).length ?? 0;
+
   return (
     <ConfigGuard carId={carIdNum}>
       <OptionsInfo.Provider value={optionsInfo}>
       <div className="min-h-screen bg-zinc-950 text-zinc-100 p-4">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
           <div className="flex items-center gap-3">
-            <Link href={`/car/${carIdNum}`} className="text-blue-400 hover:underline text-sm">&larr; Back</Link>
-            <h1 className="text-lg">Channels — car {carIdNum}</h1>
+            <Link href={`/car/${carIdNum}`} className="text-blue-400 hover:underline text-sm">&larr; {sp.back}</Link>
+            <h1 className="text-lg">{sp.title(carIdNum)}</h1>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <LanguageSwitcher />
-            <Link href={`/car/${carIdNum}/wiring`} className={btnGhost}>Wiring diagram</Link>
-            <Link href={`/car/${carIdNum}/logs`} className={btnGhost}>Onboard log</Link>
-            <button className={btnGhost} onClick={reload}>Reload</button>
+            <Link href={`/car/${carIdNum}/wiring`} className={btnGhost}>{sp.wiring}</Link>
+            <Link href={`/car/${carIdNum}/logs`} className={btnGhost}>{sp.log}</Link>
+            <button className={btnGhost} onClick={reload}>{sp.reload}</button>
           </div>
         </div>
 
         <HealthSummary health={health} />
 
+        <div role="tablist" aria-label={sp.tabsLabel} className="flex gap-1 mt-2 mb-2 overflow-x-auto overflow-y-hidden border-b border-zinc-800">
+          {SETUP_TABS.map(tab => {
+            const problems = problemsOf(tab);
+            return (
+              <button
+                key={tab}
+                role="tab"
+                id={`setup-tab-${tab}`}
+                aria-selected={activeTab === tab}
+                aria-controls="setup-tab-panel"
+                className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs border-b-2 ${activeTab === tab ? "border-green-500 text-zinc-100" : "border-transparent text-zinc-400 hover:text-zinc-200"}`}
+                onClick={() => selectTab(tab)}
+              >
+                {sp.tabs[tab]}
+                {countOf(tab) != null && <span className="text-zinc-500">{countOf(tab)}</span>}
+                {problems > 0 && <span className="w-1.5 h-1.5 rounded-full bg-red-500" title={sp.tabProblems(problems)} />}
+              </button>
+            );
+          })}
+        </div>
+
+        <div id="setup-tab-panel" role="tabpanel" aria-labelledby={`setup-tab-${activeTab}`}>
+        {activeTab === "control" && (
+          <ConfigAndTest
+            testTitle={sp.testControl}
+            test={<ControlTestPanel carId={carIdNum} channels={controls} />}
+            config={<>
+        <CollapsibleSection title={`Control channels (${controls.length})`} defaultCollapsed={false}>
+          <button className={btnPrimary + " mb-2"} onClick={() => setEditingControl({ key: "__new__", channel: {} as ControlChannel, isNew: true })}>+ Add control channel</button>
+          <div className="space-y-1">
+            {controls.map(c => (
+              <div key={c.channelName} className="border border-zinc-800 rounded p-2 bg-zinc-900">
+                {editingControl?.key === c.channelName && !editingControl.isNew ? (
+                  <ControlEditor initial={c} isNew={false} onSave={(nc) => saveControl(c.channelName, nc, false)} onCancel={() => setEditingControl(null)} controlTypes={availableControlTypes} soundFiles={soundFiles} hasSpeaker={!!savedAudioSettings.outputDevice} />
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <div className="font-mono text-xs">
+                      <span className="text-zinc-100">{c.channelName}</span>
+                      <span className="text-zinc-500 ml-2">{c.controlType || "?"} @ {c.pinManager}#{c.address ?? "-"}</span>
+                      {c.displayName && <span className="text-zinc-400 ml-2">({c.displayName})</span>}
+                    </div>
+                    <div className="flex gap-1">
+                      <button className={btnGhost} onClick={() => setEditingControl({ key: c.channelName, channel: c, isNew: false })}>Edit</button>
+                      <button className={btnDanger} onClick={() => deleteControl(c.channelName)}>Delete</button>
+                    </div>
+                  </div>
+                )}
+                <HealthLine entry={healthOf("control", c.channelName)} carId={carIdNum} />
+              </div>
+            ))}
+            {editingControl?.isNew && (
+              <ControlEditor key={editingControl.channel.channelName ?? "new"} initial={editingControl.channel.channelName ? editingControl.channel : undefined} isNew={true} onSave={(nc) => saveControl("__new__", nc, true)} onCancel={() => setEditingControl(null)} controlTypes={availableControlTypes} soundFiles={soundFiles} hasSpeaker={!!savedAudioSettings.outputDevice} />
+            )}
+          </div>
+        </CollapsibleSection>
+            </>}
+          />
+        )}
+
+        {activeTab === "telemetry" && (
+          <ConfigAndTest
+            testTitle={sp.testTelemetry}
+            test={<TelemetryTestPanel carId={carIdNum} refreshKey={telemetries.map(t => t.channelName).join("|")} />}
+            config={<>
+        <CollapsibleSection title={`Telemetry channels (${telemetries.length})`} defaultCollapsed={false}>
+          <button className={btnPrimary + " mb-2"} onClick={() => setEditingTelemetry({ key: "__new__", channel: {} as TelemetryChannel, isNew: true })}>+ Add telemetry channel</button>
+          <div className="space-y-1">
+            {telemetries.map(t => (
+              <div key={t.channelName} className="border border-zinc-800 rounded p-2 bg-zinc-900">
+                {editingTelemetry?.key === t.channelName && !editingTelemetry.isNew ? (
+                  <TelemetryEditor initial={t} isNew={false} onSave={(nt) => saveTelemetry(t.channelName, nt, false)} onCancel={() => setEditingTelemetry(null)} telemetryTypes={availableTelemetryTypes} />
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <div className="font-mono text-xs">
+                      <span className="text-zinc-100">{t.channelName}</span>
+                      <span className="text-zinc-500 ml-2">{t.telemetryType || "?"} / {DATA_TYPES[t.dataType] ?? "?"} {t.unit ? `(${t.unit})` : ""} @ {t.pinManager}#{t.address ?? "-"}</span>
+                    </div>
+                    <div className="flex gap-1">
+                      <button className={btnGhost} onClick={() => setEditingTelemetry({ key: t.channelName, channel: t, isNew: false })}>Edit</button>
+                      <button className={btnDanger} onClick={() => deleteTelemetry(t.channelName)}>Delete</button>
+                    </div>
+                  </div>
+                )}
+                <HealthLine entry={healthOf("telemetry", t.channelName)} carId={carIdNum} />
+              </div>
+            ))}
+            {editingTelemetry?.isNew && (
+              <TelemetryEditor key={editingTelemetry.channel.channelName ?? "new"} initial={editingTelemetry.channel.channelName ? editingTelemetry.channel : undefined} isNew={true} onSave={(nt) => saveTelemetry("__new__", nt, true)} onCancel={() => setEditingTelemetry(null)} telemetryTypes={availableTelemetryTypes} />
+            )}
+          </div>
+        </CollapsibleSection>
+            </>}
+          />
+        )}
+
+        {activeTab === "video" && (
+          <ConfigAndTest
+            testTitle={sp.testVideo}
+            test={<div className="h-[400px]"><CarVideoPanel carId={carIdNum} /></div>}
+            config={<>
+        <CollapsibleSection title={`Video streams (${videos.length})`} defaultCollapsed={false}>
+          <button className={btnPrimary + " mb-2"} onClick={() => setEditingVideo({ key: "__new__", stream: {} as VideoStream, isNew: true })}>+ Add video stream</button>
+          <div className="space-y-1">
+            {videos.map(v => (
+              <div key={v.streamId} className="border border-zinc-800 rounded p-2 bg-zinc-900">
+                {editingVideo?.key === v.streamId && !editingVideo.isNew ? (
+                  <VideoEditor initial={v} isNew={false} onSave={(nv) => saveVideo(v.streamId, nv, false)} onCancel={() => setEditingVideo(null)} />
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <div className="font-mono text-xs">
+                      <span className="text-zinc-100">{v.streamId}</span>
+                      <span className="text-zinc-500 ml-2">{v.name || "?"} {v.type ? `(${v.type})` : ""} {v.location ? `@ ${v.location}` : ""} {v.priority != null ? `· prio ${v.priority}` : ""}</span>
+                    </div>
+                    <div className="flex gap-1">
+                      <button className={btnGhost} onClick={() => setEditingVideo({ key: v.streamId, stream: v, isNew: false })}>Edit</button>
+                      <button className={btnDanger} onClick={() => deleteVideo(v.streamId)}>Delete</button>
+                    </div>
+                  </div>
+                )}
+                <HealthLine entry={healthOf("video", v.streamId)} carId={carIdNum} />
+              </div>
+            ))}
+            {editingVideo?.isNew && (
+              <VideoEditor isNew={true} onSave={(nv) => saveVideo("__new__", nv, true)} onCancel={() => setEditingVideo(null)} />
+            )}
+          </div>
+        </CollapsibleSection>
+            </>}
+          />
+        )}
+
+        {activeTab === "audio" && (
+          <ConfigAndTest
+            testTitle={sp.testAudio}
+            test={
+              // Remounted on a change: both read the devices once.
+              <div key={`${savedAudioSettings.inputDevice}|${savedAudioSettings.outputDevice}`} className="space-y-2">
+                <VehicleAudio carId={carIdNum} />
+                <AudioChat carId={carIdNum} />
+              </div>
+            }
+            config={<>
+              <CollapsibleSection title={sp.audioDevices} defaultCollapsed={false} className="px-2 pb-2">
+                <AudioDeviceManager carId={carIdNum} settings={savedAudioSettings} onSaved={setSavedAudioSettings} />
+              </CollapsibleSection>
+        <CollapsibleSection title={`Sounds (${soundFiles.length})`} defaultCollapsed={false}>
+          <SoundLibraryEditor carId={carIdNum} files={soundFiles} onChanged={() => void reloadSounds()} hasSpeaker={!!savedAudioSettings.outputDevice} />
+        </CollapsibleSection>
+            </>}
+          />
+        )}
+
+        {activeTab === "hardware" && (
+          <>
         <CollapsibleSection title="Templates" defaultCollapsed={false}>
           <div className="flex items-end gap-2 mb-2">
             <Field label="Template">
@@ -902,7 +1013,6 @@ export default function ChannelsPage() {
             </div>
           )}
         </CollapsibleSection>
-
         <CollapsibleSection title={`Pin managers (${pinManagers.length})`} defaultCollapsed={false}>
           <button className={btnPrimary + " mb-2"} onClick={() => setEditingPinManager({ key: "__new__", pinManager: {} as PinManager, isNew: true })}>+ Add pin manager</button>
           <div className="space-y-1">
@@ -947,117 +1057,15 @@ export default function ChannelsPage() {
             )}
           </div>
         </CollapsibleSection>
-
-        <CollapsibleSection title={`Control channels (${controls.length})`} defaultCollapsed={false}>
-          <button className={btnPrimary + " mb-2"} onClick={() => setEditingControl({ key: "__new__", channel: {} as ControlChannel, isNew: true })}>+ Add control channel</button>
-          <div className="space-y-1">
-            {controls.map(c => (
-              <div key={c.channelName} className="border border-zinc-800 rounded p-2 bg-zinc-900">
-                {editingControl?.key === c.channelName && !editingControl.isNew ? (
-                  <ControlEditor initial={c} isNew={false} onSave={(nc) => saveControl(c.channelName, nc, false)} onCancel={() => setEditingControl(null)} controlTypes={availableControlTypes} soundFiles={soundFiles} hasSpeaker={!!savedAudioSettings.outputDevice} />
-                ) : (
-                  <div className="flex items-center justify-between">
-                    <div className="font-mono text-xs">
-                      <span className="text-zinc-100">{c.channelName}</span>
-                      <span className="text-zinc-500 ml-2">{c.controlType || "?"} @ {c.pinManager}#{c.address ?? "-"}</span>
-                      {c.displayName && <span className="text-zinc-400 ml-2">({c.displayName})</span>}
-                    </div>
-                    <div className="flex gap-1">
-                      <button className={btnGhost} onClick={() => setEditingControl({ key: c.channelName, channel: c, isNew: false })}>Edit</button>
-                      <button className={btnDanger} onClick={() => deleteControl(c.channelName)}>Delete</button>
-                    </div>
-                  </div>
-                )}
-                <HealthLine entry={healthOf("control", c.channelName)} carId={carIdNum} />
-              </div>
-            ))}
-            {editingControl?.isNew && (
-              <ControlEditor key={editingControl.channel.channelName ?? "new"} initial={editingControl.channel.channelName ? editingControl.channel : undefined} isNew={true} onSave={(nc) => saveControl("__new__", nc, true)} onCancel={() => setEditingControl(null)} controlTypes={availableControlTypes} soundFiles={soundFiles} hasSpeaker={!!savedAudioSettings.outputDevice} />
-            )}
-          </div>
-        </CollapsibleSection>
-
-        <CollapsibleSection title={`Telemetry channels (${telemetries.length})`} defaultCollapsed={false}>
-          <button className={btnPrimary + " mb-2"} onClick={() => setEditingTelemetry({ key: "__new__", channel: {} as TelemetryChannel, isNew: true })}>+ Add telemetry channel</button>
-          <div className="space-y-1">
-            {telemetries.map(t => (
-              <div key={t.channelName} className="border border-zinc-800 rounded p-2 bg-zinc-900">
-                {editingTelemetry?.key === t.channelName && !editingTelemetry.isNew ? (
-                  <TelemetryEditor initial={t} isNew={false} onSave={(nt) => saveTelemetry(t.channelName, nt, false)} onCancel={() => setEditingTelemetry(null)} telemetryTypes={availableTelemetryTypes} />
-                ) : (
-                  <div className="flex items-center justify-between">
-                    <div className="font-mono text-xs">
-                      <span className="text-zinc-100">{t.channelName}</span>
-                      <span className="text-zinc-500 ml-2">{t.telemetryType || "?"} / {DATA_TYPES[t.dataType] ?? "?"} {t.unit ? `(${t.unit})` : ""} @ {t.pinManager}#{t.address ?? "-"}</span>
-                    </div>
-                    <div className="flex gap-1">
-                      <button className={btnGhost} onClick={() => setEditingTelemetry({ key: t.channelName, channel: t, isNew: false })}>Edit</button>
-                      <button className={btnDanger} onClick={() => deleteTelemetry(t.channelName)}>Delete</button>
-                    </div>
-                  </div>
-                )}
-                <HealthLine entry={healthOf("telemetry", t.channelName)} carId={carIdNum} />
-              </div>
-            ))}
-            {editingTelemetry?.isNew && (
-              <TelemetryEditor key={editingTelemetry.channel.channelName ?? "new"} initial={editingTelemetry.channel.channelName ? editingTelemetry.channel : undefined} isNew={true} onSave={(nt) => saveTelemetry("__new__", nt, true)} onCancel={() => setEditingTelemetry(null)} telemetryTypes={availableTelemetryTypes} />
-            )}
-          </div>
-        </CollapsibleSection>
-
         <CollapsibleSection title={messages.overlay.lidarSource.title} defaultCollapsed={false}>
           <LidarSourceSetup carId={carIdNum} onChanged={reloadQuietly} />
         </CollapsibleSection>
+          </>
+        )}
 
-        <CollapsibleSection title={`Video streams (${videos.length})`} defaultCollapsed={false}>
-          <button className={btnPrimary + " mb-2"} onClick={() => setEditingVideo({ key: "__new__", stream: {} as VideoStream, isNew: true })}>+ Add video stream</button>
-          <div className="space-y-1">
-            {videos.map(v => (
-              <div key={v.streamId} className="border border-zinc-800 rounded p-2 bg-zinc-900">
-                {editingVideo?.key === v.streamId && !editingVideo.isNew ? (
-                  <VideoEditor initial={v} isNew={false} onSave={(nv) => saveVideo(v.streamId, nv, false)} onCancel={() => setEditingVideo(null)} />
-                ) : (
-                  <div className="flex items-center justify-between">
-                    <div className="font-mono text-xs">
-                      <span className="text-zinc-100">{v.streamId}</span>
-                      <span className="text-zinc-500 ml-2">{v.name || "?"} {v.type ? `(${v.type})` : ""} {v.location ? `@ ${v.location}` : ""} {v.priority != null ? `· prio ${v.priority}` : ""}</span>
-                    </div>
-                    <div className="flex gap-1">
-                      <button className={btnGhost} onClick={() => setEditingVideo({ key: v.streamId, stream: v, isNew: false })}>Edit</button>
-                      <button className={btnDanger} onClick={() => deleteVideo(v.streamId)}>Delete</button>
-                    </div>
-                  </div>
-                )}
-                <HealthLine entry={healthOf("video", v.streamId)} carId={carIdNum} />
-              </div>
-            ))}
-            {editingVideo?.isNew && (
-              <VideoEditor isNew={true} onSave={(nv) => saveVideo("__new__", nv, true)} onCancel={() => setEditingVideo(null)} />
-            )}
-          </div>
-        </CollapsibleSection>
+        {activeTab === "diagnostics" && <OnboardDiagnostics carId={carIdNum} defaultCollapsed={false} />}
+        </div>
 
-        <CollapsibleSection title="Audio" defaultCollapsed={false}>
-          <AudioSettingsEditor
-            settings={audioSettings}
-            onChange={patch => setAudioSettings(prev => ({ ...prev, ...patch }))}
-            dirty={JSON.stringify(audioSettings) !== JSON.stringify(savedAudioSettings)}
-            onSave={saveAudioSettings}
-            onReset={() => setAudioSettings(savedAudioSettings)}
-            noDevicesReported={audioInputs.length === 0 && audioOutputs.length === 0}
-          />
-        </CollapsibleSection>
-
-        <CollapsibleSection title={`Sounds (${soundFiles.length})`} defaultCollapsed={false}>
-          <SoundLibraryEditor carId={carIdNum} files={soundFiles} onChanged={() => void reloadSounds()} hasSpeaker={!!savedAudioSettings.outputDevice} />
-        </CollapsibleSection>
-
-        <datalist id="audio-input-options">
-          {audioInputs.map(d => <option key={d.name} value={d.name}>{d.description ?? ""}</option>)}
-        </datalist>
-        <datalist id="audio-output-options">
-          {audioOutputs.map(d => <option key={d.name} value={d.name}>{d.description ?? ""}</option>)}
-        </datalist>
         <datalist id="video-type-options">
           <option value="camera">Raspberry Pi camera</option>
           <option value="v4l2">USB webcam (V4L2)</option>

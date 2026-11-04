@@ -21,6 +21,9 @@ public class CarAudioService
 {
     // Video mountpoints use their CarVideoStream id; car audio lives in its own id range.
     public const int MountpointIdOffset = 1_000_000;
+    private static readonly TimeSpan DeviceScanTimeout = TimeSpan.FromSeconds(8);
+    // Longer than the Onboard's own limit, so its error message arrives instead of a timeout.
+    private static readonly TimeSpan DeviceTestTimeout = TimeSpan.FromSeconds(12);
     public static int MountpointId(int carId) => MountpointIdOffset + carId;
 
     private readonly IHubContext<CarConnectionHub, IConnectionHubClient> _hub;
@@ -113,6 +116,38 @@ public class CarAudioService
         if (_running.ContainsKey(carId) && _streamService.GetAudioPort(carId) is { } port)
             await client.StartAudioUplink(port);
         await client.SyncSoundFiles(await LoadSoundFilesAsync(carId));
+    }
+
+    /// <summary>
+    /// The devices the vehicle sees right now; null when it is offline or its build can't answer.
+    /// </summary>
+    public async Task<AudioDeviceScan?> ScanDevicesAsync(int carId)
+    {
+        if (!TryGetCarClient(carId, out var client)) return null;
+        try
+        {
+            return await client.ListAudioDevices().WaitAsync(DeviceScanTimeout);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Audio device scan failed for car {CarId}", carId);
+            return null;
+        }
+    }
+
+    public async Task<AudioDeviceTestResult> TestDeviceAsync(int carId, string device, bool output)
+    {
+        if (!TryGetCarClient(carId, out var client))
+            return new AudioDeviceTestResult { Message = "Das Fahrzeug ist nicht verbunden." };
+        try
+        {
+            return await client.TestAudioDevice(device, output).WaitAsync(DeviceTestTimeout);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Audio device test failed for car {CarId}", carId);
+            return new AudioDeviceTestResult { Message = "Das Fahrzeug hat nicht geantwortet (Onboard zu alt?)." };
+        }
     }
 
     /// <summary>

@@ -40,6 +40,15 @@ public interface IAudioClient
     /// </summary>
     Task<DiagnosticCheck[]> GetAudioDiagnostics();
 
+    /// <summary>The ALSA devices the vehicle sees right now, for the device picker of the setup page.</summary>
+    Task<AudioDeviceScan> ListAudioDevices();
+
+    /// <summary>
+    /// Tests one device before it is saved: records two seconds and reports the level, or plays a short
+    /// tone when <paramref name="output"/> is set. Refuses while that device is in use.
+    /// </summary>
+    Task<AudioDeviceTestResult> TestAudioDevice(string device, bool output);
+
     /// <summary>
     /// The car's sound library, pushed on connect and after every upload/delete. The Onboard downloads
     /// missing or changed files (GetSoundFileChunk) and removes the ones no longer listed.

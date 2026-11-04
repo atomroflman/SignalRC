@@ -20,6 +20,7 @@ interface OnboardDiagnosticsReport {
 
 interface Props {
   carId?: number;
+  defaultCollapsed?: boolean;
 }
 
 const statusClasses: Record<DiagnosticStatus, string> = {
@@ -125,7 +126,7 @@ export default function OnboardDiagnostics(props: Props): JSX.Element {
     <CollapsibleSection
       title={messages.onboardDiagnostics.title}
       label={messages.onboardDiagnostics.title}
-      defaultCollapsed={true}
+      defaultCollapsed={props.defaultCollapsed ?? true}
       className="px-2"
     >
       <div className="space-y-2 text-xs leading-tight">

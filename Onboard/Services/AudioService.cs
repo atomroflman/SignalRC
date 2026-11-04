@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using SignalRC.Onboard.Audio;
 using SignalRC.Onboard.Control;
+using SignalRC.Onboard.Services;
 using SignalRC.Shared.Audio;
 using SignalRC.Shared.HubClients;
 using SignalRC.Shared.Video;
@@ -483,6 +484,147 @@ public class AudioService : IAudioClient
         }
 
         return checks.ToArray();
+    }
+
+    public Task<AudioDeviceScan> ListAudioDevices() => Task.Run(() => new AudioDeviceScan
+    {
+        Inputs = AvailableChannelTypesService.ListAlsaDevices("arecord"),
+        Outputs = AvailableChannelTypesService.ListAlsaDevices("aplay"),
+    });
+
+    public async Task<AudioDeviceTestResult> TestAudioDevice(string device, bool output)
+    {
+        if (!AudioEnabled)
+            return new AudioDeviceTestResult { Message = "Feature-Flag 'audio' ist aus – Audio wird abgelehnt." };
+        if (!IsValidDeviceName(device))
+            return new AudioDeviceTestResult { Message = "Ungültiger Gerätename." };
+        try
+        {
+            return output ? await TestSpeakerAsync(device) : await TestMicrophoneAsync(device);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Audio device test failed for {Device}", device);
+            return new AudioDeviceTestResult { Message = $"Test fehlgeschlagen: {ex.Message}" };
+        }
+    }
+
+    private async Task<AudioDeviceTestResult> TestMicrophoneAsync(string device)
+    {
+        bool running;
+        lock (_lock) running = _uplink != null;
+        if (running && device == Settings.InputDevice)
+            return new AudioDeviceTestResult { Ok = true, Message = "Das Mikrofon sendet gerade an Zuhörer. Den Pegel siehst du beim Mithören." };
+
+        var result = await RunPcmToolAsync("arecord", ["-q", "-D", device, "-f", "S16_LE", "-r", PcmRate, "-c", "1", "-d", "2", "-t", "raw", "-"], null);
+        if (result.ExitCode != 0)
+            return new AudioDeviceTestResult { Message = $"Aufnahme fehlgeschlagen: {DescribeAlsaError(result.Error)}" };
+
+        var (peakDb, rmsDb) = MeasureLevel(result.Output);
+        var message = peakDb is null or < SilentBelowDb
+            ? "Aufnahme läuft, aber es kommt kein Signal an. Prüfe Stecker und Pegel."
+            : "Aufnahme erfolgreich, das Mikrofon liefert Signal.";
+        return new AudioDeviceTestResult { Ok = true, Message = message, PeakDb = peakDb, RmsDb = rmsDb };
+    }
+
+    private async Task<AudioDeviceTestResult> TestSpeakerAsync(string device)
+    {
+        if (_mixer.IsOpen && device == Settings.OutputDevice)
+            return new AudioDeviceTestResult { Ok = true, Message = "Der Lautsprecher spielt gerade etwas, darum kein Testton." };
+
+        var result = await RunPcmToolAsync("aplay", ["-q", "-D", device, "-f", "S16_LE", "-r", PcmRate, "-c", "2", "-t", "raw", "-"], BuildTestTone());
+        return result.ExitCode == 0
+            ? new AudioDeviceTestResult { Ok = true, Message = "Testton gesendet. Ist er am Fahrzeug zu hören?" }
+            : new AudioDeviceTestResult { Message = $"Wiedergabe fehlgeschlagen: {DescribeAlsaError(result.Error)}" };
+    }
+
+    private const string PcmRate = "48000";
+    private const double SilentBelowDb = -70;
+
+    /// <summary>ALSA names only; the name goes to a tool as a single argument, but must not look like an option.</summary>
+    internal static bool IsValidDeviceName(string? device) =>
+        !string.IsNullOrEmpty(device) && device.Length <= 100
+        && System.Text.RegularExpressions.Regex.IsMatch(device, @"^[A-Za-z0-9_][A-Za-z0-9_:=,.\-]*$");
+
+    /// <summary>Peak and RMS of signed 16 bit little endian samples in dBFS; null on digital silence.</summary>
+    internal static (double? PeakDb, double? RmsDb) MeasureLevel(ReadOnlySpan<byte> pcm)
+    {
+        var count = pcm.Length / 2;
+        if (count == 0) return (null, null);
+        var peak = 0d;
+        var sum = 0d;
+        for (var i = 0; i < count; i++)
+        {
+            var sample = (short)(pcm[i * 2] | pcm[i * 2 + 1] << 8) / 32768d;
+            peak = Math.Max(peak, Math.Abs(sample));
+            sum += sample * sample;
+        }
+        return peak == 0 ? (null, null) : (ToDb(peak), ToDb(Math.Sqrt(sum / count)));
+    }
+
+    private static double ToDb(double level) => Math.Round(20 * Math.Log10(level), 1);
+
+    /// <summary>One second of 880 Hz at about -12 dBFS as 48 kHz stereo, faded to avoid clicks.</summary>
+    internal static byte[] BuildTestTone()
+    {
+        const int rate = 48000;
+        const int fade = rate / 50;
+        var pcm = new byte[rate * 4];
+        for (var i = 0; i < rate; i++)
+        {
+            var envelope = Math.Min(1d, Math.Min(i, rate - 1 - i) / (double)fade);
+            var sample = (short)(Math.Sin(2 * Math.PI * 880 * i / rate) * envelope * 8000);
+            for (var channel = 0; channel < 2; channel++)
+            {
+                pcm[i * 4 + channel * 2] = (byte)sample;
+                pcm[i * 4 + channel * 2 + 1] = (byte)(sample >> 8);
+            }
+        }
+        return pcm;
+    }
+
+    private static async Task<(int ExitCode, byte[] Output, string Error)> RunPcmToolAsync(string tool, string[] args, byte[]? input)
+    {
+        var startInfo = new ProcessStartInfo(tool)
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardInput = input != null,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+        foreach (var arg in args) startInfo.ArgumentList.Add(arg);
+        startInfo.Environment["LC_ALL"] = "C";
+
+        using var process = Process.Start(startInfo);
+        if (process == null) return (-1, [], $"{tool} konnte nicht gestartet werden");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+        using var output = new MemoryStream();
+        var stdout = process.StandardOutput.BaseStream.CopyToAsync(output, cts.Token);
+        var stderr = process.StandardError.ReadToEndAsync(cts.Token);
+        try
+        {
+            if (input != null)
+            {
+                try
+                {
+                    await process.StandardInput.BaseStream.WriteAsync(input, cts.Token);
+                    process.StandardInput.Close();
+                }
+                catch (IOException)
+                {
+                    // The tool quit before reading everything, usually a busy device: its stderr says why.
+                }
+            }
+            await process.WaitForExitAsync(cts.Token);
+            await stdout;
+            return (process.ExitCode, output.ToArray(), await stderr);
+        }
+        catch (OperationCanceledException)
+        {
+            process.Kill(entireProcessTree: true);
+            return (-1, [], "Zeitüberschreitung");
+        }
     }
 
     // arecord/aplay print ALSA lib noise first; the "audio open error: …" line at the end is the useful one.
