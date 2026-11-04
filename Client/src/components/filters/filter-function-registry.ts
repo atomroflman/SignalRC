@@ -18,6 +18,7 @@ import { TurnSignal } from "./TurnSignal";
 import { SignFunction } from "./SignFunction";
 import { HudSignalFunction } from "./HudSignalFunction";
 import { HudInputFunction } from "./HudInputFunction";
+import { TelemetryFunction } from "./TelemetryFunction";
 
 export var storedToggleValues = {} as Record<number, {switchState: boolean, toggleState: boolean}>;
 
@@ -61,5 +62,6 @@ export const filterFunctionRegistry = {
   Sign: new SignFunction(),
   HudSignal: new HudSignalFunction(),
   HudInput: new HudInputFunction(),
+  Telemetry: new TelemetryFunction(),
 };
 

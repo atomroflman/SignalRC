@@ -297,8 +297,39 @@ The vehicle has no other inbound ports — it only makes outbound connections to
 
 | Type | Description |
 |------|-------------|
-| `Pca9685PwmExtension` | 16-channel PWM controller via I2C |
-| `RaspberryPiGpioManager` | Native GPIO pins (via `System.Device.Gpio`, no `pigpio` daemon) |
+| `Pca9685PwmExtension` | 16-channel PWM controller via I2C; addresses 0–15 are the channels |
+| `RaspberryPiGpioManager` | The Pi's own 40-pin header via `System.Device.Gpio` (libgpiod, no `pigpio` daemon); addresses are **physical** pins 1–40 |
+
+`default` is a `RaspberryPiGpioManager` every vehicle has without an entry. Add an entry named `default` (or any other name) of that type to configure its pins:
+
+```json
+"pinManagers": {
+  "default": {
+    "type": "RaspberryPiGpioManager",
+    "options": {
+      "pins": [
+        { "pin": 11, "mode": "Input", "pull": "Up", "activeLow": true, "debounceMs": 20, "label": "door" },
+        { "pin": 13, "mode": "Output", "initialState": false },
+        { "pin": 12, "mode": "Pwm" }
+      ]
+    }
+  }
+}
+```
+
+| Pin option | Meaning |
+|------|-------------|
+| `pin` | Physical header pin (1–40). The BCM number is looked up (`RaspberryPiPinMap`). |
+| `mode` | `Output`, `Input` or `Pwm` (hardware PWM only on pins 12, 32, 33, 35). |
+| `pull` | Inputs: `None`, `Up` (switch to GND) or `Down` (switch to 3.3 V). |
+| `activeLow` | Logical "on" is electrical low; applies to reads and writes. |
+| `debounceMs` | Inputs: a level counts once it was stable this long (from edge timestamps). |
+| `initialState` | Outputs: logical level when the pin is opened. |
+| `label` | Free text for the pin editor. |
+
+Manager options: `driver` (`Auto`, `LibGpiod`, `LibGpiodV2`, `SysFs`; `Auto` lets `System.Device.Gpio` pick libgpiod v1/v2 and the header's `pinctrl` chip, Pi 5 included) and `gpioChip` (force a gpiochip number). Unconfigured pins become an output on the first write and an input on the first read. Problems (power pin, PWM on a non-PWM pin, duplicate pins) show up as channel health warnings.
+
+The channel page draws the board for these two types: the Raspberry Pi matching the model the onboard reports (`/proc/device-tree/model`, sent as `boardModel` with the available channel types) or the PCA9685 breakout. Pins are hoverable and clickable; the selected pin is configured in place and can prefill a new control or telemetry channel.
 
 ### Control Types
 
@@ -314,6 +345,7 @@ Discriminated by the `[ControlType("...")]` attribute on each class (`Onboard/Co
 | `PwmLight` / `PwmBlinker` | PWM-driven light / blinking light |
 | `CustomBash` | Runs a fixed shell command on activation |
 | `LoopbackToTelemetry` | Feeds a control value straight back out as telemetry |
+| `GpioOutput` | Switches a digital pin: on at or above `threshold` (0.5); `releaseState` `Off`/`On`/`Keep` |
 | `LoggingOnly` | No hardware effect — logs the value (also the fallback when a `controlType` string doesn't match anything) |
 
 There is no `ServoControl` or `GearControl` type in the current code.
@@ -325,3 +357,7 @@ There is no `ServoControl` or `GearControl` type in the current code.
 | `CpuTemperatureReader` | CPU temperature |
 | `ApplicationLifetimeReader` | App uptime |
 | `JbdBmsTelemetryReader` | Battery BMS via UART |
+| `GpioPinReader` | State of a digital pin (`1`/`0`, data type Boolean) from the channel's `pinManager` + `address`. `latch` (default true) keeps a pulse shorter than the read interval for one read; `report: Edges` counts debounced edges instead. Works for inputs and outputs. |
+| `PwmOutputReader` | What a PWM output drives. PCA9685: read back from the chip registers (`Valid`; `Error` when the chip was reset and sleeps); Pi hardware PWM: last write (`Unchecked`). `report`: `Percent` (default), `DutyCycle`, `PulseWidthMs`, `PulseWidthUs`, `Counts`. |
+
+Both pin readers take `pinManager` and `address` from the channel itself and share the module instance of the control on the same pin. In flows the node **Telemetry** (`channel`, `fallback`; outputs `value`, `valid`) turns any telemetry channel into a flow input; it runs in the driver's browser, so end stops and e-stops belong on the vehicle.

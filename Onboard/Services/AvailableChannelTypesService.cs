@@ -26,7 +26,26 @@ public class AvailableChannelTypesService
         OptionSchemas = _cache.Value.OptionSchemas,
         AudioInputDevices = ListAlsaDevices("arecord"),
         AudioOutputDevices = ListAlsaDevices("aplay"),
+        BoardModel = _boardModel.Value,
     };
+
+    private static readonly Lazy<string?> _boardModel = new(ReadBoardModel);
+
+    /// <summary>The device tree model string, without its trailing NUL; null where there is none.</summary>
+    internal static string? ReadBoardModel()
+    {
+        try
+        {
+            const string path = "/proc/device-tree/model";
+            if (!File.Exists(path)) return null;
+            var model = File.ReadAllText(path).TrimEnd('\0', ' ', '\n');
+            return string.IsNullOrWhiteSpace(model) ? null : model;
+        }
+        catch
+        {
+            return null;
+        }
+    }
 
     /// <summary>
     /// Hardware devices first as <c>plughw:CARD=…,DEV=…</c> (from <c>-l</c>; plughw converts sample

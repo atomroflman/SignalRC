@@ -519,6 +519,7 @@ public TelemetryService(ChannelMap channelMap, ServerConnectionService serverCon
             return null;
         }
         reader.ReadIntervalTicks = Math.Max(1, definition.ReadIntervalTicks);
+        (reader as IPinAddressedReader)?.Bind(definition.PinManager, definition.Address);
 
         var problems = ChannelOptionBinder.Apply(reader, definition.Options, Logger, $"channel {channelName}");
         _readerProblems[channelName] = problems;

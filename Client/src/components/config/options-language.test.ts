@@ -45,8 +45,8 @@ describe("schema lookup", () => {
   });
 
   it("parses the server response defensively", () => {
-    expect(parseOptionSchemas(null)).toEqual({ pinManagerTypes: [], schemas: [] });
-    expect(parseOptionSchemas({ pinManagerTypes: ["A", 3], schemas: [pca, { typeName: 1 }] })).toEqual({ pinManagerTypes: ["A"], schemas: [pca] });
+    expect(parseOptionSchemas(null)).toEqual({ pinManagerTypes: [], schemas: [], boardModel: null });
+    expect(parseOptionSchemas({ pinManagerTypes: ["A", 3], schemas: [pca, { typeName: 1 }], boardModel: "Raspberry Pi 5 Model B Rev 1.0" })).toEqual({ pinManagerTypes: ["A"], schemas: [pca], boardModel: "Raspberry Pi 5 Model B Rev 1.0" });
   });
 });
 

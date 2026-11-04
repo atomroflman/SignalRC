@@ -19,6 +19,9 @@ public class AvailableChannelTypes
     [Key(4)][JsonPropertyName("pinManagerTypes")] public string[] PinManagerTypes { get; set; } = Array.Empty<string>();
     // The "options" each type understands, for the options editor of the channel config.
     [Key(5)][JsonPropertyName("optionSchemas")] public ChannelTypeSchema[] OptionSchemas { get; set; } = Array.Empty<ChannelTypeSchema>();
+    // Board the onboard runs on, from /proc/device-tree/model (e.g. "Raspberry Pi 5 Model B Rev 1.0");
+    // null on other hardware. The pin editor draws the matching board.
+    [Key(6)][JsonPropertyName("boardModel")] public string? BoardModel { get; set; }
 }
 
 /// <summary>Options of one pin manager, control, telemetry or video type.</summary>

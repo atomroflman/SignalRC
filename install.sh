@@ -552,6 +552,15 @@ if [ "$DEPLOY_MODE" = "onboard" ]; then
         echo "Warning: No libcamera runtime package found in apt. Continuing without it."
     fi
 
+    # GPIO pins (RaspberryPiGpioManager) go through libgpiod; System.Device.Gpio
+    # loads v2 (libgpiod3, Trixie) or v1 (libgpiod2, Bookworm), whichever is there.
+    for gpiod_pkg in libgpiod3 libgpiod2; do
+        if pkg_candidate_exists "$gpiod_pkg"; then
+            base_packages+=("$gpiod_pkg")
+            break
+        fi
+    done
+
     pkg_install "${base_packages[@]}" "${camera_packages[@]}"
 
     # Two-way audio: the Onboard service talks to ALSA directly (no desktop
@@ -559,6 +568,12 @@ if [ "$DEPLOY_MODE" = "onboard" ]; then
     if getent group audio >/dev/null; then
         usermod -aG audio "$RUN_USER"
     fi
+    # /dev/gpiochip* and /dev/i2c-* (GPIO pins, PCA9685) belong to these groups on Raspberry Pi OS.
+    for hw_group in gpio i2c; do
+        if getent group "$hw_group" >/dev/null; then
+            usermod -aG "$hw_group" "$RUN_USER"
+        fi
+    done
 
     # ── Phase 2: mediamtx ───────────────────────────────────────────
     echo ""

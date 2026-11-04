@@ -114,7 +114,6 @@ serviceCollection.AddSingleton<IModuleManagerFactory, ModuleManagerFactory>();
 serviceCollection.AddAllTransient(typeof(TelemetryReaderBase));
 serviceCollection.AddAllTransient(typeof(ControlTypeBase));
 serviceCollection.AddAllTransient(typeof(IPwmModule));
-serviceCollection.AddAllTransient(typeof(IGpioModule));
 // The log also goes to the server for the GUI (car page → Logs), buffered until connected.
 var logForwarder = new ServerLogForwarder(configuration.GetValue("LogForwarding:MinLevel", LogLevel.Information));
 serviceCollection.AddSingleton(logForwarder);

@@ -3,6 +3,7 @@ import { filterFunctionRegistry } from './filters/filter-function-registry';
 import { hudInputValues } from './filters/HudInputFunction';
 import { hudInputName, nextHudInputValue, type HudInputAction } from './overlay/integration/hud-input';
 import { Connection } from 'reactflow';
+import { bindFlowTelemetry } from './flow-telemetry';
 
 export type ControlFlowNode = {
   nodeId: number;
@@ -1141,3 +1142,6 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
     }
   },
 }));
+
+// Telemetry nodes follow their vehicle channel while the flow is loaded.
+if (typeof window !== 'undefined') bindFlowTelemetry(useControlFlowStore);

@@ -455,6 +455,7 @@ public class ChannelsController : ControllerBase
         {
             pinManagerTypes = types?.PinManagerTypes ?? Array.Empty<string>(),
             schemas = types?.OptionSchemas ?? Array.Empty<ChannelTypeSchema>(),
+            boardModel = types?.BoardModel,
         });
     }
 

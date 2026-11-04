@@ -9,6 +9,8 @@ import LidarSourceSetup from "@/components/overlay/lidar-source/lidar-source-set
 import { confirmationText, dependencyWarning, loadChannelDependencies } from "@/components/overlay/integration/channel-dependencies";
 import OptionsJsonField from "@/components/config/options-json-field";
 import { findSchema, parseOptionSchemas, type ChannelTypeSchema, type SchemaKind } from "@/components/config/options-language";
+import PinBoardEditor, { boardKindOf, type NewChannelRequest, type OtherPinManager } from "@/components/config/pin-boards/pin-board-editor";
+import type { ChannelRef } from "@/components/config/pin-boards/pin-boards";
 
 type PinManager = {
   name: string;
@@ -188,15 +190,42 @@ function formatOptionsJson(options: any): string {
   catch { return ""; }
 }
 
+/** What the board editors need from the page: channels on the pins, the other managers, the vehicle's board. */
+type BoardContext = {
+  carId: number;
+  channels: ChannelRef[];
+  pinManagers: PinManager[];
+  boardModel: string | null;
+  onCreateChannel: (request: NewChannelRequest) => void;
+};
+
 function PinManagerEditor({
-  initial, isNew, onSave, onCancel,
-}: { initial?: PinManager; isNew: boolean; onSave: (p: PinManager) => Promise<void>; onCancel: () => void }) {
+  initial, isNew, onSave, onCancel, board,
+}: { initial?: PinManager; isNew: boolean; onSave: (p: PinManager) => Promise<void>; onCancel: () => void; board: BoardContext }) {
   const [p, setP] = useState<PinManager>(initial ?? { name: "", type: "", optionsJson: "" });
   const update = (patch: Partial<PinManager>) => setP(prev => ({ ...prev, ...patch }));
+  const kind = boardKindOf(p.type);
+  const options = useMemo(() => {
+    if (!p.optionsJson.trim()) return {};
+    try {
+      const o = JSON.parse(p.optionsJson);
+      return o && typeof o === "object" && !Array.isArray(o) ? o as Record<string, unknown> : undefined;
+    } catch { return undefined; }
+  }, [p.optionsJson]);
+  const others = useMemo<OtherPinManager[]>(() => board.pinManagers
+    .filter(m => m.name !== p.name)
+    .map(m => ({ name: m.name, type: m.type, options: parseOptionsJson(m.optionsJson) })), [board.pinManagers, p.name]);
   return (
     <div className="grid grid-cols-2 gap-2 p-2 border border-zinc-700 rounded bg-zinc-950">
       <Field label="Name"><input className={inputClass} value={p.name} onChange={e => update({ name: e.target.value })} disabled={!isNew} /></Field>
       <Field label="Type"><input className={inputClass} value={p.type} onChange={e => update({ type: e.target.value })} list="pin-manager-type-options" placeholder="e.g. Pca9685PwmExtension" /></Field>
+      {kind && (
+        <div className="col-span-2">
+          <PinBoardEditor carId={board.carId} managerName={p.name || "default"} kind={kind} options={options}
+            onOptionsChange={o => update({ optionsJson: formatOptionsJson(o) })}
+            channels={board.channels} otherPinManagers={others} boardModel={board.boardModel} onCreateChannel={board.onCreateChannel} />
+        </div>
+      )}
       <OptionsField kind="pinManager" typeName={p.type} value={p.optionsJson} onChange={optionsJson => update({ optionsJson })} example='e.g. {"boardAddress":0,"i2cBus":1}' className="col-span-2" />
       <div className="col-span-2 flex gap-2 justify-end">
         <button className={btnGhost} onClick={onCancel}>Cancel</button>
@@ -215,7 +244,7 @@ function ControlEditor({
   });
   const update = (patch: Partial<ControlChannel>) => setC(prev => ({ ...prev, ...patch }));
   return (
-    <div className="grid grid-cols-2 gap-2 p-2 border border-zinc-700 rounded bg-zinc-950">
+    <div id={isNew ? "new-control-editor" : undefined} className="grid grid-cols-2 gap-2 p-2 border border-zinc-700 rounded bg-zinc-950">
       <Field label="Channel name"><input className={inputClass} value={c.channelName} onChange={e => update({ channelName: e.target.value })} disabled={!isNew} /></Field>
       <Field label="Display name"><input className={inputClass} value={c.displayName ?? ""} onChange={e => update({ displayName: e.target.value })} /></Field>
       <Field label="Control type">
@@ -245,7 +274,7 @@ function TelemetryEditor({
   });
   const update = (patch: Partial<TelemetryChannel>) => setT(prev => ({ ...prev, ...patch }));
   return (
-    <div className="grid grid-cols-2 gap-2 p-2 border border-zinc-700 rounded bg-zinc-950">
+    <div id={isNew ? "new-telemetry-editor" : undefined} className="grid grid-cols-2 gap-2 p-2 border border-zinc-700 rounded bg-zinc-950">
       <Field label="Channel name"><input className={inputClass} value={t.channelName} onChange={e => update({ channelName: e.target.value })} disabled={!isNew} /></Field>
       <Field label="Telemetry type">
         <input className={inputClass + " font-mono"} value={t.telemetryType} onChange={e => update({ telemetryType: e.target.value })} list="telemetry-type-options" placeholder="e.g. SignalRC.Onboard.Telemetry.CpuTemperatureReader" />
@@ -407,6 +436,30 @@ export default function ChannelsPage() {
   // "default" is the GPIO manager every vehicle has without an entry.
   const pinManagerNames = useMemo(() => ["default", ...pinManagers.map(p => p.name).filter(n => n !== "default")], [pinManagers]);
   const optionsInfo = useMemo(() => ({ schemas: optionSchemas.schemas, pinManagers: pinManagerNames }), [optionSchemas, pinManagerNames]);
+  const channelRefs = useMemo<ChannelRef[]>(() => [
+    ...controls.map(c => ({ kind: "control" as const, name: c.channelName, type: c.controlType, pinManager: c.pinManager, address: c.address })),
+    ...telemetries.map(t => ({ kind: "telemetry" as const, name: t.channelName, type: t.telemetryType, pinManager: t.pinManager, address: t.address })),
+  ], [controls, telemetries]);
+  // A pin in the board editor prefills a new channel; the editor opens below and is scrolled to.
+  const createChannelFromBoard = useCallback((r: NewChannelRequest) => {
+    if (r.kind === "control") {
+      setEditingControl({ key: "__new__", isNew: true, channel: {
+        channelName: r.channelName, displayName: "", isEnabled: true, requiresAxis: false, maxResendInterval: null,
+        controlType: r.type, pinManager: r.pinManager, address: r.address, testDisabled: false, optionsJson: formatOptionsJson(r.options),
+      } });
+    } else {
+      setEditingTelemetry({ key: "__new__", isNew: true, channel: {
+        channelName: r.channelName, readIntervalTicks: r.readIntervalTicks ?? 1, telemetryType: r.type, dataType: r.dataType ?? 0,
+        unit: r.unit ?? "", decimals: r.decimals ?? null, pinManager: r.pinManager, address: r.address, optionsJson: formatOptionsJson(r.options),
+      } });
+    }
+    setTimeout(() => document.getElementById(r.kind === "control" ? "new-control-editor" : "new-telemetry-editor")?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
+  }, []);
+  const boardContext = useMemo<BoardContext>(() => ({
+    carId: carIdNum ?? 0, channels: channelRefs, pinManagers, boardModel: optionSchemas.boardModel, onCreateChannel: createChannelFromBoard,
+  }), [carIdNum, channelRefs, pinManagers, optionSchemas.boardModel, createChannelFromBoard]);
+  const hasDefaultEntry = pinManagers.some(p => p.name === "default");
+
   // Keeps embedded helpers (LiDAR source) mounted with their status message.
   const reloadQuietly = useCallback(() => { void load(false); }, [load]);
 
@@ -670,7 +723,7 @@ export default function ChannelsPage() {
             {pinManagers.map(p => (
               <div key={p.name} className="border border-zinc-800 rounded p-2 bg-zinc-900">
                 {editingPinManager?.key === p.name && !editingPinManager.isNew ? (
-                  <PinManagerEditor initial={p} isNew={false} onSave={(np) => savePinManager(p.name, np, false)} onCancel={() => setEditingPinManager(null)} />
+                  <PinManagerEditor initial={p} isNew={false} onSave={(np) => savePinManager(p.name, np, false)} onCancel={() => setEditingPinManager(null)} board={boardContext} />
                 ) : (
                   <div className="flex items-center justify-between">
                     <div className="font-mono text-xs">
@@ -686,8 +739,25 @@ export default function ChannelsPage() {
                 <HealthLine entry={healthOf("pinManager", p.name)} carId={carIdNum} />
               </div>
             ))}
-            {editingPinManager?.isNew && (
-              <PinManagerEditor isNew={true} onSave={(np) => savePinManager("__new__", np, true)} onCancel={() => setEditingPinManager(null)} />
+            {!hasDefaultEntry && (
+              <div className="border border-zinc-800 border-dashed rounded p-2 bg-zinc-900/50">
+                {editingPinManager?.key === "default" ? (
+                  <PinManagerEditor initial={{ name: "default", type: "RaspberryPiGpioManager", optionsJson: "" }} isNew={true}
+                    onSave={(np) => savePinManager("default", np, true)} onCancel={() => setEditingPinManager(null)} board={boardContext} />
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <div className="font-mono text-xs">
+                      <span className="text-zinc-100">default</span>
+                      <span className="text-zinc-500 ml-2">RaspberryPiGpioManager · built in, no pin configuration yet</span>
+                    </div>
+                    <button className={btnGhost} onClick={() => setEditingPinManager({ key: "default", pinManager: { name: "default", type: "RaspberryPiGpioManager", optionsJson: "" }, isNew: true })}>Configure pins</button>
+                  </div>
+                )}
+                <HealthLine entry={healthOf("pinManager", "default")} carId={carIdNum} />
+              </div>
+            )}
+            {editingPinManager?.isNew && editingPinManager.key === "__new__" && (
+              <PinManagerEditor isNew={true} onSave={(np) => savePinManager("__new__", np, true)} onCancel={() => setEditingPinManager(null)} board={boardContext} />
             )}
           </div>
         </CollapsibleSection>
@@ -716,7 +786,7 @@ export default function ChannelsPage() {
               </div>
             ))}
             {editingControl?.isNew && (
-              <ControlEditor isNew={true} onSave={(nc) => saveControl("__new__", nc, true)} onCancel={() => setEditingControl(null)} controlTypes={availableControlTypes} />
+              <ControlEditor key={editingControl.channel.channelName ?? "new"} initial={editingControl.channel.channelName ? editingControl.channel : undefined} isNew={true} onSave={(nc) => saveControl("__new__", nc, true)} onCancel={() => setEditingControl(null)} controlTypes={availableControlTypes} />
             )}
           </div>
         </CollapsibleSection>
@@ -744,7 +814,7 @@ export default function ChannelsPage() {
               </div>
             ))}
             {editingTelemetry?.isNew && (
-              <TelemetryEditor isNew={true} onSave={(nt) => saveTelemetry("__new__", nt, true)} onCancel={() => setEditingTelemetry(null)} telemetryTypes={availableTelemetryTypes} />
+              <TelemetryEditor key={editingTelemetry.channel.channelName ?? "new"} initial={editingTelemetry.channel.channelName ? editingTelemetry.channel : undefined} isNew={true} onSave={(nt) => saveTelemetry("__new__", nt, true)} onCancel={() => setEditingTelemetry(null)} telemetryTypes={availableTelemetryTypes} />
             )}
           </div>
         </CollapsibleSection>

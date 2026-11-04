@@ -136,6 +136,15 @@ const de: Record<string, FlowNodeDoc> = {
     ],
     example: "HUD-Eingabe \"light\" (Schalter) → Fahrzeugkanal light; parallel → HUD-Signal \"light\" für die Anzeige",
   },
+  Telemetry: {
+    summary: "Eingang vom Fahrzeug: liefert den aktuellen Wert eines Telemetrie-Kanals, z. B. einen GPIO-Eingang (1/0).",
+    details: [
+      "channel ist der Name des Telemetrie-Kanals. Zahlen kommen unverändert, true/false als 1/0.",
+      "valid ist 1, solange der Wert frisch ist; bei veraltetem, fehlerhaftem oder fehlendem Wert ist valid 0 und value der fallback.",
+      "Läuft im Browser des Fahrers: zwischen Pin und Reaktion liegen Leseintervall und Netzwerk. Endschalter oder Not-Aus gehören aufs Fahrzeug.",
+    ],
+    example: "Telemetrie \"doorOpen\" → Iif → Fahrzeugkanal warnLight",
+  },
 };
 
 const en: Record<string, FlowNodeDoc> = {
@@ -263,6 +272,15 @@ const en: Record<string, FlowNodeDoc> = {
       "For feedback in the HUD (e.g. a lit switch) also connect the output to a HUD signal.",
     ],
     example: "HUD input \"light\" (toggle) → vehicle channel light; in parallel → HUD signal \"light\" for the display",
+  },
+  Telemetry: {
+    summary: "Input from the vehicle: outputs the current value of a telemetry channel, e.g. a GPIO input (1/0).",
+    details: [
+      "channel is the name of the telemetry channel. Numbers pass unchanged, true/false as 1/0.",
+      "valid is 1 while the value is fresh; for a stale, failed or missing value valid is 0 and value is the fallback.",
+      "Runs in the driver's browser: read interval and network lie between pin and reaction. End stops or an e-stop belong on the vehicle.",
+    ],
+    example: "Telemetry \"doorOpen\" → Iif → vehicle channel warnLight",
   },
 };
 

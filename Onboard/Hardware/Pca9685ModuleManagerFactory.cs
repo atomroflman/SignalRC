@@ -32,8 +32,13 @@ namespace SignalRC.Onboard.Hardware
             _loggerFactory = loggerFactory;
             _serviceProvider = serviceProvider;
             _channelMap = channelMap;
-            _instances.Add("default", new RaspberryPiGpioManager(serviceProvider));
         }
+
+        /// <summary>
+        /// "default" is the Pi's own header. It exists without a ChannelMap entry; an entry named
+        /// "default" (type RaspberryPiGpioManager) adds its pin configuration.
+        /// </summary>
+        public const string DefaultName = "default";
 
         /// <summary>
         /// Creates an IModuleManager instance for the given pin manager name using ChannelMap.
@@ -67,7 +72,7 @@ namespace SignalRC.Onboard.Hardware
             lock (_lock)
             {
                 _failures.Remove(name);
-                if (name == "default" || !_instances.Remove(name, out dropped))
+                if (!_instances.Remove(name, out dropped))
                     return;
             }
             try
@@ -86,6 +91,12 @@ namespace SignalRC.Onboard.Hardware
             // Find pin manager config by name
             if (!_channelMap.PinManagers.TryGetValue(name, out var managerConfig))
             {
+                if (name == DefaultName)
+                {
+                    var bare = new RaspberryPiGpioManager(_serviceProvider);
+                    _instances.Add(name, bare);
+                    return bare;
+                }
                 logger.LogError($"No pinManager named '{name}' in ChannelMap.");
                 return new NullModuleManager(logger);
             }
@@ -125,6 +136,14 @@ namespace SignalRC.Onboard.Hardware
             // Set properties from options dictionary; unknown keys are ignored as before.
             var problems = ChannelOptionBinder.Apply(instance!, managerConfig.Options, logger, $"pinManager {name}", warnUnknown: false);
             var res = instance as IModuleManager ?? throw new InvalidCastException($"{typeName} does not implement IModuleManager");
+            if (res is IValidatingModuleManager validating)
+            {
+                foreach (var problem in validating.Validate())
+                {
+                    logger.LogWarning("pinManager {Name}: {Problem}", name, problem);
+                    problems.Add(problem);
+                }
+            }
             _instances.Add(name, res);
             _serviceProvider.GetService<ChannelHealthService>()?.Problems(ChannelTypeSchema.PinManager, name, problems);
             return res;

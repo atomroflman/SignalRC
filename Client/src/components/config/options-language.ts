@@ -35,6 +35,8 @@ export interface ChannelTypeSchema {
 export interface OptionSchemas {
   pinManagerTypes: string[];
   schemas: ChannelTypeSchema[];
+  /** /proc/device-tree/model of the vehicle, e.g. "Raspberry Pi 5 Model B Rev 1.0"; null when unknown. */
+  boardModel: string | null;
 }
 
 export function parseOptionSchemas(raw: unknown): OptionSchemas {
@@ -42,6 +44,7 @@ export function parseOptionSchemas(raw: unknown): OptionSchemas {
   return {
     pinManagerTypes: Array.isArray(r.pinManagerTypes) ? r.pinManagerTypes.filter((t) => typeof t === "string") : [],
     schemas: Array.isArray(r.schemas) ? r.schemas.filter((s) => s && typeof s.typeName === "string" && Array.isArray(s.options)) : [],
+    boardModel: typeof r.boardModel === "string" && r.boardModel.trim() ? r.boardModel : null,
   };
 }
 

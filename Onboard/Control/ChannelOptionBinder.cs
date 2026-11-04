@@ -16,7 +16,12 @@ public static class ChannelOptionBinder
 {
     public const string GroupKeyOption = "groupKey";
 
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
+    // Enums inside nested objects ("pins": [{"mode": "Input"}]) come as names, like top-level enum options.
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() },
+    };
 
     /// <summary>Options consumed by the onboard services, not by the target type.</summary>
     private static readonly HashSet<string> ServiceOptions = new(StringComparer.OrdinalIgnoreCase) { GroupKeyOption };
