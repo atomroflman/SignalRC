@@ -17,7 +17,7 @@ public class SvgSanitizerTests
     public static TheoryData<string> CaseIds()
     {
         var data = new TheoryData<string>();
-        foreach (var c in Cases()) data.Add(c["id"]!.GetValue<string>());
+        foreach (var c in Cases()) data.Add(c!["id"]!.GetValue<string>());
         return data;
     }
 

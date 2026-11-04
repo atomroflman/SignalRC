@@ -141,7 +141,12 @@ namespace SignalRC.Onboard.Hardware
 
             T IModuleManager.GetModule<T>(int address)
             {
-                return new NullModule(Logger) as T;
+                if (new NullModule(Logger) is not T module)
+                {
+                    throw new InvalidCastException(
+                        $"NullModuleManager provides IPwmModule and IGpioModule, not {typeof(T).Name}.");
+                }
+                return module;
             }
 
             private class NullModule : IModule, IPwmModule, IGpioModule
