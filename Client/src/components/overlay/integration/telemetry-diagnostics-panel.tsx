@@ -44,7 +44,7 @@ export function TelemetryDiagnosticsPanel({ carId, provider, className, summaryC
   );
 }
 
-function DiagnosticsBody({ carId, provider: given, m }: { carId: number; provider?: CarSourceProvider; m: Messages }) {
+export function DiagnosticsBody({ carId, provider: given, m }: { carId: number; provider?: CarSourceProvider; m: Messages }) {
   const [acquired, setAcquired] = useState<CarSourceProvider | undefined>(undefined);
   useEffect(() => {
     if (given) return;

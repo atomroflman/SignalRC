@@ -2,7 +2,7 @@
 // AP13 – the overlay editor page (/car/[carId]/overlay): AP09–AP12 editor with
 // preview, real assets, sources, streams and video, publishing/history, the
 // sending pause on opening and the keyboard separation (api/README.md §6).
-import Link from "next/link";
+import ConfigHeader from "@/components/config-header";
 import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useCarUiStore } from "../../car-ui-store";
 import { useControlFlowStore } from "../../control-flow-store";
@@ -34,7 +34,7 @@ import {
 import type { IntegrationMessages } from "./messages";
 import { PublishPanel } from "./publish-panel";
 import { SvgImportDialog } from "./svg-import-dialog";
-import { TelemetryDiagnosticsPanel } from "./telemetry-diagnostics-panel";
+import { DiagnosticsBody } from "./telemetry-diagnostics-panel";
 import type { Size, VideoGeometry } from "./video-frame";
 
 type EditorPageMessages = IntegrationMessages["editorPage"];
@@ -125,9 +125,13 @@ function PreviewVideo({ carId, store, streams, hud, m }: { carId: number; store:
   );
 }
 
+const HUD_TABS = ["editor", "diagnostics"] as const;
+type HudTab = typeof HUD_TABS[number];
+
 export function OverlayEditorPage({ carId }: { carId: number }) {
   const { messages, locale } = useI18n();
   const m = messages.overlay;
+  const [tab, setTab] = useState<HudTab>("editor");
   const [me, setMe] = useState<MeLike | null | undefined>(undefined);
   const connectCarUi = useCarUiStore((s) => s.connect);
   const carState = useCarUiStore((s) => s.states[carId]);
@@ -269,14 +273,32 @@ export function OverlayEditorPage({ carId }: { carId: number }) {
   const ready = me !== undefined && persistence !== undefined;
 
   return (
-    <div className="flex min-h-screen flex-col gap-2 bg-zinc-950 p-3 text-zinc-100" data-ovl-editor-page={carId}>
-      <div className="flex flex-wrap items-center gap-3">
-        <Link href="/" className="text-xs text-sky-400 hover:underline">← {m.editorPage.back}</Link>
-        <h1 className="text-sm font-semibold">{m.editorPage.title}</h1>
-        <span className="text-xs text-zinc-500">{m.editorPage.vehicle(carId)}</span>
-        <span className="ml-auto text-[11px] text-zinc-500">{m.editorPage.keyboardHint}</span>
-      </div>
+    <div className="flex min-h-screen flex-col gap-2 bg-zinc-950 p-4 text-zinc-100" data-ovl-editor-page={carId}>
+      <ConfigHeader carId={carId} active="hud" className="mb-2"
+        actions={<span className="text-[11px] text-zinc-500">{m.editorPage.keyboardHint}</span>} />
       <SendBanner carId={carId} />
+      <div role="tablist" aria-label={m.editorPage.tabsLabel} className="flex gap-1 overflow-x-auto overflow-y-hidden border-b border-zinc-800">
+        {HUD_TABS.map(t => (
+          <button
+            key={t}
+            role="tab"
+            id={`hud-tab-${t}`}
+            aria-selected={tab === t}
+            aria-controls={`hud-tab-panel-${t}`}
+            className={`shrink-0 px-3 py-1.5 text-xs border-b-2 ${tab === t ? "border-green-500 text-zinc-100" : "border-transparent text-zinc-400 hover:text-zinc-200"}`}
+            onClick={() => setTab(t)}
+          >
+            {m.editorPage.tabs[t]}
+          </button>
+        ))}
+      </div>
+      {tab === "diagnostics" && (
+        <div id="hud-tab-panel-diagnostics" role="tabpanel" aria-labelledby="hud-tab-diagnostics" className="text-xs">
+          <DiagnosticsBody carId={carId} provider={live} m={m.telemetryDiagnostics} />
+        </div>
+      )}
+      {/* Hidden, not unmounted: the editor keeps its store, autosave and preview while diagnostics are shown. */}
+      <div id="hud-tab-panel-editor" role="tabpanel" aria-labelledby="hud-tab-editor" className={`flex flex-1 flex-col gap-2 ${tab === "editor" ? "" : "hidden"}`}>
       {me !== undefined && reason !== "control" && <div className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-300" data-ovl-local-only={reason}>{m.editorPage.localOnly[reason]}</div>}
       {!ready && <div className="text-xs text-zinc-400">{m.editorPage.loading}</div>}
       {ready && (
@@ -314,12 +336,11 @@ export function OverlayEditorPage({ carId }: { carId: number }) {
               <Section title={m.svgImport.title}>
                 <SvgImportDialog store={api.store} carId={carId} locale={locale} m={m.svgImport} canImport={hasControl} onAsset={addAssets} />
               </Section>
-              {/* Its own <details>: a collapsed Section would keep it mounted. */}
-              <TelemetryDiagnosticsPanel carId={carId} provider={live} />
             </>
           )}
         </OverlayEditorWithPreview>
       )}
+      </div>
     </div>
   );
 }

@@ -31,10 +31,9 @@ const de = {
     proceed: "Trotzdem fortfahren?",
   },
   editorPage: {
-    title: "HUD-Editor",
+    tabsLabel: "HUD-Bereiche",
+    tabs: { editor: "Editor", diagnostics: "Diagnose" },
     open: "HUD-Editor öffnen (pausiert die Steuerung)",
-    back: "Zurück zur Fahransicht",
-    vehicle: (id: number) => `Fahrzeug ${id}`,
     loading: "Laden…",
     /** D73: why the editor edits locally only (controlReason). */
     localOnly: {
@@ -244,10 +243,9 @@ const en: typeof de = {
     proceed: "Continue anyway?",
   },
   editorPage: {
-    title: "HUD editor",
+    tabsLabel: "HUD areas",
+    tabs: { editor: "Editor", diagnostics: "Diagnostics" },
     open: "Open HUD editor (pauses control)",
-    back: "Back to driving view",
-    vehicle: (id: number) => `Vehicle ${id}`,
     loading: "Loading…",
     localOnly: {
       noSession: "No user session – draft, history and saving on the server are locked. Locally loaded states can still be edited.",

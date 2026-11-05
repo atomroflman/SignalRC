@@ -349,7 +349,6 @@ const deMessages = {
   },
   controlFlowPage: {
     loadingFlow: 'Control Flow wird geladen...',
-    back: 'Zurück zur Fahransicht',
   },
   configGuard: {
     checkingAccess: 'Zugriffsrechte werden gepruft...',
@@ -472,15 +471,17 @@ const deMessages = {
     assignedSummary: (assigned: number, total: number) => `${assigned} von ${total} Eingangsknoten zugeordnet`,
     missing: 'fehlend',
   },
+  configHeader: {
+    back: 'Zur Fahransicht',
+    vehicle: (carId: number) => `Fahrzeug ${carId}`,
+    sectionsLabel: 'Konfigurationsbereiche',
+    sections: { setup: 'Setup', hud: 'HUD', flow: 'Flow Engine', logs: 'Onboard-Log', telemetry: 'Telemetrie' },
+    confirmHudWhileLive: 'Es werden gerade Steuerbefehle an das Fahrzeug gesendet. Der HUD-Editor pausiert das Senden. Trotzdem wechseln?',
+  },
   setupPage: {
-    link: 'Setup & Test (Steuerung, Telemetrie, Video, Audio)',
-    back: 'Zurück',
-    title: (carId: number) => `Setup – Fahrzeug ${carId}`,
-    wiring: 'Schaltplan',
-    log: 'Onboard-Log',
     reload: 'Neu laden',
     tabsLabel: 'Setup-Bereiche',
-    tabs: { control: 'Steuerung', telemetry: 'Telemetrie', video: 'Video', audio: 'Audio', hardware: 'Hardware', diagnostics: 'Diagnose' },
+    tabs: { control: 'Steuerung', telemetry: 'Telemetrie', video: 'Video', audio: 'Audio', hardware: 'Hardware', wiring: 'Schaltplan', diagnostics: 'Diagnose' },
     tabProblems: (count: number) => `${count} Problem${count === 1 ? '' : 'e'}`,
     testControl: 'Test: Eingänge',
     testTelemetry: 'Test: Live-Werte',
@@ -885,7 +886,6 @@ const enMessages: Messages = {
   },
   controlFlowPage: {
     loadingFlow: 'Loading control flow...',
-    back: 'Back to driving view',
   },
   configGuard: {
     checkingAccess: 'Checking access permissions...',
@@ -1008,15 +1008,17 @@ const enMessages: Messages = {
     assignedSummary: (assigned: number, total: number) => `${assigned} of ${total} input nodes assigned`,
     missing: 'missing',
   },
+  configHeader: {
+    back: 'To driving view',
+    vehicle: (carId: number) => `Vehicle ${carId}`,
+    sectionsLabel: 'Configuration areas',
+    sections: { setup: 'Setup', hud: 'HUD', flow: 'Flow engine', logs: 'Onboard log', telemetry: 'Telemetry' },
+    confirmHudWhileLive: 'Control commands are being sent to the vehicle right now. The HUD editor pauses sending. Switch anyway?',
+  },
   setupPage: {
-    link: 'Setup & test (controls, telemetry, video, audio)',
-    back: 'Back',
-    title: (carId: number) => `Setup – vehicle ${carId}`,
-    wiring: 'Wiring diagram',
-    log: 'Onboard log',
     reload: 'Reload',
     tabsLabel: 'Setup areas',
-    tabs: { control: 'Controls', telemetry: 'Telemetry', video: 'Video', audio: 'Audio', hardware: 'Hardware', diagnostics: 'Diagnostics' },
+    tabs: { control: 'Controls', telemetry: 'Telemetry', video: 'Video', audio: 'Audio', hardware: 'Hardware', wiring: 'Wiring diagram', diagnostics: 'Diagnostics' },
     tabProblems: (count: number) => `${count} problem${count === 1 ? '' : 's'}`,
     testControl: 'Test: inputs',
     testTelemetry: 'Test: live values',

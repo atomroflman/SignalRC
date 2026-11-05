@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/router";
-import Link from "next/link";
-import LanguageSwitcher from "@/components/language-switcher";
+import ConfigHeader from "@/components/config-header";
 import ConfigGuard from "@/components/config-guard";
 
 /** One forwarded onboard log line (Shared/Logs/OnboardLogEntry.cs); level is Microsoft.Extensions.Logging.LogLevel. */
@@ -88,14 +87,7 @@ export default function LogsPage() {
   return (
     <ConfigGuard carId={carIdNum!}>
       <div className="min-h-screen bg-zinc-950 text-zinc-100 p-4 flex flex-col">
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-          <div className="flex items-center gap-3">
-            <Link href={`/car/${carIdNum}`} className="text-blue-400 hover:underline text-sm">&larr; Back</Link>
-            <h1 className="text-lg">Onboard log — car {carIdNum}</h1>
-            <Link href={`/car/${carIdNum}/setup`} className="text-blue-400 hover:underline text-xs">Setup</Link>
-          </div>
-          <LanguageSwitcher />
-        </div>
+        <ConfigHeader carId={carIdNum!} active="logs" className="mb-3" />
 
         <div className="flex flex-wrap items-center gap-2 mb-2 text-xs">
           <select className={inputClass} value={minLevel} onChange={e => setMinLevel(Number(e.target.value))}>

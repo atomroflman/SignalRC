@@ -1,5 +1,4 @@
 import React, { useEffect, useState, useCallback } from "react";
-import Link from "next/link";
 import { useRouter } from "next/router";
 import GamepadViewer from "../../../components/gamepad-viewer";
 import CarFunctionsView from "../../../components/car-functions-view";
@@ -14,7 +13,7 @@ import { clusterFrame } from "@/components/flow-layout";
 import { ArrangedClusters, ClusterFrameNode, FlowLayoutPanel } from "@/components/flow-layout-panel";
 import ConfigGuard from "@/components/config-guard";
 import UpdateControl from "@/components/update-control";
-import LanguageSwitcher from "@/components/language-switcher";
+import ConfigHeader from "@/components/config-header";
 import SetupTemplatePanel from "@/components/setup-template-panel";
 import { useI18n } from "@/i18n/provider";
 
@@ -137,32 +136,14 @@ export default function CarControlFlowPage() {
 
   return (
     <ConfigGuard carId={carIdNum}>
-      <div className="flex flex-col md:flex-row gap-4 p-4 bg-zinc-950 min-h-screen">
+      <div className="flex flex-col p-4 bg-zinc-950 text-zinc-100 min-h-screen">
+      <ConfigHeader carId={carIdNum} active="flow" className="mb-4" />
+      <div className="flex flex-1 flex-col md:flex-row gap-4">
         <div className="w-full md:w-1/4 space-y-4">
-          <div className="flex items-center justify-between">
-            <Link href="/" className="text-xs text-sky-400 hover:underline">← {messages.controlFlowPage.back}</Link>
-            <LanguageSwitcher />
-          </div>
           <UpdateControl />
           <GamepadViewer hideFlowButtons={false} />
           <FunctionNodesView />
           {carIdNum && <CarFunctionsView carId={carIdNum} hideFlowButtons={false} />}
-          {carIdNum && (
-            <div className="bg-zinc-900 rounded-lg p-2 border border-zinc-800 text-xs space-y-1">
-              <Link href={`/car/${carIdNum}/setup`} className="text-blue-400 hover:underline block">
-                {messages.setupPage.link}
-              </Link>
-              <Link href={`/car/${carIdNum}/logs`} className="text-blue-400 hover:underline block">
-                Onboard log
-              </Link>
-              <Link href={`/car/${carIdNum}/telemetry`} className="text-blue-400 hover:underline block">
-                {messages.telemetryHistory.link}
-              </Link>
-              <Link href={`/car/${carIdNum}/overlay`} className="text-blue-400 hover:underline block">
-                {messages.overlay.editorPage.open}
-              </Link>
-            </div>
-          )}
           {carIdNum && <SetupTemplatePanel carId={carIdNum} />}
         </div>
         <div className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg p-2 min-h-[600px]">
@@ -195,6 +176,7 @@ export default function CarControlFlowPage() {
             </ReactFlow>
           </ReactFlowProvider>
         </div>
+      </div>
       </div>
     </ConfigGuard>
   );

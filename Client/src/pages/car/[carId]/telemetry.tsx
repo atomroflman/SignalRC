@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/router";
-import Link from "next/link";
-import LanguageSwitcher from "@/components/language-switcher";
+import ConfigHeader from "@/components/config-header";
 import ConfigGuard from "@/components/config-guard";
 import { useI18n } from "@/i18n/provider";
 import { historyApi } from "@/components/telemetry-history/api";
@@ -226,17 +225,8 @@ export default function TelemetryHistoryPage() {
   return (
     <ConfigGuard carId={carIdNum!}>
       <div className="min-h-screen bg-zinc-950 text-zinc-100 p-4 flex flex-col gap-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-3">
-            <Link href={`/car/${carIdNum}`} className="text-blue-400 hover:underline text-sm">&larr; {t.back}</Link>
-            <h1 className="text-lg">{carIdNum !== undefined ? t.title(carIdNum) : ""}</h1>
-            <Link href={`/car/${carIdNum}/setup`} className="text-blue-400 hover:underline text-xs">{t.setup}</Link>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <LanguageSwitcher />
-            <button className={btnGhost} onClick={() => setShowSettings(s => !s)}>{t.recording}</button>
-          </div>
-        </div>
+        <ConfigHeader carId={carIdNum!} active="telemetry"
+          actions={<button className={btnGhost} onClick={() => setShowSettings(s => !s)}>{t.recording}</button>} />
 
         {error && <div className="text-xs text-red-300">{t.error(error)}</div>}
         {showSettings && carIdNum && (

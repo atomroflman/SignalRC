@@ -229,7 +229,7 @@ export default function CarControl() {
             <button
               className="ml-auto px-2 py-1 text-xs rounded bg-zinc-700 hover:bg-zinc-600 text-zinc-100"
               title={messages.carControl.openFlowEditor}
-              onClick={() => router.push(`/car/${flowControl.carId}`)}
+              onClick={() => router.push(`/car/${flowControl.carId}/flow`)}
             >
               🧭
             </button>
