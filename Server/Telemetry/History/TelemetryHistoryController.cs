@@ -16,6 +16,7 @@ public class TelemetryHistoryController(
     SignalRCContext context,
     TelemetryRecorder recorder,
     TelemetryRelay relay,
+    SignalRC.Server.Overlay.OverlayAccess access,
     ILogger<TelemetryHistoryController> logger) : Controllers.ControllerBase(context)
 {
     public const int MinRetentionDays = 1;
@@ -35,6 +36,7 @@ public class TelemetryHistoryController(
         return Ok(new
         {
             retentionDays = car.TelemetryRetentionDays,
+            recordingStopped = car.TelemetryRecordingStopped,
             channels = channels.Select(t => new
             {
                 id = t.Id,
@@ -76,6 +78,57 @@ public class TelemetryHistoryController(
         logger.LogInformation("Telemetry history settings of car {CarId} by {User}: {Count} channels, {Days} days",
             carId, user.LoginName, ids.Count, car.TelemetryRetentionDays);
         return await GetSettings(carId);
+    }
+
+    // --- Master switch (main page) ---
+
+    /// <summary>Whether recording is stopped, how many channels are selected and whether the caller may switch it.</summary>
+    [HttpGet("recording")]
+    public async Task<IActionResult> GetRecording(int carId)
+    {
+        var user = await GetCurrentUserAsync();
+        if (user == null) return Unauthorized();
+        var car = await _context.Cars.AsNoTracking().FirstOrDefaultAsync(c => c.Id == carId);
+        if (car == null) return NotFound();
+        var channels = await _context.CarTelemetry.AsNoTracking().Where(t => t.CarId == carId && t.Record).Select(t => t.DataType).ToListAsync();
+        var active = await _context.TelemetrySessions.AsNoTracking().AnyAsync(s => s.CarId == carId && s.EndedAt == null);
+        Response.Headers.CacheControl = "no-store";
+        return Ok(new
+        {
+            stopped = car.TelemetryRecordingStopped,
+            channels = channels.Count(TelemetryRecorder.IsRecordable),
+            recording = active,
+            canChange = access.CheckAdmin(user, carId) == SignalRC.Server.Overlay.OverlayAccessError.None,
+        });
+    }
+
+    public sealed class RecordingDto
+    {
+        public bool Stopped { get; set; }
+    }
+
+    /// <summary>Stops or resumes all recording of the vehicle; only the driver who holds control.</summary>
+    [HttpPut("recording")]
+    public async Task<IActionResult> PutRecording(int carId, [FromBody] RecordingDto body)
+    {
+        var user = await GetCurrentUserAsync();
+        if (user == null) return Unauthorized();
+        if (access.CheckAdmin(user, carId) != SignalRC.Server.Overlay.OverlayAccessError.None)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, "Only the driver who controls the vehicle can change this.");
+        }
+        var car = await _context.Cars.FirstOrDefaultAsync(c => c.Id == carId);
+        if (car == null) return NotFound();
+        if (car.TelemetryRecordingStopped != body.Stopped)
+        {
+            car.TelemetryRecordingStopped = body.Stopped;
+            await _context.SaveChangesAsync();
+            var ids = await recorder.RefreshAsync(carId);
+            await relay.SetRecordedAsync(carId, ids);
+            logger.LogInformation("Telemetry recording of car {CarId} {State} by driver {User}",
+                carId, body.Stopped ? "stopped" : "resumed", user.LoginName ?? user.Name);
+        }
+        return await GetRecording(carId);
     }
 
     // --- Sessions ---

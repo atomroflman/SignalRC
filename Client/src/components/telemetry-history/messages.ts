@@ -59,6 +59,16 @@ const de = {
   max: "max",
   last: "zuletzt",
   time: "Zeit",
+  section: "Telemetrie-Aufzeichnung",
+  recordingRuns: (n: number) => `Aufzeichnung aktiv · ${n} ${n === 1 ? "Kanal" : "Kanäle"}`,
+  recordingIdle: (n: number) => `Aufzeichnung bereit · ${n} ${n === 1 ? "Kanal" : "Kanäle"} · startet, sobald das Fahrzeug verbunden ist`,
+  recordingNoChannels: "Keine Kanäle zur Aufzeichnung ausgewählt.",
+  recordingStopped: "Aufzeichnung gestoppt",
+  stopRecording: "Aufzeichnung stoppen",
+  resumeRecording: "Aufzeichnung fortsetzen",
+  onlyDriver: "Nur der aktive Fahrer kann die Aufzeichnung stoppen oder fortsetzen.",
+  stoppedBanner: "Die Aufzeichnung ist gestoppt. Der aktive Fahrer kann sie auf der Hauptseite wieder einschalten.",
+  openHistory: "Historie öffnen",
 };
 
 export type TelemetryHistoryMessages = typeof de;
@@ -119,6 +129,16 @@ const en: TelemetryHistoryMessages = {
   max: "max",
   last: "last",
   time: "Time",
+  section: "Telemetry recording",
+  recordingRuns: (n: number) => `Recording · ${n} ${n === 1 ? "channel" : "channels"}`,
+  recordingIdle: (n: number) => `Recording ready · ${n} ${n === 1 ? "channel" : "channels"} · starts once the vehicle is connected`,
+  recordingNoChannels: "No channels selected for recording.",
+  recordingStopped: "Recording stopped",
+  stopRecording: "Stop recording",
+  resumeRecording: "Resume recording",
+  onlyDriver: "Only the active driver can stop or resume recording.",
+  stoppedBanner: "Recording is stopped. The active driver can switch it on again on the main page.",
+  openHistory: "Open history",
 };
 
 export const telemetryHistoryMessages: Record<Locale, TelemetryHistoryMessages> = { de, en };

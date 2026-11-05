@@ -76,6 +76,9 @@ namespace SignalRC.Server.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<bool>("TelemetryRecordingStopped")
+                        .HasColumnType("boolean");
+
                     b.Property<int>("TelemetryRetentionDays")
                         .HasColumnType("integer");
 

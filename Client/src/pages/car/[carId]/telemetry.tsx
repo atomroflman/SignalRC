@@ -36,6 +36,7 @@ export default function TelemetryHistoryPage() {
   const [sessionId, setSessionId] = useState<number | null>(null);
   const [session, setSession] = useState<SessionDetail | null>(null);
   const [settingsChannels, setSettingsChannels] = useState<HistoryChannel[]>([]);
+  const [recordingStopped, setRecordingStopped] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -79,7 +80,7 @@ export default function TelemetryHistoryPage() {
 
   useEffect(() => {
     if (!carIdNum) return;
-    historyApi.settings(carIdNum).then(s => setSettingsChannels(s.channels)).catch(() => {});
+    historyApi.settings(carIdNum).then(s => { setSettingsChannels(s.channels); setRecordingStopped(s.recordingStopped); }).catch(() => {});
     historyApi.dashboard(carIdNum).then(d => setLayout(isLayout(d.layout) ? d.layout : null)).catch(() => {});
   }, [carIdNum]);
 
@@ -218,7 +219,10 @@ export default function TelemetryHistoryPage() {
         {error && <div className="text-xs text-red-300">{t.error(error)}</div>}
         {showSettings && carIdNum && (
           <SettingsPanel carId={carIdNum} onClose={() => setShowSettings(false)}
-            onSaved={s => { setSettingsChannels(s.channels); void loadSessions(); }} />
+            onSaved={s => { setSettingsChannels(s.channels); setRecordingStopped(s.recordingStopped); void loadSessions(); }} />
+        )}
+        {recordingStopped && (
+          <div className="text-xs text-amber-200 bg-amber-900/40 border border-amber-800 rounded px-3 py-2">{t.stoppedBanner}</div>
         )}
 
         <div className="flex flex-col lg:flex-row gap-3 flex-1 min-h-0">

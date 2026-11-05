@@ -1,4 +1,4 @@
-import type { DashboardLayout, HistorySettings, SamplesResponse, SessionDetail, SessionSummary } from "./types";
+import type { DashboardLayout, HistorySettings, RecordingState, SamplesResponse, SessionDetail, SessionSummary } from "./types";
 
 const base = (carId: number) => `/api/cars/${carId}/telemetry-history`;
 
@@ -22,6 +22,15 @@ export const historyApi = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ retentionDays, recorded }),
     }).then(r => json<HistorySettings>(r)),
+
+  recording: (carId: number) => fetch(`${base(carId)}/recording`).then(r => json<RecordingState>(r)),
+
+  setRecordingStopped: (carId: number, stopped: boolean) =>
+    fetch(`${base(carId)}/recording`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ stopped }),
+    }).then(r => json<RecordingState>(r)),
 
   sessions: (carId: number) => fetch(`${base(carId)}/sessions`).then(r => json<SessionSummary[]>(r)),
 

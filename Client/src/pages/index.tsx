@@ -19,6 +19,7 @@ import VehicleAudio from "@/components/vehicle-audio";
 import { useCarAudioSettings } from "@/components/audio-store";
 import SshKeyManager from "@/components/ssh-key-manager";
 import SortableSectionList from "@/components/sortable-section-list";
+import RecordingSwitch from "@/components/telemetry-history/recording-switch";
 import { useI18n } from "@/i18n/provider";
 
 const geistSans = Geist({
@@ -111,6 +112,12 @@ export default function Home() {
           canManageEnabled={Boolean(selectedCarId && carSession)}
         />
       ) : null,
+      visible: Boolean(selectedCarId),
+    },
+    {
+      id: "telemetryRecording",
+      title: messages.telemetryHistory.section,
+      content: selectedCarId ? <RecordingSwitch carId={selectedCarId} /> : null,
       visible: Boolean(selectedCarId),
     },
     {

@@ -184,6 +184,8 @@ public sealed class TelemetryRecorder(IServiceScopeFactory scopes, TimeProvider 
     {
         using var scope = scopes.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SignalRCContext>();
+        // Stopped by the driver: no channels, so the running session ends and nothing is demanded.
+        if (await db.Cars.AnyAsync(c => c.Id == carId && c.TelemetryRecordingStopped)) return [];
         var rows = await db.CarTelemetry.AsNoTracking()
             .Where(t => t.CarId == carId && t.Record)
             .Select(t => new { t.Id, t.ChannelName, t.DataType, t.Unit, t.Decimals })
@@ -305,7 +307,7 @@ public sealed class TelemetryRecorder(IServiceScopeFactory scopes, TimeProvider 
         {
             CarId = op.CarId,
             StartedAt = op.At,
-            ChannelsJson = JsonSerializer.Serialize(op.Channels, Json),
+            ChannelsJson = Merge("[]", op.Channels),
         };
         db.TelemetrySessions.Add(session);
         await db.SaveChangesAsync();

@@ -241,6 +241,11 @@ server and shows them as charts per drive.
   repeated once per second. Stale, missing or failed values are stored as gaps.
 - Older drives and samples are deleted every hour
   (`TelemetryRecorder.ApplyRetentionAsync`).
+- The section **Telemetry recording** on the main page shows whether recording
+  runs and has a master switch per vehicle that stops all recording (the
+  channel selection is kept). It is stored on the vehicle; only the driver who
+  currently controls the vehicle can change it (same rule as enabling video
+  streams), everyone else sees the state only.
 
 ### Dashboard
 

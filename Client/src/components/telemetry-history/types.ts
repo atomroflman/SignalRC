@@ -16,7 +16,19 @@ export interface HistorySettingsChannel extends HistoryChannel {
 
 export interface HistorySettings {
   retentionDays: number;
+  recordingStopped: boolean;
   channels: HistorySettingsChannel[];
+}
+
+/** Master switch of a vehicle (main page). */
+export interface RecordingState {
+  stopped: boolean;
+  /** Channels selected for recording. */
+  channels: number;
+  /** A session is open right now. */
+  recording: boolean;
+  /** The caller is the driver who controls the vehicle. */
+  canChange: boolean;
 }
 
 /** Times are Unix milliseconds. */

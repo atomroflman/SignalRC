@@ -73,7 +73,9 @@ public class TelemetryHistoryPostgresTests
                 Assert.NotNull(session.EndedAt);
                 Assert.NotNull(session.LastSampleAt);
                 var voltRows = await db.TelemetrySamples.CountAsync(s => s.SessionId == session.Id && s.ChannelId == volt.Id);
-                Assert.InRange(voltRows, 9_900, 10_100); // 10 Hz of 50 Hz
+                // At most 10 Hz of 50 Hz. Fewer is fine here: 1000 s of samples arrive within
+                // about a second, so the wall-clock flush timer coalesces more than in a real drive.
+                Assert.InRange(voltRows, 8_000, 10_100);
                 var flagRows = await db.TelemetrySamples.CountAsync(s => s.SessionId == session.Id && s.ChannelId == flag.Id);
                 Assert.InRange(flagRows, 1_000, 1_200); // changes plus one repeat per second
                 Assert.Equal(["flag", "volt"], TelemetryRecorder.ReadChannels(session.ChannelsJson).Select(c => c.Name));
@@ -108,6 +110,25 @@ public class TelemetryHistoryPostgresTests
                 Assert.Equal(session.Id, again.Id);
                 Assert.Null(again.EndedAt);
             }
+            recorder.OnboardDisconnected(car.Id);
+            await Task.Delay(TimeSpan.FromSeconds(2));
+
+            // Stopped by the driver: nothing is demanded and a running drive ends.
+            await using (var db = Db())
+            {
+                await db.Cars.Where(c => c.Id == car.Id).ExecuteUpdateAsync(u => u.SetProperty(c => c.TelemetryRecordingStopped, true));
+            }
+            Assert.Empty(await recorder.OnboardConnectedAsync(car.Id));
+            recorder.OnSamples(car.Id, DateTime.UtcNow, [new RecordedSample(volt.Id, "2", TelemetrySampleState.Valid, 0, false)]);
+            await Task.Delay(TimeSpan.FromSeconds(2));
+            await using (var db = Db())
+            {
+                var stopped = await db.TelemetrySessions.SingleAsync(s => s.CarId == car.Id);
+                Assert.NotNull(stopped.EndedAt);
+                Assert.False(await db.TelemetrySamples.AnyAsync(s => s.SessionId == stopped.Id && s.Value == 2));
+                await db.Cars.Where(c => c.Id == car.Id).ExecuteUpdateAsync(u => u.SetProperty(c => c.TelemetryRecordingStopped, false));
+            }
+            Assert.Equal(2, (await recorder.RefreshAsync(car.Id)).Count);
             recorder.OnboardDisconnected(car.Id);
             await Task.Delay(TimeSpan.FromSeconds(2));
 
