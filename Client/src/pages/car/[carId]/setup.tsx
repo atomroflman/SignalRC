@@ -2,7 +2,7 @@ import React, { useContext, useEffect, useMemo, useState, useCallback } from "re
 import { useRouter } from "next/router";
 import Link from "next/link";
 import CollapsibleSection from "@/components/collapsible-section";
-import LanguageSwitcher from "@/components/language-switcher";
+import ConfigHeader from "@/components/config-header";
 import ConfigGuard from "@/components/config-guard";
 import { useI18n } from "@/i18n/provider";
 import { CarAudioSettings, DEFAULT_CAR_AUDIO_SETTINGS } from "@/components/audio-store";
@@ -18,6 +18,7 @@ import { confirmationText, dependencyWarning, loadChannelDependencies } from "@/
 import OptionsJsonField from "@/components/config/options-json-field";
 import { findSchema, parseOptionSchemas, type ChannelTypeSchema, type SchemaKind } from "@/components/config/options-language";
 import { suggestTelemetryValue } from "@/components/config/telemetry-value-hint";
+import WiringPanel from "@/components/config/pin-boards/wiring-panel";
 import PinBoardEditor, { boardKindOf, type NewChannelRequest, type OtherPinManager } from "@/components/config/pin-boards/pin-board-editor";
 import type { ChannelRef } from "@/components/config/pin-boards/pin-boards";
 
@@ -474,7 +475,7 @@ function SoundLibraryEditor({
   );
 }
 
-const SETUP_TABS = ["control", "telemetry", "video", "audio", "hardware", "diagnostics"] as const;
+const SETUP_TABS = ["control", "telemetry", "video", "audio", "hardware", "wiring", "diagnostics"] as const;
 type SetupTab = typeof SETUP_TABS[number];
 
 /** Configuration on the left, its live test on the right; stacked on narrow screens. */
@@ -835,24 +836,13 @@ export default function SetupPage() {
   return (
     <ConfigGuard carId={carIdNum}>
       <OptionsInfo.Provider value={optionsInfo}>
-      <div className="min-h-screen bg-zinc-950 text-zinc-100 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
-          <div className="flex items-center gap-3">
-            <Link href={`/car/${carIdNum}`} className="text-blue-400 hover:underline text-sm">&larr; {sp.back}</Link>
-            <h1 className="text-lg">{sp.title(carIdNum)}</h1>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <LanguageSwitcher />
-            <Link href={`/car/${carIdNum}/wiring`} className={btnGhost}>{sp.wiring}</Link>
-            <Link href={`/car/${carIdNum}/logs`} className={btnGhost}>{sp.log}</Link>
-            <Link href={`/car/${carIdNum}/telemetry`} className={btnGhost}>{messages.telemetryHistory.link}</Link>
-            <button className={btnGhost} onClick={reload}>{sp.reload}</button>
-          </div>
-        </div>
+      <div className="min-h-screen bg-zinc-950 text-zinc-100 p-4 print:bg-white print:text-black">
+        <ConfigHeader carId={carIdNum} active="setup" className="mb-4 print:hidden"
+          actions={<button className={btnGhost} onClick={reload}>{sp.reload}</button>} />
 
-        <HealthSummary health={health} />
+        <div className="print:hidden"><HealthSummary health={health} /></div>
 
-        <div role="tablist" aria-label={sp.tabsLabel} className="flex gap-1 mt-2 mb-2 overflow-x-auto overflow-y-hidden border-b border-zinc-800">
+        <div role="tablist" aria-label={sp.tabsLabel} className="flex gap-1 mt-2 mb-2 overflow-x-auto overflow-y-hidden border-b border-zinc-800 print:hidden">
           {SETUP_TABS.map(tab => {
             const problems = problemsOf(tab);
             return (
@@ -1086,6 +1076,8 @@ export default function SetupPage() {
         </CollapsibleSection>
           </>
         )}
+
+        {activeTab === "wiring" && <WiringPanel carId={carIdNum} />}
 
         {activeTab === "diagnostics" && <OnboardDiagnostics carId={carIdNum} defaultCollapsed={false} />}
         </div>

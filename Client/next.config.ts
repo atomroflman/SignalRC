@@ -10,6 +10,10 @@ const nextConfig: NextConfig = {
     return [
       { source: '/car/:carId/channels', destination: '/car/:carId/setup', permanent: false },
       { source: '/car/:carId/test', destination: '/car/:carId/setup', permanent: false },
+      // The flow engine moved to /flow; the vehicle address opens the setup.
+      { source: '/car/:carId', destination: '/car/:carId/setup', permanent: false },
+      // The wiring diagram became a tab of the setup page.
+      { source: '/car/:carId/wiring', destination: '/car/:carId/setup?tab=wiring', permanent: false },
     ];
   },
   async rewrites() {

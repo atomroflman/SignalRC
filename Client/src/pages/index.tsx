@@ -20,6 +20,8 @@ import { useCarAudioSettings } from "@/components/audio-store";
 import SshKeyManager from "@/components/ssh-key-manager";
 import SortableSectionList from "@/components/sortable-section-list";
 import RecordingSwitch from "@/components/telemetry-history/recording-switch";
+import BrandLogo, { useBrandStatus } from "@/components/brand-logo";
+import { pillClass, StatusDot } from "@/components/status-pill";
 import { useI18n } from "@/i18n/provider";
 
 const geistSans = Geist({
@@ -38,6 +40,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const selectedCarId = useControlFlowStore(state => state.carId);
   const carSession = useControlFlowStore(state => state.carSession);
+  const brandStatus = useBrandStatus();
   const { inputDevice: carAudioInputDevice, outputDevice: carAudioOutputDevice } = useCarAudioSettings(selectedCarId);
 
   useEffect(() => {
@@ -139,15 +142,19 @@ export default function Home() {
 
         <div className="relative flex h-full flex-col overflow-hidden bg-[linear-gradient(180deg,rgba(23,25,31,0.98),rgba(15,17,22,0.96))] shadow-[0_28px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl">
           <div className="flex items-center justify-between px-5 py-4 md:px-6">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.34em] text-sky-300">
-              {messages.home.title}
+            <div className="flex items-center gap-3">
+              <BrandLogo className="h-9 w-auto" />
+              <div className="text-[11px] font-semibold uppercase tracking-[0.34em] text-sky-300">
+                {messages.home.title}
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <LanguageSwitcher className="shrink-0" />
               {selectedCarId && <VersionBadge carId={selectedCarId} />}
               <div className="hidden items-center gap-2 md:flex">
               {!selectedCarId && <InstallDialog />}
-              <div className="rounded-full bg-slate-800/90 px-3 py-2 text-[11px] font-medium text-slate-300 shadow-sm ring-1 ring-white/10">
+              <div className={pillClass}>
+                <StatusDot tone={brandStatus === "live" ? "ok" : brandStatus === "connected" ? "info" : "off"} />
                 {selectedCarId ? messages.home.activeVehicle(selectedCarId) : messages.home.noVehicleSelected}
               </div>
               </div>

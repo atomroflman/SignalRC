@@ -1,7 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/router";
-import Link from "next/link";
-import ConfigGuard from "@/components/config-guard";
 import { parseOptionSchemas } from "@/components/config/options-language";
 import WiringDiagramView from "@/components/config/pin-boards/wiring-diagram";
 import { buildWiring, wireList, type WiringChannel, type WiringDevice, type WiringManager } from "@/components/config/pin-boards/wiring-model";
@@ -25,9 +22,8 @@ const KIND_LABEL: Record<string, string> = {
   button: "Button / switch", output: "Digital output", input: "Digital input",
 };
 
-export default function WiringPage() {
-  const router = useRouter();
-  const carId = router.query.carId ? parseInt(router.query.carId as string) : undefined;
+/** Wiring diagram tab of the setup page. */
+export default function WiringPanel({ carId }: { carId: number }) {
   const [managers, setManagers] = useState<WiringManager[]>([]);
   const [channels, setChannels] = useState<WiringChannel[]>([]);
   const [boardModel, setBoardModel] = useState<string | null>(null);
@@ -120,24 +116,17 @@ export default function WiringPage() {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
-  if (!carId || loading) return <div className="p-8 text-zinc-300">Loading…</div>;
+  if (loading) return <div className="p-2 text-xs text-zinc-400">Loading…</div>;
 
   return (
-    <ConfigGuard carId={carId}>
-      <div className="min-h-screen bg-zinc-950 text-zinc-100 p-4 print:bg-white print:text-black">
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-3 print:hidden">
-          <div className="flex items-center gap-3">
-            <Link href={`/car/${carId}/setup?tab=hardware`} className="text-blue-400 hover:underline text-sm">&larr; Setup</Link>
-            <h1 className="text-lg">Wiring diagram — car {carId}</h1>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
+      <div>
+        <div className="flex flex-wrap items-center justify-end gap-2 mb-3 print:hidden">
             <select className={field} value={shownVariant} onChange={e => setVariant(e.target.value as PiBoardVariant)} title={boardModel ? `Detected: ${boardModel}` : "Board model not reported"}>
               {(Object.keys(PI_BOARD_LABELS) as PiBoardVariant[]).map(v => <option key={v} value={v}>{PI_BOARD_LABELS[v]}{v === piBoardVariant(boardModel) && boardModel ? " (detected)" : ""}</option>)}
             </select>
             <button className={btn} onClick={() => load()}>Reload</button>
             <button className={btn} onClick={downloadSvg}>Download SVG</button>
             <button className={btn} onClick={() => window.print()}>Print</button>
-          </div>
         </div>
         {error && <div className="mb-3 text-xs text-red-300 border border-red-800 rounded p-2">{error}</div>}
 
@@ -225,6 +214,5 @@ export default function WiringPage() {
           </table>
         </div>
       </div>
-    </ConfigGuard>
   );
 }
