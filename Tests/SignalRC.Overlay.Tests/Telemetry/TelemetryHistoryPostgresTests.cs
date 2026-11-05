@@ -170,6 +170,63 @@ public class TelemetryHistoryPostgresTests
         }
     }
 
+    [SkippableFact]
+    public async Task ChangedDataTypeTakesEffectWithoutReconnect()
+    {
+        Skip.If(string.IsNullOrEmpty(ConnectionString), $"{PostgresOverlayTestDb.Variable} not set");
+        var services = new ServiceCollection()
+            .AddDbContext<SignalRCContext>(o => o.UseNpgsql(ConnectionString))
+            .BuildServiceProvider();
+        SignalRCContext Db() => services.CreateScope().ServiceProvider.GetRequiredService<SignalRCContext>();
+
+        await Db().Database.MigrateAsync();
+        var car = new Car { Name = "history-type-test", CarIdentityKey = "history-" + Guid.NewGuid().ToString("N")[..12], LastSeen = DateTime.UtcNow };
+        // Created with the default data type: a number arrives but is recorded as text.
+        var cpu = new CarTelemetry { ChannelName = "cpuTemperature", DataType = TelemetryDataType.String, Record = true };
+        await using (var db = Db())
+        {
+            db.Cars.Add(car);
+            await db.SaveChangesAsync();
+            cpu.CarId = car.Id;
+            db.CarTelemetry.Add(cpu);
+            await db.SaveChangesAsync();
+        }
+
+        var recorder = new TelemetryRecorder(services.GetRequiredService<IServiceScopeFactory>(), TimeProvider.System, NullLogger<TelemetryRecorder>.Instance);
+        using var cts = new CancellationTokenSource();
+        await recorder.StartAsync(cts.Token);
+        try
+        {
+            await recorder.OnboardConnectedAsync(car.Id);
+            recorder.OnSamples(car.Id, DateTime.UtcNow, [new RecordedSample(cpu.Id, "52.3", TelemetrySampleState.Valid, 0, false)]);
+            await Task.Delay(TimeSpan.FromSeconds(2));
+
+            // Switched to Number in the setup while the vehicle stays connected.
+            await using (var db = Db())
+            {
+                await db.CarTelemetry.Where(t => t.Id == cpu.Id).ExecuteUpdateAsync(u => u.SetProperty(t => t.DataType, TelemetryDataType.Number));
+            }
+            await recorder.RefreshAsync(car.Id);
+            recorder.OnSamples(car.Id, DateTime.UtcNow, [new RecordedSample(cpu.Id, "53.1", TelemetrySampleState.Valid, 0, false)]);
+            await Task.Delay(TimeSpan.FromSeconds(2));
+
+            await using (var db = Db())
+            {
+                var session = await db.TelemetrySessions.SingleAsync(s => s.CarId == car.Id);
+                Assert.Equal(TelemetryDataType.Number, TelemetryRecorder.ReadChannels(session.ChannelsJson).Single().DataType);
+                Assert.Equal(["52.3"], await db.TelemetryTextSamples.Where(s => s.SessionId == session.Id).Select(s => s.Value).ToListAsync());
+                Assert.Contains(53.1, await db.TelemetrySamples.Where(s => s.SessionId == session.Id).Select(s => s.Value).ToListAsync());
+            }
+        }
+        finally
+        {
+            await cts.CancelAsync();
+            await recorder.StopAsync(CancellationToken.None);
+            await using var db = Db();
+            await db.Cars.Where(c => c.Id == car.Id).ExecuteDeleteAsync();
+        }
+    }
+
     /// <summary>The system clock moved by a fixed offset; timers run in real time.</summary>
     private sealed class ShiftedClock(TimeSpan offset) : TimeProvider
     {

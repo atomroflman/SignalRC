@@ -132,6 +132,7 @@ public class ChannelTemplateService
 
         _logger.LogInformation("Applied template '{TemplateName}' ({TemplateId}) to car {CarId} (hash {Hash}).",
             template.Name, template.Id, carId, hash[..8]);
+        await _serviceProvider.GetRequiredService<SignalRC.Server.Telemetry.History.TelemetryChannelsChanged>().NotifyAsync(carId);
     }
 
     /// <summary>

@@ -1,3 +1,4 @@
+using SignalRC.Server.Telemetry.History;
 using System.Text.Json;
 using SignalRC.Server.Data;
 using SignalRC.Server.Hubs;
@@ -27,6 +28,7 @@ public class ChannelsController : ControllerBase
     private readonly VideoStreamReceiverService _streamService;
     private readonly VideoStreamActivationService _streamActivation;
     private readonly ILogger<ChannelsController> _logger;
+    private readonly TelemetryChannelsChanged _telemetryChannelsChanged;
 
     public ChannelsController(
         SignalRCContext context,
@@ -36,8 +38,10 @@ public class ChannelsController : ControllerBase
         CarConnectionStore connections,
         VideoStreamReceiverService streamService,
         VideoStreamActivationService streamActivation,
-        ILogger<ChannelsController> logger) : base(context)
+        ILogger<ChannelsController> logger,
+        TelemetryChannelsChanged telemetryChannelsChanged) : base(context)
     {
+        _telemetryChannelsChanged = telemetryChannelsChanged;
         _controlHub = controlHub;
         _availableTypes = availableTypes;
         _carAudio = carAudio;
@@ -273,6 +277,7 @@ public class ChannelsController : ControllerBase
 
         var mapItem = ToMapItem(t);
         await _controlHub.Clients.Group($"Car-{carId}").UpsertTelemetryChannel(t.ChannelName, mapItem);
+        await _telemetryChannelsChanged.NotifyAsync(carId);
         _logger.LogInformation("Upsert telemetry channel {Channel} for car {CarId} by {User}", t.ChannelName, carId, user.LoginName);
         return Ok(mapItem);
     }
@@ -289,6 +294,7 @@ public class ChannelsController : ControllerBase
         await UpdateCarChannelMapHashAsync(carId);
 
         await _controlHub.Clients.Group($"Car-{carId}").DeleteTelemetryChannel(name);
+        await _telemetryChannelsChanged.NotifyAsync(carId);
         _logger.LogInformation("Delete telemetry channel {Channel} for car {CarId} by {User}", name, carId, user.LoginName);
         return NoContent();
     }

@@ -59,6 +59,7 @@ public static class TelemetryRegistration
         services.AddSingleton<ITelemetrySink>(sp => sp.GetRequiredService<History.TelemetryRecorder>());
         services.AddHostedService(sp => sp.GetRequiredService<History.TelemetryRecorder>());
         services.AddSingleton<TelemetryRelay>();
+        services.AddSingleton<History.TelemetryChannelsChanged>();
         services.AddSingleton<ControlDisplayRelay>();
         services.AddSingleton<SignalRC.Server.Overlay.HudInputRateLimit>();
         services.TryAddSingleton(TimeProvider.System);
