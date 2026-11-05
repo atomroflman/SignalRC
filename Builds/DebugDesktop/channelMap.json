@@ -13,6 +13,7 @@
   "telemetryChannels": {
     "cpuTemperature": {
       "telemetryType": "SignalRC.Onboard.Telemetry.CpuTemperatureReader",
+      "dataType": "Number",
       "readIntervalTicks": 1000
     },
     "debug": {

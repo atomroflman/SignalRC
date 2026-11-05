@@ -3,6 +3,8 @@ using Microsoft.Extensions.Logging;
 
 namespace SignalRC.Onboard.Telemetry
 {
+    /// <summary>Onboard uptime in whole seconds.</summary>
+    [TelemetryValue("", Shared.Channels.TelemetryDataType.Integer, "s", Decimals = 0)]
     public class ApplicationLifetimeReader : TelemetryReaderBase
     {
         private readonly DateTime _startTime;
@@ -22,7 +24,8 @@ namespace SignalRC.Onboard.Telemetry
         public override Task<string> ReadTelemetry()
         {
             var applicationUptime = DateTime.UtcNow - _startTime;
-            var uptimeString = $"{applicationUptime.Days}d {applicationUptime.Hours}h {applicationUptime.Minutes}m {applicationUptime.Seconds}s";
+            // Whole seconds as a number, so it can be charted and formatted in the HUD.
+            var uptimeString = ((long)applicationUptime.TotalSeconds).ToString(System.Globalization.CultureInfo.InvariantCulture);
             Logger.LogDebug($"Application Uptime: {uptimeString}");
             return Task.FromResult(uptimeString);
         }

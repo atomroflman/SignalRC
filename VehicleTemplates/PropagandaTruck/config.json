@@ -95,7 +95,9 @@
     },
     "telemetryChannels": {
       "lifetime": {
-        "telemetryType": "SignalRC.Onboard.Telemetry.ApplicationLifetimeReader"
+        "telemetryType": "SignalRC.Onboard.Telemetry.ApplicationLifetimeReader",
+        "dataType": "Integer",
+        "unit": "s"
       },
       "battery": {
         "telemetryType": "SignalRC.Onboard.Telemetry.JbdBmsTelemetryReader",

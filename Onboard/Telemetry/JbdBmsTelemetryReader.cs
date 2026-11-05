@@ -1,3 +1,4 @@
+using SignalRC.Shared.Channels;
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text.Json;
@@ -7,6 +8,16 @@ using SignalRC.Shared.Telemetry;
 
 namespace SignalRC.Onboard.Telemetry;
 
+// Only the keys the code knows; the rest come from jbdtool and get no suggestion.
+[TelemetryValue("voltage", TelemetryDataType.Number, "V", Decimals = 2)]
+[TelemetryValue("current", TelemetryDataType.Number, "A", Decimals = 2)]
+[TelemetryValue("soc", TelemetryDataType.Integer, "%", Decimals = 0)]
+[TelemetryValue("remaining", TelemetryDataType.Number, "Ah", Decimals = 2)]
+[TelemetryValue("capacity", TelemetryDataType.Number, "Ah", Decimals = 2)]
+[TelemetryValue("cycles", TelemetryDataType.Integer, Decimals = 0)]
+[TelemetryValue("temperature", TelemetryDataType.Number, "°C", Decimals = 1)]
+[TelemetryValue("currentAvg", TelemetryDataType.Number, "A", Decimals = 2)]
+[TelemetryValue("runtime", TelemetryDataType.Number, "h", Decimals = 2)]
 public class JbdBmsTelemetryReader : TelemetryReaderBase
 {
     private readonly Bash _bash;

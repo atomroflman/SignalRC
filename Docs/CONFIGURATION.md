@@ -356,10 +356,12 @@ There is no `ServoControl` or `GearControl` type in the current code.
 
 | Type | Description |
 |------|-------------|
-| `CpuTemperatureReader` | CPU temperature |
-| `ApplicationLifetimeReader` | App uptime |
+| `CpuTemperatureReader` | CPU temperature in °C as a plain number (data type Number; the unit belongs to the channel) |
+| `ApplicationLifetimeReader` | Onboard uptime in whole seconds (data type Integer, unit `s`) |
 | `JbdBmsTelemetryReader` | Battery BMS via UART |
 | `GpioPinReader` | State of a digital pin (`1`/`0`, data type Boolean) from the channel's `pinManager` + `address`. `latch` (default true) keeps a pulse shorter than the read interval for one read; `report: Edges` counts debounced edges instead. Works for inputs and outputs. |
 | `PwmOutputReader` | What a PWM output drives. PCA9685: read back from the chip registers (`Valid`; `Error` when the chip was reset and sleeps); Pi hardware PWM: last write (`Unchecked`). `report`: `Percent` (default), `DutyCycle`, `PulseWidthMs`, `PulseWidthUs`, `Counts`. |
+
+Readers declare what they deliver per value key with `[TelemetryValue(key, dataType, unit, Decimals = …, When = "option=Value")]` (empty key: the single value of a one-value reader). The onboard reports this with the option schema; the channel editor of the setup page takes it over as data type, unit and decimals when a channel is created (until one of them is edited by hand) and offers an **Apply** button on existing channels that differ. `TelemetryValueHintTests` checks that the track drive and LiDAR readers declare every key they produce. JBD BMS values only have suggestions for the keys the code knows (`voltage`, `current`, `soc`, `remaining`, `capacity`, `cycles`, `temperature`, `currentAvg`, `runtime`); the others come from jbdtool unchanged.
 
 Both pin readers take `pinManager` and `address` from the channel itself and share the module instance of the control on the same pin. In flows the node **Telemetry** (`channel`, `fallback`; outputs `value`, `valid`) turns any telemetry channel into a flow input; it runs in the driver's browser, so end stops and e-stops belong on the vehicle.

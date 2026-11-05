@@ -31,7 +31,8 @@ public static class OptionSchemaBuilder
             .Concat(extra ?? [])
             .OrderBy(o => o.Name, StringComparer.Ordinal)
             .ToArray();
-        return new ChannelTypeSchema { Kind = kind, TypeName = typeName, Description = docs.Type(type), Options = options };
+        var values = type.GetCustomAttributes<TelemetryValueAttribute>(inherit: false).Select(a => a.ToHint()).ToArray();
+        return new ChannelTypeSchema { Kind = kind, TypeName = typeName, Description = docs.Type(type), Options = options, Values = values };
     }
 
     /// <summary>Properties an option can set.</summary>

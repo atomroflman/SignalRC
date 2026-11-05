@@ -1,3 +1,4 @@
+using SignalRC.Shared.Channels;
 using System.Globalization;
 using System.Text;
 using Microsoft.Extensions.Logging;
@@ -22,6 +23,29 @@ namespace SignalRC.Onboard.Telemetry;
 /// locally, at full rate and full resolution, from the same manager - this is
 /// for the operator, not for the vehicle.
 /// </summary>
+[TelemetryValue("lidarOk", TelemetryDataType.Boolean)]
+[TelemetryValue("lidarRpm", TelemetryDataType.Number, "rpm", Decimals = 1)]
+[TelemetryValue("lidarGaps", TelemetryDataType.Integer, Decimals = 0)]
+[TelemetryValue("lidarScans", TelemetryDataType.Integer, Decimals = 0)]
+[TelemetryValue("lidarCrcErrors", TelemetryDataType.Integer, Decimals = 0)]
+[TelemetryValue("lidarDiscarded", TelemetryDataType.Integer, "B", Decimals = 0)]
+[TelemetryValue("lidarSeqGaps", TelemetryDataType.Integer, Decimals = 0)]
+[TelemetryValue("lidarReconnects", TelemetryDataType.Integer, Decimals = 0)]
+[TelemetryValue("lidarNeedsPowerCycle", TelemetryDataType.Boolean)]
+[TelemetryValue("lidarProblem", TelemetryDataType.String)]
+[TelemetryValue("lidarAge", TelemetryDataType.Number, "s", Decimals = 2)]
+[TelemetryValue("lidarState", TelemetryDataType.String)]
+[TelemetryValue("lidarPicoDropped", TelemetryDataType.Integer, Decimals = 0)]
+[TelemetryValue("lidarPicoFramesBad", TelemetryDataType.Integer, Decimals = 0)]
+[TelemetryValue("lidarPicoOverruns", TelemetryDataType.Integer, Decimals = 0)]
+[TelemetryValue("lidarPowerOn", TelemetryDataType.Boolean)]
+[TelemetryValue("lidarFrames", TelemetryDataType.Integer, Decimals = 0)]
+[TelemetryValue("lidarMissingFrames", TelemetryDataType.Integer, Decimals = 0)]
+[TelemetryValue("lidarComplete", TelemetryDataType.Boolean)]
+[TelemetryValue("lidarSectors", TelemetryDataType.String)]
+[TelemetryValue("lidarNearest", TelemetryDataType.Integer, "cm", Decimals = 0)]
+[TelemetryValue("lidarNearestAngle", TelemetryDataType.Number, "°", Decimals = 0)]
+[TelemetryValue("lidarFront", TelemetryDataType.Integer, "cm", Decimals = 0)]
 public class LidarTelemetryReader : TelemetryReaderBase
 {
     private readonly IModuleManagerFactory _factory;

@@ -30,6 +30,20 @@ export interface ChannelTypeSchema {
   typeName: string;
   description?: string | null;
   options: OptionSchema[];
+  /** Telemetry readers: suggested data type, unit and decimals per value key. */
+  values?: TelemetryValueHint[] | null;
+}
+
+/** What a telemetry reader delivers for one value key (onboard TelemetryValueAttribute). */
+export interface TelemetryValueHint {
+  /** Value key; empty for a reader with a single value. */
+  key: string;
+  /** TelemetryDataType as number or name. */
+  dataType: number | string;
+  unit?: string | null;
+  decimals?: number | null;
+  /** Only when an option has this value, "option=Value"; null = the default. */
+  when?: string | null;
 }
 
 export interface OptionSchemas {

@@ -9,6 +9,8 @@ using Microsoft.Extensions.Logging;
 
 namespace SignalRC.Onboard.Telemetry
 {
+    /// <summary>CPU temperature in °C as a plain number; the unit belongs to the channel.</summary>
+    [TelemetryValue("", Shared.Channels.TelemetryDataType.Number, "°C", Decimals = 1)]
     public class CpuTemperatureReader : TelemetryReaderBase
     {
         private readonly string? _vcgencmdPath;
@@ -94,7 +96,7 @@ namespace SignalRC.Onboard.Telemetry
                 {
                     var tempC = tempMilliC / 1000.0;
                     Logger.LogTrace("CPU Temperature from sysfs: {Temp}°C", tempC);
-                    return tempC.ToString("F2", CultureInfo.InvariantCulture) + "°C";
+                    return tempC.ToString("F2", CultureInfo.InvariantCulture);
                 }
             }
 
@@ -171,7 +173,7 @@ namespace SignalRC.Onboard.Telemetry
             }
 
             Logger.LogTrace("CPU Temperature from vcgencmd: {Temp}°C", tempC);
-            return tempC.ToString("F2", CultureInfo.InvariantCulture) + "°C";
+            return tempC.ToString("F2", CultureInfo.InvariantCulture);
         }
     }
 }

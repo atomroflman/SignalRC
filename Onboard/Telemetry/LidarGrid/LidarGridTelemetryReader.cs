@@ -1,3 +1,4 @@
+using SignalRC.Shared.Channels;
 using Microsoft.Extensions.Logging;
 using SignalRC.Onboard.Hardware;
 using SignalRC.Onboard.Hardware.Lidar;
@@ -17,6 +18,7 @@ namespace SignalRC.Onboard.Telemetry;
 /// readIntervalTicks 2 (at most 5 Hz, D16), DataType LidarGrid.
 /// For display only; nothing safety related may depend on it.
 /// </summary>
+[TelemetryValue("", TelemetryDataType.LidarGrid)]
 public class LidarGridTelemetryReader : TelemetryReaderBase
 {
     public const string ChannelName = "lidarGrid";

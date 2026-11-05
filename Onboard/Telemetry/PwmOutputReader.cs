@@ -1,3 +1,4 @@
+using SignalRC.Shared.Channels;
 using System.Globalization;
 using Microsoft.Extensions.Logging;
 using SignalRC.Onboard.Hardware;
@@ -9,6 +10,11 @@ namespace SignalRC.Onboard.Telemetry;
 /// What a PWM output (channel pinManager + address) currently drives. The PCA9685 is read back
 /// from its registers (Valid; Error after a chip reset); Pi hardware PWM reports the last write (Unchecked).
 /// </summary>
+[TelemetryValue("", TelemetryDataType.Number, "%", Decimals = 1)]
+[TelemetryValue("", TelemetryDataType.Number, Decimals = 3, When = "report=DutyCycle")]
+[TelemetryValue("", TelemetryDataType.Number, "ms", Decimals = 3, When = "report=PulseWidthMs")]
+[TelemetryValue("", TelemetryDataType.Integer, "µs", Decimals = 0, When = "report=PulseWidthUs")]
+[TelemetryValue("", TelemetryDataType.Integer, Decimals = 0, When = "report=Counts")]
 public class PwmOutputReader : PinReaderBase<IPwmModule>
 {
     /// <summary>Unit of the value: Percent (duty 0–100), DutyCycle (0–1), PulseWidthMs, PulseWidthUs or Counts.</summary>

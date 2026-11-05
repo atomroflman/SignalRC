@@ -1,3 +1,4 @@
+using SignalRC.Shared.Channels;
 using Microsoft.Extensions.Logging;
 using SignalRC.Onboard.Hardware;
 using SignalRC.Shared.Telemetry;
@@ -9,6 +10,8 @@ namespace SignalRC.Onboard.Telemetry;
 /// for HUD and flows. Inputs keep a pulse shorter than the read interval visible for one read.
 /// Pull resistor, activeLow and debounce are set on the pin in the pin manager.
 /// </summary>
+[TelemetryValue("", TelemetryDataType.Boolean)]
+[TelemetryValue("", TelemetryDataType.Integer, Decimals = 0, When = "report=Edges")]
 public class GpioPinReader : PinReaderBase<IGpioModule>
 {
     /// <summary>What to report: State (1/0) or Edges (debounced changes counted since start).</summary>

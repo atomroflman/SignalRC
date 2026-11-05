@@ -17,6 +17,7 @@ import LidarSourceSetup from "@/components/overlay/lidar-source/lidar-source-set
 import { confirmationText, dependencyWarning, loadChannelDependencies } from "@/components/overlay/integration/channel-dependencies";
 import OptionsJsonField from "@/components/config/options-json-field";
 import { findSchema, parseOptionSchemas, type ChannelTypeSchema, type SchemaKind } from "@/components/config/options-language";
+import { suggestTelemetryValue } from "@/components/config/telemetry-value-hint";
 import PinBoardEditor, { boardKindOf, type NewChannelRequest, type OtherPinManager } from "@/components/config/pin-boards/pin-board-editor";
 import type { ChannelRef } from "@/components/config/pin-boards/pin-boards";
 
@@ -341,6 +342,22 @@ function TelemetryEditor({
     pinManager: "default", address: null, optionsJson: "",
   });
   const update = (patch: Partial<TelemetryChannel>) => setT(prev => ({ ...prev, ...patch }));
+  // What the reader declares for this value. A new channel takes it over until
+  // type, unit or decimals are edited by hand; an existing one only offers it.
+  const { schemas } = useContext(OptionsInfo);
+  const suggestion = suggestTelemetryValue(findSchema(schemas, "telemetry", t.telemetryType), t.channelName, t.optionsJson ?? "");
+  const [manual, setManual] = useState(!isNew);
+  const suggestionKey = suggestion ? `${suggestion.dataType}|${suggestion.unit}|${suggestion.decimals}` : "";
+  useEffect(() => {
+    if (manual || !suggestion) return;
+    setT(prev => ({ ...prev, dataType: suggestion.dataType, unit: suggestion.unit, decimals: suggestion.decimals }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [manual, suggestionKey]);
+  const edit = (patch: Partial<TelemetryChannel>) => { setManual(true); update(patch); };
+  const differs = suggestion !== undefined && (suggestion.dataType !== t.dataType || suggestion.unit !== (t.unit ?? "") || suggestion.decimals !== (t.decimals ?? null));
+  const suggestionText = suggestion
+    ? [DATA_TYPES[suggestion.dataType], suggestion.unit, suggestion.decimals !== null ? `${suggestion.decimals} decimals` : ""].filter(Boolean).join(", ")
+    : "";
   return (
     <div id={isNew ? "new-telemetry-editor" : undefined} className="grid grid-cols-2 gap-2 p-2 border border-zinc-700 rounded bg-zinc-950">
       <Field label="Channel name"><input className={inputClass} value={t.channelName} onChange={e => update({ channelName: e.target.value })} disabled={!isNew} /></Field>
@@ -350,13 +367,19 @@ function TelemetryEditor({
       <Field label="Read interval (ms)" hint={`${t.readIntervalTicks} × ${TICK_MS} ms onboard ticks; rounded to whole ticks`}>
         <ReadIntervalInput ticks={t.readIntervalTicks} onChange={readIntervalTicks => update({ readIntervalTicks })} />
       </Field>
-      <Field label="Data type">
-        <select className={inputClass} value={t.dataType} onChange={e => update({ dataType: Number(e.target.value) })}>
-          {DATA_TYPES.map((d, i) => <option key={d} value={i}>{d}</option>)}
-        </select>
+      <Field label="Data type" hint={suggestion ? (differs ? `Reader suggests: ${suggestionText}` : `As the reader suggests (${suggestionText})`) : undefined}>
+        <div className="flex gap-2">
+          <select className={inputClass} value={t.dataType} onChange={e => edit({ dataType: Number(e.target.value) })}>
+            {DATA_TYPES.map((d, i) => <option key={d} value={i}>{d}</option>)}
+          </select>
+          {differs && suggestion && (
+            <button type="button" className={btnGhost + " whitespace-nowrap"} title={`Set ${suggestionText}`}
+              onClick={() => update({ dataType: suggestion.dataType, unit: suggestion.unit, decimals: suggestion.decimals })}>Apply</button>
+          )}
+        </div>
       </Field>
-      <Field label="Unit"><input className={inputClass} value={t.unit ?? ""} onChange={e => update({ unit: e.target.value })} /></Field>
-      <Field label="Decimals"><input className={inputClass} type="number" value={t.decimals ?? ""} onChange={e => update({ decimals: e.target.value === "" ? null : Number(e.target.value) })} /></Field>
+      <Field label="Unit"><input className={inputClass} value={t.unit ?? ""} onChange={e => edit({ unit: e.target.value })} /></Field>
+      <Field label="Decimals"><input className={inputClass} type="number" value={t.decimals ?? ""} onChange={e => edit({ decimals: e.target.value === "" ? null : Number(e.target.value) })} /></Field>
       <Field label="Pin manager"><input className={inputClass} value={t.pinManager ?? ""} onChange={e => update({ pinManager: e.target.value })} list="pin-manager-options" /></Field>
       <Field label="Address (int)"><input className={inputClass} type="number" value={t.address ?? ""} onChange={e => update({ address: e.target.value === "" ? null : Number(e.target.value) })} /></Field>
       <OptionsField kind="telemetry" typeName={t.telemetryType} value={t.optionsJson} onChange={optionsJson => update({ optionsJson })} example='e.g. {"groupKey":"battery"}' className="col-span-2" />

@@ -82,10 +82,13 @@
     },
     "telemetryChannels": {
       "lifetime": {
-        "telemetryType": "SignalRC.Onboard.Telemetry.ApplicationLifetimeReader"
+        "telemetryType": "SignalRC.Onboard.Telemetry.ApplicationLifetimeReader",
+        "dataType": "Integer",
+        "unit": "s"
       },
       "cpuTemperature": {
         "telemetryType": "SignalRC.Onboard.Telemetry.CpuTemperatureReader",
+        "dataType": "Number",
         "readIntervalTicks": 20,
         "unit": "°C",
         "decimals": 1

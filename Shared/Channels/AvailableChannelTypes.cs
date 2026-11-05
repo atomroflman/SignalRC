@@ -38,6 +38,24 @@ public class ChannelTypeSchema
     [Key(1)][JsonPropertyName("typeName")] public string TypeName { get; set; } = string.Empty;
     [Key(2)][JsonPropertyName("description")] public string? Description { get; set; }
     [Key(3)][JsonPropertyName("options")] public OptionSchema[] Options { get; set; } = Array.Empty<OptionSchema>();
+    /// <summary>Telemetry readers: suggested data type, unit and decimals per value, applied when a channel is created.</summary>
+    [Key(4)][JsonPropertyName("values")] public TelemetryValueHint[] Values { get; set; } = Array.Empty<TelemetryValueHint>();
+}
+
+/// <summary>What a telemetry reader delivers for one value key.</summary>
+[MessagePackObject]
+public class TelemetryValueHint
+{
+    /// <summary>
+    /// The value key, matched like the onboard does: the full channel name, else the
+    /// part after the last dot. Empty for a reader with a single value (any channel name).
+    /// </summary>
+    [Key(0)][JsonPropertyName("key")] public string Key { get; set; } = string.Empty;
+    [Key(1)][JsonPropertyName("dataType")] public TelemetryDataType DataType { get; set; }
+    [Key(2)][JsonPropertyName("unit")] public string? Unit { get; set; }
+    [Key(3)][JsonPropertyName("decimals")] public byte? Decimals { get; set; }
+    /// <summary>Only when an option has this value, as "option=Value" (case-insensitive); null = the default.</summary>
+    [Key(4)][JsonPropertyName("when")] public string? When { get; set; }
 }
 
 [MessagePackObject]
