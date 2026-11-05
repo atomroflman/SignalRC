@@ -42,6 +42,9 @@ Check("left fault 0x183", P.FaultId(P.LeftNode) == 0x183);
 Check("right status 0x191", P.StatusId(P.RightNode) == 0x191, $"0x{P.StatusId(P.RightNode):X}");
 Check("right power 0x192", P.PowerId(P.RightNode) == 0x192);
 Check("right fault 0x193", P.FaultId(P.RightNode) == 0x193);
+Check("left limits 0x185", P.LimitsId(P.LeftNode) == 0x185, $"0x{P.LimitsId(P.LeftNode):X}");
+Check("right limits 0x195", P.LimitsId(P.RightNode) == 0x195, $"0x{P.LimitsId(P.RightNode):X}");
+Check("limit request 0x101", P.LimitRequestId == 0x101);
 Check("estop below command", P.EmergencyStopId < P.CommandId);
 
 Console.WriteLine("Modes and status flags match the firmware");
@@ -187,6 +190,9 @@ Console.WriteLine("Flight recorder");
 Console.WriteLine("Temperature sentinel");
 Check("-128 is the invalid marker", P.TemperatureInvalid == -128);
 Check("fault names", P.Describe(P.FaultCode.OverTemperature) == "over temperature");
+Check("overload is code 9", (byte)P.FaultCode.Overload == 9 && P.Describe(P.FaultCode.Overload) == "overload");
+Check("limit reasons named", P.Describe(P.LimitReasons.ThermalI2t | P.LimitReasons.SpeedCapped) == "i2t, speed capped",
+      P.Describe(P.LimitReasons.ThermalI2t | P.LimitReasons.SpeedCapped));
 
 Console.WriteLine("Lidar protocol");
 {
@@ -472,6 +478,9 @@ var steering = manager.GetModule<ITrackDriveInput>((int)TrackDriveAxis.Steering)
 var seenCommands = 0;
 short lastLeft = 0, lastRight = 0;
 byte lastMode = 0;
+var clearFaultFrames = 0;
+var seenLimitRequests = 0;
+short limCurL = 0, limSpdL = 0, limCurR = 0, limSpdR = 0;
 var stop = false;
 
 var pump = new Thread(() =>
@@ -482,11 +491,21 @@ var pump = new Thread(() =>
         {
             if (node.Read(out CanFrame f) <= 0) continue;
             var id = f.CanId & 0x7FF;
+            if (id == P.LimitRequestId)
+            {
+                seenLimitRequests++;
+                limCurL = P.ReadInt16(f.Data, 0);
+                limSpdL = P.ReadInt16(f.Data, 2);
+                limCurR = P.ReadInt16(f.Data, 4);
+                limSpdR = P.ReadInt16(f.Data, 6);
+                continue;
+            }
             if (id != P.CommandId) continue;
             seenCommands++;
             lastLeft = P.ReadInt16(f.Data, 0);
             lastRight = P.ReadInt16(f.Data, 2);
             lastMode = f.Data[4];
+            if ((f.Data[5] & P.CommandFlagClearFault) != 0) clearFaultFrames++;
         }
         catch { /* receive timeout on a quiet bus */ }
     }
@@ -520,6 +539,15 @@ void SendStatus(int n, double speed, double target, P.FaultCode fault)
     fr[0] = (byte)fault;
     fr[1] = (byte)n;
     node.Write(new CanFrame(P.FaultId(n), fr));
+
+    // Effective limits, echoing what the master asked for like real firmware.
+    var lim = new byte[8];
+    P.WriteInt16(lim, 0, P.ToWire(7.25 * 100));
+    P.WriteInt16(lim, 2, n == P.LeftNode ? limSpdL : limSpdR);
+    P.WriteInt16(lim, 4, P.ToWire(19.2 * 100));
+    lim[6] = (byte)(P.LimitReasons.CurrentRequest | P.LimitReasons.SpeedRequest);
+    lim[7] = (byte)seenLimitRequests;
+    node.Write(new CanFrame(P.LimitsId(n), lim));
 }
 
 // The two nodes, reporting continuously the way real ones do. Tests steer
@@ -572,6 +600,51 @@ Check("telemetry decoded: temperature", snap.Left.TemperatureCelsius == 42, $"{s
 Check("telemetry decoded: I2t", Math.Abs(snap.Left.ThermalUtilisation - 0.17) < 0.001,
       F(snap.Left.ThermalUtilisation));
 
+// 2b. The limit request. Sent at once and then at 1 Hz; no current limit is
+// configured, so that field says "no request".
+Check("limit request sent", seenLimitRequests >= 1, $"{seenLimitRequests}");
+Check("limit request: no current request", limCurL == P.LimitNone && limCurR == P.LimitNone,
+      $"{limCurL}/{limCurR}");
+Check("limit request: speed = maxSpeed", limSpdL == 2000 && limSpdR == 2000, $"{limSpdL}/{limSpdR}");
+snap = manager.GetSnapshot();
+Check("limits frame decoded: current", Math.Abs(snap.Left.CurrentLimitAmps - 7.25) < 0.001,
+      F(snap.Left.CurrentLimitAmps));
+Check("limits frame decoded: speed", Math.Abs(snap.Left.SpeedLimitRadPerSecond - 20) < 0.001,
+      F(snap.Left.SpeedLimitRadPerSecond));
+Check("limits frame decoded: usable volts", Math.Abs(snap.Left.UsableVolts - 19.2) < 0.001,
+      F(snap.Left.UsableVolts));
+Check("limits frame decoded: reasons",
+      snap.Left.LimitReasons == (P.LimitReasons.CurrentRequest | P.LimitReasons.SpeedRequest),
+      snap.Left.LimitReasons.ToString());
+
+// 2c. Run-time speed limit: the commands scale down together and the nodes
+// get the same figure as their cap; a change goes out at once.
+var speedLimit = manager.GetModule<ITrackDriveInput>((int)TrackDriveAxis.SpeedLimit);
+var requestsBefore = seenLimitRequests;
+speedLimit.SetValue(0.5f);
+Thread.Sleep(100);
+Check("speed limit change sent at once", seenLimitRequests > requestsBefore, $"{seenLimitRequests - requestsBefore}");
+Check("speed limit: node cap halved", limSpdL == 1000 && limSpdR == 1000, $"{limSpdL}/{limSpdR}");
+Check("speed limit: command scaled", lastLeft == 1000 && lastRight == 1000, $"{lastLeft}/{lastRight}");
+speedLimit.SetValue(0f);       // 0 is "no reduction", never "stop"
+Thread.Sleep(100);
+Check("speed limit 0 -> full speed", lastLeft == 2000 && limSpdL == 2000, $"{lastLeft}, cap {limSpdL}");
+speedLimit.SetValue(0.3f);
+speedLimit.Release();
+Thread.Sleep(100);
+Check("speed limit released -> full speed", lastLeft == 2000 && limSpdL == 2000, $"{lastLeft}, cap {limSpdL}");
+
+manager.CurrentLimitAmps = 6.5f;
+manager.SetSpeedLimitFactor(0.99f); // forces a resend with the new option
+manager.SetSpeedLimitFactor(1f);
+Thread.Sleep(100);
+Check("current limit requested on both sides", limCurL == 650 && limCurR == 650, $"{limCurL}/{limCurR}");
+manager.CurrentLimitAmps = 0f;
+Thread.Sleep(1200);                 // the 1 Hz repeat carries the change
+Check("limit request repeats at 1 Hz", limCurL == P.LimitNone, $"{limCurL}");
+snap = manager.GetSnapshot();
+Check("limit request acknowledged", snap.Left.LimitRequestAcknowledged && snap.Right.LimitRequestAcknowledged);
+
 // 3. Steering while driving.
 steering.SetValue(0.5f);
 Thread.Sleep(100);
@@ -614,6 +687,12 @@ snap = manager.GetSnapshot();
 Check("fault inhibits the drive", !snap.DriveEnabled, snap.InhibitReason ?? "(none)");
 Check("fault -> mode stop", lastMode == (byte)P.DriveMode.Stop, $"mode {lastMode}");
 Check("fault is reported", snap.Left.Fault == P.FaultCode.Stall, snap.Left.Fault.ToString());
+
+// Unlatching: the bit goes out in exactly one frame, never held.
+clearFaultFrames = 0;
+manager.RequestFaultReset();
+Thread.Sleep(300);
+Check("fault reset in exactly one frame", clearFaultFrames == 1, $"{clearFaultFrames} frames");
 
 simLeftFault = P.FaultCode.None;
 Thread.Sleep(200);

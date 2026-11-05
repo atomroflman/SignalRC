@@ -265,8 +265,61 @@ carrying its own id, so a master posing as node 0 would be ignored by node 0.
 ### Unlatching
 
 Nothing on a node re-enables itself. `TrackFaultReset` sets bit 0 of the
-command frame's flag byte for `FaultResetHoldMs`, long enough for several
-command frames to carry it.
+command frame's flag byte in **exactly one** command frame per press.
+
+It used to be held for 250 ms, about twelve frames. That is wrong: the node
+clears its fault on *every* frame carrying the bit, so a fault whose cause
+persists - undervoltage, say - would be cleared and re-latched over and over
+while the bit is held, and the latch would be gone in effect. If the single
+frame is lost the fault code stays, and the operator presses again. The
+firmware executes the drive command in the same frame after unlatching.
+
+## Limits
+
+Firmware 2026-11-05 and later takes a limit request from the master and
+reports the limits that are actually in effect. Older firmware ignores the
+request and sends no report; nothing here depends on either.
+
+**`0x101` request**, master to all. Current and speed limit per side, both
+sides get the same values. Sent at once on any change, when the socket is
+(re)opened, when a node that was gone reports again, and otherwise every
+`limitIntervalMs` (1 s). The repeat is not optional: the node keeps the
+request only in RAM, drops it on master timeout and has none after a reset.
+
+- Speed: `maxSpeedRadPerSecond` × the run-time factor from `TrackSpeedLimit`.
+  The node clamps to 0..30 rad/s.
+- Current: `currentLimitAmps`, or `0x7FFF` (no request) when 0. The node
+  clamps to 2 A..`I_PEAK` (currently 10 A); below 2 A it could no longer
+  brake.
+- A request only ever lowers a limit. Thermal and undervoltage derating stay
+  in charge underneath.
+
+**Why the master scales its commands too.** The node's speed limit clips
+each track on its own. Left to that alone, a turn at full stick would clip
+the outer track and leave the inner one, and the turn would widen exactly
+when the stick is pushed hardest - the same reason the mix scales rather
+than clips. So the master scales both commanded speeds by the same limit,
+and the node's cap is only the backstop that never engages in normal
+driving. If it does (reason bit 5, `SpeedCapped`), the node's limit is below
+what the master asks for, e.g. through undervoltage.
+
+**`0x185`/`0x195` report**, 5 Hz per node: effective current limit (0.01 A,
+ten times finer than the diagnostics frame), effective speed limit, usable
+voltage (the highest phase amplitude the inverter can make, about Vbus / 2 -
+when the back-EMF reaches it, that is top speed), a reason bit field, and the
+lower 8 bits of the count of `0x101` frames received. That count moving is
+the acknowledgement: `LimitsAcked` is 1 while it has moved within the last
+2.5 request periods.
+
+**Run-time limit.** `TrackSpeedLimit` takes a value in (0, 1] as the share
+of `maxSpeedRadPerSecond`. 0, negative or released means **no reduction**,
+deliberately not "stop": a centred axis or a toggle that is off must not
+park the vehicle. A slider from 0.1 to 1 works, and so does a toggle with
+value 0.3 as a crawl gear. The full stick then reaches the reduced speed, so
+the stick keeps its whole travel.
+
+The voltage limit is not adjustable by design; it follows from the sine
+modulation. See the firmware's `SCHNITTSTELLE.md`, `0x185`.
 
 ## Options
 
@@ -282,7 +335,8 @@ All on the `pinManagers` entry.
 | `commandIntervalMs` | `20` | 50 Hz. The firmware's master timeout is 150 ms, i.e. three missed frames. |
 | `nodeTimeoutMs` | `250` | Status arrives at 20 Hz, so this is five missed frames. |
 | `expectedNodes` | `2` | Set to 1 for bench work with one board. |
-| `faultResetHoldMs` | `250` | How long the unlatch flag stays set. |
+| `currentLimitAmps` | `0` | Phase current limit requested in `0x101`. 0 means no request (firmware maximum). Node clamps to 2..10 A. See [Limits](#limits). |
+| `limitIntervalMs` | `1000` | Repeat period of `0x101`. Changes go out at once regardless. |
 | `coastAtStandstill` | `true` | Replace Stop once nothing is commanded and the tracks stand. See [Coasting at standstill](#coasting-at-standstill). |
 | `brakeAtStandstill` | `true` | What replaces it: `Brake` (short-circuit brake, firmware 2026-11-04 and later) or, if `false`, `Coast`. See [Brake mode](#brake-mode). |
 | `standstillSpeedRadPerSecond` | `1.0` | Below this a track counts as standing. |
@@ -302,7 +356,8 @@ All on the `pinManagers` entry.
 | `TrackThrottle` | forward and reverse, mixed |
 | `TrackSteering` | left and right, mixed; positive speeds the left track up |
 | `TrackLeft` / `TrackRight` | direct, bypasses the mix |
-| `TrackFaultReset` | momentary, asks the nodes to unlatch |
+| `TrackFaultReset` | momentary, asks the nodes to unlatch (one frame per press) |
+| `TrackSpeedLimit` | run-time share of the speed limit, (0, 1]; 0 or released = none. See [Limits](#limits) |
 | `TrackEmergencyStop` | momentary, broadcasts a stop; never part of the channel test |
 
 `TrackThrottle` and `TrackSteering` have a deliberately gentle channel test -
@@ -320,11 +375,25 @@ Per node, prefixed `left` or `right`: `Present`, `Speed`, `Target`, `State`,
 `Current`, `BusVolts`, `BusAmps`, `Power`, `Temperature`, `Thermal`, `Fault`,
 `FaultCode`, `Derating`, `CurrentLimited`, `UnderVoltageWarning`,
 `ShortBrake` (status bit 6, brake engaged now), `BrakeTripped` (bit 7,
-released on overcurrent).
+released on overcurrent), `Failsafe` (bit 0, master timeout active),
+`VoltageLimited` (bit 2, top speed at this battery voltage; set since
+firmware 2026-11-05), `TemperatureWarning` (bit 5, above 70 °C).
+
+From the diagnostics frame: `CurrentD`, `VoltageQ`, `HallError`, `IsrMax`,
+`Debounce`. From the limits frame (firmware 2026-11-05 and later, empty
+before): `SpeedLimit`, `UsableVolts`, `LimitReasons` (comma-separated:
+`i2t`, `temperature`, `undervoltage`, `current request`, `speed request`,
+`speed capped`), `SpeedCapped`, `LimitsAcked`. `CurrentLimit` comes from the
+limits frame once one has arrived, else from the coarser diagnostics frame.
+
+`Current` is Iq **relative to the direction of travel** since firmware
+2026-11-05: positive drives, negative brakes, forwards and backwards alike.
+Before that it carried the sign of the torque.
 
 Bus-wide: `busUp`, `nodesPresent`, `driveEnabled`, `inhibit`, `controlAge`,
-`mode`, `commandLeft`, `commandRight`, `framesSent`, `framesReceived`,
-`sendFailures`.
+`mode`, `commandLeft`, `commandRight`, `speedLimit` (requested in `0x101`),
+`speedLimitFactor` (%), `currentLimitRequest` (empty when none),
+`framesSent`, `framesReceived`, `sendFailures`.
 
 **Each value needs a channel of its own**, named `<group>.<key>`, for example
 `drive.leftState`. `TelemetryService` only forwards keys that a channel asks
@@ -888,7 +957,8 @@ to `cansend`, which at 50 Hz means a process spawn per frame.
 
 ## Keeping the two sides in step
 
-`CanTrackProtocol.cs` mirrors the firmware byte for byte. The firmware's CAN
-section in `problem.md` is the other half of the same specification. **Change
-them together** - there is no generated header and nothing checks that they
+`CanTrackProtocol.cs` mirrors the firmware byte for byte. The binding
+reference is the firmware's `SCHNITTSTELLE.md` (since 2026-11-05; it replaces
+the CAN section of `problem.md`), aligned here with firmware commit
+`1c3c1c3`. **Change them together** - there is no generated header and nothing checks that they
 agree.

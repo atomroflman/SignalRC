@@ -91,9 +91,24 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
     /// releases the drive.</summary>
     public int ExpectedNodes { get; set; } = 2;
 
-    /// <summary>How long the fault-reset flag stays set after the button is
-    /// pressed, so the nodes see it across several command frames.</summary>
-    public int FaultResetHoldMs { get; set; } = 250;
+    /// <summary>
+    /// Phase current limit requested from both nodes in 0x101, in amps. Zero
+    /// or negative means no request: the firmware maximum (I_PEAK, currently
+    /// 10 A) applies.
+    ///
+    /// The node clamps it to 2 A .. I_PEAK; below 2 A it could no longer
+    /// brake. It only ever lowers the limit - thermal and undervoltage
+    /// derating stay in charge underneath. Firmware 2026-11-05 and later.
+    /// </summary>
+    public float CurrentLimitAmps { get; set; }
+
+    /// <summary>
+    /// How often 0x101 is repeated. The node does not store the request and
+    /// drops it on master timeout, and a node that restarts has none, so it
+    /// is sent periodically and not only on change. A change goes out at
+    /// once regardless.
+    /// </summary>
+    public int LimitIntervalMs { get; set; } = 1000;
 
     /// <summary>
     /// Switch the nodes to Brake or Coast (<see cref="BrakeAtStandstill"/>)
@@ -261,7 +276,10 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
     private float _steering;
     private float? _directLeft;
     private float? _directRight;
-    private long _faultResetUntilTicks;
+    private bool _faultResetPending;
+    private float _speedLimitFactor = 1f;
+    private bool _limitsDirty = true;
+    private long _limitsSentMs = -1;
     private long _lastControlMs = -1; //!< -1 means nothing has ever arrived
 
     private long _odoLastMs = -1;
@@ -349,6 +367,20 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
             Directory = RecorderDirectory,
         };
 
+        // The node clamps silently; say so here, where the option is read.
+        if (CurrentLimitAmps > 0f && (CurrentLimitAmps < 2f || CurrentLimitAmps > 10f))
+        {
+            _logger.LogWarning(
+                "currentLimitAmps {Limit} is outside 2..10 A; the nodes clamp it to that range " +
+                "(below 2 A they could no longer brake).", CurrentLimitAmps);
+        }
+        if (MaxSpeedRadPerSecond > 30f)
+        {
+            _logger.LogWarning(
+                "maxSpeedRadPerSecond {Max} is above the firmware's 30 rad/s; the nodes cap it there.",
+                MaxSpeedRadPerSecond);
+        }
+
         _running = true;
         _rxThread = new Thread(ReceiveLoop) { IsBackground = true, Name = "can-track-rx" };
         _txThread = new Thread(TransmitLoop) { IsBackground = true, Name = "can-track-tx" };
@@ -411,7 +443,13 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
                                 | CanErrorClass.CAN_ERR_RESTARTED;
             socket.ReceiveTimeout = 200;
             _socket = socket;
-            lock (_stateLock) { _busOff = false; _busState = "unknown"; _openProblem = null; }
+            lock (_stateLock)
+            {
+                _busOff = false;
+                _busState = "unknown";
+                _openProblem = null;
+                _limitsDirty = true; // the nodes may have timed out meanwhile
+            }
             _nextLinkPoll = TimeSpan.Zero;
 
             _logger.LogInformation(
@@ -567,7 +605,27 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
             case TrackDriveAxis.RecordDump:
                 if (MathF.Abs(value) >= 0.5f) DumpRecording("manual");
                 break;
+            case TrackDriveAxis.SpeedLimit:
+                SetSpeedLimitFactor(value);
+                break;
         }
+    }
+
+    /// <summary>
+    /// Run-time share of the speed limit, see <see cref="TrackDriveAxis.SpeedLimit"/>.
+    /// Anything not in (0, 1] means no reduction - deliberately not "stop":
+    /// a centred axis or a toggle that is off must not park the vehicle.
+    /// </summary>
+    public void SetSpeedLimitFactor(float value)
+    {
+        var factor = float.IsNaN(value) || value <= 0f ? 1f : MathF.Min(value, 1f);
+        lock (_stateLock)
+        {
+            if (factor == _speedLimitFactor) return;
+            _speedLimitFactor = factor;
+            _limitsDirty = true;
+        }
+        _logger.LogInformation("Speed limit factor {Factor:0.##}.", factor);
     }
 
     /// <summary>
@@ -594,6 +652,11 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
                     _directLeft = _directLeft.HasValue ? 0f : null;
                     _directRight = _directRight.HasValue ? 0f : null;
                 }
+                break;
+            case TrackDriveAxis.SpeedLimit:
+                // Released means whoever lowered it is gone; the drive stops
+                // anyway once the control inputs go stale.
+                SetSpeedLimitFactor(1f);
                 break;
         }
     }
@@ -679,13 +742,20 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
         else if (_odoHeading <= -Math.PI) _odoHeading += 2.0 * Math.PI;
     }
 
+    /// <summary>
+    /// Sets the unlatch bit in exactly ONE command frame. The node clears its
+    /// fault on every frame carrying the bit, so holding it across several
+    /// frames would let a fault that re-latches at once (undervoltage, say)
+    /// be cleared again and again - the latch would be gone in effect. If the
+    /// frame is lost, the operator presses again and sees the fault code.
+    /// </summary>
     public void RequestFaultReset()
     {
         lock (_stateLock)
         {
-            _faultResetUntilTicks = _clock.ElapsedMilliseconds + FaultResetHoldMs;
+            _faultResetPending = true;
         }
-        _logger.LogInformation("Fault reset requested; flag set for {Hold} ms.", FaultResetHoldMs);
+        _logger.LogInformation("Fault reset requested; flag goes out in the next command frame.");
     }
 
     /// <summary>
@@ -733,6 +803,7 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
             {
                 PollLinkState();
                 SendCommandFrame();
+                SendLimitRequestIfDue();
             }
             catch (Exception ex)
             {
@@ -784,11 +855,19 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
                 mode = CanTrackProtocol.DriveMode.Velocity;
             }
 
-            _commandedLeft = left * MaxSpeedRadPerSecond;
-            _commandedRight = right * MaxSpeedRadPerSecond;
+            // Scaled, not clipped, by the run-time limit: both tracks shrink
+            // together, so the turn radius stays what the stick says. The
+            // node's own cap from 0x101 is the same value and therefore only
+            // a backstop - left to the node alone it would clip the outer
+            // track and widen every turn.
+            var fullScale = EffectiveSpeedLimit();
+            _commandedLeft = left * fullScale;
+            _commandedRight = right * fullScale;
             mode = ApplyStandstillCoast(mode, now);
             _mode = mode;
-            clearFault = now < _faultResetUntilTicks;
+            // One frame only, and only into a frame that can actually leave.
+            clearFault = _faultResetPending && _socket != null;
+            if (clearFault) _faultResetPending = false;
             sequence = unchecked(++_sequence);
         }
 
@@ -807,6 +886,51 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
         CanTrackProtocol.WriteUInt16(data, 6, sequence);
 
         Send(CanTrackProtocol.CommandId, data);
+    }
+
+    /// <summary>Full-scale speed after the run-time reduction. Must be called
+    /// under _stateLock.</summary>
+    private double EffectiveSpeedLimit() => MaxSpeedRadPerSecond * (double)_speedLimitFactor;
+
+    /// <summary>Current limit to request, or null for none. Must be called
+    /// under _stateLock.</summary>
+    private double? RequestedCurrentLimit() => CurrentLimitAmps > 0f ? CurrentLimitAmps : null;
+
+    /// <summary>
+    /// Sends 0x101 on change and otherwise every <see cref="LimitIntervalMs"/>.
+    /// The node keeps no copy across a reset and drops the request on master
+    /// timeout, so the repeat is what brings a restarted node back in line.
+    ///
+    /// Both sides get the same values. The limits are magnitudes, so the
+    /// per-side inversion does not touch them.
+    /// </summary>
+    private void SendLimitRequestIfDue()
+    {
+        double speed;
+        double? current;
+        lock (_stateLock)
+        {
+            if (_socket == null) return;
+            var now = _clock.ElapsedMilliseconds;
+            var due = _limitsDirty || _limitsSentMs < 0
+                      || now - _limitsSentMs >= Math.Max(100, LimitIntervalMs);
+            if (!due) return;
+            _limitsDirty = false;
+            _limitsSentMs = now;
+            speed = EffectiveSpeedLimit();
+            current = RequestedCurrentLimit();
+        }
+
+        var speedWire = speed > 0.0 ? CanTrackProtocol.ToWire(speed * 100.0) : CanTrackProtocol.LimitNone;
+        var currentWire = current.HasValue
+            ? CanTrackProtocol.ToWire(current.Value * 100.0) : CanTrackProtocol.LimitNone;
+
+        var data = new byte[8];
+        CanTrackProtocol.WriteInt16(data, 0, currentWire);
+        CanTrackProtocol.WriteInt16(data, 2, speedWire);
+        CanTrackProtocol.WriteInt16(data, 4, currentWire);
+        CanTrackProtocol.WriteInt16(data, 6, speedWire);
+        Send(CanTrackProtocol.LimitRequestId, data);
     }
 
     /// <summary>
@@ -1071,6 +1195,7 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
             if (id == CanTrackProtocol.PowerId(node)) { ApplyPower(node, data, len); return; }
             if (id == CanTrackProtocol.FaultId(node)) { ApplyFault(node, data, len); return; }
             if (id == CanTrackProtocol.DiagId(node)) { ApplyDiag(node, data, len); return; }
+            if (id == CanTrackProtocol.LimitsId(node)) { ApplyLimits(node, data, len); return; }
         }
 
         if (id == CanTrackProtocol.EmergencyStopId)
@@ -1083,7 +1208,8 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
             return;
         }
 
-        if (id == CanTrackProtocol.CommandId) return; // our own frame, looped back
+        // Our own frames, looped back.
+        if (id == CanTrackProtocol.CommandId || id == CanTrackProtocol.LimitRequestId) return;
         Interlocked.Increment(ref _unknownFrames);
     }
 
@@ -1209,8 +1335,12 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
         lock (_stateLock)
         {
             var n = _nodes[node];
+            var now = _clock.ElapsedMilliseconds;
+            // A node that was gone may have restarted and lost the limit
+            // request; send it now rather than at the next 1 Hz slot.
+            if (!n.Seen || now - n.LastSeenMs > NodeTimeoutMs) _limitsDirty = true;
             n.Seen = true;
-            n.LastSeenMs = _clock.ElapsedMilliseconds;
+            n.LastSeenMs = now;
             n.Speed = sign * CanTrackProtocol.ReadInt16(d, 0) / 100.0;
             n.Target = sign * CanTrackProtocol.ReadInt16(d, 2) / 100.0;
             n.State = (CanTrackProtocol.NodeState)d[4];
@@ -1250,6 +1380,30 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
         }
     }
 
+    /// <summary>
+    /// 0x185/0x195. The limits are magnitudes, so no inversion. Byte 7 counts
+    /// the 0x101 frames the node has received; it moving is the
+    /// acknowledgement that our request arrives.
+    /// </summary>
+    private void ApplyLimits(int node, byte[] d, int len)
+    {
+        if (len < 8) return;
+        lock (_stateLock)
+        {
+            var n = _nodes[node];
+            var now = _clock.ElapsedMilliseconds;
+            n.LimitsSeen = true;
+            n.LimitCurrent = CanTrackProtocol.ReadInt16(d, 0) / 100.0;
+            n.SpeedLimit = CanTrackProtocol.ReadInt16(d, 2) / 100.0;
+            n.UsableVolts = CanTrackProtocol.ReadInt16(d, 4) / 100.0;
+            n.LimitReasons = (CanTrackProtocol.LimitReasons)d[6];
+            // The first frame only sets the baseline; a count that moves after
+            // that is a request that arrived.
+            if (n.LimitAckCount >= 0 && n.LimitAckCount != d[7]) n.LimitAckChangedMs = now;
+            n.LimitAckCount = d[7];
+        }
+    }
+
     private void ApplyFault(int node, byte[] d, int len)
     {
         if (len < 6) return;
@@ -1285,10 +1439,17 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
             var now = _clock.ElapsedMilliseconds;
             RefreshPresence(now);
             var present = CountPresent(now);
+            // Two and a half request periods: one lost 0x101 or 0x185 must not
+            // flip the acknowledgement off.
+            var ackWindow = (long)(2.5 * Math.Max(100, LimitIntervalMs));
+            var speedLimit = EffectiveSpeedLimit();
             return new TrackDriveSnapshot
             {
-                Left = _nodes[CanTrackProtocol.LeftNode].ToState(now),
-                Right = _nodes[CanTrackProtocol.RightNode].ToState(now),
+                Left = _nodes[CanTrackProtocol.LeftNode].ToState(now, ackWindow),
+                Right = _nodes[CanTrackProtocol.RightNode].ToState(now, ackWindow),
+                SpeedLimitFactor = _speedLimitFactor,
+                RequestedSpeedLimit = speedLimit > 0.0 ? speedLimit : null,
+                RequestedCurrentLimit = RequestedCurrentLimit(),
                 BusUp = _socket != null,
                 AllNodesPresent = present >= ExpectedNodes,
                 DriveEnabled = _inhibitReason == null,
@@ -1352,8 +1513,17 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
         public int IsrMaxUs;
         public double CurrentLimit;
         public int DebounceSamples;
+        public bool LimitsSeen;
+        public double LimitCurrent;
+        public double SpeedLimit;
+        public double UsableVolts;
+        public CanTrackProtocol.LimitReasons LimitReasons;
+        public int LimitAckCount = -1;
+        public long LimitAckChangedMs = -1;
 
-        public TrackNodeState ToState(long nowMs) => new()
+        /// <param name="ackWindowMs">How recently the request counter has to
+        /// have moved to count as acknowledged.</param>
+        public TrackNodeState ToState(long nowMs, long ackWindowMs) => new()
         {
             Node = Node,
             Seen = Seen,
@@ -1374,8 +1544,15 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
             VoltageQVolts = VoltageQ,
             HallErrorPercent = HallErrorPercent,
             IsrMaxMicroseconds = IsrMaxUs,
-            CurrentLimitAmps = CurrentLimit,
+            // The limits frame carries the same value at ten times the resolution.
+            CurrentLimitAmps = LimitsSeen ? LimitCurrent : CurrentLimit,
             DebounceSamples = DebounceSamples,
+            LimitsSeen = LimitsSeen,
+            SpeedLimitRadPerSecond = SpeedLimit,
+            UsableVolts = UsableVolts,
+            LimitReasons = LimitReasons,
+            LimitRequestCount = Math.Max(0, LimitAckCount),
+            LimitRequestAcknowledged = LimitAckChangedMs >= 0 && nowMs - LimitAckChangedMs <= ackWindowMs,
         };
     }
 

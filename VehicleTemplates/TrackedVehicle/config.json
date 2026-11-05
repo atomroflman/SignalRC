@@ -16,6 +16,8 @@
           "nodeTimeoutMs": 250,
           "expectedNodes": 2,
           "controlTimeoutMs": 500,
+          "currentLimitAmps": 0,
+          "limitIntervalMs": 1000,
           "invertLeft": false,
           "invertRight": false,
           "wheelRadiusM": 0.09466,
@@ -70,6 +72,11 @@
       "odometryReset": {
         "pinManager": "trackDrive",
         "controlType": "TrackOdometryReset",
+        "testDisabled": true
+      },
+      "speedLimit": {
+        "pinManager": "trackDrive",
+        "controlType": "TrackSpeedLimit",
         "testDisabled": true
       }
     },
@@ -292,6 +299,102 @@
         "dataType": "Number",
         "unit": "%",
         "decimals": 0,
+        "options": {
+          "groupKey": "drive",
+          "pinManager": "trackDrive"
+        }
+      },
+      "drive.speedLimit": {
+        "pinManager": "trackDrive",
+        "telemetryType": "SignalRC.Onboard.Telemetry.CanTrackDriveTelemetryReader",
+        "readIntervalTicks": 1,
+        "dataType": "Number",
+        "unit": "rad/s",
+        "decimals": 1,
+        "options": {
+          "groupKey": "drive",
+          "pinManager": "trackDrive"
+        }
+      },
+      "drive.leftSpeedLimit": {
+        "pinManager": "trackDrive",
+        "telemetryType": "SignalRC.Onboard.Telemetry.CanTrackDriveTelemetryReader",
+        "readIntervalTicks": 1,
+        "dataType": "Number",
+        "unit": "rad/s",
+        "decimals": 1,
+        "options": {
+          "groupKey": "drive",
+          "pinManager": "trackDrive"
+        }
+      },
+      "drive.leftCurrentLimit": {
+        "pinManager": "trackDrive",
+        "telemetryType": "SignalRC.Onboard.Telemetry.CanTrackDriveTelemetryReader",
+        "readIntervalTicks": 1,
+        "dataType": "Number",
+        "unit": "A",
+        "decimals": 1,
+        "options": {
+          "groupKey": "drive",
+          "pinManager": "trackDrive"
+        }
+      },
+      "drive.leftLimitReasons": {
+        "pinManager": "trackDrive",
+        "telemetryType": "SignalRC.Onboard.Telemetry.CanTrackDriveTelemetryReader",
+        "readIntervalTicks": 1,
+        "options": {
+          "groupKey": "drive",
+          "pinManager": "trackDrive"
+        }
+      },
+      "drive.leftVoltageLimited": {
+        "pinManager": "trackDrive",
+        "telemetryType": "SignalRC.Onboard.Telemetry.CanTrackDriveTelemetryReader",
+        "readIntervalTicks": 1,
+        "options": {
+          "groupKey": "drive",
+          "pinManager": "trackDrive"
+        }
+      },
+      "drive.rightSpeedLimit": {
+        "pinManager": "trackDrive",
+        "telemetryType": "SignalRC.Onboard.Telemetry.CanTrackDriveTelemetryReader",
+        "readIntervalTicks": 1,
+        "dataType": "Number",
+        "unit": "rad/s",
+        "decimals": 1,
+        "options": {
+          "groupKey": "drive",
+          "pinManager": "trackDrive"
+        }
+      },
+      "drive.rightCurrentLimit": {
+        "pinManager": "trackDrive",
+        "telemetryType": "SignalRC.Onboard.Telemetry.CanTrackDriveTelemetryReader",
+        "readIntervalTicks": 1,
+        "dataType": "Number",
+        "unit": "A",
+        "decimals": 1,
+        "options": {
+          "groupKey": "drive",
+          "pinManager": "trackDrive"
+        }
+      },
+      "drive.rightLimitReasons": {
+        "pinManager": "trackDrive",
+        "telemetryType": "SignalRC.Onboard.Telemetry.CanTrackDriveTelemetryReader",
+        "readIntervalTicks": 1,
+        "options": {
+          "groupKey": "drive",
+          "pinManager": "trackDrive"
+        }
+      },
+      "drive.rightVoltageLimited": {
+        "pinManager": "trackDrive",
+        "telemetryType": "SignalRC.Onboard.Telemetry.CanTrackDriveTelemetryReader",
+        "readIntervalTicks": 1,
         "options": {
           "groupKey": "drive",
           "pinManager": "trackDrive"

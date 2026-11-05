@@ -7,8 +7,9 @@ namespace SignalRC.Onboard.Hardware.Can;
 /// node id is baked into each board's firmware at build time (-e left / -e
 /// right) because the strap pins are unreachable once a board is mounted.
 ///
-/// Everything here mirrors the firmware; see Docs/CanTrackDrive.md and the
-/// CAN section of the firmware's problem.md. The two must be changed together.
+/// Everything here mirrors the firmware; the binding reference is the
+/// firmware's SCHNITTSTELLE.md, the reasoning on this side is in
+/// Docs/CanTrackDrive.md. The two must be changed together.
 /// </summary>
 public static class CanTrackProtocol
 {
@@ -20,6 +21,17 @@ public static class CanTrackProtocol
     /// so the nodes read the same bus instant instead of being skewed by two
     /// separate transmissions.</summary>
     public const uint CommandId = 0x100;
+
+    /// <summary>Limit request, master to all. Upper bounds for current and
+    /// speed per side; they only ever lower what thermal and undervoltage
+    /// derating allow. Not stored on the node and dropped on master timeout,
+    /// so it is repeated at 1 Hz. Firmware 2026-11-05 and later; older
+    /// firmware ignores the frame.</summary>
+    public const uint LimitRequestId = 0x101;
+
+    /// <summary>"No request" in a limit field of <see cref="LimitRequestId"/>:
+    /// the firmware maximum applies. A negative value means the same.</summary>
+    public const short LimitNone = short.MaxValue;
 
     public const int LeftNode = 0;
     public const int RightNode = 1;
@@ -33,6 +45,9 @@ public static class CanTrackProtocol
     /// <summary>Diagnostics. Steers nothing; it is what makes an incident
     /// explainable afterwards.</summary>
     public static uint DiagId(int node) => NodeBase(node) + 4;
+    /// <summary>Effective limits and why they are what they are, plus a
+    /// counter that acknowledges <see cref="LimitRequestId"/>.</summary>
+    public static uint LimitsId(int node) => NodeBase(node) + 5;
 
     public enum DriveMode : byte
     {
@@ -51,7 +66,8 @@ public static class CanTrackProtocol
 
     /// <summary>Bit 0 of the command frame's flag byte: unlatch a fault.
     /// Unlatching is the master's privilege; nothing on the node re-enables
-    /// itself.</summary>
+    /// itself. The node clears on EVERY frame carrying the bit, so a bit left
+    /// set would defeat the latch - set it in exactly one frame.</summary>
     public const byte CommandFlagClearFault = 0x01;
 
     [Flags]
@@ -69,6 +85,38 @@ public static class CanTrackProtocol
         /// <summary>The short-circuit brake let go on overcurrent; the wheel
         /// free-wheels until the next drive command.</summary>
         BrakeTripped = 0x80,
+    }
+
+    /// <summary>Byte 6 of the limits frame: what is holding a limit down.</summary>
+    [Flags]
+    public enum LimitReasons : byte
+    {
+        None = 0,
+        /// <summary>The I2t model limits the current.</summary>
+        ThermalI2t = 0x01,
+        /// <summary>The board temperature limits the current.</summary>
+        Temperature = 0x02,
+        /// <summary>Undervoltage (Vbus below 32 V) limits the speed.</summary>
+        UnderVoltage = 0x04,
+        /// <summary>The current request from 0x101 is in effect.</summary>
+        CurrentRequest = 0x08,
+        /// <summary>The speed request from 0x101 is in effect.</summary>
+        SpeedRequest = 0x10,
+        /// <summary>The target is being clipped to the speed limit right now.</summary>
+        SpeedCapped = 0x20,
+    }
+
+    public static string Describe(LimitReasons reasons)
+    {
+        if (reasons == LimitReasons.None) return string.Empty;
+        var parts = new List<string>(6);
+        if (reasons.HasFlag(LimitReasons.ThermalI2t)) parts.Add("i2t");
+        if (reasons.HasFlag(LimitReasons.Temperature)) parts.Add("temperature");
+        if (reasons.HasFlag(LimitReasons.UnderVoltage)) parts.Add("undervoltage");
+        if (reasons.HasFlag(LimitReasons.CurrentRequest)) parts.Add("current request");
+        if (reasons.HasFlag(LimitReasons.SpeedRequest)) parts.Add("speed request");
+        if (reasons.HasFlag(LimitReasons.SpeedCapped)) parts.Add("speed capped");
+        return string.Join(", ", parts);
     }
 
     public enum NodeState : byte
@@ -90,6 +138,9 @@ public static class CanTrackProtocol
         PeerLost = 6,
         MasterTimeout = 7,
         OverTemperature = 8,
+        /// <summary>I2t above 150 % for 10 s: persistently over the continuous
+        /// current despite derating. Firmware 2026-11-05 and later.</summary>
+        Overload = 9,
         EmergencyStop = 0xFF,
     }
 
@@ -104,6 +155,7 @@ public static class CanTrackProtocol
         FaultCode.PeerLost => "peer lost",
         FaultCode.MasterTimeout => "master timeout",
         FaultCode.OverTemperature => "over temperature",
+        FaultCode.Overload => "overload",
         FaultCode.EmergencyStop => "emergency stop",
         _ => $"unknown ({(byte)code})",
     };

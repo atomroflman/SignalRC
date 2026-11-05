@@ -143,6 +143,23 @@ public class TrackOdometryResetControl : TrackDriveControlBase
     protected override TrackDriveAxis Axis => TrackDriveAxis.OdometryReset;
 }
 
+/// <summary>
+/// Lowers the speed limit while driving: a value in (0, 1] is the share of
+/// maxSpeedRadPerSecond the stick reaches at full scale, and the nodes get the
+/// same figure as their own cap (0x101). 0, negative or released means no
+/// reduction, so use a slider from e.g. 0.1 to 1, or a toggle with value 0.3
+/// as a crawl gear. Not part of the channel test.
+/// </summary>
+[ControlType("TrackSpeedLimit")]
+public class TrackSpeedLimitControl : TrackDriveControlBase
+{
+    public TrackSpeedLimitControl(ILogger<TrackSpeedLimitControl> logger) : base(logger)
+    {
+        TestDisabled = true;
+    }
+    protected override TrackDriveAxis Axis => TrackDriveAxis.SpeedLimit;
+}
+
 /// <summary>Momentary button. Broadcasts an emergency stop to every node.
 /// Never part of the channel test.</summary>
 [ControlType("TrackEmergencyStop")]

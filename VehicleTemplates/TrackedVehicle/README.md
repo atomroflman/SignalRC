@@ -92,7 +92,23 @@ Ein verriegelter Fehler auf **einem** Knoten schaltet über den Not-Aus-Broadcas
 `0x010` **beide** ab. Ein Antrieb, der bei blockierter Kette weiterläuft,
 während der andere steht, reißt das Fahrzeug herum.
 
-Entriegelt wird nur vom Master, über den Kanal `faultReset`.
+Entriegelt wird nur vom Master, über den Kanal `faultReset`. Ein Druck setzt
+das Quittierungs-Bit in genau einem Fahrbefehl. Steht der Fehler danach noch,
+besteht die Ursache weiter.
+
+## Grenzen
+
+Der Kanal `speedLimit` senkt die Höchstgeschwindigkeit im Betrieb: Ein Wert in
+(0, 1] ist der Anteil von `maxSpeedRadPerSecond`, 0 oder losgelassen heißt
+keine Absenkung. Das passt zu einem Regler von 0,1 bis 1 oder zu einem
+Schalter mit Wert 0,3 als Kriechgang. Der volle Knüppelweg bleibt nutzbar,
+beide Ketten werden gleich skaliert, und die Knoten bekommen denselben Wert
+per `0x101` als eigene Obergrenze.
+
+`currentLimitAmps` in den Optionen begrenzt den Phasenstrom (2–10 A, 0 =
+Firmware-Maximum). Was tatsächlich gilt und warum, zeigen
+`drive.leftSpeedLimit`, `drive.leftCurrentLimit` und `drive.leftLimitReasons`
+(rechts ebenso). Ab Firmware 2026-11-05, ältere ignorieren die Vorgabe.
 
 ## Kanaltests
 

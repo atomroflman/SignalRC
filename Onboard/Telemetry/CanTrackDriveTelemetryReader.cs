@@ -79,6 +79,12 @@ public class CanTrackDriveTelemetryReader : TelemetryReaderBase
         values["mode"] = snapshot.Mode.ToString();
         values["commandLeft"] = Num(snapshot.CommandedLeft);
         values["commandRight"] = Num(snapshot.CommandedRight);
+        // What the master asks for in 0x101. Empty means no request.
+        values["speedLimit"] = snapshot.RequestedSpeedLimit.HasValue
+            ? Num(snapshot.RequestedSpeedLimit.Value) : string.Empty;
+        values["speedLimitFactor"] = Num(snapshot.SpeedLimitFactor * 100.0);
+        values["currentLimitRequest"] = snapshot.RequestedCurrentLimit.HasValue
+            ? Num(snapshot.RequestedCurrentLimit.Value) : string.Empty;
         var odo = snapshot.Odometry;
         // Available from the first metre, no calibration needed. The difference
         // is the one number that says whether a track fell behind.
@@ -199,6 +205,14 @@ public class CanTrackDriveTelemetryReader : TelemetryReaderBase
         {
             Set(samples, temperature, (TelemetrySampleState.Error, quality.AgeMs));
         }
+        // No limits frame yet: firmware before 2026-11-05, or just not arrived.
+        foreach (var key in new[] { $"{prefix}SpeedLimit", $"{prefix}UsableVolts" })
+        {
+            if (quality.State == TelemetrySampleState.Valid && samples[key].Value.Length == 0)
+            {
+                Set(samples, key, (TelemetrySampleState.NoData, 0));
+            }
+        }
     }
 
     private static void Set(Dictionary<string, TelemetrySample> samples, string key,
@@ -269,6 +283,23 @@ public class CanTrackDriveTelemetryReader : TelemetryReaderBase
             node.Flags.HasFlag(CanTrackProtocol.StatusFlags.ShortBrake) ? "1" : "0";
         values[$"{prefix}BrakeTripped"] =
             node.Flags.HasFlag(CanTrackProtocol.StatusFlags.BrakeTripped) ? "1" : "0";
+        values[$"{prefix}Failsafe"] =
+            node.Flags.HasFlag(CanTrackProtocol.StatusFlags.Failsafe) ? "1" : "0";
+        // Set since firmware 2026-11-05: the back-EMF has reached what the
+        // inverter can produce, i.e. top speed at this battery voltage.
+        values[$"{prefix}VoltageLimited"] =
+            node.Flags.HasFlag(CanTrackProtocol.StatusFlags.VoltageLimited) ? "1" : "0";
+        values[$"{prefix}TemperatureWarning"] =
+            node.Flags.HasFlag(CanTrackProtocol.StatusFlags.TemperatureWarning) ? "1" : "0";
+
+        // From 0x185/0x195, firmware 2026-11-05 and later. Empty before the
+        // first such frame, so an old firmware shows nothing instead of zeros.
+        values[$"{prefix}SpeedLimit"] = node.LimitsSeen ? Num(node.SpeedLimitRadPerSecond) : string.Empty;
+        values[$"{prefix}UsableVolts"] = node.LimitsSeen ? Num(node.UsableVolts) : string.Empty;
+        values[$"{prefix}LimitReasons"] = CanTrackProtocol.Describe(node.LimitReasons);
+        values[$"{prefix}SpeedCapped"] =
+            node.LimitReasons.HasFlag(CanTrackProtocol.LimitReasons.SpeedCapped) ? "1" : "0";
+        values[$"{prefix}LimitsAcked"] = node.LimitRequestAcknowledged ? "1" : "0";
     }
 
     private static string Num(double value)

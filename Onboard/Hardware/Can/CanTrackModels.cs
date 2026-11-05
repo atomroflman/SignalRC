@@ -25,6 +25,13 @@ public enum TrackDriveAxis
     OdometryReset = 6,
     /// <summary>Momentary: a nonzero value writes the flight recorder out.</summary>
     RecordDump = 7,
+    /// <summary>
+    /// Lowers the speed limit at run time. A value in (0, 1] is the share of
+    /// maxSpeedRadPerSecond that may be used; 0, negative or released means
+    /// no reduction. So a slider from 0.1 to 1 works, and so does a toggle
+    /// with value 0.3 as a crawl gear.
+    /// </summary>
+    SpeedLimit = 8,
 }
 
 /// <summary>One input into the drive manager. Values run -1..1 like every other
@@ -69,9 +76,27 @@ public sealed record TrackNodeState
     /// instead of only on the bench.</summary>
     public int HallErrorPercent { get; init; }
     public int IsrMaxMicroseconds { get; init; }
-    /// <summary>What the node's thermal model currently allows.</summary>
+    /// <summary>What the node's thermal model currently allows. From the
+    /// limits frame (0.01 A) once one has arrived, else from the diagnostics
+    /// frame (0.1 A).</summary>
     public double CurrentLimitAmps { get; init; }
     public int DebounceSamples { get; init; }
+
+    /// <summary>True once a limits frame (0x185/0x195) has arrived. Firmware
+    /// before 2026-11-05 never sends one.</summary>
+    public bool LimitsSeen { get; init; }
+    /// <summary>Effective speed limit, magnitude, rad/s.</summary>
+    public double SpeedLimitRadPerSecond { get; init; }
+    /// <summary>Highest phase amplitude the inverter can produce right now,
+    /// practically Vbus / 2. When the back-EMF reaches it, top speed is
+    /// reached.</summary>
+    public double UsableVolts { get; init; }
+    public CanTrackProtocol.LimitReasons LimitReasons { get; init; }
+    /// <summary>Lower 8 bits of the node's count of received limit requests.</summary>
+    public int LimitRequestCount { get; init; }
+    /// <summary>The count moved recently, i.e. our limit requests are being
+    /// received.</summary>
+    public bool LimitRequestAcknowledged { get; init; }
 }
 
 /// <summary>
@@ -134,6 +159,15 @@ public sealed record TrackDriveSnapshot
     public double CommandedLeft { get; init; }
     public double CommandedRight { get; init; }
     public CanTrackProtocol.DriveMode Mode { get; init; }
+
+    /// <summary>Run-time share of the speed limit, 1 when not reduced.</summary>
+    public double SpeedLimitFactor { get; init; } = 1.0;
+    /// <summary>Speed limit the master sends in 0x101 and scales its commands
+    /// to; null when nothing is requested.</summary>
+    public double? RequestedSpeedLimit { get; init; }
+    /// <summary>Current limit the master sends in 0x101; null when nothing
+    /// is requested.</summary>
+    public double? RequestedCurrentLimit { get; init; }
 
     public long FramesSent { get; init; }
     public long FramesReceived { get; init; }
