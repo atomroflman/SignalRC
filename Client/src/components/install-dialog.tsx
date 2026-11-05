@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useI18n } from "@/i18n/provider";
+import { pillButtonClass } from "./status-pill";
 
 type OnboardInstallCommandResponse = {
   command?: string;
@@ -131,9 +132,12 @@ export default function InstallDialog() {
     <>
       <button
         type="button"
-        className="inline-flex items-center justify-center rounded-full border border-green-500/45 bg-transparent px-3 py-2 text-[11px] font-medium text-green-300 shadow-sm transition hover:bg-green-500/10 hover:text-green-200"
+        className={pillButtonClass}
         onClick={() => setIsOpen(true)}
       >
+        <svg aria-hidden viewBox="0 0 16 16" className="h-3 w-3 text-emerald-300" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+          <path d="M8 2v8M4.5 6.5 8 10l3.5-3.5M3 13.5h10" />
+        </svg>
         {messages.installDialog.trigger}
       </button>
 

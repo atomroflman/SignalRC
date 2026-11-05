@@ -1,6 +1,7 @@
 'use client';
 
-import { JSX, useCallback, useEffect, useMemo, useState } from 'react';
+import { JSX, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import BrandLogo from "./brand-logo";
 import VideoStream, { type VideoHudInput } from './video-stream';
 import { PublishedOverlay, type PublishedState } from './overlay/integration/published-overlay';
 import { hudConfigFor } from './overlay/integration/hud-config';
@@ -243,17 +244,13 @@ export default function CarVideoPanel({ carId }: CarVideoPanelProps): JSX.Elemen
 
   if (!carId) {
     return (
-      <div className="flex h-full w-full items-center justify-center rounded-2xl border border-dashed border-zinc-700 bg-zinc-900 p-10 text-center text-sm text-zinc-300">
-        {messages.carVideoPanel.selectVehicleFirst}
-      </div>
+      <VideoPlaceholder>{messages.carVideoPanel.selectVehicleFirst}</VideoPlaceholder>
     );
   }
 
   if (loading && streams.length === 0) {
     return (
-      <div className="flex h-full w-full items-center justify-center rounded-2xl border border-zinc-700 bg-zinc-900 text-sm text-zinc-300">
-        {messages.carVideoPanel.loadingStreams}
-      </div>
+      <VideoPlaceholder carId={carId}>{messages.carVideoPanel.loadingStreams}</VideoPlaceholder>
     );
   }
 
@@ -267,9 +264,7 @@ export default function CarVideoPanel({ carId }: CarVideoPanelProps): JSX.Elemen
 
   if (streams.length === 0) {
     return (
-      <div className="flex h-full w-full items-center justify-center rounded-2xl border border-zinc-700 bg-zinc-900 p-6 text-center text-sm text-zinc-300">
-        {messages.carVideoPanel.noStreamsConfigured}
-      </div>
+      <VideoPlaceholder carId={carId}>{messages.carVideoPanel.noStreamsConfigured}</VideoPlaceholder>
     );
   }
 
@@ -301,21 +296,15 @@ export default function CarVideoPanel({ carId }: CarVideoPanelProps): JSX.Elemen
       </div>
 
       {!selectedStream && (
-        <div className="rounded-2xl border border-zinc-700 bg-zinc-900 p-6 text-sm text-zinc-300">
-          {messages.carVideoPanel.noStreamSelected}
-        </div>
+        <VideoPlaceholder carId={carId}>{messages.carVideoPanel.noStreamSelected}</VideoPlaceholder>
       )}
 
       {selectedStream && !selectedStream.enabled && (
-        <div className="rounded-2xl border border-amber-900 bg-amber-950/50 p-6 text-sm text-amber-200">
-          {messages.carVideoPanel.streamDisabledHint}
-        </div>
+        <VideoPlaceholder carId={carId} className="text-amber-200">{messages.carVideoPanel.streamDisabledHint}</VideoPlaceholder>
       )}
 
       {selectedStream && selectedStream.enabled && !documentVisible && (
-        <div className="rounded-2xl border border-zinc-700 bg-zinc-900 p-6 text-sm text-zinc-300">
-          {messages.carVideoPanel.tabInactiveHint}
-        </div>
+        <VideoPlaceholder carId={carId}>{messages.carVideoPanel.tabInactiveHint}</VideoPlaceholder>
       )}
 
       {selectedStream && selectedStream.enabled && documentVisible && (
@@ -328,6 +317,16 @@ export default function CarVideoPanel({ carId }: CarVideoPanelProps): JSX.Elemen
           />
         </div>
       )}
+    </div>
+  );
+}
+
+/** Video area without a running stream: the logo, glowing in the vehicle state, above the reason. */
+function VideoPlaceholder({ carId, className = "text-zinc-400", children }: { carId?: number; className?: string; children: ReactNode }) {
+  return (
+    <div className="flex h-full min-h-[240px] w-full flex-1 flex-col items-center justify-center gap-6 rounded-2xl p-8 text-center">
+      <BrandLogo carId={carId} className="h-28 w-auto opacity-90 md:h-36" />
+      <div className={`max-w-md text-sm ${className}`}>{children}</div>
     </div>
   );
 }

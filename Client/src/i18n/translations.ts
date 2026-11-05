@@ -69,7 +69,7 @@ const deMessages = {
   },
   home: {
     unauthenticated: 'Kein Benutzer angemeldet.',
-    title: 'Signal-RC Control Deck',
+    title: 'Control Deck',
     activeVehicle: (id: number) => `Aktive Fahrzeug-ID ${id}`,
     noVehicleSelected: 'Kein Fahrzeug ausgewahlt',
   },
@@ -606,7 +606,7 @@ const enMessages: Messages = {
   },
   home: {
     unauthenticated: 'No user signed in.',
-    title: 'Signal-RC Control Deck',
+    title: 'Control Deck',
     activeVehicle: (id: number) => `Active vehicle ID ${id}`,
     noVehicleSelected: 'No vehicle selected',
   },
