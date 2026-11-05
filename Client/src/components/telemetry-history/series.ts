@@ -4,7 +4,7 @@
 // for at most `holdMs`, after that they count as missing.
 import { analyze, evaluate, type Analysis, type ExprType, type SourceValue, type ValueSource } from "@/components/overlay/expression";
 import type { TelemetryDataType } from "@/components/overlay/expression/analyze";
-import type { ChannelData, DashboardLayout, HistoryChannel, PanelDef } from "./types";
+import type { ChannelData, DashboardLayout, HistoryChannel, PanelDef, TextData } from "./types";
 
 /** A sample is held this long at least; recorded channels repeat unchanged values every second. */
 export const MIN_HOLD_MS = 3000;
@@ -34,16 +34,22 @@ export function telemetryTypes(channels: HistoryChannel[]): Record<string, Telem
 
 /**
  * The formula at every time any of its channels has a sample (step hold).
- * A formula without channels is drawn as a constant over [from, to].
+ * Numbers count as missing after `holdMs`; a text state holds until its next
+ * change. A formula without channels is drawn as a constant over [from, to].
  */
 export function evaluateSeries(
   compiled: CompiledSeries,
   data: Record<string, ChannelData | undefined>,
   holdMs: number,
   range: { from: number; to: number },
+  texts: Record<string, TextData | undefined> = {},
 ): ChannelData {
   if (compiled.error || !compiled.analysis.ast) return { t: [], v: [] };
-  const inputs = compiled.channels.map(name => ({ name, d: data[name] ?? { t: [], v: [] }, i: -1 }));
+  const inputs = compiled.channels.map(name => {
+    const text = texts[name];
+    const d: { t: number[]; v: (number | string | null)[] } = text ?? data[name] ?? { t: [], v: [] };
+    return { name, d, hold: text ? Infinity : holdMs, i: -1 };
+  });
   const times = inputs.length === 0 ? [range.from, range.to] : mergeTimes(inputs.map(x => x.d.t));
 
   const current = new Map<string, SourceValue>();
@@ -59,7 +65,7 @@ export function evaluateSeries(
       const { d } = input;
       while (input.i + 1 < d.t.length && d.t[input.i + 1] <= time) input.i++;
       const value = input.i >= 0 ? d.v[input.i] : null;
-      const fresh = input.i >= 0 && time - d.t[input.i] <= holdMs;
+      const fresh = input.i >= 0 && time - d.t[input.i] <= input.hold;
       current.set(input.name, value === null || !fresh ? { state: "invalid" } : { state: "valid", value: String(value) });
     }
     const r = evaluate(compiled.analysis, source);
@@ -82,20 +88,20 @@ export function mergeTimes(arrays: number[][]): number[] {
 }
 
 /** Appends newer samples (live follow); samples not newer than the last one are dropped. */
-export function appendSamples(target: Record<string, ChannelData>, fresh: Record<string, ChannelData>): Record<string, ChannelData> {
+export function appendSamples<T extends { t: number[]; v: unknown[] }>(target: Record<string, T>, fresh: Record<string, T>): Record<string, T> {
   const out = { ...target };
   for (const [key, add] of Object.entries(fresh)) {
-    const old = out[key] ?? { t: [], v: [] };
+    const old = out[key] ?? ({ t: [], v: [] } as unknown as T);
     const last = old.t.length > 0 ? old.t[old.t.length - 1] : -Infinity;
     let start = 0;
     while (start < add.t.length && add.t[start] <= last) start++;
     if (start >= add.t.length) continue;
-    out[key] = { t: old.t.concat(add.t.slice(start)), v: old.v.concat(add.v.slice(start)) };
+    out[key] = { t: old.t.concat(add.t.slice(start)), v: old.v.concat(add.v.slice(start)) } as T;
   }
   return out;
 }
 
-export function newestTime(data: Record<string, ChannelData>): number | undefined {
+export function newestTime(data: Record<string, { t: number[] }>): number | undefined {
   let newest: number | undefined;
   for (const d of Object.values(data)) {
     const last = d.t[d.t.length - 1];
@@ -121,15 +127,35 @@ export function stats(d: ChannelData, from = -Infinity, to = Infinity): SeriesSt
   return min === Infinity ? undefined : { min, max, last };
 }
 
+/** A stable color per text state, so the same status looks the same everywhere. */
+export function stateColor(value: string): string {
+  let h = 0;
+  for (let i = 0; i < value.length; i++) h = (h * 31 + value.charCodeAt(i)) >>> 0;
+  return `hsl(${h % 360} 65% 55%)`;
+}
+
+/** The text state at `time` (the last change at or before it); undefined before the first. */
+export function textAt(d: TextData, time: number): string | null | undefined {
+  let lo = 0;
+  let hi = d.t.length - 1;
+  let found = -1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (d.t[mid] <= time) { found = mid; lo = mid + 1; } else hi = mid - 1;
+  }
+  return found < 0 ? undefined : d.v[found];
+}
+
 export const PALETTE = ["#38bdf8", "#f97316", "#a3e635", "#e879f9", "#facc15", "#2dd4bf", "#f87171", "#818cf8"];
 
 let counter = 0;
 export const newId = (prefix: string) => `${prefix}${Date.now().toString(36)}${(counter++).toString(36)}`;
 
-/** One chart per unit with all recorded channels of that unit. */
+/** One chart per unit with all recorded channels of that unit; text channels are markers. */
 export function defaultLayout(channels: HistoryChannel[]): DashboardLayout {
   const byUnit = new Map<string, HistoryChannel[]>();
   for (const c of channels) {
+    if (c.dataType === "String" || c.dataType === "LidarGrid") continue;
     const key = c.unit?.trim() || (c.dataType === "Boolean" ? "bool" : "");
     byUnit.set(key, [...(byUnit.get(key) ?? []), c]);
   }

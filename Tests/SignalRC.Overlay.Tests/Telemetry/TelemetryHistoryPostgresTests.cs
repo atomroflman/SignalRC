@@ -34,24 +34,28 @@ public class TelemetryHistoryPostgresTests
         var volt = new CarTelemetry { ChannelName = "volt", DataType = TelemetryDataType.Number, Unit = "V", Record = true };
         var flag = new CarTelemetry { ChannelName = "flag", DataType = TelemetryDataType.Boolean, Record = true };
         var text = new CarTelemetry { ChannelName = "text", DataType = TelemetryDataType.String, Record = true };
+        var grid = new CarTelemetry { ChannelName = "grid", DataType = TelemetryDataType.LidarGrid, Record = true };
         await using (var db = Db())
         {
             db.Cars.Add(car);
             await db.SaveChangesAsync();
-            foreach (var t in new[] { volt, flag, text }) { t.CarId = car.Id; db.CarTelemetry.Add(t); }
+            foreach (var t in new[] { volt, flag, text, grid }) { t.CarId = car.Id; db.CarTelemetry.Add(t); }
             await db.SaveChangesAsync();
         }
 
-        var recorder = new TelemetryRecorder(scopes, TimeProvider.System, NullLogger<TelemetryRecorder>.Instance);
+        // The test replays 1000 s of samples within a few seconds: the recorder's clock
+        // starts at the first sample so its flush timer sees the same times as the samples.
+        var clock = new ShiftedClock(TimeSpan.FromSeconds(-1000));
+        var recorder = new TelemetryRecorder(scopes, clock, NullLogger<TelemetryRecorder>.Instance);
         using var cts = new CancellationTokenSource();
         await recorder.StartAsync(cts.Token);
         try
         {
             var ids = await recorder.OnboardConnectedAsync(car.Id);
-            Assert.Equal(new[] { volt.Id, flag.Id }.Order(), ids.Order());
+            Assert.Equal(new[] { volt.Id, flag.Id, text.Id }.Order(), ids.Order());
 
             // 1000 s of a 50 Hz signal with one spike and one gap, flag toggling every 10 s.
-            var start = DateTime.UtcNow.AddSeconds(-1000);
+            var start = clock.GetUtcNow().UtcDateTime;
             for (var i = 0; i < 50_000; i++)
             {
                 var at = start.AddMilliseconds(i * 20);
@@ -60,6 +64,8 @@ public class TelemetryHistoryPostgresTests
                 recorder.OnSamples(car.Id, at, [
                     new RecordedSample(volt.Id, value, state, 0, false),
                     new RecordedSample(flag.Id, (i / 500 % 2).ToString(), TelemetrySampleState.Valid, 0, i % 500 != 0),
+                    // status: changes every 100 s, a stale phase around 600 s
+                    new RecordedSample(text.Id, $"phase {i / 5_000}", i is >= 30_000 and < 30_050 ? TelemetrySampleState.Stale : TelemetrySampleState.Valid, 0, false),
                 ]);
             }
             await Task.Delay(TimeSpan.FromSeconds(3));
@@ -73,12 +79,17 @@ public class TelemetryHistoryPostgresTests
                 Assert.NotNull(session.EndedAt);
                 Assert.NotNull(session.LastSampleAt);
                 var voltRows = await db.TelemetrySamples.CountAsync(s => s.SessionId == session.Id && s.ChannelId == volt.Id);
-                // At most 10 Hz of 50 Hz. Fewer is fine here: 1000 s of samples arrive within
-                // about a second, so the wall-clock flush timer coalesces more than in a real drive.
-                Assert.InRange(voltRows, 8_000, 10_100);
+                Assert.InRange(voltRows, 9_900, 10_100); // 10 Hz of 50 Hz
                 var flagRows = await db.TelemetrySamples.CountAsync(s => s.SessionId == session.Id && s.ChannelId == flag.Id);
                 Assert.InRange(flagRows, 1_000, 1_200); // changes plus one repeat per second
-                Assert.Equal(["flag", "volt"], TelemetryRecorder.ReadChannels(session.ChannelsJson).Select(c => c.Name));
+                Assert.Equal(["flag", "text", "volt"], TelemetryRecorder.ReadChannels(session.ChannelsJson).Select(c => c.Name));
+                var textRows = await db.TelemetryTextSamples.Where(s => s.SessionId == session.Id).OrderBy(s => s.Time).Select(s => s.Value).ToListAsync();
+                // phases 0-5, the gap (it starts where phase 6 would), phases 6-9
+                Assert.Equal(11, textRows.Count);
+                Assert.Null(textRows[6]);
+                Assert.Equal("phase 6", textRows[7]);
+                Assert.Equal("phase 0", textRows[0]);
+                Assert.Contains(null, textRows);
             }
 
             var from = TelemetryHistoryReader.Ms(start);
@@ -88,6 +99,9 @@ public class TelemetryHistoryPostgresTests
                 var raw = await TelemetryHistoryReader.ReadSamplesAsync(db, session.Id, from + 600_000, from + 601_000, null, 1500);
                 Assert.Equal(0, raw.ResolutionMs);
                 Assert.Contains(null, raw.Channels[volt.Id].V); // the gap at 600 s
+                // the state at the start of the range comes first
+                Assert.Equal("phase 5", raw.Texts[text.Id].V[0]);
+                Assert.True(raw.Texts[text.Id].T[0] < from + 600_000);
 
                 var reduced = await TelemetryHistoryReader.ReadSamplesAsync(db, session.Id, from, to, null, 100);
                 Assert.Equal(10_000, reduced.ResolutionMs);
@@ -102,7 +116,7 @@ public class TelemetryHistoryPostgresTests
 
             // A reconnect within two minutes continues the session.
             await recorder.OnboardConnectedAsync(car.Id);
-            recorder.OnSamples(car.Id, DateTime.UtcNow, [new RecordedSample(volt.Id, "1", TelemetrySampleState.Valid, 0, false)]);
+            recorder.OnSamples(car.Id, clock.GetUtcNow().UtcDateTime, [new RecordedSample(volt.Id, "1", TelemetrySampleState.Valid, 0, false)]);
             await Task.Delay(TimeSpan.FromSeconds(2));
             await using (var db = Db())
             {
@@ -119,7 +133,7 @@ public class TelemetryHistoryPostgresTests
                 await db.Cars.Where(c => c.Id == car.Id).ExecuteUpdateAsync(u => u.SetProperty(c => c.TelemetryRecordingStopped, true));
             }
             Assert.Empty(await recorder.OnboardConnectedAsync(car.Id));
-            recorder.OnSamples(car.Id, DateTime.UtcNow, [new RecordedSample(volt.Id, "2", TelemetrySampleState.Valid, 0, false)]);
+            recorder.OnSamples(car.Id, clock.GetUtcNow().UtcDateTime, [new RecordedSample(volt.Id, "2", TelemetrySampleState.Valid, 0, false)]);
             await Task.Delay(TimeSpan.FromSeconds(2));
             await using (var db = Db())
             {
@@ -128,7 +142,7 @@ public class TelemetryHistoryPostgresTests
                 Assert.False(await db.TelemetrySamples.AnyAsync(s => s.SessionId == stopped.Id && s.Value == 2));
                 await db.Cars.Where(c => c.Id == car.Id).ExecuteUpdateAsync(u => u.SetProperty(c => c.TelemetryRecordingStopped, false));
             }
-            Assert.Equal(2, (await recorder.RefreshAsync(car.Id)).Count);
+            Assert.Equal(3, (await recorder.RefreshAsync(car.Id)).Count);
             recorder.OnboardDisconnected(car.Id);
             await Task.Delay(TimeSpan.FromSeconds(2));
 
@@ -154,5 +168,11 @@ public class TelemetryHistoryPostgresTests
             await using var db = Db();
             await db.Cars.Where(c => c.Id == car.Id).ExecuteDeleteAsync();
         }
+    }
+
+    /// <summary>The system clock moved by a fixed offset; timers run in real time.</summary>
+    private sealed class ShiftedClock(TimeSpan offset) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => base.GetUtcNow() + offset;
     }
 }

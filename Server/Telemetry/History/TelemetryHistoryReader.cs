@@ -7,13 +7,18 @@ namespace SignalRC.Server.Telemetry.History;
 /// <summary>Samples of one channel; null is a gap.</summary>
 public sealed record ChannelSamples(List<long> T, List<double?> V);
 
+/// <summary>Changes of one text channel; null is a gap.</summary>
+public sealed record TextSamples(List<long> T, List<string?> V);
+
 /// <param name="ResolutionMs">0 for raw samples, otherwise the bucket width.</param>
-public sealed record SamplesResult(long ResolutionMs, Dictionary<int, ChannelSamples> Channels);
+/// <param name="Texts">Changes of text channels, never reduced; the state at the start of the range comes first.</param>
+public sealed record SamplesResult(long ResolutionMs, Dictionary<int, ChannelSamples> Channels, Dictionary<int, TextSamples> Texts);
 
 /// <summary>Reads recorded samples (PostgreSQL only: raw SQL for the reduction).</summary>
 public static class TelemetryHistoryReader
 {
     public const int MaxRawRows = 200_000;
+    public const int MaxTextRows = 20_000;
 
     /// <summary>
     /// Samples of a session between <paramref name="start"/> and <paramref name="end"/>
@@ -30,6 +35,7 @@ public static class TelemetryHistoryReader
         try
         {
             var series = new Dictionary<int, ChannelSamples>();
+            var texts = await ReadTextsAsync(connection, sessionId, after.HasValue ? after.Value + 1 : start, after.HasValue ? long.MaxValue / 2 : end, !after.HasValue);
             var fromTime = Utc(after.HasValue ? after.Value + 1 : start);
             var toTime = Utc(after.HasValue ? long.MaxValue / 2 : end);
 
@@ -64,7 +70,7 @@ public static class TelemetryHistoryReader
                     var v = r.GetDouble(2);
                     Add(series, r.GetInt32(0), Ms(r.GetDateTime(1)), double.IsNaN(v) ? null : v);
                 }
-                return new SamplesResult(0, series);
+                return new SamplesResult(0, series, texts);
             }
 
             var resolution = Math.Max(1, (end - start) / buckets);
@@ -114,12 +120,44 @@ public static class TelemetryHistoryReader
                     }
                 }
             }
-            return new SamplesResult(resolution, series);
+            return new SamplesResult(resolution, series, texts);
         }
         finally
         {
             if (opened) await connection.CloseAsync();
         }
+    }
+
+    private static async Task<Dictionary<int, TextSamples>> ReadTextsAsync(NpgsqlConnection connection, int sessionId, long start, long end, bool withState)
+    {
+        var texts = new Dictionary<int, TextSamples>();
+        // The state each channel had at the start, then the changes inside the range.
+        var state = withState ? """
+            (SELECT DISTINCT ON ("ChannelId") "ChannelId", "Time", "Value" FROM "TelemetryTextSamples"
+             WHERE "SessionId" = @s AND "Time" < @f ORDER BY "ChannelId", "Time" DESC)
+            UNION ALL
+            """ : "";
+        var sql = $"""
+            SELECT * FROM (
+            {state}
+            (SELECT "ChannelId", "Time", "Value" FROM "TelemetryTextSamples"
+             WHERE "SessionId" = @s AND "Time" BETWEEN @f AND @t ORDER BY "ChannelId", "Time" LIMIT @l)
+            ) x ORDER BY 1, 2
+            """;
+        await using var c = new NpgsqlCommand(sql, connection);
+        c.Parameters.AddWithValue("s", sessionId);
+        c.Parameters.AddWithValue("f", Utc(start));
+        c.Parameters.AddWithValue("t", Utc(end));
+        c.Parameters.AddWithValue("l", MaxTextRows);
+        await using var r = await c.ExecuteReaderAsync();
+        while (await r.ReadAsync())
+        {
+            var id = r.GetInt32(0);
+            if (!texts.TryGetValue(id, out var x)) texts[id] = x = new([], []);
+            x.T.Add(Ms(r.GetDateTime(1)));
+            x.V.Add(r.IsDBNull(2) ? null : r.GetString(2));
+        }
+        return texts;
     }
 
     private static void Add(Dictionary<int, ChannelSamples> series, int id, long t, double? v)

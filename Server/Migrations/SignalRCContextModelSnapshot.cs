@@ -828,6 +828,34 @@ namespace SignalRC.Server.Migrations
                     b.ToTable("TelemetrySessions", (string)null);
                 });
 
+            modelBuilder.Entity("SignalRC.Server.Data.TelemetryTextSample", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("ChannelId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SessionId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("Time")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Value")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SessionId", "ChannelId", "Time");
+
+                    b.ToTable("TelemetryTextSamples", (string)null);
+                });
+
             modelBuilder.Entity("SignalRC.Server.Data.User", b =>
                 {
                     b.Property<int>("Id")
@@ -1312,6 +1340,17 @@ namespace SignalRC.Server.Migrations
                     b.Navigation("Car");
                 });
 
+            modelBuilder.Entity("SignalRC.Server.Data.TelemetryTextSample", b =>
+                {
+                    b.HasOne("SignalRC.Server.Data.TelemetrySession", "Session")
+                        .WithMany("TextSamples")
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Session");
+                });
+
             modelBuilder.Entity("SignalRC.Server.Data.User", b =>
                 {
                     b.HasOne("SignalRC.Server.Data.Car", "ActiveVehicle")
@@ -1503,6 +1542,8 @@ namespace SignalRC.Server.Migrations
             modelBuilder.Entity("SignalRC.Server.Data.TelemetrySession", b =>
                 {
                     b.Navigation("Samples");
+
+                    b.Navigation("TextSamples");
                 });
 
             modelBuilder.Entity("SignalRC.Server.Data.User", b =>

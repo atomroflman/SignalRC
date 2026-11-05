@@ -5,13 +5,14 @@ import LanguageSwitcher from "@/components/language-switcher";
 import ConfigGuard from "@/components/config-guard";
 import { useI18n } from "@/i18n/provider";
 import { historyApi } from "@/components/telemetry-history/api";
-import HistoryChart, { type ChartSeries } from "@/components/telemetry-history/history-chart";
+import HistoryChart, { type ChartMarker, type ChartSeries } from "@/components/telemetry-history/history-chart";
+import EventLane from "@/components/telemetry-history/event-lane";
 import PanelEditor from "@/components/telemetry-history/panel-editor";
 import SettingsPanel from "@/components/telemetry-history/settings-panel";
 import {
-  appendSamples, compile, defaultLayout, evaluateSeries, formatValue, isLayout, MIN_HOLD_MS, newId, newestTime, stats, telemetryTypes,
+  appendSamples, compile, defaultLayout, evaluateSeries, formatValue, isLayout, MIN_HOLD_MS, newId, newestTime, stateColor, stats, telemetryTypes,
 } from "@/components/telemetry-history/series";
-import type { ChannelData, DashboardLayout, HistoryChannel, PanelDef, SessionDetail, SessionSummary } from "@/components/telemetry-history/types";
+import type { ChannelData, DashboardLayout, HistoryChannel, PanelDef, SessionDetail, SessionSummary, TextData } from "@/components/telemetry-history/types";
 
 const btnGhost = "px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded text-xs border border-zinc-700 disabled:opacity-50";
 const btnPrimary = "px-2 py-1 bg-sky-700 hover:bg-sky-600 text-white rounded text-xs border border-sky-600 disabled:opacity-50";
@@ -41,6 +42,7 @@ export default function TelemetryHistoryPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [data, setData] = useState<Record<string, ChannelData>>({});
+  const [texts, setTexts] = useState<Record<string, TextData>>({});
   const [resolution, setResolution] = useState(0);
   const [loading, setLoading] = useState(false);
   const [range, setRange] = useState<Range | undefined>();
@@ -49,6 +51,8 @@ export default function TelemetryHistoryPage() {
   const livePoints = useRef(0);
   const dataRef = useRef(data);
   dataRef.current = data;
+  const textsRef = useRef(texts);
+  textsRef.current = texts;
 
   const [layout, setLayout] = useState<DashboardLayout | null>(null);
   const [draft, setDraft] = useState<DashboardLayout | null>(null);
@@ -98,9 +102,9 @@ export default function TelemetryHistoryPage() {
   }, [carIdNum, session, summary]);
 
   const idToName = useMemo(() => new Map(session?.channels.map(c => [String(c.id), c.name]) ?? []), [session]);
-  const byName = useCallback((channels: Record<string, ChannelData>) => {
-    const out: Record<string, ChannelData> = {};
-    for (const [id, d] of Object.entries(channels)) {
+  const byName = useCallback(<T,>(channels: Record<string, T> | undefined) => {
+    const out: Record<string, T> = {};
+    for (const [id, d] of Object.entries(channels ?? {})) {
       const name = idToName.get(id);
       if (name) out[name] = d;
     }
@@ -115,6 +119,7 @@ export default function TelemetryHistoryPage() {
       .then(r => {
         if (cancelled) return;
         setData(byName(r.channels));
+        setTexts(byName(r.texts));
         setResolution(r.resolutionMs);
         livePoints.current = 0;
         setError(null);
@@ -132,11 +137,13 @@ export default function TelemetryHistoryPage() {
       if (busy) return;
       busy = true;
       try {
-        const after = newestTime(dataRef.current);
+        const after = newestTime({ ...dataRef.current, ...textsRef.current });
         const r = await historyApi.samples(carIdNum, session.id, { after: after ?? session.startedAt - 1 });
         const fresh = byName(r.channels);
+        const freshTexts = byName(r.texts);
         const added = Object.values(fresh).reduce((n, d) => n + d.t.length, 0);
         if (added > 0) setData(prev => appendSamples(prev, fresh));
+        if (Object.values(freshTexts).some(d => d.t.length > 0)) setTexts(prev => appendSamples(prev, freshTexts));
         livePoints.current += added;
         if (livePoints.current > MAX_LIVE_POINTS) setReload(x => x + 1);
       } catch {
@@ -152,7 +159,7 @@ export default function TelemetryHistoryPage() {
 
   const channels = useMemo(() => {
     const merged = new Map<string, HistoryChannel>();
-    for (const c of settingsChannels) if (c.dataType !== "String" && c.dataType !== "LidarGrid") merged.set(c.name, c);
+    for (const c of settingsChannels) if (c.dataType !== "LidarGrid") merged.set(c.name, c);
     for (const c of session?.channels ?? []) merged.set(c.name, c);
     return [...merged.values()].sort((a, b) => a.name.localeCompare(b.name));
   }, [settingsChannels, session]);
@@ -160,16 +167,31 @@ export default function TelemetryHistoryPage() {
 
   const shown = draft ?? layout ?? defaultLayout(session?.channels ?? []);
   const hold = Math.max(MIN_HOLD_MS, resolution * 3);
-  const extent: Range | undefined = range ?? (session ? { from: session.startedAt, to: newestTime(data) ?? session.lastSampleAt ?? session.startedAt } : undefined);
+  const sessionExtent: Range | undefined = session
+    ? { from: session.startedAt, to: newestTime({ ...data, ...texts }) ?? session.lastSampleAt ?? session.startedAt }
+    : undefined;
+  const extent: Range | undefined = range ?? sessionExtent;
+
+  // Text channels: a band per state in the event lane and a marker per change in every chart.
+  const textChannels = useMemo(() => (session?.channels ?? [])
+    .filter(c => c.dataType === "String")
+    .map(c => ({ name: c.name, data: texts[c.name] ?? { t: [], v: [] } })), [session, texts]);
+  const markers = useMemo<ChartMarker[]>(() => textChannels
+    .flatMap(c => c.data.t.map((t, i) => {
+      const v = c.data.v[i];
+      return { t, label: textChannels.length > 1 ? `${c.name}: ${v ?? "–"}` : (v ?? "–"), color: v === null ? "#71717a" : stateColor(v) };
+    }))
+    .filter(m => !sessionExtent || m.t > sessionExtent.from)
+    .sort((a, b) => a.t - b.t), [textChannels, sessionExtent?.from]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const panels = useMemo(() => shown.panels.map(panel => ({
     panel,
     series: panel.series.map(def => {
       const compiled = compile(def.expr, telemetry);
-      const values = extent ? evaluateSeries(compiled, data, hold, extent) : { t: [], v: [] };
+      const values = extent ? evaluateSeries(compiled, data, hold, extent, texts) : { t: [], v: [] };
       return { def, compiled, values };
     }),
-  })), [shown, telemetry, data, hold, extent?.from, extent?.to]); // eslint-disable-line react-hooks/exhaustive-deps
+  })), [shown, telemetry, data, texts, hold, extent?.from, extent?.to]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const updatePanel = (p: PanelDef) => setDraft(d => d && { ...d, panels: d.panels.map(x => (x.id === p.id ? p : x)) });
 
@@ -273,7 +295,14 @@ export default function TelemetryHistoryPage() {
               </div>
             </div>
 
-            {session && Object.keys(data).length === 0 && !loading && <div className="text-xs text-zinc-500">{t.noData}</div>}
+            {session && Object.keys(data).length === 0 && Object.keys(texts).length === 0 && !loading && <div className="text-xs text-zinc-500">{t.noData}</div>}
+            {sessionExtent && textChannels.length > 0 && (
+              <section className="bg-zinc-900 border border-zinc-800 rounded-lg p-2">
+                <h2 className="text-sm text-zinc-100 mb-1">{t.events}</h2>
+                <EventLane channels={textChannels} extent={sessionExtent} range={range} syncKey={SYNC_KEY}
+                  timeLabel={t.time} onZoom={zoom} onReset={resetZoom} />
+              </section>
+            )}
             {shown.panels.length === 0 && <div className="text-xs text-zinc-500">{t.emptyLayout}</div>}
 
             {panels.map(({ panel, series }) => {
@@ -306,7 +335,7 @@ export default function TelemetryHistoryPage() {
                     })}
                   </div>
                   {chartSeries.some(c => c.data.t.length > 0) ? (
-                    <HistoryChart series={chartSeries} height={panel.height ?? 220} range={range}
+                    <HistoryChart series={chartSeries} markers={markers} height={panel.height ?? 220} range={range}
                       syncKey={SYNC_KEY} timeLabel={t.time} onZoom={zoom} onReset={resetZoom} />
                   ) : (
                     !loading && <div className="text-xs text-zinc-500 py-4">{t.noData}</div>

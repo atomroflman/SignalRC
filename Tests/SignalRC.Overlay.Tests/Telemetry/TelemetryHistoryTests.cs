@@ -121,6 +121,63 @@ public class TelemetryThrottleTests
     }
 }
 
+public class TextThrottleTests
+{
+    private static List<(long, string?)> Offer(TextThrottle t, long time, string? value)
+    {
+        var rows = new List<(long Time, string? Value)>();
+        t.Offer(1, time, value, rows);
+        return rows.Select(r => (r.Time, r.Value)).ToList();
+    }
+
+    [Fact]
+    public void StoresOnlyChanges()
+    {
+        var t = new TextThrottle();
+        Assert.Equal([(0L, (string?)"idle")], Offer(t, 0, "idle"));
+        Assert.Empty(Offer(t, 500, "idle"));
+        Assert.Equal([(1000L, (string?)"drive")], Offer(t, 1000, "drive"));
+        Assert.Equal([(2000L, (string?)null)], Offer(t, 2000, null));
+        Assert.Empty(Offer(t, 2500, null));
+        Assert.Empty(t.Flush(5000));
+    }
+
+    [Fact]
+    public void FlappingKeepsTheNewestStateAtTenPerSecond()
+    {
+        var t = new TextThrottle();
+        Offer(t, 0, "a");
+        Assert.Empty(Offer(t, 20, "b"));
+        Assert.Empty(Offer(t, 40, "c"));
+        Assert.Empty(t.Flush(90));
+        Assert.Equal([(1, 40L, (string?)"c")], t.Flush(100));
+        // back and forth within an interval: no change at all
+        Assert.Empty(Offer(t, 150, "d"));
+        Assert.Empty(Offer(t, 160, "c"));
+        Assert.Empty(t.Flush(1000));
+        // a pending change is written first when the next one arrives after the interval
+        Assert.Equal([(1100L, (string?)"e")], Offer(t, 1100, "e"));
+        Assert.Empty(Offer(t, 1150, "f"));
+        Assert.Equal([(1150L, (string?)"f")], Offer(t, 1250, "f"));
+    }
+
+    [Theory]
+    [InlineData("RUN", TelemetrySampleState.Valid, "RUN")]
+    [InlineData("RUN", TelemetrySampleState.Stale, null)]
+    public void ParsesText(string text, TelemetrySampleState state, string? expected)
+    {
+        Assert.Equal(expected, TelemetryRecorder.ParseText(text, state));
+        Assert.Equal(200, TelemetryRecorder.ParseText(new string('x', 500), TelemetrySampleState.Valid)!.Length);
+    }
+
+    [Fact]
+    public void EverythingButLidarIsRecordable()
+    {
+        Assert.True(TelemetryRecorder.IsRecordable(TelemetryDataType.String));
+        Assert.False(TelemetryRecorder.IsRecordable(TelemetryDataType.LidarGrid));
+    }
+}
+
 public class TelemetryRelaySinkTests
 {
     private const int Car = 3;

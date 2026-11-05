@@ -38,6 +38,27 @@ public class TelemetryHistorySampleMapping : IEntityTypeConfiguration<TelemetryH
     }
 }
 
+public class TelemetryTextSampleMapping : IEntityTypeConfiguration<TelemetryTextSample>
+{
+    public void Configure(EntityTypeBuilder<TelemetryTextSample> builder)
+    {
+        builder.ToTable("TelemetryTextSamples");
+        builder.HasKey(x => x.Id);
+        builder.Property(x => x.Id).UseIdentityAlwaysColumn();
+        builder.Property(x => x.Value).HasMaxLength(TelemetryTextSampleMapping.MaxLength);
+
+        builder.HasOne(x => x.Session)
+            .WithMany(s => s.TextSamples)
+            .HasForeignKey(x => x.SessionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasIndex(x => new { x.SessionId, x.ChannelId, x.Time });
+    }
+
+    /// <summary>Longer texts are cut; a status is short.</summary>
+    public const int MaxLength = 200;
+}
+
 public class CarTelemetryDashboardMapping : IEntityTypeConfiguration<CarTelemetryDashboard>
 {
     public void Configure(EntityTypeBuilder<CarTelemetryDashboard> builder)

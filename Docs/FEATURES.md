@@ -229,8 +229,8 @@ server and shows them as charts per drive.
 
 ### Recording
 
-- Under **Recording** you tick the channels to record (numbers and booleans
-  only) and set how many days to keep them (default 7, per vehicle).
+- Under **Recording** you tick the channels to record (every type except
+  LiDAR grids) and set how many days to keep them (default 7, per vehicle).
 - The server asks the onboard for recorded channels even when nobody watches,
   so they cost LTE traffic for as long as the vehicle is connected.
 - A **drive** runs from the onboard connecting until it disconnects. A
@@ -239,6 +239,9 @@ server and shows them as charts per drive.
   within that time, the one furthest from the last stored value is kept, so
   short peaks survive, and the newest value follows. An unchanged value is
   repeated once per second. Stale, missing or failed values are stored as gaps.
+- Text channels (e.g. a status) store only their changes, at most 10 per second;
+  when a state flaps, the newest one is kept. Texts longer than 200 characters
+  are cut.
 - Older drives and samples are deleted every hour
   (`TelemetryRecorder.ApplyRetentionAsync`).
 - The section **Telemetry recording** on the main page shows whether recording
@@ -252,7 +255,12 @@ server and shows them as charts per drive.
 - Charts with lines defined as formulas in the HUD expression language
   (`Shared/Overlay/expression/README.md`), e.g. power as
   `tel("bms_voltage") * tel("bms_current")`. Only `tel()` is available; outputs,
-  signals and `driverActive()` are not recorded.
+  signals and `driverActive()` are not recorded. Text channels work too, e.g.
+  `tel("status") == "FAULT"` as an on/off line; a text state holds until its
+  next change.
+- Text channels appear as a **status lane** above the charts (a colored band
+  per state, the states under the cursor below it) and as a dashed marker with
+  the new state in every chart.
 - The layout is stored per vehicle on the server. Without one, every unit gets
   a chart.
 - Drag to zoom (the range is fetched again at a finer resolution). Double-click

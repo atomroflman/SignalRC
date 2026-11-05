@@ -34,6 +34,7 @@ public sealed class TelemetryRecorder(IServiceScopeFactory scopes, TimeProvider 
     private sealed record ChannelsOp(int CarId, List<TelemetrySessionChannel> Channels) : Op(CarId);
     private sealed record CloseOp(int CarId, DateTime At) : Op(CarId);
     private sealed record SampleOp(int CarId, int ChannelId, long Time, double Value) : Op(CarId);
+    private sealed record TextOp(int CarId, int ChannelId, long Time, string? Value) : Op(CarId);
 
     private sealed class CarState
     {
@@ -42,6 +43,7 @@ public sealed class TelemetryRecorder(IServiceScopeFactory scopes, TimeProvider 
         public bool Recording;
         public Dictionary<int, TelemetryDataType> Types = [];
         public TelemetryThrottle Throttle = new();
+        public TextThrottle Texts = new();
     }
 
     private readonly Dictionary<int, CarState> _cars = [];
@@ -101,9 +103,17 @@ public sealed class TelemetryRecorder(IServiceScopeFactory scopes, TimeProvider 
         {
             if (!car.Recording) return;
             var rows = new List<(long Time, double Value)>(2);
+            var texts = new List<(long Time, string? Value)>(2);
             foreach (var s in samples)
             {
                 if (!car.Types.TryGetValue(s.Id, out var type)) continue;
+                if (type == TelemetryDataType.String)
+                {
+                    texts.Clear();
+                    car.Texts.Offer(s.Id, received - s.AgeMs, ParseText(s.Value, s.State), texts);
+                    foreach (var (t, v) in texts) Enqueue(new TextOp(carId, s.Id, t, v));
+                    continue;
+                }
                 rows.Clear();
                 car.Throttle.Offer(s.Id, received - s.AgeMs, Parse(s.Value, s.State, type), s.Touched, rows);
                 foreach (var (t, v) in rows) Enqueue(new SampleOp(carId, s.Id, t, v));
@@ -146,6 +156,7 @@ public sealed class TelemetryRecorder(IServiceScopeFactory scopes, TimeProvider 
             return;
         }
         car.Throttle = new TelemetryThrottle();
+        car.Texts = new TextThrottle();
         car.Recording = true;
         Enqueue(new OpenOp(carId, UtcNow, channels));
     }
@@ -153,6 +164,7 @@ public sealed class TelemetryRecorder(IServiceScopeFactory scopes, TimeProvider 
     private void FlushPending(int carId, CarState car, long now)
     {
         foreach (var (id, t, v) in car.Throttle.Flush(now)) Enqueue(new SampleOp(carId, id, t, v));
+        foreach (var (id, t, v) in car.Texts.Flush(now)) Enqueue(new TextOp(carId, id, t, v));
     }
 
     private void Enqueue(Op op)
@@ -177,8 +189,18 @@ public sealed class TelemetryRecorder(IServiceScopeFactory scopes, TimeProvider 
         return double.TryParse(t, NumberStyles.Float, CultureInfo.InvariantCulture, out var v) && double.IsFinite(v) ? v : double.NaN;
     }
 
+    /// <summary>Everything but LiDAR grids (a large image per sample).</summary>
     public static bool IsRecordable(TelemetryDataType type) =>
-        type is TelemetryDataType.Integer or TelemetryDataType.Number or TelemetryDataType.Boolean;
+        type is TelemetryDataType.Integer or TelemetryDataType.Number or TelemetryDataType.Boolean or TelemetryDataType.String;
+
+    /// <summary>The text of a valid sample, cut to the stored length; null for a gap.</summary>
+    public static string? ParseText(string text, TelemetrySampleState state)
+    {
+        if (state is not (TelemetrySampleState.Valid or TelemetrySampleState.Unchecked)) return null;
+        return text.Length > Data.EntityMapping.TelemetryTextSampleMapping.MaxLength
+            ? text[..Data.EntityMapping.TelemetryTextSampleMapping.MaxLength]
+            : text;
+    }
 
     private async Task<List<TelemetrySessionChannel>> LoadRecordedChannelsAsync(int carId)
     {
@@ -265,6 +287,7 @@ public sealed class TelemetryRecorder(IServiceScopeFactory scopes, TimeProvider 
         using var scope = scopes.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SignalRCContext>();
         var rows = new List<(int SessionId, SampleOp Sample)>();
+        var texts = new List<(int SessionId, TextOp Text)>();
         foreach (var op in batch)
         {
             switch (op)
@@ -272,20 +295,23 @@ public sealed class TelemetryRecorder(IServiceScopeFactory scopes, TimeProvider 
                 case SampleOp s:
                     if (_openSessions.TryGetValue(s.CarId, out var sessionId)) rows.Add((sessionId, s));
                     break;
+                case TextOp x:
+                    if (_openSessions.TryGetValue(x.CarId, out var textSession)) texts.Add((textSession, x));
+                    break;
                 case OpenOp o:
-                    await InsertAsync(db, rows);
+                    await InsertAsync(db, rows, texts);
                     _openSessions[o.CarId] = await OpenSessionAsync(db, o);
                     break;
                 case ChannelsOp c:
                     if (_openSessions.TryGetValue(c.CarId, out var open)) await MergeChannelsAsync(db, open, c.Channels);
                     break;
                 case CloseOp c:
-                    await InsertAsync(db, rows);
+                    await InsertAsync(db, rows, texts);
                     if (_openSessions.Remove(c.CarId, out var closing)) await CloseSessionAsync(db, closing, c.At);
                     break;
             }
         }
-        await InsertAsync(db, rows);
+        await InsertAsync(db, rows, texts);
     }
 
     private async Task<int> OpenSessionAsync(SignalRCContext db, OpenOp op)
@@ -350,14 +376,15 @@ public sealed class TelemetryRecorder(IServiceScopeFactory scopes, TimeProvider 
         }
     }
 
-    private static async Task InsertAsync(SignalRCContext db, List<(int SessionId, SampleOp Sample)> rows)
+    private static async Task InsertAsync(SignalRCContext db, List<(int SessionId, SampleOp Sample)> rows, List<(int SessionId, TextOp Text)> texts)
     {
-        if (rows.Count == 0) return;
+        if (rows.Count == 0 && texts.Count == 0) return;
         var connection = (NpgsqlConnection)db.Database.GetDbConnection();
         if (connection.State != System.Data.ConnectionState.Open) await connection.OpenAsync();
-        await using (var writer = await connection.BeginBinaryImportAsync(
-            "COPY \"TelemetrySamples\" (\"SessionId\", \"ChannelId\", \"Time\", \"Value\") FROM STDIN (FORMAT BINARY)"))
+        if (rows.Count > 0)
         {
+            await using var writer = await connection.BeginBinaryImportAsync(
+                "COPY \"TelemetrySamples\" (\"SessionId\", \"ChannelId\", \"Time\", \"Value\") FROM STDIN (FORMAT BINARY)");
             foreach (var (sessionId, s) in rows)
             {
                 await writer.StartRowAsync();
@@ -368,14 +395,31 @@ public sealed class TelemetryRecorder(IServiceScopeFactory scopes, TimeProvider 
             }
             await writer.CompleteAsync();
         }
-        foreach (var group in rows.GroupBy(r => r.SessionId))
+        if (texts.Count > 0)
         {
-            var newest = DateTimeOffset.FromUnixTimeMilliseconds(group.Max(r => r.Sample.Time)).UtcDateTime;
+            await using var writer = await connection.BeginBinaryImportAsync(
+                "COPY \"TelemetryTextSamples\" (\"SessionId\", \"ChannelId\", \"Time\", \"Value\") FROM STDIN (FORMAT BINARY)");
+            foreach (var (sessionId, x) in texts)
+            {
+                await writer.StartRowAsync();
+                await writer.WriteAsync(sessionId, NpgsqlDbType.Integer);
+                await writer.WriteAsync(x.ChannelId, NpgsqlDbType.Integer);
+                await writer.WriteAsync(DateTimeOffset.FromUnixTimeMilliseconds(x.Time).UtcDateTime, NpgsqlDbType.TimestampTz);
+                if (x.Value == null) await writer.WriteNullAsync();
+                else await writer.WriteAsync(x.Value, NpgsqlDbType.Text);
+            }
+            await writer.CompleteAsync();
+        }
+        var newest = rows.Select(r => (r.SessionId, r.Sample.Time)).Concat(texts.Select(x => (x.SessionId, x.Text.Time)));
+        foreach (var group in newest.GroupBy(r => r.SessionId))
+        {
+            var last = DateTimeOffset.FromUnixTimeMilliseconds(group.Max(r => r.Time)).UtcDateTime;
             await db.TelemetrySessions
-                .Where(s => s.Id == group.Key && (s.LastSampleAt == null || s.LastSampleAt < newest))
-                .ExecuteUpdateAsync(u => u.SetProperty(s => s.LastSampleAt, newest));
+                .Where(s => s.Id == group.Key && (s.LastSampleAt == null || s.LastSampleAt < last))
+                .ExecuteUpdateAsync(u => u.SetProperty(s => s.LastSampleAt, last));
         }
         rows.Clear();
+        texts.Clear();
     }
 
     /// <summary>After a server restart no onboard is connected: sessions still open end at their last sample.</summary>
@@ -419,6 +463,9 @@ public sealed class TelemetryRecorder(IServiceScopeFactory scopes, TimeProvider 
         {
             var cutoff = UtcNow.AddDays(-Math.Max(1, car.TelemetryRetentionDays));
             var samples = await db.TelemetrySamples
+                .Where(s => s.Session.CarId == car.Id && s.Time < cutoff)
+                .ExecuteDeleteAsync(ct);
+            samples += await db.TelemetryTextSamples
                 .Where(s => s.Session.CarId == car.Id && s.Time < cutoff)
                 .ExecuteDeleteAsync(ct);
             var sessions = await db.TelemetrySessions

@@ -13,8 +13,16 @@ export interface ChartSeries {
   data: ChannelData;
 }
 
+/** A text state change, drawn as a vertical line through the plot. */
+export interface ChartMarker {
+  t: number;
+  label: string;
+  color: string;
+}
+
 interface Props {
   series: ChartSeries[];
+  markers?: ChartMarker[];
   height: number;
   /** Shown x range in Unix ms; undefined fits the data. */
   range?: { from: number; to: number };
@@ -58,18 +66,59 @@ function cursorTime(ms: number | null): string {
   return `${d.toLocaleTimeString([], { hour12: false })}.${String(d.getMilliseconds()).padStart(3, "0")}`;
 }
 
+/** Dashed lines at state changes; a label where there is room for it. */
+export function drawMarkers(u: uPlot, markers: ChartMarker[]) {
+  if (markers.length === 0) return;
+  const { ctx, bbox } = u;
+  const min = u.scales.x.min ?? -Infinity;
+  const max = u.scales.x.max ?? Infinity;
+  const dpr = devicePixelRatio || 1;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(bbox.left, bbox.top, bbox.width, bbox.height);
+  ctx.clip();
+  ctx.font = `${10 * dpr}px sans-serif`;
+  ctx.textBaseline = "top";
+  ctx.textAlign = "left"; // uPlot leaves "center" from its axis labels
+  let lastLabelEnd = -Infinity;
+  for (const m of markers) {
+    if (m.t < min || m.t > max) continue;
+    const x = Math.round(u.valToPos(m.t, "x", true)) + 0.5;
+    ctx.strokeStyle = m.color;
+    ctx.globalAlpha = 0.8;
+    ctx.lineWidth = dpr;
+    ctx.setLineDash([4 * dpr, 3 * dpr]);
+    ctx.beginPath();
+    ctx.moveTo(x, bbox.top);
+    ctx.lineTo(x, bbox.top + bbox.height);
+    ctx.stroke();
+    const width = ctx.measureText(m.label).width + 6 * dpr;
+    if (x + 2 * dpr > lastLabelEnd) {
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 0.85;
+      ctx.fillStyle = "#18181b";
+      ctx.fillRect(x + 2 * dpr, bbox.top + 2 * dpr, width, 13 * dpr);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = m.color;
+      ctx.fillText(m.label, x + 5 * dpr, bbox.top + 3.5 * dpr);
+      lastLabelEnd = x + 2 * dpr + width + 4 * dpr;
+    }
+  }
+  ctx.restore();
+}
+
 const AXIS = { stroke: "#a1a1aa", grid: { stroke: "#27272a", width: 1 }, ticks: { stroke: "#3f3f46", width: 1 } };
 
 /** One uPlot time chart. Charts with the same syncKey share the cursor. */
-export default function HistoryChart({ series, height, range, syncKey, timeLabel, onZoom, onReset }: Props) {
+export default function HistoryChart({ series, markers = [], height, range, syncKey, timeLabel, onZoom, onReset }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const plot = useRef<uPlot | null>(null);
   const callbacks = useRef({ onZoom, onReset });
   callbacks.current = { onZoom, onReset };
 
   const data = useMemo(() => align(series), [series]);
-  const latest = useRef({ data, range });
-  latest.current = { data, range };
+  const latest = useRef({ data, range, markers });
+  latest.current = { data, range, markers };
   // The chart is rebuilt only when its lines change, not for new data.
   const shape = JSON.stringify([timeLabel, series.map(s => [s.label, s.color, s.unit, s.decimals, s.stepped])]);
   // Only on/off lines: a fixed 0..1 axis instead of an auto range around a constant.
@@ -108,6 +157,7 @@ export default function HistoryChart({ series, height, range, syncKey, timeLabel
           })),
         ],
         hooks: {
+          draw: [u => drawMarkers(u, latest.current.markers)],
           setSelect: [
             u => {
               if (u.select.width < 5) return;
@@ -143,6 +193,10 @@ export default function HistoryChart({ series, height, range, syncKey, timeLabel
     u.setData(data as uPlot.AlignedData, !range);
     if (range) u.setScale("x", { min: range.from, max: range.to });
   }, [data, range]);
+
+  useEffect(() => {
+    plot.current?.redraw(false);
+  }, [markers]);
 
   return <div ref={host} className="w-full history-chart" />;
 }

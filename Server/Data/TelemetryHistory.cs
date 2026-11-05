@@ -22,6 +22,7 @@ public class TelemetrySession : EntityBase
     public string ChannelsJson { get; set; } = "[]";
 
     public ICollection<TelemetryHistorySample> Samples { get; set; } = new List<TelemetryHistorySample>();
+    public ICollection<TelemetryTextSample> TextSamples { get; set; } = new List<TelemetryTextSample>();
 }
 
 /// <summary>A recorded value; NaN marks a gap (no data, stale or error at the source).</summary>
@@ -35,6 +36,17 @@ public class TelemetryHistorySample
     /// <summary>Measurement time (server receive time minus the sample age), UTC.</summary>
     public DateTime Time { get; set; }
     public double Value { get; set; }
+}
+
+/// <summary>A change of a text channel (status); null marks a gap. Only changes are stored.</summary>
+public class TelemetryTextSample
+{
+    public long Id { get; set; }
+    public int SessionId { get; set; }
+    public TelemetrySession Session { get; set; } = null!;
+    public int ChannelId { get; set; }
+    public DateTime Time { get; set; }
+    public string? Value { get; set; }
 }
 
 /// <summary>Charts and formulas of the telemetry dashboard of a vehicle, as the client stores them.</summary>

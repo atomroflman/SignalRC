@@ -58,3 +58,24 @@ describe("telemetry history series", () => {
     expect(l.panels.map(p => p.series.map(s => s.expr))).toEqual([['tel("volt")', 'tel("cell")'], ['tel("amp")']]);
   });
 });
+
+describe("text channels", () => {
+  it("holds a text state until its next change and compares it in formulas", async () => {
+    const { compile: c, evaluateSeries: ev, textAt, stateColor } = await import("./series");
+    const f = c('tel("mode") == "drive"', { mode: "String" });
+    expect(f.error).toBeUndefined();
+    const r = ev(f, {}, 3000, { from: 0, to: 100_000 }, { mode: { t: [0, 50_000, 60_000], v: ["idle", "drive", null] } });
+    expect(r.t).toEqual([0, 50_000, 60_000]);
+    expect(r.v).toEqual([0, 1, null]);
+    const d = { t: [10, 20], v: ["a", "b"] };
+    expect(textAt(d, 5)).toBeUndefined();
+    expect(textAt(d, 15)).toBe("a");
+    expect(textAt(d, 99)).toBe("b");
+    expect(stateColor("drive")).toBe(stateColor("drive"));
+  });
+
+  it("leaves text channels out of the default layout", async () => {
+    const { defaultLayout: dl } = await import("./series");
+    expect(dl([{ id: 1, name: "mode", dataType: "String" }, { id: 2, name: "v", dataType: "Number", unit: "V" }]).panels).toHaveLength(1);
+  });
+});

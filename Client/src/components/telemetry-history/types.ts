@@ -50,12 +50,20 @@ export interface ChannelData {
   v: (number | null)[];
 }
 
+/** Changes of a text channel (status); null is a gap. Each state holds until the next change. */
+export interface TextData {
+  t: number[];
+  v: (string | null)[];
+}
+
 export interface SamplesResponse {
   from: number;
   to: number;
   /** 0: raw samples; otherwise the bucket width of the min/max reduction. */
   resolutionMs: number;
   channels: Record<string, ChannelData>;
+  /** Text channels; without `after` the state at the start of the range comes first. */
+  texts: Record<string, TextData>;
 }
 
 /** One line of a chart: a formula of the overlay expression language over tel("…"). */

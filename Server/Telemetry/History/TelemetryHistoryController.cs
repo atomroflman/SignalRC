@@ -214,6 +214,7 @@ public class TelemetryHistoryController(
             to = end,
             resolutionMs = result.ResolutionMs,
             channels = result.Channels.ToDictionary(kv => kv.Key.ToString(), kv => new { t = kv.Value.T, v = kv.Value.V }),
+            texts = result.Texts.ToDictionary(kv => kv.Key.ToString(), kv => new { t = kv.Value.T, v = kv.Value.V }),
         });
     }
 
