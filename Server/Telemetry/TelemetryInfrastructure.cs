@@ -55,6 +55,9 @@ public static class TelemetryRegistration
         services.AddSingleton<ITelemetryTransport>(sp => sp.GetRequiredService<HubTelemetryTransport>());
         services.AddSingleton<IControlDisplayTransport>(sp => sp.GetRequiredService<HubTelemetryTransport>());
         services.AddSingleton<ITelemetryChannelDirectory, DbTelemetryChannelDirectory>();
+        services.AddSingleton<History.TelemetryRecorder>();
+        services.AddSingleton<ITelemetrySink>(sp => sp.GetRequiredService<History.TelemetryRecorder>());
+        services.AddHostedService(sp => sp.GetRequiredService<History.TelemetryRecorder>());
         services.AddSingleton<TelemetryRelay>();
         services.AddSingleton<ControlDisplayRelay>();
         services.AddSingleton<SignalRC.Server.Overlay.HudInputRateLimit>();

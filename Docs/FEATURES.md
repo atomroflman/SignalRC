@@ -222,6 +222,45 @@ The web client's `/car/[carId]/test` page provides this today, independent of an
 
 ---
 
+## Telemetry History
+
+The page `/car/[carId]/telemetry` stores selected telemetry channels on the
+server and shows them as charts per drive.
+
+### Recording
+
+- Under **Recording** you tick the channels to record (numbers and booleans
+  only) and set how many days to keep them (default 7, per vehicle).
+- The server asks the onboard for recorded channels even when nobody watches,
+  so they cost LTE traffic for as long as the vehicle is connected.
+- A **drive** runs from the onboard connecting until it disconnects. A
+  reconnect within two minutes continues the same drive.
+- At most one row per 100 ms and channel is stored. If several samples arrive
+  within that time, the one furthest from the last stored value is kept, so
+  short peaks survive, and the newest value follows. An unchanged value is
+  repeated once per second. Stale, missing or failed values are stored as gaps.
+- Older drives and samples are deleted every hour
+  (`TelemetryRecorder.ApplyRetentionAsync`).
+
+### Dashboard
+
+- Charts with lines defined as formulas in the HUD expression language
+  (`Shared/Overlay/expression/README.md`), e.g. power as
+  `tel("bms_voltage") * tel("bms_current")`. Only `tel()` is available; outputs,
+  signals and `driverActive()` are not recorded.
+- The layout is stored per vehicle on the server. Without one, every unit gets
+  a chart.
+- Drag to zoom (the range is fetched again at a finer resolution). Double-click
+  shows the whole drive again. Long ranges are reduced on the server to the
+  minimum and maximum per time bucket.
+- A running drive follows live (polled every second).
+
+Code: `Server/Telemetry/History/` (recorder, reader, API under
+`api/cars/{carId}/telemetry-history`) and `Client/src/components/telemetry-history/`.
+The PostgreSQL tests run with `SIGNALRC_TEST_POSTGRES` set.
+
+---
+
 ## Web-Based Vehicle Configuration
 
 There's no dedicated "Web Setup Interface" gated by a `webSetup` flag — that flag can be set in `appSettings.json` but is currently inert (nothing reads it). What *is* available, always, with no flag needed, is the web client itself at `/car/[carId]`:

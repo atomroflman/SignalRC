@@ -19,6 +19,23 @@ public interface ITelemetryChannelDirectory
     Task<IReadOnlyDictionary<int, string>> LoadAsync(int carId);
 }
 
+/// <summary>One sample the relay hands to the history recorder.</summary>
+/// <param name="Touched">The value was only confirmed, not changed.</param>
+public readonly record struct RecordedSample(int Id, string Value, TelemetrySampleState State, int AgeMs, bool Touched);
+
+/// <summary>
+/// Receives the samples of recorded channels (TelemetryRecorder). Recorded
+/// channels are part of the demand even when no browser watches.
+/// </summary>
+public interface ITelemetrySink
+{
+    /// <summary>The onboard of a vehicle connected; returns the channel ids to record.</summary>
+    Task<IReadOnlyCollection<int>> OnboardConnectedAsync(int carId);
+    void OnboardDisconnected(int carId);
+    /// <summary>Called outside the relay lock, in the order the deltas arrived.</summary>
+    void OnSamples(int carId, DateTime receivedUtc, IReadOnlyList<RecordedSample> samples);
+}
+
 /// <summary>
 /// Server side of the telemetry contract v1.1 (Shared/Overlay/telemetry/README.md §5):
 /// caches the last sample per channel, forwards only what each client asked for,
@@ -30,7 +47,8 @@ public sealed class TelemetryRelay(
     ITelemetryChannelDirectory directory,
     TimeProvider time,
     ILogger<TelemetryRelay> logger,
-    ILoggerFactory? loggers = null)
+    ILoggerFactory? loggers = null,
+    ITelemetrySink? sink = null)
 {
     private readonly TelemetryRelayLog _log = new(loggers?.CreateLogger(TelemetryRelayLog.Category) ?? NullLogger.Instance, time);
 
@@ -64,6 +82,7 @@ public sealed class TelemetryRelay(
         public Dictionary<string, int> Ids = [];
         public readonly Dictionary<string, HashSet<int>> Interests = [];
         public readonly HashSet<string> LegacyClients = [];
+        public HashSet<int> Recorded = [];
         public int[] SentDemand = [];
         public long DemandSentAt = long.MinValue;
         public bool DemandScheduled;
@@ -139,7 +158,27 @@ public sealed class TelemetryRelay(
             car.AcceptedDeltas = car.DroppedOldSeq = 0;
             car.Counters.Clear();
         }
+        if (sink != null)
+        {
+            try
+            {
+                var recorded = await sink.OnboardConnectedAsync(carId);
+                lock (car.Lock) car.Recorded = [.. recorded];
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Telemetry history could not start for car {CarId}", carId);
+            }
+        }
         await UpdateDemandAsync(carId, car, force: true);
+    }
+
+    /// <summary>Replaces the recorded channels of a vehicle (history settings changed).</summary>
+    public async Task SetRecordedAsync(int carId, IEnumerable<int> channelIds)
+    {
+        var car = Get(carId);
+        lock (car.Lock) car.Recorded = [.. channelIds];
+        await UpdateDemandAsync(carId, car);
     }
 
     public void OnboardDisconnected(int carId, string connectionId)
@@ -152,6 +191,7 @@ public sealed class TelemetryRelay(
             car.Cache.Clear();
             car.Epoch = null;
         }
+        sink?.OnboardDisconnected(carId);
     }
 
     /// <summary>A delta from the onboard registered for <paramref name="carId"/>.</summary>
@@ -160,6 +200,7 @@ public sealed class TelemetryRelay(
         var car = Get(carId);
         var now = Now;
         var changed = new List<(int Id, Entry Entry)>();
+        List<RecordedSample>? recorded = null;
         bool unknownId;
         lock (car.Lock)
         {
@@ -191,6 +232,7 @@ public sealed class TelemetryRelay(
             foreach (var id in delta.Touched) Touch(car, id, delta.AgeMs, now);
             for (var i = 0; i + 1 < delta.TouchedAged.Length; i += 2) Touch(car, delta.TouchedAged[i], delta.TouchedAged[i + 1], now);
             unknownId = changed.Any(c => !car.Names.ContainsKey(c.Id));
+            if (sink != null && car.Recorded.Count > 0) recorded = Recorded(car, changed, delta.Touched, delta.TouchedAged);
             if (car.Traffic.Measuring(now))
             {
                 var (bytes, real) = car.Measure(delta);
@@ -202,9 +244,37 @@ public sealed class TelemetryRelay(
             }
             _log.Delta(carId, delta, car.Names, car);
         }
+        if (recorded is { Count: > 0 }) Record(carId, recorded);
         if (unknownId) await RefreshNamesAsync(carId, car);
         await ForwardAsync(carId, car, delta.AgeMs, changed, delta.Touched, delta.TouchedAged);
         await ForwardLegacyAsync(carId, car, changed);
+    }
+
+    /// <summary>Changed and confirmed samples of recorded channels. Under car.Lock.</summary>
+    private static List<RecordedSample> Recorded(Car car, List<(int Id, Entry Entry)> changed, int[] touched, int[] touchedAged)
+    {
+        var result = new List<RecordedSample>();
+        foreach (var (id, e) in changed)
+        {
+            if (car.Recorded.Contains(id)) result.Add(new(id, e.Value, e.State, e.AgeMs, false));
+        }
+        foreach (var id in Car.ContainedIds([], touched, touchedAged))
+        {
+            if (car.Recorded.Contains(id) && car.Cache.TryGetValue(id, out var e)) result.Add(new(id, e.Value, e.State, e.AgeMs, true));
+        }
+        return result;
+    }
+
+    private void Record(int carId, IReadOnlyList<RecordedSample> samples)
+    {
+        try
+        {
+            sink!.OnSamples(carId, time.GetUtcNow().UtcDateTime, samples);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Telemetry history dropped samples of car {CarId}", carId);
+        }
     }
 
     private static void Touch(Car car, int id, int ageMs, long now)
@@ -262,6 +332,12 @@ public sealed class TelemetryRelay(
                 changed.Add((id, entry));
                 Count(car, id).Changes++;
             }
+        }
+        if (sink != null)
+        {
+            List<RecordedSample> recorded;
+            lock (car.Lock) recorded = car.Recorded.Count > 0 ? Recorded(car, changed, touched, []) : [];
+            if (recorded.Count > 0) Record(carId, recorded);
         }
         await ForwardAsync(carId, car, 0, changed, touched, []);
         await ForwardLegacyAsync(carId, car, changed);
@@ -459,7 +535,7 @@ public sealed class TelemetryRelay(
             if (onboard == null) return;
             demand = car.LegacyClients.Count > 0
                 ? car.Names.Keys.Order().ToArray()
-                : car.Interests.Values.SelectMany(i => i).Distinct().Order().ToArray();
+                : car.Interests.Values.SelectMany(i => i).Concat(car.Recorded).Distinct().Order().ToArray();
             if (!force && demand.SequenceEqual(car.SentDemand)) return;
             var elapsed = Now - car.DemandSentAt;
             wait = force ? TimeSpan.Zero : TimeSpan.FromMilliseconds(Math.Max(0, DemandInterval.TotalMilliseconds - elapsed));

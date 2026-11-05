@@ -17,7 +17,7 @@ namespace SignalRC.Server.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.0")
+                .HasAnnotation("ProductVersion", "10.0.14")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -75,6 +75,9 @@ namespace SignalRC.Server.Migrations
                     b.Property<string>("Name")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
+
+                    b.Property<int>("TelemetryRetentionDays")
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 
@@ -261,6 +264,9 @@ namespace SignalRC.Server.Migrations
                     b.Property<int>("ReadIntervalTicks")
                         .HasColumnType("integer");
 
+                    b.Property<bool>("Record")
+                        .HasColumnType("boolean");
+
                     b.Property<int?>("ServerId")
                         .HasColumnType("integer");
 
@@ -279,6 +285,32 @@ namespace SignalRC.Server.Migrations
                         .IsUnique();
 
                     b.ToTable("CarTelemetry", (string)null);
+                });
+
+            modelBuilder.Entity("SignalRC.Server.Data.CarTelemetryDashboard", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CarId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("LayoutJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("ModifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CarId")
+                        .IsUnique();
+
+                    b.ToTable("CarTelemetryDashboards", (string)null);
                 });
 
             modelBuilder.Entity("SignalRC.Server.Data.CarVideoStream", b =>
@@ -735,6 +767,64 @@ namespace SignalRC.Server.Migrations
                     b.ToTable("SetupFilterTypes");
                 });
 
+            modelBuilder.Entity("SignalRC.Server.Data.TelemetryHistorySample", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("ChannelId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SessionId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("Time")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<double>("Value")
+                        .HasColumnType("double precision");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SessionId", "ChannelId", "Time");
+
+                    b.ToTable("TelemetrySamples", (string)null);
+                });
+
+            modelBuilder.Entity("SignalRC.Server.Data.TelemetrySession", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CarId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ChannelsJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("EndedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("LastSampleAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CarId", "StartedAt");
+
+                    b.ToTable("TelemetrySessions", (string)null);
+                });
+
             modelBuilder.Entity("SignalRC.Server.Data.User", b =>
                 {
                     b.Property<int>("Id")
@@ -1104,6 +1194,17 @@ namespace SignalRC.Server.Migrations
                     b.Navigation("Car");
                 });
 
+            modelBuilder.Entity("SignalRC.Server.Data.CarTelemetryDashboard", b =>
+                {
+                    b.HasOne("SignalRC.Server.Data.Car", "Car")
+                        .WithMany()
+                        .HasForeignKey("CarId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Car");
+                });
+
             modelBuilder.Entity("SignalRC.Server.Data.CarVideoStream", b =>
                 {
                     b.HasOne("SignalRC.Server.Data.Car", "Car")
@@ -1184,6 +1285,28 @@ namespace SignalRC.Server.Migrations
                         .IsRequired();
 
                     b.Navigation("Publication");
+                });
+
+            modelBuilder.Entity("SignalRC.Server.Data.TelemetryHistorySample", b =>
+                {
+                    b.HasOne("SignalRC.Server.Data.TelemetrySession", "Session")
+                        .WithMany("Samples")
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Session");
+                });
+
+            modelBuilder.Entity("SignalRC.Server.Data.TelemetrySession", b =>
+                {
+                    b.HasOne("SignalRC.Server.Data.Car", "Car")
+                        .WithMany()
+                        .HasForeignKey("CarId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Car");
                 });
 
             modelBuilder.Entity("SignalRC.Server.Data.User", b =>
@@ -1372,6 +1495,11 @@ namespace SignalRC.Server.Migrations
             modelBuilder.Entity("SignalRC.Server.Data.OverlayPublication", b =>
                 {
                     b.Navigation("Assets");
+                });
+
+            modelBuilder.Entity("SignalRC.Server.Data.TelemetrySession", b =>
+                {
+                    b.Navigation("Samples");
                 });
 
             modelBuilder.Entity("SignalRC.Server.Data.User", b =>

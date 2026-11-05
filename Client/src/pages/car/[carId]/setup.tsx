@@ -822,6 +822,7 @@ export default function SetupPage() {
             <LanguageSwitcher />
             <Link href={`/car/${carIdNum}/wiring`} className={btnGhost}>{sp.wiring}</Link>
             <Link href={`/car/${carIdNum}/logs`} className={btnGhost}>{sp.log}</Link>
+            <Link href={`/car/${carIdNum}/telemetry`} className={btnGhost}>{messages.telemetryHistory.link}</Link>
             <button className={btnGhost} onClick={reload}>{sp.reload}</button>
           </div>
         </div>

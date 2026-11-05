@@ -155,6 +155,9 @@ export default function CarControlFlowPage() {
               <Link href={`/car/${carIdNum}/logs`} className="text-blue-400 hover:underline block">
                 Onboard log
               </Link>
+              <Link href={`/car/${carIdNum}/telemetry`} className="text-blue-400 hover:underline block">
+                {messages.telemetryHistory.link}
+              </Link>
               <Link href={`/car/${carIdNum}/overlay`} className="text-blue-400 hover:underline block">
                 {messages.overlay.editorPage.open}
               </Link>

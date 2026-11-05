@@ -26,6 +26,9 @@ namespace SignalRC.Server.Data
         public DbSet<OverlayPublication> OverlayPublications { get; set; }
         public DbSet<OverlayPublicationAsset> OverlayPublicationAssets { get; set; }
         public DbSet<OverlayAsset> OverlayAssets { get; set; }
+        public DbSet<TelemetrySession> TelemetrySessions { get; set; }
+        public DbSet<TelemetryHistorySample> TelemetrySamples { get; set; }
+        public DbSet<CarTelemetryDashboard> CarTelemetryDashboards { get; set; }
 
         public async Task<long> GetNextUserSessionId() 
         {

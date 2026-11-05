@@ -6,6 +6,7 @@ import { dynamicsMessages } from '@/components/overlay/editor/inspector/messages
 import { previewMessages } from '@/components/overlay/preview/messages';
 import { exchangeMessages } from '@/components/overlay/exchange/messages';
 import { templateMessages } from '@/components/overlay/templates/messages';
+import { telemetryHistoryMessages } from '@/components/telemetry-history/messages';
 
 export type Locale = 'de' | 'en';
 
@@ -552,6 +553,7 @@ const deMessages = {
     },
   },
   overlay: overlayMessages('de'),
+  telemetryHistory: telemetryHistoryMessages.de,
 };
 
 export type Messages = typeof deMessages;
@@ -1087,6 +1089,7 @@ const enMessages: Messages = {
     },
   },
   overlay: overlayMessages('en'),
+  telemetryHistory: telemetryHistoryMessages.en,
 };
 
 export const messagesByLocale: Record<Locale, Messages> = {

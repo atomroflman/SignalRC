@@ -23,5 +23,7 @@ namespace SignalRC.Server.Data
         public string? OptionsJson { get; set; }
         public int? ServerId { get; set; }
         public DateTime? ModifiedAt { get; set; }
+        /// <summary>Stored in the telemetry history (TelemetryRecorder); only numeric and boolean channels.</summary>
+        public bool Record { get; set; }
     }
 }

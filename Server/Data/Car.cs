@@ -22,6 +22,8 @@ public class Car : EntityBase
     public string? AudioOutputDevice { get; set; }
     public float AudioOutputVolume { get; set; } = 1f;
     public bool AudioMuteInputWhileTalking { get; set; } = true;
+    /// <summary>Days the telemetry history of this car is kept (TelemetryRecorder).</summary>
+    public int TelemetryRetentionDays { get; set; } = 7;
     public ICollection<CarChannel> Functions { get; set; } = new List<CarChannel>();
     public ICollection<UserCarSetup> UserCarSetups { get; set; } = new List<UserCarSetup>();
     public ICollection<CarVideoStream> VideoStreams { get; set; } = new List<CarVideoStream>();
