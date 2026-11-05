@@ -325,7 +325,7 @@ export default function CarVideoPanel({ carId }: CarVideoPanelProps): JSX.Elemen
 function VideoPlaceholder({ carId, className = "text-zinc-400", children }: { carId?: number; className?: string; children: ReactNode }) {
   return (
     <div className="flex h-full min-h-[240px] w-full flex-1 flex-col items-center justify-center gap-6 rounded-2xl p-8 text-center">
-      <BrandLogo carId={carId} className="h-28 w-auto opacity-90 md:h-36" />
+      <BrandLogo carId={carId} large className="h-28 w-auto md:h-36" />
       <div className={`max-w-md text-sm ${className}`}>{children}</div>
     </div>
   );

@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useControlFlowStore } from "@/components/control-flow-store";
 import { sendState } from "@/components/overlay/integration/editor-control";
 
@@ -45,9 +45,11 @@ type Props = {
   carId?: number;
   className?: string;
   title?: string;
+  /** Large placement (empty video area): wider halo and light streak. */
+  large?: boolean;
 };
 
-export default function BrandLogo({ carId, className = "h-8 w-auto", title = "Signal-RC" }: Props) {
+export default function BrandLogo({ carId, className = "h-12 w-auto", title = "Signal-RC", large = false }: Props) {
   const status = useBrandStatus(carId);
   const storeCarId = useControlFlowStore(s => s.carId);
   const drawKey = String(carId ?? storeCarId ?? "none");
@@ -58,29 +60,17 @@ export default function BrandLogo({ carId, className = "h-8 w-auto", title = "Si
     setMode(m => ({ phase: draw ? "draw" : m.phase === "pending" ? "static" : m.phase, run: draw ? m.run + 1 : m.run }));
   }, [drawKey]);
 
-  const filterId = `brand-glow-${useId().replace(/:/g, "")}`;
-  const glow = GLOW[status];
-
   return (
     <svg
       viewBox={VIEW_BOX}
-      className={`brand-logo brand-logo--${mode.phase} brand-logo--${status} ${className}`.trim()}
+      className={`brand-logo brand-logo--${mode.phase} brand-logo--${status}${large ? " brand-logo--large" : ""} ${className}`.trim()}
       role="img"
       aria-label={title}
-      style={{ ["--brand-glow" as string]: glow }}
+      style={{ ["--brand-glow" as string]: GLOW[status] }}
     >
       <title>{title}</title>
-      <defs>
-        <filter id={filterId} x="-30%" y="-30%" width="160%" height="160%">
-          <feGaussianBlur stdDeviation="5" />
-        </filter>
-      </defs>
+      {/* The halo is a CSS drop-shadow on the whole svg (in px, so it stays visible when small). */}
       <g key={mode.run}>
-        {/* Glow in the status colour behind the shapes; the arrow pulses while live. */}
-        <g className="brand-logo__glow" filter={`url(#${filterId})`} fill={glow}>
-          <path d={C_SHAPE} fillRule="evenodd" />
-          <path d={R_WITH_LETTERS} fillRule="evenodd" className="brand-logo__pulse" />
-        </g>
         <g className="brand-logo__fill" fill="#fff">
           <path d={C_SHAPE} fillRule="evenodd" />
           <path d={R_WITH_LETTERS} fillRule="evenodd" />
@@ -88,6 +78,11 @@ export default function BrandLogo({ carId, className = "h-8 w-auto", title = "Si
         <g className="brand-logo__trace" fill="none" stroke="#fff" strokeWidth={1.6} strokeLinejoin="round" vectorEffect="non-scaling-stroke">
           <path d={C_SHAPE} pathLength={1} className="brand-logo__trace-c" vectorEffect="non-scaling-stroke" />
           <path d={R_ARROW} pathLength={1} className="brand-logo__trace-r" vectorEffect="non-scaling-stroke" />
+        </g>
+        {/* Light streak in the status colour running along the C and the R into the arrow tip. */}
+        <g className="brand-logo__comet" fill="none" strokeLinecap="round">
+          <path d={C_SHAPE} pathLength={1} vectorEffect="non-scaling-stroke" />
+          <path d={R_ARROW} pathLength={1} className="brand-logo__comet-r" vectorEffect="non-scaling-stroke" />
         </g>
       </g>
     </svg>

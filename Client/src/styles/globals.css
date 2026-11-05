@@ -128,35 +128,61 @@ textarea {
   touch-action: none;
 }
 
-/* Signal-RC logo (components/brand-logo.tsx): draw-in, then a glow in the status colour. */
-.brand-logo { overflow: visible; }
-.brand-logo__glow { opacity: 0.85; transition: opacity 0.6s ease; }
-.brand-logo--idle .brand-logo__glow { opacity: 0.3; }
-.brand-logo--live .brand-logo__glow { opacity: 1; }
-.brand-logo--live .brand-logo__pulse { animation: brand-logo-pulse 1.6s ease-in-out infinite; }
-.brand-logo__glow path { transition: fill 0.6s ease; }
+/* Signal-RC logo (components/brand-logo.tsx): draw-in, then halo and light streak in the status colour.
+   idle: dimmed, no halo · connected: halo, slow streak · live: breathing halo, fast bright streak. */
+.brand-logo {
+  overflow: visible;
+  --brand-halo-1: 6px;
+  --brand-halo-2: 14px;
+  --brand-comet: 2.5px;
+  transition: opacity 0.6s ease;
+}
+.brand-logo--large { --brand-halo-1: 10px; --brand-halo-2: 26px; --brand-comet: 5px; }
+.brand-logo--idle { opacity: 0.55; }
+.brand-logo--connected,
+.brand-logo--live { filter: drop-shadow(0 0 var(--brand-halo-1) var(--brand-glow)) drop-shadow(0 0 var(--brand-halo-2) var(--brand-glow)); }
+.brand-logo--live { animation: brand-logo-breathe 1.6s ease-in-out infinite; }
+
+.brand-logo__comet path {
+  stroke: var(--brand-glow);
+  stroke-width: var(--brand-comet);
+  stroke-dasharray: 0.18 0.82;
+  stroke-dashoffset: 1;
+  filter: drop-shadow(0 0 3px var(--brand-glow));
+}
+.brand-logo__comet { opacity: 0; transition: opacity 0.6s ease; }
+.brand-logo--connected .brand-logo__comet,
+.brand-logo--live .brand-logo__comet { opacity: 1; }
+.brand-logo--connected .brand-logo__comet path { animation: brand-logo-run 3.2s linear infinite; }
+.brand-logo--connected .brand-logo__comet-r { animation-delay: -1.6s !important; }
+.brand-logo--live .brand-logo__comet path { stroke: #bbf7d0; animation: brand-logo-run 1.1s linear infinite; }
+.brand-logo--live .brand-logo__comet-r { animation-delay: -0.55s !important; }
 
 .brand-logo--pending .brand-logo__fill,
-.brand-logo--pending .brand-logo__glow,
 .brand-logo--pending .brand-logo__trace,
+.brand-logo--pending .brand-logo__comet,
 .brand-logo--static .brand-logo__trace { opacity: 0; }
+.brand-logo--pending { filter: none; }
 
 .brand-logo--draw .brand-logo__trace path { stroke-dasharray: 1; stroke-dashoffset: 1; }
 .brand-logo--draw .brand-logo__trace-c { animation: brand-logo-trace 0.8s ease-in-out forwards; }
 .brand-logo--draw .brand-logo__trace-r { animation: brand-logo-trace 1s ease-in-out 0.5s forwards; }
 .brand-logo--draw .brand-logo__trace { animation: brand-logo-fade-out 0.5s ease-out 1.6s forwards; }
 .brand-logo--draw .brand-logo__fill { opacity: 0; animation: brand-logo-fade-in 0.6s ease-out 1.2s forwards; }
-.brand-logo--draw .brand-logo__glow { animation: brand-logo-glow-in 0.8s ease-out 1.5s backwards; }
+.brand-logo--draw .brand-logo__comet { animation: brand-logo-hold 1.8s step-end backwards; }
 
 @keyframes brand-logo-trace { to { stroke-dashoffset: 0; } }
 @keyframes brand-logo-fade-in { to { opacity: 1; } }
 @keyframes brand-logo-fade-out { to { opacity: 0; } }
-@keyframes brand-logo-glow-in { from { opacity: 0; } }
-@keyframes brand-logo-pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+@keyframes brand-logo-hold { from { opacity: 0; } }
+@keyframes brand-logo-run { to { stroke-dashoffset: 0; } }
+@keyframes brand-logo-breathe {
+  50% { filter: drop-shadow(0 0 calc(var(--brand-halo-1) / 2) var(--brand-glow)) drop-shadow(0 0 calc(var(--brand-halo-2) * 1.6) var(--brand-glow)) drop-shadow(0 0 calc(var(--brand-halo-2) * 2.8) var(--brand-glow)); }
+}
 
 @media (prefers-reduced-motion: reduce) {
-  .brand-logo--draw .brand-logo__trace { display: none; }
+  .brand-logo--draw .brand-logo__trace,
+  .brand-logo__comet { display: none; }
   .brand-logo--draw .brand-logo__fill { animation: none; opacity: 1; }
-  .brand-logo--draw .brand-logo__glow,
-  .brand-logo--live .brand-logo__pulse { animation: none; }
+  .brand-logo--live { animation: none; }
 }

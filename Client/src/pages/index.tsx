@@ -143,7 +143,7 @@ export default function Home() {
         <div className="relative flex h-full flex-col overflow-hidden bg-[linear-gradient(180deg,rgba(23,25,31,0.98),rgba(15,17,22,0.96))] shadow-[0_28px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl">
           <div className="flex items-center justify-between px-5 py-4 md:px-6">
             <div className="flex items-center gap-3">
-              <BrandLogo className="h-9 w-auto" />
+              <BrandLogo className="h-12 w-auto" />
               <div className="text-[11px] font-semibold uppercase tracking-[0.34em] text-sky-300">
                 {messages.home.title}
               </div>
