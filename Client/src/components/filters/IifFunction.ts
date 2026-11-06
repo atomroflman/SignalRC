@@ -5,18 +5,19 @@ export class IifFunction implements FilterFunctionDef<readonly ["a", "b", "ifTru
   label = 'IIF (If-Then-Else)';
   params: FilterFunctionParam[] = [
     { name: 'operator', label: 'Operator', type: 'string', default: '>' },
-    { name: 'a', label: 'a (default)', type: 'number', default: 0 },
-    { name: 'b', label: 'b (default)', type: 'number', default: 0 },
-    { name: 'trueValue', label: 'ifTrue (default)', type: 'number', default: 1 },
-    { name: 'falseValue', label: 'ifFalse (default)', type: 'number', default: 0 },
+    // Switches: that branch outputs 1 instead of its input (unconnected inputs count as 0).
+    { name: 'trueIs1', label: 'true → 1', type: 'boolean', default: false },
+    { name: 'falseIs1', label: 'false → 1', type: 'boolean', default: false },
   ];
   inputLabels = ["a", "b", "ifTrue", "ifFalse"];
   outputLabels = ['result'];
   apply(inputs: InputMap<readonly ["a", "b", "ifTrue", "ifFalse"]>, params: Record<string, any>) {
-    const a = inputs.a ?? params.a ?? 0;
-    const b = inputs.b ?? params.b ?? 0;
-    const trueValue = inputs.ifTrue ?? params.trueValue ?? 1;
-    const falseValue = inputs.ifFalse ?? params.falseValue ?? 0;
+    const a = inputs.a ?? 0;
+    const b = inputs.b ?? 0;
+    // Parameters arrive as text from the server; same parsing as the onboard engine.
+    const flag = (v: unknown) => v === true || String(v ?? "").trim().toLowerCase() === "true";
+    const trueValue = flag(params?.trueIs1) ? 1 : inputs.ifTrue ?? 0;
+    const falseValue = flag(params?.falseIs1) ? 1 : inputs.ifFalse ?? 0;
     const operator = params?.operator || '>';
     
     let condition = false;

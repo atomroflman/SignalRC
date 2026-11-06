@@ -56,6 +56,13 @@
       { "inputs": { "a": 0.5, "b": 0.6, "ifTrue": 1, "ifFalse": 0 }, "expect": [0] } ] },
     { "name": "iif not equal and lte", "function": "Iif", "params": { "operator": "<=" }, "steps": [
       { "inputs": { "a": 1, "b": 1, "ifTrue": 3 }, "expect": [3] } ] },
+    { "name": "iif true is 1", "function": "Iif", "params": { "trueIs1": "true" }, "steps": [
+      { "inputs": { "a": 0.7, "b": 0.5, "ifTrue": 0.3 }, "expect": [1] },
+      { "inputs": { "a": 0.2, "b": 0.5, "ifFalse": 0.4 }, "expect": [0.4] },
+      { "inputs": { "a": 0.2, "b": 0.5 }, "expect": [0] } ] },
+    { "name": "iif false is 1", "function": "Iif", "params": { "operator": "<", "falseIs1": "TRUE", "trueIs1": "false" }, "steps": [
+      { "inputs": { "a": 0.7, "b": 0.5 }, "expect": [1] },
+      { "inputs": { "a": 0.2, "b": 0.5, "ifTrue": 0.6 }, "expect": [0.6] } ] },
     { "name": "toggle", "function": "Toggle", "params": {}, "steps": [
       { "inputs": { "input": 0 }, "expect": [0] },
       { "inputs": { "input": 1 }, "expect": [1] },

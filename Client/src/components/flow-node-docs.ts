@@ -91,8 +91,9 @@ const de: Record<string, FlowNodeDoc> = {
     details: [
       "Operatoren: >, <, =, >=, <=, != (= und != mit kleiner Toleranz für Kommazahlen).",
       "Nicht verbundene Eingänge zählen als 0.",
+      "Schalter „true → 1“ / „false → 1“ (true eintragen): der Zweig gibt 1 statt seines Eingangs aus – für einen reinen Vergleich braucht es dann nur a und b.",
     ],
-    example: "a = Gas, b = 0, Operator >, ifTrue = 1, ifFalse = 0 → Bremslicht aus, sobald Gas gegeben wird",
+    example: "a = Gas, b = 0, Operator >, true → 1 → 1 sobald Gas gegeben wird, sonst 0",
   },
   Toggle: {
     summary: "Schalter: jeder Druck (Wechsel von 0 auf 1) schaltet den Ausgang zwischen 0 und 1 um.",
@@ -293,8 +294,9 @@ const en: Record<string, FlowNodeDoc> = {
     details: [
       "Operators: >, <, =, >=, <=, != (= and != with a small tolerance for decimals).",
       "Unconnected inputs count as 0.",
+      "Switches “true → 1” / “false → 1” (enter true): that branch outputs 1 instead of its input, so a plain comparison only needs a and b.",
     ],
-    example: "a = throttle, b = 0, operator >, ifTrue = 1, ifFalse = 0 → brake light off as soon as you accelerate",
+    example: "a = throttle, b = 0, operator >, true → 1 → 1 as soon as you accelerate, otherwise 0",
   },
   Toggle: {
     summary: "Switch: every press (change from 0 to 1) flips the output between 0 and 1.",

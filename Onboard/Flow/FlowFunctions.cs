@@ -200,8 +200,14 @@ internal sealed class IifFn : FlowFunction
             "!=" or "<>" => Math.Abs(a - b) >= 0.00001,
             _ => a > b,
         };
-        return [condition ? In(i, "ifTrue") : In(i, "ifFalse")];
+        // Switches "trueIs1" / "falseIs1": that branch outputs 1 instead of its input, so a
+        // comparison needs no extra links.
+        if (condition) return [Flag(p, "trueIs1") ? 1 : In(i, "ifTrue")];
+        return [Flag(p, "falseIs1") ? 1 : In(i, "ifFalse")];
     }
+
+    private static bool Flag(IReadOnlyDictionary<string, string?> p, string name) =>
+        p.TryGetValue(name, out var v) && string.Equals(v?.Trim(), "true", StringComparison.OrdinalIgnoreCase);
 }
 
 internal sealed class ToggleFn : FlowFunction
