@@ -22,6 +22,7 @@ import { HudInputFunction } from "./HudInputFunction";
 import { TelemetryFunction } from "./TelemetryFunction";
 import { ActiveFunction } from "./ActiveFunction";
 import { PriorityFunction } from "./PriorityFunction";
+import { DisconnectControllerFunction } from "./DisconnectControllerFunction";
 
 export var storedToggleValues = {} as Record<number, {switchState: boolean, toggleState: boolean}>;
 
@@ -69,5 +70,6 @@ export const filterFunctionRegistry = {
   Telemetry: new TelemetryFunction(),
   Active: new ActiveFunction(),
   Priority: new PriorityFunction(),
+  DisconnectController: new DisconnectControllerFunction(),
 };
 

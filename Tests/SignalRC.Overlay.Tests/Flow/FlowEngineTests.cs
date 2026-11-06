@@ -20,6 +20,8 @@ public class FlowEngineTests
             InputConnected && Inputs.TryGetValue((deviceKey, code), out var v) ? (v, true) : (0, false);
         public (string Value, bool Valid)? Telemetry(string channelName) =>
             Telemetries.TryGetValue(channelName, out var v) ? v : null;
+        public List<string?> Disconnects { get; } = new();
+        public void DisconnectControllers(string? filter) => Disconnects.Add(filter);
     }
 
     private static OnboardFlowNode Fn(int id, string fn, params (string, string)[] p) =>
@@ -192,5 +194,23 @@ public class FlowEngineTests
         engine.Load(null);
         Assert.Empty(engine.OwnedChannels);
         Assert.Empty(engine.Tick(new Env()));
+    }
+
+    [Fact]
+    public void DisconnectController_fires_once_per_press()
+    {
+        var engine = new FlowEngine();
+        engine.Load(new OnboardFlowDefinition
+        {
+            Nodes = { Input(1, "pad", 0x13c), Fn(2, "DisconnectController", ("device", "Wireless")) },
+            Links = { Link(1, 2, "trigger") },
+        });
+        var env = new Env();
+        foreach (var press in new double[] { 0, 1, 1, 0, 1 })
+        {
+            env.Inputs[("pad", 0x13c)] = press;
+            engine.Tick(env);
+        }
+        Assert.Equal(["Wireless", "Wireless"], env.Disconnects);
     }
 }

@@ -47,5 +47,6 @@ public class FlowParityTests
     {
         public long NowMs => 1000;
         public (string Value, bool Valid)? Telemetry(string channelName) => null;
+        public void DisconnectControllers(string? filter) { }
     }
 }

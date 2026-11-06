@@ -100,6 +100,12 @@
     { "name": "active instant", "function": "Active", "params": { "threshold": "0.1" }, "steps": [
       { "inputs": { "input": 0.05 }, "expect": [0] },
       { "inputs": { "input": -0.5 }, "expect": [1] } ] },
+    { "name": "disconnect controller edge", "function": "DisconnectController", "params": { "device": "x" }, "steps": [
+      { "inputs": { "trigger": 0 }, "expect": [0] },
+      { "inputs": { "trigger": 1 }, "expect": [1] },
+      { "inputs": { "trigger": 1 }, "expect": [0] },
+      { "inputs": { "trigger": 0 }, "expect": [0] },
+      { "inputs": { "trigger": 0.7 }, "expect": [1] } ] },
     { "name": "priority", "function": "Priority", "params": {}, "steps": [
       { "inputs": { "a": 0.3, "aActive": 1, "b": -0.8 }, "expect": [0.3] },
       { "inputs": { "a": 0.3, "aActive": 0, "b": -0.8 }, "expect": [-0.8] } ] }

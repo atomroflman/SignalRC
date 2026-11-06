@@ -11,6 +11,8 @@ public interface IFlowEnvironment
     /// <summary>Value of a controller axis or button; not connected → (0, false).</summary>
     (double Value, bool Connected) VehicleInput(string deviceKey, int code, bool isAxis);
     (string Value, bool Valid)? Telemetry(string channelName);
+    /// <summary>Side effect of the DisconnectController function.</summary>
+    void DisconnectControllers(string? filter);
 }
 
 /// <summary>A value the engine wants written to a control channel.</summary>
@@ -236,5 +238,6 @@ public sealed class FlowEngine
     {
         public long NowMs => env.NowMs;
         public (string Value, bool Valid)? Telemetry(string channelName) => env.Telemetry(channelName);
+        public void DisconnectControllers(string? filter) => env.DisconnectControllers(filter);
     }
 }

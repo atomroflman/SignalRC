@@ -26,6 +26,7 @@ public sealed class OnboardFlowService : IFlowEnvironment, IDisposable
     private readonly TelemetryService _telemetry;
     private readonly VehicleInputService _inputs;
     private readonly ServerConnectionService _server;
+    private readonly BluetoothService? _bluetooth;
     private readonly FlowEngine _engine = new();
     private readonly object _lock = new();
     private readonly ConcurrentDictionary<int, (double Value, long AtMs)> _handoffs = new();
@@ -39,8 +40,9 @@ public sealed class OnboardFlowService : IFlowEnvironment, IDisposable
     private int _ticking;
     private int _reportingStatus;
 
-    public OnboardFlowService(ILogger<OnboardFlowService> logger, IControlSink control, TelemetryService telemetry, VehicleInputService inputs, ServerConnectionService server)
+    public OnboardFlowService(ILogger<OnboardFlowService> logger, IControlSink control, TelemetryService telemetry, VehicleInputService inputs, ServerConnectionService server, BluetoothService? bluetooth = null)
     {
+        _bluetooth = bluetooth;
         _logger = logger;
         _control = control;
         _telemetry = telemetry;
@@ -157,6 +159,46 @@ public sealed class OnboardFlowService : IFlowEnvironment, IDisposable
     public (double Value, bool Connected) VehicleInput(string deviceKey, int code, bool isAxis) => _inputs.Get(deviceKey, code, isAxis);
 
     public (string Value, bool Valid)? Telemetry(string channelName) => _telemetry.Live.Get(channelName);
+
+    /// <summary>Addresses the last DisconnectControllers call would disconnect (tests).</summary>
+    public IReadOnlyList<string> LastDisconnectRequest { get; private set; } = [];
+
+    /// <summary>
+    /// DisconnectController in the flow: disconnects the connected Bluetooth controllers that
+    /// match (name part or address; empty = all). Runs in the background; the tick goes on.
+    /// </summary>
+    public void DisconnectControllers(string? filter)
+    {
+        var addresses = BluetoothAddresses(_inputs.States(), filter);
+        LastDisconnectRequest = addresses;
+        if (addresses.Count == 0)
+        {
+            _logger.LogInformation("Flow: no connected Bluetooth controller matches '{Filter}'.", filter);
+            return;
+        }
+        if (_bluetooth == null) return;
+        _ = Task.Run(async () =>
+        {
+            foreach (var address in addresses)
+            {
+                var result = await _bluetooth.ExecuteAsync(BluetoothAction.Disconnect, address);
+                _logger.LogInformation("Flow disconnects controller {Address}: {Result}", address, result.Success ? "ok" : result.Message);
+            }
+        });
+    }
+
+    /// <summary>Bluetooth addresses of connected controllers matching the filter; the address is the key's part before '/'.</summary>
+    public static List<string> BluetoothAddresses(IEnumerable<VehicleInputDeviceState> devices, string? filter)
+    {
+        var f = filter?.Trim() ?? string.Empty;
+        return devices
+            .Where(d => d.Connected && (f.Length == 0 || d.Name.Contains(f, StringComparison.OrdinalIgnoreCase) || d.Key.Contains(f, StringComparison.OrdinalIgnoreCase)))
+            .Select(d => d.Key.Split('/')[0])
+            .Where(a => System.Text.RegularExpressions.Regex.IsMatch(a, "^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$"))
+            .Select(a => a.ToUpperInvariant())
+            .Distinct()
+            .ToList();
+    }
 
     private bool HandoffConnected =>
         !_webDetached && _serverConnected && _handoffs.Values.Any(h => NowMs - h.AtMs <= HandoffTimeoutMs);

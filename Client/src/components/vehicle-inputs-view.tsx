@@ -15,6 +15,25 @@ export default function VehicleInputsView({ carId, hideFlowButtons }: { carId: n
   const nodes = useControlFlowStore(s => s.nodes);
   const status = useControlFlowStore(s => s.flowStatus);
   const registerVehicleInput = useControlFlowStore(s => s.registerVehicleInput);
+  const vehicleBluetooth = useControlFlowStore(s => s.vehicleBluetooth);
+  const carSession = useControlFlowStore(s => s.carSession);
+  const [disconnecting, setDisconnecting] = useState<string | null>(null);
+  /** Bluetooth address from the device key ("AA:BB:…/Name"), or null for USB controllers. */
+  const bluetoothAddress = (key: string) => {
+    const address = key.split("/")[0];
+    return /^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/.test(address) ? address : null;
+  };
+  const disconnect = async (key: string) => {
+    const address = bluetoothAddress(key);
+    if (!address) return;
+    setDisconnecting(key);
+    try {
+      const result = await vehicleBluetooth("disconnect", address);
+      if (!result.success) alert(result.message ?? "?");
+    } finally {
+      setDisconnecting(null);
+    }
+  };
   const [devices, setDevices] = useState<VehicleInputDevice[]>([]);
   // Reload when the vehicle reports other controllers.
   const deviceSignature = (status?.devices ?? []).map(d => d.key).sort().join("|");
@@ -40,6 +59,15 @@ export default function VehicleInputsView({ carId, hideFlowButtons }: { carId: n
               <span className={`inline-block w-2 h-2 rounded-full ${connected.get(d.key) ? "bg-emerald-400" : "bg-zinc-600"}`} />
               <span className="font-semibold text-zinc-100 truncate">{d.name}</span>
               <span className="text-zinc-500">{connected.get(d.key) ? t.controllerConnected : t.controllerDisconnected}</span>
+              {connected.get(d.key) && carSession && bluetoothAddress(d.key) && (
+                <button
+                  className="ml-auto px-1.5 py-0.5 rounded border text-[10px] bg-zinc-800 border-zinc-600 hover:bg-zinc-700 disabled:opacity-50"
+                  disabled={disconnecting === d.key}
+                  onClick={() => disconnect(d.key)}
+                >
+                  {disconnecting === d.key ? t.btBusy : t.btDisconnect}
+                </button>
+              )}
             </div>
             <ul className="mt-1 space-y-0.5">
               {d.channels.map(c => (

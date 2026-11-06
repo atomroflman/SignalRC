@@ -7,6 +7,8 @@ public interface IFlowFunctionContext
     long NowMs { get; }
     /// <summary>Telemetry value by channel name, null if unknown. Valid = fresh and not erroneous.</summary>
     (string Value, bool Valid)? Telemetry(string channelName);
+    /// <summary>Disconnects the vehicle's Bluetooth controllers matching the filter (name part or address; empty = all).</summary>
+    void DisconnectControllers(string? filter);
 }
 
 /// <summary>
@@ -40,7 +42,7 @@ public static class FlowFunctions
         new MultiplyFn(), new DivideFn(), new ModuloFn(), new PowerFn(), new LogFn(), new IifFn(),
         new ToggleFn(), new TurnSignalFn(), new RescaleFn(), new GearboxFn(), new FloatValueFn(),
         new SmoothFn(), new SignFn(), new HudSignalFn(), new HudInputFn(), new TelemetryFn(),
-        new ActiveFn(), new PriorityFn(),
+        new ActiveFn(), new PriorityFn(), new DisconnectControllerFn(),
     }.ToDictionary(f => f.Name, StringComparer.Ordinal);
 
     public static FlowFunction? Get(string? name) => name != null && All.TryGetValue(name, out var f) ? f : null;
@@ -472,4 +474,28 @@ internal sealed class PriorityFn : FlowFunction
     public override string[] Outputs => ["output"];
     public override double[] Apply(IReadOnlyDictionary<string, double> i, IReadOnlyDictionary<string, string?> p, object? s, IFlowFunctionContext c) =>
         [In(i, "aActive") >= 0.5 ? In(i, "a") : In(i, "b")];
+}
+
+/// <summary>
+/// "Controller trennen": on a rising edge of trigger (≥ 0.5) the vehicle disconnects its
+/// Bluetooth controllers that match <c>device</c> (part of the name or the address; empty:
+/// all). For controllers that cannot be switched off, e.g. a PS4 controller. Vehicle flow
+/// only; the output is 1 in the evaluation that triggered.
+/// </summary>
+internal sealed class DisconnectControllerFn : FlowFunction
+{
+    private sealed class State { public bool Last; }
+    public override string Name => "DisconnectController";
+    public override string[] Inputs => ["trigger"];
+    public override string[] Outputs => ["triggered"];
+    public override object CreateState() => new State();
+    public override double[] Apply(IReadOnlyDictionary<string, double> i, IReadOnlyDictionary<string, string?> p, object? s, IFlowFunctionContext c)
+    {
+        var st = (State)s!;
+        var on = In(i, "trigger") >= 0.5;
+        var rising = on && !st.Last;
+        st.Last = on;
+        if (rising) c.DisconnectControllers(p.TryGetValue("device", out var d) ? d : null);
+        return [rising ? 1 : 0];
+    }
 }

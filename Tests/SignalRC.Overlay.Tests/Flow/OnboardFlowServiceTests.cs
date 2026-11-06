@@ -148,4 +148,19 @@ public class OnboardFlowServiceTests
         service.SetWebDetached(true);
         Assert.Equal(OnboardFlowMode.Detached, service.Status().Mode);
     }
+
+    [Fact]
+    public void Disconnect_targets_connected_bluetooth_controllers_matching_the_filter()
+    {
+        VehicleInputDeviceState[] devices =
+        [
+            new() { Key = "aa:bb:cc:dd:ee:ff/Wireless Controller", Name = "Wireless Controller", Connected = true },
+            new() { Key = "11:22:33:44:55:66/Xbox Wireless Controller", Name = "Xbox Wireless Controller", Connected = false },
+            new() { Key = "054c:09cc/USB Pad", Name = "USB Pad", Connected = true },
+        ];
+        Assert.Equal(["AA:BB:CC:DD:EE:FF"], OnboardFlowService.BluetoothAddresses(devices, ""));
+        Assert.Equal(["AA:BB:CC:DD:EE:FF"], OnboardFlowService.BluetoothAddresses(devices, "wireless"));
+        Assert.Empty(OnboardFlowService.BluetoothAddresses(devices, "xbox")); // not connected
+        Assert.Empty(OnboardFlowService.BluetoothAddresses(devices, "usb"));  // no Bluetooth address
+    }
 }

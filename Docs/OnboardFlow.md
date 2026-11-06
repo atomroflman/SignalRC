@@ -69,6 +69,17 @@ Wertebereiche:
 
 Jeder Controller-Knoten hat zusätzlich den Ausgang `connected`.
 
+Trennen lässt sich ein Bluetooth-Controller, etwa ein PS4-Controller, der sich nicht
+ausschalten lässt, auf zwei Wegen:
+
+- im Panel „Fahrzeug-Controller“ über „Trennen“ beim verbundenen Gerät; dafür ist die
+  aktive Steuerung nötig;
+- im Fahrzeug-Teil des Flows mit der Funktion „Controller trennen“
+  (`DisconnectController`). Bei einer steigenden Flanke an `trigger` werden die
+  Controller getrennt, die zu `device` passen (Namensteil oder Adresse; leer = alle).
+  Beispiel: `BTN_MODE` (PS-Taste) → Controller trennen. Das funktioniert auch bei
+  abgekoppeltem Web.
+
 Für HUD und Telemetrie gibt es den Telemetrie-Typ `VehicleControllerReader`. Er
 liefert `1`/`0`, ob ein Controller verbunden ist. Mit `Device` lässt er sich auf
 einen Controller eingrenzen, über einen Namensteil oder die Bluetooth-Adresse.

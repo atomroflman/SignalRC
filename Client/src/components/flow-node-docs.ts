@@ -166,6 +166,15 @@ const de: Record<string, FlowNodeDoc> = {
     details: ["Web und Controller werden nur gemischt, wenn der Flow es so festlegt."],
     example: "Controller-Lenkung → a, Aktiv? → aActive, Übergabe Lenkung → b → Fahrzeugkanal steering",
   },
+  DisconnectController: {
+    summary: "Controller trennen: Bei einer steigenden Flanke an trigger trennt das Fahrzeug seine Bluetooth-Controller. Nur im Fahrzeug-Flow.",
+    details: [
+      "device grenzt ein: Teil des Namens oder die Bluetooth-Adresse; leer trennt alle verbundenen Controller.",
+      "Für Controller, die sich nicht ausschalten lassen (z. B. PS4). Nach dem Trennen sind ihre Knoten 0 und connected 0.",
+      "triggered ist 1 in dem Takt, in dem getrennt wurde.",
+    ],
+    example: "Controller BTN_MODE (PS-Taste) → Controller trennen (device leer)",
+  },
   vehicleInput: {
     summary: "Fahrzeug-Controller: eine Achse oder Taste eines Controllers, der direkt am Fahrzeug gekoppelt ist. Nur im Fahrzeug-Flow.",
     details: [
@@ -339,6 +348,15 @@ const en: Record<string, FlowNodeDoc> = {
     summary: "Priority: passes a while aActive ≥ 0.5, otherwise b.",
     details: ["Web and controller are only mixed where the flow says so."],
     example: "Controller steering → a, Active? → aActive, handoff steering → b → vehicle channel steering",
+  },
+  DisconnectController: {
+    summary: "Disconnect controller: on a rising edge at trigger the vehicle disconnects its Bluetooth controllers. Vehicle flow only.",
+    details: [
+      "device narrows it down: part of the name or the Bluetooth address; empty disconnects every connected controller.",
+      "For controllers that cannot be switched off (e.g. PS4). Afterwards their nodes are 0 and connected is 0.",
+      "triggered is 1 in the tick that disconnected.",
+    ],
+    example: "Controller BTN_MODE (PS button) → Disconnect controller (device empty)",
   },
   vehicleInput: {
     summary: "Vehicle controller: an axis or button of a controller paired with the vehicle. Vehicle flow only.",

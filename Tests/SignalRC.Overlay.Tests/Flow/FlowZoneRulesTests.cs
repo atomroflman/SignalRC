@@ -50,6 +50,8 @@ public class FlowZoneRulesTests
         Assert.NotNull(FlowZoneRules.ZoneForNewNode(Fn(FlowZone.Browser, "HudInput"), FlowZone.Onboard).Error);
         Assert.Null(FlowZoneRules.ZoneForNewNode(Fn(FlowZone.Browser, "Gearbox"), FlowZone.Onboard).Error);
         Assert.Equal(FlowZone.Browser, FlowZoneRules.ZoneForNewNode(Fn(FlowZone.Browser), null).Zone);
+        Assert.NotNull(FlowZoneRules.ZoneForNewNode(Fn(FlowZone.Browser, "DisconnectController"), FlowZone.Browser).Error);
+        Assert.Null(FlowZoneRules.ZoneForNewNode(Fn(FlowZone.Browser, "DisconnectController"), FlowZone.Onboard).Error);
     }
 
     [Fact]

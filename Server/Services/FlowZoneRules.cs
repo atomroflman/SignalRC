@@ -14,6 +14,9 @@ public static class FlowZoneRules
     /// <summary>Functions that only make sense in the browser (HUD clicks and HUD display).</summary>
     public static readonly IReadOnlySet<string> BrowserOnlyFunctions = new HashSet<string>(StringComparer.Ordinal) { "HudInput", "HudSignal" };
 
+    /// <summary>Functions that only exist in the vehicle flow (they act on the vehicle).</summary>
+    public static readonly IReadOnlySet<string> OnboardOnlyFunctions = new HashSet<string>(StringComparer.Ordinal) { "DisconnectController" };
+
     private enum Side { Browser, Handoff, Onboard }
 
     private static Side SideOf(UserSetupFlowNodeBase node) => node switch
@@ -36,6 +39,8 @@ public static class FlowZoneRules
                 return (FlowZone.Onboard, null);
             case UserSetupFunctionNode fn when requested == FlowZone.Onboard && BrowserOnlyFunctions.Contains(fn.SetupFunctionName):
                 return (FlowZone.Browser, $"{fn.SetupFunctionName} only exists in the browser flow.");
+            case UserSetupFunctionNode fn when requested != FlowZone.Onboard && OnboardOnlyFunctions.Contains(fn.SetupFunctionName):
+                return (FlowZone.Onboard, $"{fn.SetupFunctionName} only exists in the vehicle flow.");
             default:
                 return (requested ?? FlowZone.Browser, null);
         }

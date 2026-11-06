@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { BluetoothDevice, useControlFlowStore } from "./control-flow-store";
 import { useI18n } from "@/i18n/provider";
 
@@ -26,6 +26,12 @@ export default function BluetoothPanel() {
       setBusy(false);
     }
   };
+
+  // Known devices right away, so a connected controller can be disconnected without a scan.
+  useEffect(() => {
+    if (carSession) run("list");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [carSession]);
 
   if (!carSession) return <div className="text-zinc-400">{t.btNeedsSession}</div>;
 
