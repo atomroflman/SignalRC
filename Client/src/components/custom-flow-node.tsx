@@ -1,7 +1,7 @@
 import React from "react";
 import { Handle, Position, NodeProps } from "reactflow";
 import { filterFunctionRegistry } from "./filters/filter-function-registry";
-import { useControlFlowStore } from "./control-flow-store";
+import { edgeValue, useControlFlowStore } from "./control-flow-store";
 import FloatValueFlowNode from "./float-value-flow-node";
 import GearboxFlowNode from "./gearbox-flow-node";
 import IifFlowNode from "./iif-flow-node";
@@ -27,6 +27,11 @@ const SPECIALIZED_NODES: Record<string, React.ComponentType<CustomFlowNodeProps>
   Gearbox: GearboxFlowNode,
   Iif: IifFlowNode,
   Smooth: SmoothFlowNode,
+};
+
+/** Functions whose title bar shows an input instead of the output. */
+const HEADER_INPUT: Record<string, { port: string; unit: string }> = {
+  Pulse: { port: "rate", unit: " Hz" },
 };
 
 /** Node kinds that are not filter functions. */
@@ -179,6 +184,12 @@ function CustomFlowNodeContent(props: NodeProps) {
     }
   }
   
+  // Nodes whose output alone says little show an input in the title bar instead (Pulse: the rate).
+  const headerPort = HEADER_INPUT[data?.metadata?.functionName ?? ""];
+  const headerEdge = headerPort ? flowControl.edges.find(e => e.target === id && e.targetPort === headerPort.port) : undefined;
+  const headerInput = headerPort
+    ? `${(headerEdge ? edgeValue(flowControl, headerEdge) : 0).toFixed(2)}${headerPort.unit}`
+    : undefined;
   const outputValues = Array.isArray(data?.latestValue) ? data.latestValue : [data?.latestValue];
   const inputHandles = inputs.map((label, index) => (
     <Handle
@@ -222,7 +233,9 @@ function CustomFlowNodeContent(props: NodeProps) {
       <FlowNodeHeader
         title={data?.label}
         docKey={CHANNEL_TYPES.includes(data?.type ?? "") ? data!.type : data?.metadata?.functionName}
-        value={Array.isArray(data?.latestValue)
+        value={headerInput
+          ? headerInput
+          : Array.isArray(data?.latestValue)
           ? data.latestValue.map((v: number) => Number(v).toFixed(3)).join(", ")
           : Number(data?.latestValue ?? 0).toFixed(3)}
         onDelete={deleteNode}
