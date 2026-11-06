@@ -29,7 +29,8 @@ public sealed class FlowAccessTests : IDisposable
         var car = new Car { Name = "f", CarIdentityKey = "f", LastSeen = DateTime.UtcNow };
         _alice = new User { Name = "alice", SessionId = 6_000_000_000_001, LastSeen = DateTime.UtcNow };
         _bob = new User { Name = "bob", SessionId = 6_000_000_000_002, LastSeen = DateTime.UtcNow };
-        _ctx.AddRange(car, _alice, _bob, new SetupFilterType { TypeName = "Invert" });
+        // No SetupFilterType rows: the table is never filled in production either.
+        _ctx.AddRange(car, _alice, _bob);
         _ctx.SaveChanges();
         _car = car.Id;
         var aliceSetup = new UserCarSetup { UserId = _alice.Id, CarId = _car };
@@ -109,5 +110,47 @@ public sealed class FlowAccessTests : IDisposable
         // Copying the own flow or a flow of another vehicle is refused.
         Assert.IsType<BadRequestObjectResult>(await As(_alice).CopyFrom(_car, _aliceSetup));
         Assert.IsType<NotFoundObjectResult>(await As(_bob).CopyFrom(_car + 1000, _aliceSetup));
+    }
+
+    [Fact]
+    public async Task CopyingKeepsInputsFunctionsParametersAndLinks()
+    {
+        // Alice and Bob drive with differently named gamepads.
+        var car = new Car { Name = "g", CarIdentityKey = "g", LastSeen = DateTime.UtcNow };
+        var alicePad = new UserChannelDevice { DeviceName = "Xbox Controller (alice)", UserId = _alice.Id };
+        var bobPad = new UserChannelDevice { DeviceName = "8BitDo Pro 2", UserId = _bob.Id };
+        var aliceAxis = new UserChannel { UserChannelDevice = alicePad, ChannelId = 2, IsAxis = true };
+        var bobAxis = new UserChannel { UserChannelDevice = bobPad, ChannelId = 2, IsAxis = true };
+        var bobOther = new UserChannel { UserChannelDevice = bobPad, ChannelId = 0, IsAxis = true };
+        _ctx.AddRange(car, alicePad, bobPad, aliceAxis, bobAxis, bobOther);
+        _ctx.SaveChanges();
+        var steering = new CarChannel { CarId = car.Id, ChannelName = "steering" };
+        var setup = new UserCarSetup { UserId = _alice.Id, CarId = car.Id };
+        _ctx.AddRange(steering, setup);
+        _ctx.SaveChanges();
+        var input = new UserSetupUserChannelNode { UserSetupId = setup.Id, UserChannelId = aliceAxis.Id };
+        var fn = new UserSetupFunctionNode { UserSetupId = setup.Id, SetupFunctionName = "Expo" };
+        var output = new UserSetupCarChannelNode { UserSetupId = setup.Id, CarChannelId = steering.Id };
+        _ctx.AddRange(input, fn, output);
+        _ctx.SaveChanges();
+        _ctx.AddRange(
+            new UserSetupFunctionNodeParameter { NodeId = fn.Id, ParameterName = "factor", ParameterValue = "0.4" },
+            new UserSetupLink { UserSetupFromNodeId = input.Id, UserSetupToNodeId = fn.Id },
+            new UserSetupLink { UserSetupFromNodeId = fn.Id, UserSetupToNodeId = output.Id });
+        _ctx.SaveChanges();
+
+        Assert.IsType<OkObjectResult>(await As(_bob).CopyFrom(car.Id, setup.Id));
+
+        var bobSetup = _ctx.UserSetups.AsNoTracking().Single(s => s.UserId == _bob.Id && s.CarId == car.Id);
+        var nodes = _ctx.Set<UserSetupFlowNodeBase>().AsNoTracking().Where(n => n.UserSetupId == bobSetup.Id).ToList();
+        Assert.Equal(3, nodes.Count);
+        // The input lands on the same axis of Bob's own gamepad.
+        Assert.Equal(bobAxis.Id, Assert.Single(nodes.OfType<UserSetupUserChannelNode>()).UserChannelId);
+        var bobFn = Assert.Single(nodes.OfType<UserSetupFunctionNode>());
+        Assert.Equal("Expo", bobFn.SetupFunctionName);
+        var param = Assert.Single(_ctx.Set<UserSetupFunctionNodeParameter>().AsNoTracking().Where(p => p.NodeId == bobFn.Id));
+        Assert.Equal(("factor", "0.4"), (param.ParameterName, param.ParameterValue));
+        var ids = nodes.Select(n => n.Id).ToList();
+        Assert.Equal(2, _ctx.Set<UserSetupLink>().Count(l => ids.Contains(l.UserSetupToNodeId)));
     }
 }

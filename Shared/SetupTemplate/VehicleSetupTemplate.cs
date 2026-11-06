@@ -93,6 +93,8 @@ public sealed class ControllerBinding
     [JsonPropertyName("deviceName")] public string DeviceName { get; set; } = "";
     [JsonPropertyName("channelName")] public string ChannelName { get; set; } = "";
     [JsonPropertyName("isAxis")] public bool IsAxis { get; set; }
+    /// <summary>Axis or button index on the device; fallback when device and channel name do not match.</summary>
+    [JsonPropertyName("channelIndex")] public int? ChannelIndex { get; set; }
 }
 
 public sealed class TemplateFlowEdge

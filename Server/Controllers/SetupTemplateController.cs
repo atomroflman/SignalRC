@@ -134,6 +134,7 @@ public class SetupTemplateController : ControllerBase
                                 DeviceName = uc.UserChannelDevice.DeviceName,
                                 ChannelName = uc.Name ?? (uc.IsAxis ? $"Axis {uc.ChannelId + 1}" : $"Button {uc.ChannelId + 1}"),
                                 IsAxis = uc.IsAxis,
+                                ChannelIndex = uc.ChannelId,
                             };
                             break;
                         case UserSetupUserChannelNode:
@@ -207,14 +208,22 @@ public class SetupTemplateController : ControllerBase
 
         var targetCarChannels = await _context.CarChannels.Where(c => c.CarId == carId).ToDictionaryAsync(c => c.ChannelName);
         var targetTelemetries = await _context.CarTelemetry.Where(t => t.CarId == carId).ToDictionaryAsync(t => t.ChannelName);
-        var filterTypeNames = (await _context.SetupFilterTypes.Select(f => f.TypeName).ToListAsync()).ToHashSet();
 
         var userChannels = await _context.Set<UserChannel>()
             .Include(c => c.UserChannelDevice)
             .Where(c => c.UserChannelDevice!.UserId == user.Id)
             .ToListAsync();
-        var userChannelLookup = userChannels.ToDictionary(
-            c => $"{c.UserChannelDevice!.DeviceName}|{c.Name ?? (c.IsAxis ? $"Axis {c.ChannelId + 1}" : $"Button {c.ChannelId + 1}")}|{c.IsAxis}");
+        static string Label(UserChannel c) => c.Name ?? (c.IsAxis ? $"Axis {c.ChannelId + 1}" : $"Button {c.ChannelId + 1}");
+        var userChannelLookup = userChannels
+            .GroupBy(c => $"{c.UserChannelDevice!.DeviceName}|{Label(c)}|{c.IsAxis}")
+            .ToDictionary(g => g.Key, g => g.First());
+        // Another driver's gamepad is not the caller's: fall back to the caller's own
+        // gamepads, first by channel name, then by axis/button index.
+        var orderedChannels = userChannels.OrderBy(c => c.UserChannelDeviceId).ThenBy(c => c.ChannelId).ToList();
+        UserChannel? FindChannel(ControllerBinding b) =>
+            userChannelLookup.GetValueOrDefault($"{b.DeviceName}|{b.ChannelName}|{b.IsAxis}")
+            ?? orderedChannels.FirstOrDefault(c => c.IsAxis == b.IsAxis && Label(c) == b.ChannelName)
+            ?? (b.ChannelIndex is int index ? orderedChannels.FirstOrDefault(c => c.IsAxis == b.IsAxis && c.ChannelId == index) : null);
 
         var created = new List<(string TemplateId, UserSetupFlowNodeBase Entity)>();
         foreach (var tnode in template.Flow.Nodes)
@@ -226,13 +235,13 @@ public class SetupTemplateController : ControllerBase
                     var binding = tnode.Binding;
                     if (controllerBindings != null && controllerBindings.TryGetValue(tnode.Id, out var ov))
                         binding = ov;
-                    if (binding == null || string.IsNullOrEmpty(binding.DeviceName) || string.IsNullOrEmpty(binding.ChannelName))
+                    if (binding == null || string.IsNullOrEmpty(binding.ChannelName))
                     {
                         result.Warnings.Add($"Input node '{tnode.Id}': no controller binding supplied.");
                         continue;
                     }
-                    var key = $"{binding.DeviceName}|{binding.ChannelName}|{binding.IsAxis}";
-                    if (!userChannelLookup.TryGetValue(key, out var userChannel))
+                    var userChannel = FindChannel(binding);
+                    if (userChannel == null)
                     {
                         result.Warnings.Add($"Input node '{tnode.Id}': controller '{binding.DeviceName} / {binding.ChannelName}' (axis={binding.IsAxis}) not found for current user.");
                         continue;
@@ -260,9 +269,11 @@ public class SetupTemplateController : ControllerBase
                     };
                     break;
                 case "function":
-                    if (string.IsNullOrEmpty(tnode.FunctionName) || !filterTypeNames.Contains(tnode.FunctionName))
+                    // The function registry lives in the client (filters/filter-function-registry.ts);
+                    // like AddNode, any name is accepted. SetupFilterTypes is never filled.
+                    if (string.IsNullOrEmpty(tnode.FunctionName))
                     {
-                        result.Warnings.Add($"Function node '{tnode.Id}': '{tnode.FunctionName}' is not a registered filter type.");
+                        result.Warnings.Add($"Function node '{tnode.Id}': no function name.");
                         continue;
                     }
                     entity = new UserSetupFunctionNode
