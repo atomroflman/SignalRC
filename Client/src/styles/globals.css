@@ -209,10 +209,34 @@ textarea {
   to { opacity: 0; transform: scale(1.6); }
 }
 
+/* Steering wheel while updates are sent: rumbles and steers wildly. */
+.updates-wheel__rumble { animation: updates-wheel-rumble 0.14s linear infinite; }
+.updates-wheel__steer { transform-box: view-box; transform-origin: 12px 12px; animation: updates-wheel-steer 2.6s ease-in-out infinite; }
+button:disabled .updates-wheel__rumble,
+button:disabled .updates-wheel__steer { animation: none; }
+@keyframes updates-wheel-rumble {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(0.5px, -0.4px); }
+  50% { transform: translate(-0.4px, 0.5px); }
+  75% { transform: translate(0.4px, 0.3px); }
+}
+@keyframes updates-wheel-steer {
+  0%, 100% { transform: rotate(0deg); }
+  12% { transform: rotate(-75deg); }
+  22% { transform: rotate(-40deg); }
+  34% { transform: rotate(95deg); }
+  46% { transform: rotate(60deg); }
+  55% { transform: rotate(-20deg); }
+  68% { transform: rotate(-110deg); }
+  80% { transform: rotate(30deg); }
+  90% { transform: rotate(-15deg); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .brand-logo--draw .brand-logo__trace,
   .brand-logo__comet { display: none; }
   .brand-logo--draw .brand-logo__fill { animation: none; opacity: 1; }
   .brand-logo--live { animation: none; }
   .updates-resume, .updates-resume::after { animation: none; }
+  .updates-wheel__rumble, .updates-wheel__steer { animation: none; }
 }
