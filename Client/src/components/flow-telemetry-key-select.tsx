@@ -11,7 +11,9 @@ export function flowValueChannels(map: any): FlowValueChannel[] {
   const channels = map?.telemetryChannels ?? {};
   const result: FlowValueChannel[] = [];
   for (const [channel, item] of Object.entries<any>(channels)) {
-    if (item?.telemetryType !== "FlowValueReader") continue;
+    // The type is stored short ("FlowValueReader") or with its namespace (SignalRC.Onboard.Telemetry.FlowValueReader).
+    const type = String(item?.telemetryType ?? "");
+    if (type !== "FlowValueReader" && !type.endsWith(".FlowValueReader")) continue;
     const options = item?.options ?? {};
     const entry = Object.entries<any>(options).find(([k]) => k.toLowerCase() === "key");
     const key = String(entry?.[1] ?? "").trim();

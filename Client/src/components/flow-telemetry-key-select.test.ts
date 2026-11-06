@@ -8,11 +8,13 @@ describe("flowValueChannels", () => {
         gang: { telemetryType: "FlowValueReader", options: { Key: "gear" } },
         abstand: { telemetryType: "FlowValueReader", options: { key: " distance " } },
         ohneKey: { telemetryType: "FlowValueReader", options: {} },
+        puls: { telemetryType: "SignalRC.Onboard.Telemetry.FlowValueReader", options: { Key: "GamePadPulse" } },
         lidar: { telemetryType: "LidarTelemetryReader", options: { Key: "x" } },
       },
     };
     expect(flowValueChannels(map)).toEqual([
       { channel: "abstand", key: "distance" },
+      { channel: "puls", key: "GamePadPulse" },
       { channel: "gang", key: "gear" },
     ]);
     expect(flowValueChannels(null)).toEqual([]);
