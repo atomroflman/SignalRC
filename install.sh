@@ -576,8 +576,18 @@ if [ "$DEPLOY_MODE" = "onboard" ]; then
             usermod -aG "$hw_group" "$RUN_USER"
         fi
     done
+    # Raspberry Pi OS soft-blocks Bluetooth via rfkill (e.g. until a WLAN country is set); only root
+    # can lift it and the service user cannot. systemd-rfkill keeps the state across reboots.
+    for rfkill_dev in /sys/class/rfkill/rfkill*; do
+        if [ -f "$rfkill_dev/type" ] && [ "$(cat "$rfkill_dev/type")" = "bluetooth" ] && [ "$(cat "$rfkill_dev/soft")" = "1" ]; then
+            echo 0 > "$rfkill_dev/soft" && echo "Bluetooth rfkill soft block lifted ($(cat "$rfkill_dev/name"))."
+        fi
+    done
     if command -v systemctl >/dev/null && systemctl list-unit-files bluetooth.service >/dev/null 2>&1; then
         systemctl enable --now bluetooth.service || echo "Warning: bluetooth.service could not be started."
+    fi
+    if command -v bluetoothctl >/dev/null; then
+        bluetoothctl power on >/dev/null 2>&1 || true
     fi
 
     # ── Phase 2: mediamtx ───────────────────────────────────────────

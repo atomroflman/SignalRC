@@ -78,8 +78,15 @@ einmal von Hand:
 sudo apt-get install -y bluez
 sudo usermod -aG input,bluetooth <service-user>
 sudo systemctl enable --now bluetooth
+sudo rfkill unblock bluetooth             # oder: echo 0 | sudo tee /sys/class/rfkill/rfkill*/soft (Typ bluetooth)
+bluetoothctl power on
 sudo systemctl restart signalrc-onboard   # damit die Gruppen greifen
 ```
+
+Ist der Adapter per rfkill gesperrt (`bluetoothctl show` zeigt `PowerState: off-blocked`),
+meldet das Bluetooth-Panel genau das. Auf Raspberry Pi OS passiert das, solange kein
+WLAN-Land gesetzt ist. Das Onboard läuft nicht als root und kann die Sperre deshalb
+nicht selbst aufheben.
 
 Der Server braucht die Migration `AddOnboardFlow`. Sie läuft beim Start mit.
 

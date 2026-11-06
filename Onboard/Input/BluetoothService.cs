@@ -34,12 +34,29 @@ public sealed partial class BluetoothService
         {
             string? message = null;
             var success = true;
+            // Scanning, pairing and connecting need a powered adapter; switch it on, or say why not.
+            if (action is BluetoothAction.Scan or BluetoothAction.Pair or BluetoothAction.Connect)
+            {
+                var powerError = await EnsurePoweredAsync();
+                if (powerError != null)
+                {
+                    _logger.LogWarning("Bluetooth {Action}: {Error}", action, powerError);
+                    return new BluetoothResult { Success = false, Message = powerError, Devices = await ListAsync() };
+                }
+            }
             switch (action)
             {
                 case BluetoothAction.List:
+                    // An adapter that is off lists nothing; say so instead of an empty "ok".
+                    var (powered, state) = await AdapterStateAsync();
+                    if (!powered)
+                        (success, message) = (false, PowerMessage(state));
                     break;
                 case BluetoothAction.Scan:
-                    await RunAsync(["--timeout", "10", "scan", "on"], TimeSpan.FromSeconds(15));
+                    var scan = StripAnsi(await RunAsync(["--timeout", "10", "scan", "on"], TimeSpan.FromSeconds(15)));
+                    var scanError = scan.Split('\n').Select(l => l.Trim()).FirstOrDefault(l => l.StartsWith("Failed", StringComparison.OrdinalIgnoreCase));
+                    if (scanError != null)
+                        (success, message) = (false, scanError);
                     break;
                 case BluetoothAction.Pair:
                     (success, message) = await PairAsync(address!.ToUpperInvariant());
@@ -68,6 +85,36 @@ public sealed partial class BluetoothService
         {
             _gate.Release();
         }
+    }
+
+    /// <summary>Powered flag and PowerState ("on", "off", "off-blocked" …) of the default adapter.</summary>
+    private static async Task<(bool Powered, string State)> AdapterStateAsync()
+    {
+        var show = StripAnsi(await RunAsync(["show"], TimeSpan.FromSeconds(5)));
+        if (show.Contains("No default controller", StringComparison.OrdinalIgnoreCase))
+            return (false, "no-controller");
+        var state = Regex.Match(show, @"^\s*PowerState:\s*(\S+)", RegexOptions.Multiline).Groups[1].Value;
+        return (Flag(show, "Powered"), state.Length > 0 ? state : "unknown");
+    }
+
+    private static string PowerMessage(string state) => state switch
+    {
+        "no-controller" => "No Bluetooth adapter found on the vehicle.",
+        _ when state.Contains("blocked", StringComparison.OrdinalIgnoreCase) =>
+            "Bluetooth is blocked by rfkill on the vehicle. Unblock it once as root: 'sudo rfkill unblock bluetooth' (on Raspberry Pi OS also set the WLAN country), see Docs/OnboardFlow.md.",
+        _ => $"The Bluetooth adapter is off ({state}) and could not be switched on.",
+    };
+
+    /// <summary>Switches the adapter on if needed; null when it is powered, otherwise the reason.</summary>
+    private static async Task<string?> EnsurePoweredAsync()
+    {
+        var (powered, state) = await AdapterStateAsync();
+        if (powered) return null;
+        if (state == "no-controller" || state.Contains("blocked", StringComparison.OrdinalIgnoreCase))
+            return PowerMessage(state);
+        await RunAsync(["power", "on"], TimeSpan.FromSeconds(5));
+        (powered, state) = await AdapterStateAsync();
+        return powered ? null : PowerMessage(state);
     }
 
     private static BluetoothResult Fail(string message) => new() { Success = false, Message = message };
