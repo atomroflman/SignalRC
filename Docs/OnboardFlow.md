@@ -63,6 +63,26 @@ der Flow den ersten Wert schickt, hat er keine Daten. Kommt `StaleAfterMs` lang
 (Standard 2 s) kein neuer Wert, gilt er als veraltet, z. B. wenn der Flow aus ist oder
 eine andere Session ohne diesen Knoten fährt.
 
+## Lidar im Flow
+
+**Lidar Objekt** (`LidarObject`, nur Fahrzeug-Teil) liefert die Entfernung zum
+nächsten Objekt in einem Winkelbereich. Es rechnet auf dem Fahrzeug aus jedem
+Umlauf in voller Auflösung (1440 Punkte, alle 0,25°), nicht aus der verkleinerten
+Telemetrie.
+
+- `from` / `to`: Winkel in Grad, roh wie `lidarNearestAngle` – 0° = Index 0 des
+  Sensors (geradeaus), ohne den Montagewinkel des Lidar-Rasters. `from > to` geht
+  über 0° (350 bis 10), negative Winkel zählen von 360 (−15 bis 15).
+- `points`: so viele benachbarte Punkte braucht ein Objekt mindestens.
+- `maxJump`: zwei Nachbarpunkte gehören zum selben Objekt, wenn ihre Entfernungen
+  höchstens so viele cm auseinanderliegen. Punkte ohne Echo werden übersprungen.
+- `none`: Wert von `distance`, wenn nichts gefunden wird (Standard 9999 cm).
+- `lidar`: Name des Lidar-pinManagers in der ChannelMap (Standard `lidar`).
+
+Ausgänge: `distance` (cm, nächster Punkt des nächsten Objekts), `angle` (Grad dieses
+Punktes), `found` (1/0), `ok` (1, solange ein Umlauf jünger als 1 s vorliegt). Wer
+damit bremst, sollte `ok` mit auswerten: ohne Lidar ist `distance` = `none`.
+
 ## Live-Werte im Editor
 
 Werte des Fahrzeug-Teils kommen vom Fahrzeug: bis zu 5-mal pro Sekunde, mit allen

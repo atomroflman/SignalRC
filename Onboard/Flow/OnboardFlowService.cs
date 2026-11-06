@@ -42,8 +42,9 @@ public sealed class OnboardFlowService : IFlowEnvironment, IDisposable
     private int _ticking;
     private int _reportingStatus;
 
-    public OnboardFlowService(ILogger<OnboardFlowService> logger, IControlSink control, TelemetryService telemetry, VehicleInputService inputs, ServerConnectionService server, BluetoothService? bluetooth = null, FlowTelemetryStore? flowTelemetry = null)
+    public OnboardFlowService(ILogger<OnboardFlowService> logger, IControlSink control, TelemetryService telemetry, VehicleInputService inputs, ServerConnectionService server, BluetoothService? bluetooth = null, FlowTelemetryStore? flowTelemetry = null, global::IModuleManagerFactory? modules = null)
     {
+        _modules = modules;
         _bluetooth = bluetooth;
         _flowTelemetry = flowTelemetry ?? new FlowTelemetryStore();
         _logger = logger;
@@ -183,6 +184,30 @@ public sealed class OnboardFlowService : IFlowEnvironment, IDisposable
     public void PublishTelemetry(string key, double value) => _flowTelemetry.Set(key, value);
 
     public FlowTelemetryStore FlowTelemetry => _flowTelemetry;
+
+    private readonly global::IModuleManagerFactory? _modules;
+    private readonly HashSet<string> _lidarWarned = new(StringComparer.Ordinal);
+
+    /// <summary>LidarObject in the flow: the latest revolution of the lidar pin manager.</summary>
+    public SignalRC.Onboard.Hardware.Lidar.LidarScan? Lidar(string pinManager)
+    {
+        if (_modules == null) return null;
+        try
+        {
+            if (_modules.Create(pinManager) is SignalRC.Onboard.Hardware.Lidar.ILidarSource source)
+            {
+                if (source is SignalRC.Onboard.Hardware.Lidar.LidarManager m) m.EnsureStarted();
+                return source.LatestScan;
+            }
+        }
+        catch (Exception ex)
+        {
+            if (_lidarWarned.Add(pinManager)) _logger.LogWarning(ex, "Flow: lidar '{Name}' not available.", pinManager);
+            return null;
+        }
+        if (_lidarWarned.Add(pinManager)) _logger.LogWarning("Flow: pin manager '{Name}' is not a lidar.", pinManager);
+        return null;
+    }
 
     /// <summary>ControllerRumble in the flow.</summary>
     public void ControllerRumble(string? filter, double strong, double weak) => _inputs.SetRumble(filter, strong, weak);

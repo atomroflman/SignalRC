@@ -15,6 +15,8 @@ public interface IFlowFunctionContext
     void ControllerRumble(string? filter, double strong, double weak);
     /// <summary>Light bar colour of the vehicle's matching controllers (channels 0…1).</summary>
     void ControllerLight(string? filter, double red, double green, double blue);
+    /// <summary>Latest lidar revolution of the pin manager, null without one.</summary>
+    SignalRC.Onboard.Hardware.Lidar.LidarScan? Lidar(string pinManager);
 }
 
 /// <summary>
@@ -49,7 +51,7 @@ public static class FlowFunctions
         new ToggleFn(), new TurnSignalFn(), new RescaleFn(), new GearboxFn(), new FloatValueFn(),
         new SmoothFn(), new SignFn(), new HudSignalFn(), new HudInputFn(), new TelemetryFn(),
         new ActiveFn(), new PriorityFn(), new MaxFn(), new MinFn(), new DisconnectControllerFn(), new TelemetryOutFn(),
-        new ControllerRumbleFn(), new ControllerLightFn(),
+        new ControllerRumbleFn(), new ControllerLightFn(), new LidarObjectFn(),
     }.ToDictionary(f => f.Name, StringComparer.Ordinal);
 
     public static FlowFunction? Get(string? name) => name != null && All.TryGetValue(name, out var f) ? f : null;
@@ -581,5 +583,88 @@ internal sealed class ControllerLightFn : FlowFunction
         var b = Math.Clamp(In(i, "blue"), 0, 1);
         c.ControllerLight(p.TryGetValue("device", out var d) ? d : null, r, g, b);
         return [Math.Max(r, Math.Max(g, b))];
+    }
+}
+
+/// <summary>
+/// "Lidar Objekt": distance to the nearest object in an angle range of the lidar. Neighbouring
+/// slots whose distances differ by at most <c>maxJump</c> cm belong to one object (empty slots
+/// are skipped); an object needs at least <c>points</c> slots, so single stray returns do not
+/// count. Angles as lidarNearestAngle: 0° straight ahead, 0.25° per slot; from > to wraps
+/// over 0° (e.g. 350 to 10), negative angles count from 360.
+/// Outputs: distance (cm, nearest point of the nearest object; <c>none</c> if there is none),
+/// angle (° of that point), found (1/0), ok (1 while the lidar delivers fresh scans).
+/// Vehicle flow only.
+/// </summary>
+internal sealed class LidarObjectFn : FlowFunction
+{
+    private sealed class State { public uint Sequence; public string? Key; public double[] Result = []; }
+
+    public const double StaleSeconds = 1.0;
+    public override string Name => "LidarObject";
+    public override string[] Inputs => [];
+    public override string[] Outputs => ["distance", "angle", "found", "ok"];
+    public override object CreateState() => new State();
+
+    public override double[] Apply(IReadOnlyDictionary<string, double> i, IReadOnlyDictionary<string, string?> p, object? s, IFlowFunctionContext c)
+    {
+        var st = (State)s!;
+        var none = P(p, "none", 9999);
+        var pin = p.TryGetValue("lidar", out var l) && !string.IsNullOrWhiteSpace(l) ? l.Trim() : "lidar";
+        var scan = c.Lidar(pin);
+        if (scan == null || (DateTime.UtcNow - scan.ReceivedUtc).TotalSeconds > StaleSeconds)
+            return [none, 0, 0, 0];
+
+        var from = P(p, "from", -15);
+        var to = P(p, "to", 15);
+        var points = Math.Max(1, (int)Math.Round(P(p, "points", 3)));
+        var maxJumpMm = Math.Max(0, P(p, "maxJump", 10)) * 10;
+        var key = $"{from}|{to}|{points}|{maxJumpMm}|{none}";
+        if (st.Sequence == scan.Sequence && st.Key == key && st.Result.Length > 0) return st.Result;
+
+        var (distanceMm, index) = Nearest(scan.DistanceMm, from, to, points, maxJumpMm);
+        st.Result = distanceMm < 0
+            ? [none, 0, 0, 1]
+            : [distanceMm / 10.0, SignalRC.Onboard.Hardware.Lidar.LidarScan.AngleOf(index), 1, 1];
+        st.Sequence = scan.Sequence;
+        st.Key = key;
+        return st.Result;
+    }
+
+    private static double P(IReadOnlyDictionary<string, string?> p, string name, double fallback)
+    {
+        var v = JsNumber.Param(p, name, fallback);
+        return double.IsFinite(v) ? v : fallback;
+    }
+
+    /// <summary>Nearest point (mm, slot) of the nearest object with enough slots; (−1, −1) if none.</summary>
+    public static (int DistanceMm, int Index) Nearest(int[] distanceMm, double fromDeg, double toDeg, int points, double maxJumpMm)
+    {
+        var n = distanceMm.Length;
+        var perSlot = 360.0 / n;
+        int Slot(double deg) => ((int)Math.Round(((deg % 360) + 360) % 360 / perSlot)) % n;
+        var start = Slot(fromDeg);
+        var count = (Slot(toDeg) - start + n) % n + 1;
+
+        var best = (-1, -1);
+        int clusterMin = -1, clusterMinIndex = -1, clusterSize = 0, last = -1;
+        void Close()
+        {
+            if (clusterSize >= points && (best.Item1 < 0 || clusterMin < best.Item1)) best = (clusterMin, clusterMinIndex);
+            clusterSize = 0;
+            clusterMin = -1;
+        }
+        for (var k = 0; k < count; k++)
+        {
+            var idx = (start + k) % n;
+            var d = distanceMm[idx];
+            if (d < 0) continue; // no return: skipped, does not split an object
+            if (clusterSize > 0 && Math.Abs(d - last) > maxJumpMm) Close();
+            clusterSize++;
+            if (clusterMin < 0 || d < clusterMin) { clusterMin = d; clusterMinIndex = idx; }
+            last = d;
+        }
+        Close();
+        return best;
     }
 }

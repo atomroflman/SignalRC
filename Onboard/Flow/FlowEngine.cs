@@ -19,6 +19,8 @@ public interface IFlowEnvironment
     void ControllerRumble(string? filter, double strong, double weak);
     /// <summary>Side effect of the ControllerLight function.</summary>
     void ControllerLight(string? filter, double red, double green, double blue);
+    /// <summary>Latest lidar revolution of the pin manager, null without one (LidarObject).</summary>
+    SignalRC.Onboard.Hardware.Lidar.LidarScan? Lidar(string pinManager);
 }
 
 /// <summary>A value the engine wants written to a control channel.</summary>
@@ -248,5 +250,6 @@ public sealed class FlowEngine
         public void PublishTelemetry(string key, double value) => env.PublishTelemetry(key, value);
         public void ControllerRumble(string? filter, double strong, double weak) => env.ControllerRumble(filter, strong, weak);
         public void ControllerLight(string? filter, double red, double green, double blue) => env.ControllerLight(filter, red, green, blue);
+        public SignalRC.Onboard.Hardware.Lidar.LidarScan? Lidar(string pinManager) => env.Lidar(pinManager);
     }
 }

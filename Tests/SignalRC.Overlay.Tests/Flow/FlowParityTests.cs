@@ -51,5 +51,6 @@ public class FlowParityTests
         public void PublishTelemetry(string key, double value) { }
         public void ControllerRumble(string? filter, double strong, double weak) { }
         public void ControllerLight(string? filter, double red, double green, double blue) { }
+        public SignalRC.Onboard.Hardware.Lidar.LidarScan? Lidar(string pinManager) => null;
     }
 }

@@ -130,6 +130,8 @@
     { "name": "controller light outputs the brightest channel", "function": "ControllerLight", "params": {}, "steps": [
       { "inputs": { "red": 0.2, "green": 0.6, "blue": 0.1 }, "expect": [0.6] },
       { "inputs": { "blue": 3 }, "expect": [1] } ] },
+    { "name": "lidar object without a lidar", "function": "LidarObject", "params": { "from": "10", "to": "30" }, "steps": [
+      { "inputs": {}, "expect": [9999, 0, 0, 0] } ] },
     { "name": "priority", "function": "Priority", "params": {}, "steps": [
       { "inputs": { "a": 0.3, "aActive": 1, "b": -0.8 }, "expect": [0.3] },
       { "inputs": { "a": 0.3, "aActive": 0, "b": -0.8 }, "expect": [-0.8] } ] }

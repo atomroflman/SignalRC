@@ -25,6 +25,7 @@ import { PriorityFunction } from "./PriorityFunction";
 import { MaxFunction } from "./MaxFunction";
 import { ControllerRumbleFunction } from "./ControllerRumbleFunction";
 import { ControllerLightFunction } from "./ControllerLightFunction";
+import { LidarObjectFunction } from "./LidarObjectFunction";
 import { MinFunction } from "./MinFunction";
 import { DisconnectControllerFunction } from "./DisconnectControllerFunction";
 import { TelemetryOutFunction } from "./TelemetryOutFunction";
@@ -78,6 +79,7 @@ export const filterFunctionRegistry = {
   Max: new MaxFunction(),
   ControllerRumble: new ControllerRumbleFunction(),
   ControllerLight: new ControllerLightFunction(),
+  LidarObject: new LidarObjectFunction(),
   Min: new MinFunction(),
   DisconnectController: new DisconnectControllerFunction(),
   TelemetryOut: new TelemetryOutFunction(),

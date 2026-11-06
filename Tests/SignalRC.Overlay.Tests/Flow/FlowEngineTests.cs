@@ -28,6 +28,7 @@ public class FlowEngineTests
         public List<(string? Filter, double R, double G, double B)> Lights { get; } = new();
         public void ControllerRumble(string? filter, double strong, double weak) => Rumbles.Add((filter, strong, weak));
         public void ControllerLight(string? filter, double red, double green, double blue) => Lights.Add((filter, red, green, blue));
+        public SignalRC.Onboard.Hardware.Lidar.LidarScan? Lidar(string pinManager) => null;
     }
 
     private static OnboardFlowNode Fn(int id, string fn, params (string, string)[] p) =>
@@ -250,5 +251,33 @@ public class FlowEngineTests
         Assert.Equal([("Wireless", 1.0, 0.0)], env.Rumbles);
         Assert.Equal([((string?)null, 0.0, 0.0, 1.0)], env.Lights);
         Assert.Equal([1.0], engine.OutputsOf(2));
+    }
+
+    private static int[] Ring(params (int Slot, int Mm)[] points)
+    {
+        var d = Enumerable.Repeat(-1, 1440).ToArray();
+        foreach (var (slot, mm) in points) d[slot] = mm;
+        return d;
+    }
+
+    [Fact]
+    public void LidarObject_takes_the_nearest_object_with_enough_points()
+    {
+        // 10°..30° = slots 40..120. A stray return at 500 mm (1 point), an object at 1200..1230 mm
+        // (4 points, one empty slot inside), a wall at 2000 mm.
+        var ring = Ring((45, 500), (60, 1230), (61, 1210), (63, 1200), (64, 1220), (80, 2000), (81, 2000), (82, 2000));
+        Assert.Equal((1200, 63), LidarObjectFn.Nearest(ring, 10, 30, 3, 100));
+        Assert.Equal((500, 45), LidarObjectFn.Nearest(ring, 10, 30, 1, 100));
+        Assert.Equal((2000, 80), LidarObjectFn.Nearest(ring, 10, 30, 3, 5)); // 1210 → 1230 jumps too far: object split
+        Assert.Equal((-1, -1), LidarObjectFn.Nearest(ring, 31, 40, 1, 100));
+    }
+
+    [Fact]
+    public void LidarObject_range_wraps_over_zero()
+    {
+        var ring = Ring((1436, 800), (1437, 800), (1438, 810), (2, 3000), (3, 3000), (4, 3000));
+        Assert.Equal((800, 1436), LidarObjectFn.Nearest(ring, -2, 2, 3, 100));
+        Assert.Equal((800, 1436), LidarObjectFn.Nearest(ring, 358, 2, 3, 100));
+        Assert.Equal((-1, -1), LidarObjectFn.Nearest(ring, 2, 358, 1, 100)); // 2°..358° is the back: nothing there
     }
 }

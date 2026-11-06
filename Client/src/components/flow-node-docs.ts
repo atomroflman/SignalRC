@@ -186,6 +186,18 @@ const de: Record<string, FlowNodeDoc> = {
     ],
     example: "Gearbox.gearValue → Telemetrie senden (key \"gear\") → Kanal \"Gang\" (FlowValueReader, Key gear) im HUD",
   },
+  LidarObject: {
+    summary: "Lidar Objekt: Entfernung zum nächsten Objekt in einem Winkelbereich des Lidars. Nur im Fahrzeug-Flow.",
+    details: [
+      "from/to in Grad, 0° = geradeaus, wie lidarNearestAngle. from > to geht über 0° (z. B. 350 bis 10); negative Winkel zählen von 360 (−15 bis 15).",
+      "Ein Objekt sind benachbarte Messpunkte (alle 0,25°), deren Entfernungen sich höchstens um maxJump cm unterscheiden; Punkte ohne Echo werden übersprungen.",
+      "points: so viele Punkte braucht ein Objekt mindestens – einzelne Streupunkte zählen nicht.",
+      "distance: nächster Punkt des nächsten Objekts in cm; none (Standard 9999), wenn keines da ist. angle: Winkel dieses Punktes. found: 1/0.",
+      "ok ist 1, solange das Lidar frische Umläufe liefert (jünger als 1 s). Ohne Lidar: distance = none, found = 0, ok = 0 – für Bremsen also ok mit prüfen.",
+      "Rechnet jeden Umlauf in voller Auflösung auf dem Fahrzeug.",
+    ],
+    example: "from 10, to 30, points 3 → distance < 50 (Iif, true → 1) → Gas begrenzen",
+  },
   ControllerRumble: {
     summary: "Controller rütteln: lässt die passenden Controller vibrieren, strong = großer Motor, weak = kleiner Motor (je 0…1).",
     details: [
@@ -408,6 +420,18 @@ const en: Record<string, FlowNodeDoc> = {
       "The output passes the value on unchanged.",
     ],
     example: "Gearbox.gearValue → Send telemetry (key \"gear\") → channel \"Gear\" (FlowValueReader, Key gear) in the HUD",
+  },
+  LidarObject: {
+    summary: "Lidar object: distance to the nearest object in an angle range of the lidar. Vehicle flow only.",
+    details: [
+      "from/to in degrees, 0° = straight ahead, as lidarNearestAngle. from > to wraps over 0° (e.g. 350 to 10); negative angles count from 360 (−15 to 15).",
+      "An object is neighbouring points (every 0.25°) whose distances differ by at most maxJump cm; points without a return are skipped.",
+      "points: an object needs at least this many points – single stray returns do not count.",
+      "distance: nearest point of the nearest object in cm; none (default 9999) if there is none. angle: angle of that point. found: 1/0.",
+      "ok is 1 while the lidar delivers fresh revolutions (younger than 1 s). Without a lidar: distance = none, found = 0, ok = 0 – check ok too when braking on it.",
+      "Computed on the vehicle from every revolution at full resolution.",
+    ],
+    example: "from 10, to 30, points 3 → distance < 50 (Iif, true → 1) → limit throttle",
   },
   ControllerRumble: {
     summary: "Rumble controller: makes the matching controllers vibrate, strong = big motor, weak = small motor (0…1 each).",
