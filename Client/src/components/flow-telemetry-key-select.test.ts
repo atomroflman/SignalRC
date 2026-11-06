@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { flowValueChannels } from "./flow-telemetry-key-select";
+import { flowValueChannels, telemetryChannelNames } from "./flow-telemetry-key-select";
 
 describe("flowValueChannels", () => {
   it("lists FlowValueReader channels with their key, sorted, any key casing", () => {
@@ -18,5 +18,13 @@ describe("flowValueChannels", () => {
       { channel: "gang", key: "gear" },
     ]);
     expect(flowValueChannels(null)).toEqual([]);
+  });
+});
+
+describe("telemetryChannelNames", () => {
+  it("lists every telemetry channel, sorted", () => {
+    expect(telemetryChannelNames({ telemetryChannels: { lidar: {}, "drive.mode": {}, cpuTemperature: {} } }))
+      .toEqual(["cpuTemperature", "drive.mode", "lidar"]);
+    expect(telemetryChannelNames(undefined)).toEqual([]);
   });
 });
