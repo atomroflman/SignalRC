@@ -43,6 +43,7 @@ function ZoneFrame({ node, children }: { node: any; children: React.ReactNode })
   const setNodeZone = useControlFlowStore(s => s.setNodeZone);
   if (!node) return <>{children}</>;
   const onboard = node.zone === "onboard";
+  const handoff = node.nodeTypeName === "UserSetupHandoffNode";
   const movable = node.nodeTypeName === "UserSetupFunctionNode" || node.nodeTypeName === "UserSetupCarChannelNode";
   const move = async () => {
     const error = await setNodeZone(node.nodeId, onboard ? "browser" : "onboard");
@@ -50,7 +51,11 @@ function ZoneFrame({ node, children }: { node: any; children: React.ReactNode })
   };
   return (
     // The zone class colours the ports (globals.css): web blue, vehicle orange, handoff both.
-    <div className={`${onboard ? "relative rounded-lg ring-2 ring-orange-500/80" : "relative rounded-lg ring-2 ring-blue-500/80"} ${zoneClass(node)}`}>
+    <div className={`relative isolate rounded-lg ${handoff ? "" : onboard ? "ring-2 ring-orange-500/80" : "ring-2 ring-blue-500/80"} ${zoneClass(node)}`}>
+      {/* The handoff joins both zones: frame blue at the top (web in), orange at the bottom (vehicle out). */}
+      {handoff && (
+        <div className="pointer-events-none absolute -inset-[2px] -z-10 rounded-[10px] bg-gradient-to-b from-blue-500/80 to-orange-500/80" />
+      )}
       {(onboard || movable || (hasOnboardPart && node.type === "output")) && (
         <div className="pointer-events-none absolute -top-6 left-0 flex items-center gap-1 text-[10px] whitespace-nowrap">
           {onboard && <span className="px-1 rounded bg-orange-700 text-orange-50">{t.onboardBadge}</span>}
