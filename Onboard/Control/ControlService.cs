@@ -182,6 +182,13 @@ public class ControlService : IControlClient, IHubConnectionObserver
             return null;
         }
 
+        // The challenge must be one this onboard issued and not used yet (no replay).
+        if (!SshKeyService.TryConsumeChallenge(authRequest.Challenge))
+        {
+            Logger.LogError("Cannot acquire control: unknown, expired or reused challenge.");
+            return null;
+        }
+
         // Verify SSH signature
         if (SshKeyService.VerifySignature(authRequest.Challenge, authRequest.Signature))
         {

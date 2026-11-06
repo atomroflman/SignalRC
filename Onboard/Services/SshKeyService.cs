@@ -145,11 +145,14 @@ public class SshKeyService
         }
     }
 
-    public string? GenerateChallenge()
-    {
-        // Generate a random challenge for authentication
-        return Guid.NewGuid().ToString("N") + DateTime.UtcNow.Ticks.ToString("X");
-    }
+    // Challenges are one-time nonces (Docs/VehicleKeyAuth.md): a recorded challenge
+    // and signature cannot open a second control session.
+    private readonly SignalRC.Shared.Security.NonceStore _challenges = new();
+
+    public string? GenerateChallenge() => _challenges.Issue();
+
+    /// <summary>True once for a challenge this onboard issued within the last minute.</summary>
+    public bool TryConsumeChallenge(string? challenge) => _challenges.TryConsume(challenge);
 
     public string? GenerateSessionIdFromPrivateKey(string privateKeyPem)
     {
