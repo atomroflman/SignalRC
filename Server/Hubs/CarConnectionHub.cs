@@ -417,6 +417,13 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
             await UpdateCarUiDriverStateAsync(carId);
             _connectionStore.RememberControlSession(carId.ToString(), session);
             await Service<ControlDisplayRelay>().ControlAcquiredAsync(carId, Context.ConnectionId);
+            // The driver's onboard flow goes to the vehicle with every takeover (OnboardFlow-Arbeitspakete.md E04).
+            var driver = await GetCurrentUserAsync();
+            if (driver != null)
+            {
+                try { await Service<OnboardFlowPublisher>().ControlAcquiredAsync(carId, driver.Id, session); }
+                catch (Exception ex) { Logger.LogError(ex, "Pushing the onboard flow to car {CarId} failed", carId); }
+            }
         }
         return session;
     }
@@ -428,6 +435,7 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
             return;
         await Clients.Client(connectionInfo.ConnectionId!).ReleaseCarControl(sessionId);
         _connectionStore.ForgetControlSession(carId.ToString(), sessionId);
+        Service<OnboardFlowPublisher>().ControlReleased(carId, sessionId);
         await ClearUserActiveVehicle(carId);
         await UpdateCarUiDriverStateAsync(carId);
         await Service<ControlDisplayRelay>().ControlEndedAsync(carId);

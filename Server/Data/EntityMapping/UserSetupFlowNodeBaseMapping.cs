@@ -11,6 +11,8 @@ public class UserSetupFlowNodeBaseMapping : IEntityTypeConfiguration<UserSetupFl
         builder.HasDiscriminator<string>("NodeType")
             .HasValue<UserSetupCarChannelNode>("C")
             .HasValue<UserSetupFunctionNode>("F")
-            .HasValue<UserSetupUserChannelNode>("U");
+            .HasValue<UserSetupUserChannelNode>("U")
+            .HasValue<UserSetupHandoffNode>("H")
+            .HasValue<UserSetupVehicleInputNode>("V");
     }
 }

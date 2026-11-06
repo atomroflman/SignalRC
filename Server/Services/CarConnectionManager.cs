@@ -137,6 +137,8 @@ public class CarConnectionInfo
     public ChannelHealthReport? ChannelHealth { get; set; }
     /// <summary>Latest self-update status the onboard sent; null for onboard builds that don't report it.</summary>
     public OnboardUpdateStatus? UpdateStatus { get; set; }
+    /// <summary>Latest onboard flow status (OnboardFlow-Arbeitspakete.md T13); null for onboard builds without it.</summary>
+    public SignalRC.Shared.Flow.OnboardFlowStatus? FlowStatus { get; set; }
     /// <summary>SHA-256 of the current control session, null without one.</summary>
     public byte[]? ControlSessionHash { get; set; }
 

@@ -1049,6 +1049,9 @@ namespace SignalRC.Server.Migrations
                     b.Property<int>("UserSetupId")
                         .HasColumnType("integer");
 
+                    b.Property<int>("Zone")
+                        .HasColumnType("integer");
+
                     b.HasKey("Id");
 
                     b.ToTable("UserSetupFlowNodes", (string)null);
@@ -1144,6 +1147,68 @@ namespace SignalRC.Server.Migrations
                     b.ToTable("UserSetupTelemetries");
                 });
 
+            modelBuilder.Entity("SignalRC.Server.Data.VehicleInputChannel", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("Code")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsAxis")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("VehicleInputDeviceId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("VehicleInputDeviceId", "IsAxis", "Code")
+                        .IsUnique();
+
+                    b.ToTable("VehicleInputChannels", (string)null);
+                });
+
+            modelBuilder.Entity("SignalRC.Server.Data.VehicleInputDevice", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CarId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("DeviceKey")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<DateTime>("LastSeenUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CarId", "DeviceKey")
+                        .IsUnique();
+
+                    b.ToTable("VehicleInputDevices", (string)null);
+                });
+
             modelBuilder.Entity("SignalRC.Server.Data.UserSetupCarChannelNode", b =>
                 {
                     b.HasBaseType("SignalRC.Server.Data.UserSetupFlowNodeBase");
@@ -1172,6 +1237,20 @@ namespace SignalRC.Server.Migrations
                     b.HasDiscriminator().HasValue("F");
                 });
 
+            modelBuilder.Entity("SignalRC.Server.Data.UserSetupHandoffNode", b =>
+                {
+                    b.HasBaseType("SignalRC.Server.Data.UserSetupFlowNodeBase");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasIndex("UserSetupId");
+
+                    b.HasDiscriminator().HasValue("H");
+                });
+
             modelBuilder.Entity("SignalRC.Server.Data.UserSetupTelemetryNode", b =>
                 {
                     b.HasBaseType("SignalRC.Server.Data.UserSetupFlowNodeBase");
@@ -1198,6 +1277,20 @@ namespace SignalRC.Server.Migrations
                     b.HasIndex("UserSetupId");
 
                     b.HasDiscriminator().HasValue("U");
+                });
+
+            modelBuilder.Entity("SignalRC.Server.Data.UserSetupVehicleInputNode", b =>
+                {
+                    b.HasBaseType("SignalRC.Server.Data.UserSetupFlowNodeBase");
+
+                    b.Property<int>("VehicleInputChannelId")
+                        .HasColumnType("integer");
+
+                    b.HasIndex("UserSetupId");
+
+                    b.HasIndex("VehicleInputChannelId");
+
+                    b.HasDiscriminator().HasValue("V");
                 });
 
             modelBuilder.Entity("SignalRC.Server.Data.CarChannel", b =>
@@ -1469,6 +1562,28 @@ namespace SignalRC.Server.Migrations
                     b.Navigation("UserSetup");
                 });
 
+            modelBuilder.Entity("SignalRC.Server.Data.VehicleInputChannel", b =>
+                {
+                    b.HasOne("SignalRC.Server.Data.VehicleInputDevice", "VehicleInputDevice")
+                        .WithMany("Channels")
+                        .HasForeignKey("VehicleInputDeviceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("VehicleInputDevice");
+                });
+
+            modelBuilder.Entity("SignalRC.Server.Data.VehicleInputDevice", b =>
+                {
+                    b.HasOne("SignalRC.Server.Data.Car", "Car")
+                        .WithMany()
+                        .HasForeignKey("CarId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Car");
+                });
+
             modelBuilder.Entity("SignalRC.Server.Data.UserSetupCarChannelNode", b =>
                 {
                     b.HasOne("SignalRC.Server.Data.CarChannel", "CarChannel")
@@ -1489,6 +1604,17 @@ namespace SignalRC.Server.Migrations
                 });
 
             modelBuilder.Entity("SignalRC.Server.Data.UserSetupFunctionNode", b =>
+                {
+                    b.HasOne("SignalRC.Server.Data.UserCarSetup", "UserSetup")
+                        .WithMany()
+                        .HasForeignKey("UserSetupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("UserSetup");
+                });
+
+            modelBuilder.Entity("SignalRC.Server.Data.UserSetupHandoffNode", b =>
                 {
                     b.HasOne("SignalRC.Server.Data.UserCarSetup", "UserSetup")
                         .WithMany()
@@ -1537,6 +1663,25 @@ namespace SignalRC.Server.Migrations
                     b.Navigation("UserSetup");
                 });
 
+            modelBuilder.Entity("SignalRC.Server.Data.UserSetupVehicleInputNode", b =>
+                {
+                    b.HasOne("SignalRC.Server.Data.UserCarSetup", "UserSetup")
+                        .WithMany()
+                        .HasForeignKey("UserSetupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SignalRC.Server.Data.VehicleInputChannel", "VehicleInputChannel")
+                        .WithMany("SetupNodes")
+                        .HasForeignKey("VehicleInputChannelId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("UserSetup");
+
+                    b.Navigation("VehicleInputChannel");
+                });
+
             modelBuilder.Entity("SignalRC.Server.Data.Car", b =>
                 {
                     b.Navigation("Functions");
@@ -1583,6 +1728,16 @@ namespace SignalRC.Server.Migrations
                 });
 
             modelBuilder.Entity("SignalRC.Server.Data.UserChannelDevice", b =>
+                {
+                    b.Navigation("Channels");
+                });
+
+            modelBuilder.Entity("SignalRC.Server.Data.VehicleInputChannel", b =>
+                {
+                    b.Navigation("SetupNodes");
+                });
+
+            modelBuilder.Entity("SignalRC.Server.Data.VehicleInputDevice", b =>
                 {
                     b.Navigation("Channels");
                 });

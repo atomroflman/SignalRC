@@ -1,6 +1,8 @@
 using SignalRC.Server.Security;
 using SignalRC.Server.Data;
 using SignalRC.Shared.SetupTemplate;
+using SignalRC.Shared.Flow;
+using SignalRC.Server.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -45,6 +47,11 @@ public class SetupTemplateController : ControllerBase
                 .Where(c => inputChannelIds.Contains(c.Id))
                 .ToDictionaryAsync(c => c.Id)
             : new Dictionary<int, UserChannel>();
+        var vehicleInputIds = nodes.OfType<UserSetupVehicleInputNode>().Select(n => n.VehicleInputChannelId).Distinct().ToList();
+        var vehicleInputs = vehicleInputIds.Any()
+            ? await _context.VehicleInputChannels.Include(c => c.VehicleInputDevice)
+                .Where(c => vehicleInputIds.Contains(c.Id)).ToDictionaryAsync(c => c.Id)
+            : new Dictionary<int, VehicleInputChannel>();
         var outputCarChannelIds = nodes.OfType<UserSetupCarChannelNode>().Select(n => n.CarChannelId).Distinct().ToList();
         var outputChannels = outputCarChannelIds.Any()
             ? await _context.CarChannels.Where(c => outputCarChannelIds.Contains(c.Id)).ToDictionaryAsync(c => c.Id)
@@ -124,9 +131,27 @@ public class SetupTemplateController : ControllerBase
                         Id = nodeGuidMap[n.Id],
                         PositionX = n.PositionX,
                         PositionY = n.PositionY,
+                        Zone = n.Zone == FlowZone.Onboard ? "onboard" : null,
                     };
                     switch (n)
                     {
+                        case UserSetupHandoffNode h:
+                            tn.Type = "handoff";
+                            tn.Name = h.Name;
+                            break;
+                        case UserSetupVehicleInputNode vi when vehicleInputs.TryGetValue(vi.VehicleInputChannelId, out var vc):
+                            tn.Type = "vehicleInput";
+                            tn.Binding = new ControllerBinding
+                            {
+                                DeviceName = vc.VehicleInputDevice.Name,
+                                ChannelName = vc.Name,
+                                IsAxis = vc.IsAxis,
+                                ChannelIndex = vc.Code,
+                            };
+                            break;
+                        case UserSetupVehicleInputNode:
+                            tn.Type = "vehicleInput";
+                            break;
                         case UserSetupUserChannelNode ic when inputChannels.TryGetValue(ic.UserChannelId, out var uc) && uc.UserChannelDevice != null:
                             tn.Type = "input";
                             tn.Binding = new ControllerBinding
@@ -225,6 +250,13 @@ public class SetupTemplateController : ControllerBase
             ?? orderedChannels.FirstOrDefault(c => c.IsAxis == b.IsAxis && Label(c) == b.ChannelName)
             ?? (b.ChannelIndex is int index ? orderedChannels.FirstOrDefault(c => c.IsAxis == b.IsAxis && c.ChannelId == index) : null);
 
+        // Controllers of the target vehicle (E14): by device and channel name, else by code.
+        var vehicleChannels = await _context.VehicleInputChannels.Include(c => c.VehicleInputDevice)
+            .Where(c => c.VehicleInputDevice.CarId == carId).OrderBy(c => c.VehicleInputDeviceId).ThenBy(c => c.Code).ToListAsync();
+        VehicleInputChannel? FindVehicleChannel(ControllerBinding b) =>
+            vehicleChannels.FirstOrDefault(c => c.IsAxis == b.IsAxis && c.Name == b.ChannelName && c.VehicleInputDevice.Name == b.DeviceName)
+            ?? vehicleChannels.FirstOrDefault(c => c.IsAxis == b.IsAxis && c.Name == b.ChannelName)
+            ?? (b.ChannelIndex is int code ? vehicleChannels.FirstOrDefault(c => c.IsAxis == b.IsAxis && c.Code == code) : null);
         var created = new List<(string TemplateId, UserSetupFlowNodeBase Entity)>();
         foreach (var tnode in template.Flow.Nodes)
         {
@@ -250,6 +282,30 @@ public class SetupTemplateController : ControllerBase
                     {
                         UserSetupId = setup.Id,
                         UserChannelId = userChannel.Id,
+                        PositionX = tnode.PositionX,
+                        PositionY = tnode.PositionY,
+                    };
+                    break;
+                case "handoff":
+                    entity = new UserSetupHandoffNode
+                    {
+                        UserSetupId = setup.Id,
+                        Name = string.IsNullOrWhiteSpace(tnode.Name) ? "Übergabe" : tnode.Name[..Math.Min(64, tnode.Name.Length)],
+                        PositionX = tnode.PositionX,
+                        PositionY = tnode.PositionY,
+                    };
+                    break;
+                case "vehicleinput":
+                    var vehicleChannel = tnode.Binding == null ? null : FindVehicleChannel(tnode.Binding);
+                    if (vehicleChannel == null)
+                    {
+                        result.Warnings.Add($"Vehicle controller node '{tnode.Id}': '{tnode.Binding?.DeviceName} / {tnode.Binding?.ChannelName}' not known on this vehicle (pair the controller first).");
+                        continue;
+                    }
+                    entity = new UserSetupVehicleInputNode
+                    {
+                        UserSetupId = setup.Id,
+                        VehicleInputChannelId = vehicleChannel.Id,
                         PositionX = tnode.PositionX,
                         PositionY = tnode.PositionY,
                     };
@@ -288,6 +344,20 @@ public class SetupTemplateController : ControllerBase
                     result.Warnings.Add($"Node '{tnode.Id}': unknown type '{tnode.Type}'.");
                     continue;
             }
+            var requestedZone = string.Equals(tnode.Zone, "onboard", StringComparison.OrdinalIgnoreCase) ? FlowZone.Onboard : FlowZone.Browser;
+            var (zone, zoneError) = FlowZoneRules.ZoneForNewNode(entity, requestedZone);
+            if (zoneError != null)
+                result.Warnings.Add($"Node '{tnode.Id}': {zoneError} Placed in the {FlowZoneRules.ZoneName(zone)} flow.");
+            entity.Zone = zone;
+            if (entity is UserSetupCarChannelNode output)
+            {
+                var channelError = FlowZoneRules.CheckChannelZone(created.Select(c => c.Entity).OfType<UserSetupCarChannelNode>(), output.CarChannelId, zone);
+                if (channelError != null)
+                {
+                    result.Warnings.Add($"Output node '{tnode.Id}': {channelError}");
+                    continue;
+                }
+            }
             created.Add((tnode.Id, entity));
         }
 
@@ -311,8 +381,15 @@ public class SetupTemplateController : ControllerBase
         if (fnParams.Count > 0)
             _context.AddRange(fnParams);
 
+        var entityByTemplateId = created.ToDictionary(c => c.TemplateId, c => c.Entity);
         var edgeEntities = template.Flow.Edges
             .Where(e => nodeIdMap.ContainsKey(e.FromNode) && nodeIdMap.ContainsKey(e.ToNode))
+            .Where(e =>
+            {
+                var error = FlowZoneRules.CheckLink(entityByTemplateId[e.FromNode], entityByTemplateId[e.ToNode]);
+                if (error != null) result.Warnings.Add($"Connection {e.FromNode} → {e.ToNode} skipped: {error}");
+                return error == null;
+            })
             .Select(e => new UserSetupLink
             {
                 UserSetupFromNodeId = nodeIdMap[e.FromNode],

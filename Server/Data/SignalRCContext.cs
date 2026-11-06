@@ -30,6 +30,8 @@ namespace SignalRC.Server.Data
         public DbSet<TelemetryHistorySample> TelemetrySamples { get; set; }
         public DbSet<TelemetryTextSample> TelemetryTextSamples { get; set; }
         public DbSet<CarTelemetryDashboard> CarTelemetryDashboards { get; set; }
+        public DbSet<VehicleInputDevice> VehicleInputDevices { get; set; }
+        public DbSet<VehicleInputChannel> VehicleInputChannels { get; set; }
 
         public async Task<long> GetNextUserSessionId() 
         {

@@ -1,4 +1,6 @@
 using SignalRC.Server.Data;
+using SignalRC.Server.Services;
+using SignalRC.Shared.Flow;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -107,6 +109,7 @@ public partial class FlowController : ControllerBase
         var template = await templates.BuildTemplateAsync(car, source);
         var result = await templates.ApplyTemplateAsync(user, carId, template);
         _logger.LogInformation("User {UserId} copied flow {SetupId} of car {CarId}", user.Id, setupId, carId);
+        HttpContext?.RequestServices.GetService<OnboardFlowPublisher>()?.FlowChanged(carId, user.Id);
         return Ok(result);
     }
 
@@ -172,11 +175,47 @@ public partial class FlowController : ControllerBase
                     PositionY = req.PositionY
                 };
                 break;
+            case "handoff":
+                node = new UserSetupHandoffNode
+                {
+                    UserSetupId = req.UserSetupId,
+                    Name = string.IsNullOrWhiteSpace(req.Name) ? "Übergabe" : req.Name.Trim()[..Math.Min(64, req.Name.Trim().Length)],
+                    PositionX = req.PositionX,
+                    PositionY = req.PositionY
+                };
+                break;
+            case "vehicleinput":
+                var inputSetup = await _context.UserSetups.AsNoTracking().FirstOrDefaultAsync(s => s.Id == req.UserSetupId);
+                // Controllers belong to the vehicle (E14): any driver of the car may use them.
+                var inputChannel = inputSetup == null ? null : await _context.VehicleInputChannels
+                    .FirstOrDefaultAsync(c => c.Id == id && c.VehicleInputDevice.CarId == inputSetup.CarId);
+                if (inputChannel == null)
+                    return NotFound("Vehicle controller channel not found");
+                node = new UserSetupVehicleInputNode
+                {
+                    UserSetupId = req.UserSetupId,
+                    VehicleInputChannelId = inputChannel.Id,
+                    PositionX = req.PositionX,
+                    PositionY = req.PositionY
+                };
+                break;
             default:
                 return BadRequest("Unknown node type");
         }
+        var (zone, zoneError) = FlowZoneRules.ZoneForNewNode(node, req.Zone);
+        if (zoneError != null)
+            return BadRequest(zoneError);
+        node.Zone = zone;
+        if (node is UserSetupCarChannelNode newOutput)
+        {
+            var outputs = await _context.Set<UserSetupCarChannelNode>().Where(n => n.UserSetupId == req.UserSetupId).ToListAsync();
+            var channelError = FlowZoneRules.CheckChannelZone(outputs, newOutput.CarChannelId, zone);
+            if (channelError != null)
+                return BadRequest(channelError);
+        }
         _context.Add(node);
         await _context.SaveChangesAsync();
+        await NotifyFlowChangedAsync(node.UserSetupId);
         return Ok(FlowNodeToNodeInfo(node));
     }
 
@@ -193,6 +232,7 @@ public partial class FlowController : ControllerBase
         _context.RemoveRange(links);
         _context.Remove(node);
         await _context.SaveChangesAsync();
+        await NotifyFlowChangedAsync(node.UserSetupId);
         return Ok();
     }
 
@@ -206,6 +246,15 @@ public partial class FlowController : ControllerBase
         return _context.Set<UserSetupFlowNodeBase>().Where(n => setupIds.Contains(n.UserSetupId));
     }
 
+    /// <summary>The flow of a setup changed: its onboard part goes to the vehicle again if the owner drives it (E09).</summary>
+    private async Task NotifyFlowChangedAsync(int setupId)
+    {
+        var setup = await _context.UserSetups.AsNoTracking().Where(s => s.Id == setupId)
+            .Select(s => new { s.CarId, s.UserId }).FirstOrDefaultAsync();
+        if (setup == null) return;
+        HttpContext?.RequestServices.GetService<OnboardFlowPublisher>()?.FlowChanged(setup.CarId, setup.UserId);
+    }
+
     private NodeInfo? FlowNodeToNodeInfo(UserSetupFlowNodeBase flowNode)
     {
         var result = new NodeInfo
@@ -217,7 +266,8 @@ public partial class FlowController : ControllerBase
                 Y = flowNode.PositionY,
             },
             NodeTypeName = flowNode.GetType().Name,
-            Type = "default"
+            Type = "default",
+            Zone = FlowZoneRules.ZoneName(flowNode.Zone),
         };
         switch (flowNode)
         {
@@ -238,6 +288,17 @@ public partial class FlowController : ControllerBase
                 result.MaxResendInterval = output.MaxResendInterval;
                 result.Type = "output";
                 break;
+            case UserSetupHandoffNode handoff:
+                result.Type = "handoff";
+                result.Label = handoff.Name;
+                break;
+            case UserSetupVehicleInputNode vehicleInput:
+                result.Type = "input";
+                result.RepresentingId = vehicleInput.VehicleInputChannelId;
+                var vehicleChannel = _context.VehicleInputChannels.Include(c => c.VehicleInputDevice)
+                    .FirstOrDefault(c => c.Id == vehicleInput.VehicleInputChannelId);
+                result.Label = vehicleChannel == null ? "?" : $"{vehicleChannel.VehicleInputDevice.Name}: {vehicleChannel.Name}";
+                break;
             case UserSetupFunctionNode fn:
                 result.Label = fn.SetupFunctionName;
                 result.Metadata = new
@@ -251,6 +312,79 @@ public partial class FlowController : ControllerBase
                 return null;
         }
         return result;
+    }
+
+    public sealed record SetZoneRequest(FlowZone Zone);
+
+    /// <summary>Moves a function or output node into the other zone; refused if a connection or the channel rule would break.</summary>
+    [HttpPost("{nodeId:int}/zone")]
+    public async Task<IActionResult> SetZone(int nodeId, [FromBody] SetZoneRequest req)
+    {
+        var user = await GetCurrentUserAsync();
+        if (user == null) return Unauthorized("User not found");
+        var node = await OwnNodes(user.Id).FirstOrDefaultAsync(n => n.Id == nodeId);
+        if (node == null) return NotFound();
+        if (node is not (UserSetupFunctionNode or UserSetupCarChannelNode))
+            return BadRequest("Only functions and vehicle channels can change their zone.");
+        if (node.Zone == req.Zone) return Ok(FlowNodeToNodeInfo(node));
+        var (_, zoneError) = FlowZoneRules.ZoneForNewNode(node, req.Zone);
+        if (zoneError != null) return BadRequest(zoneError);
+        var setupNodes = await _context.Set<UserSetupFlowNodeBase>().Where(n => n.UserSetupId == node.UserSetupId).ToDictionaryAsync(n => n.Id);
+        var links = await _context.Set<UserSetupLink>()
+            .Where(l => l.UserSetupFromNodeId == nodeId || l.UserSetupToNodeId == nodeId).ToListAsync();
+        var previous = node.Zone;
+        node.Zone = req.Zone;
+        foreach (var link in links)
+        {
+            if (!setupNodes.TryGetValue(link.UserSetupFromNodeId, out var f) || !setupNodes.TryGetValue(link.UserSetupToNodeId, out var t)) continue;
+            var error = FlowZoneRules.CheckLink(f, t);
+            if (error != null)
+            {
+                node.Zone = previous;
+                return BadRequest($"Remove the connections first: {error}");
+            }
+        }
+        if (node is UserSetupCarChannelNode output)
+        {
+            var channelError = FlowZoneRules.CheckChannelZone(setupNodes.Values.OfType<UserSetupCarChannelNode>(), output.CarChannelId, req.Zone, output.Id);
+            if (channelError != null)
+            {
+                node.Zone = previous;
+                return BadRequest(channelError);
+            }
+        }
+        await _context.SaveChangesAsync();
+        await NotifyFlowChangedAsync(node.UserSetupId);
+        return Ok(FlowNodeToNodeInfo(node));
+    }
+
+    public sealed record RenameRequest(string Name);
+
+    [HttpPost("{nodeId:int}/name")]
+    public async Task<IActionResult> RenameHandoff(int nodeId, [FromBody] RenameRequest req)
+    {
+        var user = await GetCurrentUserAsync();
+        if (user == null) return Unauthorized("User not found");
+        var node = await OwnNodes(user.Id).OfType<UserSetupHandoffNode>().FirstOrDefaultAsync(n => n.Id == nodeId);
+        if (node == null) return NotFound();
+        var name = (req.Name ?? string.Empty).Trim();
+        node.Name = name.Length == 0 ? "Übergabe" : name[..Math.Min(64, name.Length)];
+        await _context.SaveChangesAsync();
+        return Ok(FlowNodeToNodeInfo(node));
+    }
+
+    public sealed record VehicleInputChannelView(int Id, int Code, bool IsAxis, string Name);
+    public sealed record VehicleInputDeviceView(int Id, string Key, string Name, DateTime LastSeenUtc, List<VehicleInputChannelView> Channels);
+
+    /// <summary>Controllers the vehicle has reported, with their channels (E14: for every driver of the car).</summary>
+    [Security.AllowWithoutVehicleSession]
+    [HttpGet("cars/{carId:int}/vehicle-inputs")]
+    public async Task<IActionResult> VehicleInputs(int carId)
+    {
+        var devices = await _context.VehicleInputDevices.AsNoTracking().Include(d => d.Channels)
+            .Where(d => d.CarId == carId).OrderBy(d => d.Name).ToListAsync();
+        return Ok(devices.Select(d => new VehicleInputDeviceView(d.Id, d.DeviceKey, d.Name, d.LastSeenUtc,
+            d.Channels.OrderByDescending(c => c.IsAxis).ThenBy(c => c.Code).Select(c => new VehicleInputChannelView(c.Id, c.Code, c.IsAxis, c.Name)).ToList())));
     }
 
     [HttpPost("movenode")]
@@ -300,11 +434,19 @@ public partial class FlowController : ControllerBase
         if (from == null || to == null || from.UserSetupId != to.UserSetupId)
             return NotFound("Node(s) not found");
 
-        if (to is UserSetupUserChannelNode)
-            return BadRequest("Cannot link to UserChannelNode");
-
-        if (from is UserSetupCarChannelNode)
-            return BadRequest("Cannot link from UserChannelNode");
+        var linkError = FlowZoneRules.CheckLink(from, to);
+        if (linkError != null)
+            return BadRequest(linkError);
+        if (to.Zone == FlowZone.Onboard && to is not UserSetupHandoffNode)
+        {
+            // The onboard engine runs in topological order: no cycles there (T03).
+            var setupNodeIds = OwnNodes(user.Id).Where(n => n.UserSetupId == from.UserSetupId).Select(n => n.Id);
+            var existing = await _context.Set<UserSetupLink>()
+                .Where(l => setupNodeIds.Contains(l.UserSetupFromNodeId) && !(l.UserSetupToNodeId == req.ToNodeId && l.TargetPort == req.ToPort))
+                .Select(l => new { l.UserSetupFromNodeId, l.UserSetupToNodeId }).ToListAsync();
+            if (FlowZoneRules.CreatesCycle(existing.Select(l => (l.UserSetupFromNodeId, l.UserSetupToNodeId)), req.FromNodeId, req.ToNodeId))
+                return BadRequest("This connection would close a loop; the onboard flow must not contain loops.");
+        }
 
         // only 1 incoming link allowed per port
         var otherToLink = await _context.Set<UserSetupLink>()
@@ -325,6 +467,7 @@ public partial class FlowController : ControllerBase
         };
         _context.Add(link);
         await _context.SaveChangesAsync();
+        await NotifyFlowChangedAsync(from.UserSetupId);
         return Ok(new { id = link.Id, source = link.UserSetupFromNodeId, sourcePort = link.SourcePort, target = link.UserSetupToNodeId, targetPort = link.TargetPort });
     }
 
@@ -339,6 +482,8 @@ public partial class FlowController : ControllerBase
         if (link == null) return NotFound();
         _context.Remove(link);
         await _context.SaveChangesAsync();
+        var setupId = await _context.Set<UserSetupFlowNodeBase>().Where(n => n.Id == link.UserSetupToNodeId).Select(n => n.UserSetupId).FirstOrDefaultAsync();
+        await NotifyFlowChangedAsync(setupId);
         return Ok();
     }
 
@@ -372,6 +517,7 @@ public partial class FlowController : ControllerBase
             }
         }
         await _context.SaveChangesAsync();
+        await NotifyFlowChangedAsync(node.UserSetupId);
         return Ok();
     }
 }

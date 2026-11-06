@@ -59,6 +59,7 @@ builder.Services.AddSingleton<VideoStreamActivationService>();
 builder.Services.AddSingleton<PushToTalkRegistry>();
 builder.Services.AddSingleton<CarAudioService>();
 builder.Services.AddSingleton<CarConnectionStore>();
+builder.Services.AddSingleton<OnboardFlowPublisher>();
 // Docs/VehicleKeyAuth.md: one-time nonces (vehicle handshake, config sessions) and config sessions.
 builder.Services.AddSingleton(new SignalRC.Shared.Security.NonceStore(maxEntries: 4096));
 builder.Services.AddSingleton<SignalRC.Server.Security.ConfigSessionStore>(_ => new SignalRC.Server.Security.ConfigSessionStore());

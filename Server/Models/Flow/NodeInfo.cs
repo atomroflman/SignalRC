@@ -13,6 +13,8 @@ namespace SignalRC.Server.Controllers
             public string NodeTypeName { get; set; } = string.Empty;
             public Dictionary<string, string?>? Params { get; set; }
             public int? MaxResendInterval { get; set; }
+            /// <summary>"browser" or "onboard" (OnboardFlow-Arbeitspakete.md T01).</summary>
+            public string Zone { get; set; } = "browser";
         }
     }
 }

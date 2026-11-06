@@ -86,6 +86,10 @@ public sealed class TemplateFlowNode
     [JsonPropertyName("channelName")] public string? ChannelName { get; set; }
     [JsonPropertyName("functionName")] public string? FunctionName { get; set; }
     [JsonPropertyName("params")] public Dictionary<string, string?>? Parameters { get; set; }
+    /// <summary>"browser" (default, also for older templates) or "onboard" (OnboardFlow-Arbeitspakete.md T01).</summary>
+    [JsonPropertyName("zone")] public string? Zone { get; set; }
+    /// <summary>Name of a "handoff" node.</summary>
+    [JsonPropertyName("name")] public string? Name { get; set; }
 }
 
 public sealed class ControllerBinding
