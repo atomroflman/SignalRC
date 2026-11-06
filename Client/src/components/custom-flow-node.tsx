@@ -50,14 +50,14 @@ function ZoneFrame({ node, children }: { node: any; children: React.ReactNode })
   return (
     <div className={onboard ? "relative rounded-lg ring-2 ring-amber-500/80" : "relative rounded-lg"}>
       {(onboard || movable || (hasOnboardPart && node.type === "output")) && (
-        <div className="absolute -top-5 left-0 flex items-center gap-1 text-[10px] whitespace-nowrap">
+        <div className="pointer-events-none absolute -top-6 left-0 flex items-center gap-1 text-[10px] whitespace-nowrap">
           {onboard && <span className="px-1 rounded bg-amber-700 text-amber-50">{t.onboardBadge}</span>}
           {!onboard && hasOnboardPart && node.type === "output" && (
             <span className="px-1 rounded bg-zinc-700 text-zinc-300">{t.localUnavailable}</span>
           )}
           {movable && (
             <button
-              className="nodrag px-1 rounded bg-zinc-800 border border-zinc-600 text-zinc-300 hover:bg-zinc-700"
+              className="nodrag pointer-events-auto px-1 rounded bg-zinc-800 border border-zinc-600 text-zinc-300 hover:bg-zinc-700"
               title={onboard ? t.moveToBrowser : t.moveToOnboard}
               onClick={move}
             >

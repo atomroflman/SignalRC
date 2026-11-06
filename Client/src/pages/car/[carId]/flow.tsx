@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/router";
 import GamepadViewer from "../../../components/gamepad-viewer";
 import CarFunctionsView from "../../../components/car-functions-view";
@@ -27,7 +27,12 @@ const edgeTypes = { flow: FlowEdge };
 export default function CarControlFlowPage() {
   const { messages } = useI18n();
   const router = useRouter();
-  const flowControl = useControlFlowStore();
+  // Only what the page itself needs: values change many times per second (gamepad,
+  // vehicle status) and must not rebuild the canvas; each node reads its values itself.
+  const flowNodes = useControlFlowStore(s => s.nodes);
+  const flowEdges = useControlFlowStore(s => s.edges);
+  const isLoading = useControlFlowStore(s => s.isLoading);
+  const flowControl = useControlFlowStore.getState();
   const carId = router.query.carId as string;
   const carIdNum = carId ? parseInt(carId) : undefined;
   // Clicking a connection selects it; its trash button or the Delete key removes it.
@@ -38,18 +43,26 @@ export default function CarControlFlowPage() {
   function controlNodeToReact(input: ControlFlowNode): Node<any, string | undefined> {
     return {
       id: input.nodeId.toString(),
-      data: {
-        ...input,
-        label: `${input.nodeId}: ${input.label} (${(typeof(flowControl.nodeLatestValues[input.nodeId]) == "number" ? flowControl.nodeLatestValues[input.nodeId] : 0).toFixed(6)})`,
-      },
+      // CustomFlowNode takes everything else (values, params) from the store by nodeId.
+      data: { nodeId: input.nodeId },
       position: input.position,
       type: "custom"
     };
   }
 
+  // The store hands out a new nodes array with every value update; React Flow only gets
+  // new node objects when something it shows changes. Otherwise every update re-rendered
+  // all nodes, which made nodes flicker while connecting and editing values.
+  const structure = flowNodes.map(n => `${n.nodeId}:${n.position.x}:${n.position.y}:${n.zone ?? ""}:${n.type}`).join("|");
+  const reactNodes = useMemo(
+    () => flowNodes.map(controlNodeToReact),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [structure],
+  );
+
   function clusterFrameNodes(): Node[] {
     if (!arranged) return [];
-    const positions = Object.fromEntries(flowControl.nodes.map(n => [n.nodeId, n.position]));
+    const positions = Object.fromEntries(flowNodes.map(n => [n.nodeId, n.position]));
     return arranged.clusters.flatMap((cluster, i) => {
       const frame = clusterFrame(cluster, positions, arranged.sizes);
       if (!frame) return [];
@@ -98,14 +111,15 @@ export default function CarControlFlowPage() {
   }, [carIdNum]);
 
   const onNodeDrag: NodeDragHandler = async (event, node) => {
-    const oldNode = flowControl.nodes.find(n => n.nodeId === Number(node.id));
+    const store = useControlFlowStore.getState();
+    const oldNode = store.nodes.find(n => n.nodeId === Number(node.id));
     if (!oldNode) return;
-    flowControl.updateNode({ ...oldNode, position: { x: node.position.x, y: node.position.y } });
+    store.updateNode({ ...oldNode, position: { x: node.position.x, y: node.position.y } });
   };
 
   const onConnect = useCallback((params: Connection) => {
-    flowControl.addEdge(params);
-  }, [flowControl]);
+    useControlFlowStore.getState().addEdge(params);
+  }, []);
 
   // Top-down only (OnboardFlow-Arbeitspakete.md T03); the server checks again.
   const isValidConnection = useCallback((c: Connection) => {
@@ -118,12 +132,13 @@ export default function CarControlFlowPage() {
   }, []);
 
   const onEdgesDelete: OnEdgesDelete = useCallback((edges) => {
-    edges.forEach(edge => flowControl.removeEdge(Number(edge.id)));
+    edges.forEach(edge => useControlFlowStore.getState().removeEdge(Number(edge.id)));
     setSelectedEdgeId(null);
-  }, [flowControl]);
+  }, []);
 
   const onNodeDragStop: NodeDragHandler = async (event, node) => {
-    const oldNode = flowControl.nodes.find(n => n.nodeId === Number(node.id));
+    const store = useControlFlowStore.getState();
+    const oldNode = store.nodes.find(n => n.nodeId === Number(node.id));
     if (!oldNode) return;
     await fetch("/api/flow/movenode", {
       method: "POST",
@@ -134,10 +149,20 @@ export default function CarControlFlowPage() {
         PositionY: node.position.y ?? 0,
       }),
     });
-    flowControl.updateNode({ ...oldNode, position: { x: node.position.x, y: node.position.y } });
+    store.updateNode({ ...oldNode, position: { x: node.position.x, y: node.position.y } });
   };
 
-  if (flowControl.isLoading)
+  const frames = useMemo(clusterFrameNodes,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [arranged, structure]);
+  const allNodes = useMemo(() => [...frames, ...reactNodes], [frames, reactNodes]);
+  const reactEdges = useMemo(
+    () => flowEdges.map(controlEdgeToReact),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [flowEdges, selectedEdgeId],
+  );
+
+  if (isLoading)
     return <div className="p-8 text-zinc-300">{messages.controlFlowPage.loadingFlow}</div>;
   
   if (!carIdNum) {
@@ -162,8 +187,8 @@ export default function CarControlFlowPage() {
         <div className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg p-2 min-h-[600px]">
           <ReactFlowProvider>
             <ReactFlow
-              nodes={[...clusterFrameNodes(), ...flowControl.nodes.map(controlNodeToReact)]}
-              edges={flowControl.edges.map(controlEdgeToReact)}
+              nodes={allNodes}
+              edges={reactEdges}
               fitView
               onNodeDrag={onNodeDrag}
               onNodeDragStop={onNodeDragStop}
