@@ -51,7 +51,7 @@ public static class FlowFunctions
         new ToggleFn(), new TurnSignalFn(), new RescaleFn(), new GearboxFn(), new FloatValueFn(),
         new SmoothFn(), new SignFn(), new HudSignalFn(), new HudInputFn(), new TelemetryFn(),
         new ActiveFn(), new PriorityFn(), new MaxFn(), new MinFn(), new DisconnectControllerFn(), new TelemetryOutFn(),
-        new ControllerRumbleFn(), new ControllerLightFn(), new LidarObjectFn(),
+        new ControllerRumbleFn(), new ControllerLightFn(), new LidarObjectFn(), new PulseFn(),
     }.ToDictionary(f => f.Name, StringComparer.Ordinal);
 
     public static FlowFunction? Get(string? name) => name != null && All.TryGetValue(name, out var f) ? f : null;
@@ -666,5 +666,39 @@ internal sealed class LidarObjectFn : FlowFunction
         }
         Close();
         return best;
+    }
+}
+
+/// <summary>
+/// "Pulsieren": square wave between 0 and 1 at <c>rate</c> Hz (input, 0 or less = off,
+/// capped at 25 Hz); <c>duty</c> (param, 0…1, default 0.5) is the share of each period
+/// that is 1. The phase runs on, so a changing rate speeds the pulse up or slows it down
+/// without jumps. Starts with 1. Vehicle flow only: it needs the steady flow tick.
+/// </summary>
+internal sealed class PulseFn : FlowFunction
+{
+    private sealed class State { public double Phase; public long LastMs = -1; }
+    public const double MaxRate = 25;
+    public override string Name => "Pulse";
+    public override string[] Inputs => ["rate"];
+    public override string[] Outputs => ["pulse"];
+    public override object CreateState() => new State();
+    public override double[] Apply(IReadOnlyDictionary<string, double> i, IReadOnlyDictionary<string, string?> p, object? s, IFlowFunctionContext c)
+    {
+        var st = (State)s!;
+        var rate = Math.Min(In(i, "rate"), MaxRate);
+        var duty = JsNumber.Param(p, "duty", 0.5);
+        duty = double.IsFinite(duty) ? Math.Clamp(duty, 0, 1) : 0.5;
+        var now = c.NowMs;
+        if (!(rate > 0))
+        {
+            st.Phase = 0;
+            st.LastMs = now;
+            return [0];
+        }
+        // Rounded so ten steps of 0.1 make a full period, not 0.999…
+        if (st.LastMs >= 0) st.Phase = Math.Round(st.Phase + Math.Max(0, now - st.LastMs) / 1000.0 * rate, 9) % 1;
+        st.LastMs = now;
+        return [st.Phase < duty ? 1 : 0];
     }
 }

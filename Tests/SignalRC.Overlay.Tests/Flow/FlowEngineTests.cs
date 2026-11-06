@@ -280,4 +280,25 @@ public class FlowEngineTests
         Assert.Equal((800, 1436), LidarObjectFn.Nearest(ring, 358, 2, 3, 100));
         Assert.Equal((-1, -1), LidarObjectFn.Nearest(ring, 2, 358, 1, 100)); // 2°..358° is the back: nothing there
     }
+
+    [Fact]
+    public void Pulse_follows_the_rate_and_duty()
+    {
+        var engine = new FlowEngine();
+        engine.Load(new OnboardFlowDefinition
+        {
+            Nodes = { Input(1, "pad", 0), Fn(2, "Pulse", ("duty", "0.25")) },
+            Links = { Link(1, 2, "rate", "value") },
+        });
+        var env = new Env();
+        env.Inputs[("pad", 0)] = 2; // 2 Hz: 500 ms period, 1 for the first 125 ms
+        var seen = new List<double>();
+        for (var t = 0; t < 1000; t += 50)
+        {
+            env.NowMs = 1000 + t;
+            engine.Tick(env);
+            seen.Add(engine.OutputsOf(2)![0]);
+        }
+        Assert.Equal([1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0], seen);
+    }
 }

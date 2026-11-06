@@ -83,6 +83,19 @@ Ausgänge: `distance` (cm, nächster Punkt des nächsten Objekts), `angle` (Grad
 Punktes), `found` (1/0), `ok` (1, solange ein Umlauf jünger als 1 s vorliegt). Wer
 damit bremst, sollte `ok` mit auswerten: ohne Lidar ist `distance` = `none`.
 
+Beispiel Einparkhilfe – je näher, desto schneller pulst das Rütteln:
+
+```
+Lidar Objekt.distance → Rescale (inMin 150, inMax 20, outMin 1, outMax 10)
+  → Pulsieren (duty 0.5) → Controller rütteln.strong
+```
+
+**Pulsieren** (`Pulse`, nur Fahrzeug-Teil) schaltet mit `rate` Hz zwischen 1 und 0
+(`rate` ≤ 0 = aus, höchstens 25 Hz; `duty` = Anteil, der 1 ist). Über 150 cm liefert
+das Rescale eine rate unter 1 und bei 9999 (nichts gefunden) eine negative – dann ist
+der Puls aus. Soll er erst ab 150 cm überhaupt anfangen, statt dort mit 1 Hz zu
+pulsen, das Rescale mit `outMin 0` und `inMin 160` o. ä. einstellen.
+
 ## Live-Werte im Editor
 
 Werte des Fahrzeug-Teils kommen vom Fahrzeug: bis zu 5-mal pro Sekunde, mit allen

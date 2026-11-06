@@ -132,6 +132,10 @@
       { "inputs": { "blue": 3 }, "expect": [1] } ] },
     { "name": "lidar object without a lidar", "function": "LidarObject", "params": { "from": "10", "to": "30" }, "steps": [
       { "inputs": {}, "expect": [9999, 0, 0, 0] } ] },
+    { "name": "pulse off without rate, starts with 1", "function": "Pulse", "params": {}, "steps": [
+      { "inputs": {}, "expect": [0] },
+      { "inputs": { "rate": 2 }, "expect": [1] },
+      { "inputs": { "rate": 0 }, "expect": [0] } ] },
     { "name": "priority", "function": "Priority", "params": {}, "steps": [
       { "inputs": { "a": 0.3, "aActive": 1, "b": -0.8 }, "expect": [0.3] },
       { "inputs": { "a": 0.3, "aActive": 0, "b": -0.8 }, "expect": [-0.8] } ] }

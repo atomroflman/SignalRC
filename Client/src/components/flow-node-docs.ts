@@ -186,6 +186,15 @@ const de: Record<string, FlowNodeDoc> = {
     ],
     example: "Gearbox.gearValue → Telemetrie senden (key \"gear\") → Kanal \"Gang\" (FlowValueReader, Key gear) im HUD",
   },
+  Pulse: {
+    summary: "Pulsieren: schaltet mit rate Hz zwischen 1 und 0 hin und her. Nur im Fahrzeug-Flow.",
+    details: [
+      "rate ≤ 0 = aus (0); höchstens 25 Hz.",
+      "duty: Anteil jeder Periode, in dem 1 ausgegeben wird (0…1, Standard 0,5).",
+      "Ändert sich rate, läuft der Takt ohne Sprung schneller oder langsamer weiter – gut für eine Einparkhilfe.",
+    ],
+    example: "Lidar Objekt.distance → Rescale (150 → 1, 20 → 10) → Pulsieren → Controller rütteln.strong",
+  },
   LidarObject: {
     summary: "Lidar Objekt: Entfernung zum nächsten Objekt in einem Winkelbereich des Lidars. Nur im Fahrzeug-Flow.",
     details: [
@@ -420,6 +429,15 @@ const en: Record<string, FlowNodeDoc> = {
       "The output passes the value on unchanged.",
     ],
     example: "Gearbox.gearValue → Send telemetry (key \"gear\") → channel \"Gear\" (FlowValueReader, Key gear) in the HUD",
+  },
+  Pulse: {
+    summary: "Pulse: switches between 1 and 0 at rate Hz. Vehicle flow only.",
+    details: [
+      "rate ≤ 0 = off (0); at most 25 Hz.",
+      "duty: share of each period that outputs 1 (0…1, default 0.5).",
+      "When rate changes, the pulse speeds up or slows down without a jump – good for a parking aid.",
+    ],
+    example: "Lidar object.distance → Rescale (150 → 1, 20 → 10) → Pulse → Rumble controller.strong",
   },
   LidarObject: {
     summary: "Lidar object: distance to the nearest object in an angle range of the lidar. Vehicle flow only.",
