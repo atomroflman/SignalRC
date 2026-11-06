@@ -46,6 +46,16 @@ const de: Record<string, FlowNodeDoc> = {
     details: ["Ein nicht verbundener Eingang zählt als 0."],
     example: "Gas 0,6 + Trim 0,05 → 0,65",
   },
+  Max: {
+    summary: "Gibt den größeren der beiden Eingänge aus.",
+    details: ["Ein nicht verbundener Eingang zählt als 0.", "Als „Oder“ für Tasten: ist eine der beiden 1, ist das Ergebnis 1."],
+    example: "Controller-Taste 1, Web-Taste 0 → 1; Gas 0,4 und 0,7 → 0,7",
+  },
+  Min: {
+    summary: "Gibt den kleineren der beiden Eingänge aus.",
+    details: ["Ein nicht verbundener Eingang zählt als 0.", "Als „Und“ für Tasten: nur wenn beide 1 sind, ist das Ergebnis 1."],
+    example: "Gas 0,9 und Begrenzung 0,5 → 0,5",
+  },
   Subtract: {
     summary: "Subtrahiert: a − b.",
     details: ["Ein nicht verbundener Eingang zählt als 0."],
@@ -237,6 +247,16 @@ const en: Record<string, FlowNodeDoc> = {
     summary: "Adds the inputs: a + b.",
     details: ["An unconnected input counts as 0."],
     example: "Throttle 0.6 + trim 0.05 → 0.65",
+  },
+  Max: {
+    summary: "Outputs the larger of the two inputs.",
+    details: ["An unconnected input counts as 0.", "As an “or” for buttons: if either is 1, the result is 1."],
+    example: "Controller button 1, web button 0 → 1; throttle 0.4 and 0.7 → 0.7",
+  },
+  Min: {
+    summary: "Outputs the smaller of the two inputs.",
+    details: ["An unconnected input counts as 0.", "As an “and” for buttons: the result is 1 only if both are 1."],
+    example: "Throttle 0.9 and limit 0.5 → 0.5",
   },
   Subtract: {
     summary: "Subtracts: a − b.",

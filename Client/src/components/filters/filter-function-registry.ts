@@ -22,6 +22,8 @@ import { HudInputFunction } from "./HudInputFunction";
 import { TelemetryFunction } from "./TelemetryFunction";
 import { ActiveFunction } from "./ActiveFunction";
 import { PriorityFunction } from "./PriorityFunction";
+import { MaxFunction } from "./MaxFunction";
+import { MinFunction } from "./MinFunction";
 import { DisconnectControllerFunction } from "./DisconnectControllerFunction";
 import { TelemetryOutFunction } from "./TelemetryOutFunction";
 
@@ -71,6 +73,8 @@ export const filterFunctionRegistry = {
   Telemetry: new TelemetryFunction(),
   Active: new ActiveFunction(),
   Priority: new PriorityFunction(),
+  Max: new MaxFunction(),
+  Min: new MinFunction(),
   DisconnectController: new DisconnectControllerFunction(),
   TelemetryOut: new TelemetryOutFunction(),
 };

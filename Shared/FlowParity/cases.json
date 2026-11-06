@@ -22,6 +22,14 @@
     { "name": "add", "function": "Add", "params": {}, "steps": [
       { "inputs": { "a": 1, "b": 2.5 }, "expect": [3.5] },
       { "inputs": { "a": 1 }, "expect": [1] } ] },
+    { "name": "max", "function": "Max", "params": {}, "steps": [
+      { "inputs": { "a": 1, "b": 0 }, "expect": [1] },
+      { "inputs": { "a": 0.4, "b": 0.7 }, "expect": [0.7] },
+      { "inputs": { "a": -0.5 }, "expect": [0] } ] },
+    { "name": "min", "function": "Min", "params": {}, "steps": [
+      { "inputs": { "a": 1, "b": 0 }, "expect": [0] },
+      { "inputs": { "a": 0.9, "b": 0.5 }, "expect": [0.5] },
+      { "inputs": { "a": -0.5 }, "expect": [-0.5] } ] },
     { "name": "subtract", "function": "Subtract", "params": {}, "steps": [
       { "inputs": { "a": 1, "b": 2.5 }, "expect": [-1.5] } ] },
     { "name": "multiply", "function": "Multiply", "params": {}, "steps": [

@@ -44,7 +44,7 @@ public static class FlowFunctions
         new MultiplyFn(), new DivideFn(), new ModuloFn(), new PowerFn(), new LogFn(), new IifFn(),
         new ToggleFn(), new TurnSignalFn(), new RescaleFn(), new GearboxFn(), new FloatValueFn(),
         new SmoothFn(), new SignFn(), new HudSignalFn(), new HudInputFn(), new TelemetryFn(),
-        new ActiveFn(), new PriorityFn(), new DisconnectControllerFn(), new TelemetryOutFn(),
+        new ActiveFn(), new PriorityFn(), new MaxFn(), new MinFn(), new DisconnectControllerFn(), new TelemetryOutFn(),
     }.ToDictionary(f => f.Name, StringComparer.Ordinal);
 
     public static FlowFunction? Get(string? name) => name != null && All.TryGetValue(name, out var f) ? f : null;
@@ -114,6 +114,20 @@ internal sealed class AddFn : BinaryFn
     public override string Name => "Add";
     public override string[] Outputs => ["sum"];
     protected override double Op(double a, double b) => a + b;
+}
+
+internal sealed class MaxFn : BinaryFn
+{
+    public override string Name => "Max";
+    public override string[] Outputs => ["max"];
+    protected override double Op(double a, double b) => Math.Max(a, b);
+}
+
+internal sealed class MinFn : BinaryFn
+{
+    public override string Name => "Min";
+    public override string[] Outputs => ["min"];
+    protected override double Op(double a, double b) => Math.Min(a, b);
 }
 
 internal sealed class SubtractFn : BinaryFn
