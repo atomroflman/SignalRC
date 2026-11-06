@@ -1,6 +1,6 @@
-# Fahrzeug-Key als Master: Berechtigungsplan
+# Halter-Key als Master: Berechtigungsplan
 
-Stand: 2026-11-06. Status: Plan zur Durchsicht, nichts umgesetzt.
+Stand: 2026-11-06. Status: Plan abgestimmt, nichts umgesetzt.
 Branch: `feature/vehicle-key-auth` (abgezweigt von `experimental`).
 
 Dieses Dokument legt fest, wer an einem Fahrzeug etwas ändern darf und wie der
@@ -9,13 +9,14 @@ automatisch gestartet.
 
 ## Ziel
 
-- Der SSH-Key des Fahrzeugs ist der Master. Ändern darf nur, wer eine Challenge
-  mit diesem Key signiert hat. Eine zusätzliche Benutzer-Anmeldung gibt es nicht.
-- Der Server setzt das für **jeden** schreibenden Zugriff durch, nicht nur die
-  Oberfläche.
+- Der Halter-Key des Fahrzeugs (`ssh_key`) ist der Master. Ändern und
+  Konfiguration lesen darf nur, wer eine Challenge mit diesem Key signiert hat.
+  Eine zusätzliche Benutzer-Anmeldung gibt es nicht.
+- Der Server setzt das für **jeden** Zugriff auf die Konfiguration durch, nicht
+  nur die Oberfläche.
 - Fahrzeuge lassen sich auch konfigurieren, wenn sie offline sind.
-- Ein Fahrzeug weist sich beim Server mit seinem Key aus; ein anderer Client
-  kann sich nicht mehr als Fahrzeug ausgeben.
+- Ein Fahrzeug weist sich beim Server mit einem eigenen Geräte-Key aus; ein
+  anderer Client kann sich nicht mehr als Fahrzeug ausgeben.
 - Flows bleiben pro Benutzer, lassen sich aber von anderen ansehen und kopieren.
 
 ## Ist-Zustand
@@ -24,8 +25,12 @@ So funktioniert es heute:
 
 1. Jeder Browser bekommt beim ersten `GET /api/user/me` einen anonymen Benutzer
    mit einem Cookie, das 10 Jahre gilt.
-2. Den privaten Fahrzeug-Key holt sich der Browser vom Fahrzeug im lokalen Netz
-   und speichert ihn im localStorage.
+2. Das Onboard erzeugt beim ersten Start `ssh_key` (privat) und `ssh_key.pub`.
+   Den privaten Key holt sich der Browser **einmal** im lokalen Netz
+   (Port 8080/8443, nur mit dem Identitäts-Hash vom Server) und speichert ihn im
+   localStorage. Danach löscht das Onboard `ssh_key`, außer `KeepPrivateKey`
+   ist gesetzt. Im Normalbetrieb hat das Fahrzeug also nur den Public Key: Es
+   kann Signaturen prüfen, aber selbst nichts signieren.
 3. `AquireCarControl`: Das Fahrzeug gibt eine Challenge aus, der Browser
    signiert, das Onboard prüft gegen seinen Public Key und vergibt eine
    Steuersitzung.
@@ -49,16 +54,36 @@ Bereits richtig: Overlay/HUD (`OverlayAccess.CheckAdmin`) und die
 Aufnahme-Schalter der Telemetrie-Historie prüfen serverseitig, ob der Aufrufer
 gerade Fahrer ist.
 
+Verbindungsaufbau des Onboards heute (`ServerConnectionService`):
+
+1. `GET /api/version` per HTTP, nur Vergleich und Log-Warnung.
+2. `OpenCarConnection(carIdentityKey, hash)`. Der `CarIdentityKey` ist die
+   CPU-Seriennummer oder eine Override-Datei.
+3. Wendet die gelieferte Kanalzuordnung an (nur wenn `ChannelMap != null`).
+4. `ReportOnboardVersion`, `RegisterAvailableChannelTypes`.
+5. `OnboardUpdateService.OnHandshakeAsync()`: bestätigt ein neues Release und
+   startet bei Abweichung das Auto-Update.
+
+Schritt 5 läuft nur, wenn 2 bis 4 ohne Ausnahme durchlaufen. Ein abgelehnter
+Handshake verhindert also sowohl das Auto-Update als auch die
+Release-Bestätigung (nach 3 Fehlstarts folgt ein Rollback).
+
 ## Entscheidungen
 
 | Thema | Entscheidung |
 |---|---|
-| Master | Der SSH-Key des Fahrzeugs. Keine zusätzliche Benutzer-Anmeldung. |
+| Zwei Schlüssel | **Halter-Key** (`ssh_key`, wie heute): Der private Teil liegt beim Halter im Browser, das Fahrzeug hat den Public Key. Er ist der Master für alle Änderungen. **Geräte-Key** (neu, `device_key`): wird auf dem Onboard erzeugt, verlässt es nie und dient nur dazu, dass sich das Fahrzeug beim Server ausweist. |
+| Master | Der Halter-Key. Keine zusätzliche Benutzer-Anmeldung. |
 | Prüfung, Fahrzeug online | Das Fahrzeug gibt die Challenge aus und prüft, wie heute. Neu: Die Challenge ist eine Nonce, nur einmal und kurz gültig. |
-| Prüfung, Fahrzeug offline | **Vorschlag:** Der Server gibt eine Nonce aus und prüft gegen den Public Key in der DB. Das ergibt eine Konfig-Sitzung, siehe unten. (Abgeleitet aus „Offline-Konfiguration nötig“.) |
+| Prüfung, Fahrzeug offline | Der Server gibt eine Nonce aus und prüft gegen den Halter-Public-Key in der DB. Das ergibt eine Konfig-Sitzung, siehe unten. |
 | Gültigkeit | Pro Sitzung. Die Berechtigung endet mit der Sitzung; der Browser signiert danach neu, solange er den Key gespeichert hat. |
-| Public Key in der DB | TOFU: Bei der ersten Verbindung meldet das Fahrzeug seinen Public Key, danach weist es sich per Signatur aus. Ein anderer Key für dieselbe Identität wird abgelehnt. |
-| Key-Abruf | Bleibt so: Der private Key wird im lokalen Netz des Fahrzeugs angeboten. |
+| Fahrzeug-Anmeldung | Geräte-Key per TOFU: Bei der ersten Anmeldung übernimmt der Server dessen Public Key, danach signiert das Fahrzeug bei jeder Verbindung eine Server-Nonce. Ein anderer Geräte-Key für dieselbe Identität wird abgelehnt. |
+| Halter-Public-Key in der DB | Meldet das Onboard nach erfolgreicher Geräte-Anmeldung. Nur von einem angemeldeten Fahrzeug übernommen. |
+| Alte Onboards | Update-Modus: Ein Handshake ohne Geräte-Anmeldung gibt keine Rechte, reicht aber für Versionsmeldung, Auto-Update und Release-Bestätigung (siehe unten). |
+| Key-Abruf | Bleibt so: Der private Halter-Key wird einmal im lokalen Netz des Fahrzeugs angeboten. |
+| Key-Reset | Nur direkt in der DB (Spalten leeren, siehe unten). Kein eigenes Werkzeug. |
+| HUD | Speichern und Veröffentlichen auch mit Konfig-Sitzung, also auch offline und ohne Fahrer zu sein. |
+| Lesen | Auch das Lesen der Konfiguration braucht eine Steuer- oder Konfig-Sitzung. Die Fahransicht (Video, Live-Telemetrie) bleibt davon unberührt. |
 | Flow | Bleibt pro Benutzer. Andere Flows desselben Fahrzeugs sind lesbar und lassen sich in den eigenen kopieren. |
 | `UserSetups` | Ist nur noch Speicherort für den Flow eines Benutzers, **keine** Berechtigung mehr. |
 
@@ -67,17 +92,19 @@ gerade Fahrer ist.
 ### Sitzungen
 
 Es gibt zwei Sitzungsarten. Beide entstehen nur durch eine Signatur mit dem
-Fahrzeug-Key und sind an die Verbindung bzw. das Cookie dieses Browsers
+Halter-Key und sind an die Verbindung bzw. das Cookie dieses Browsers
 gebunden, nicht an den Benutzer-Datensatz.
 
 | Sitzung | Entsteht | Prüft | Erlaubt | Endet |
 |---|---|---|---|---|
 | Steuersitzung (gibt es schon) | `AquireCarControl`, Fahrzeug online | Onboard | Fahren, Live-Funktionen (Audio-Sprechen, Dateien, Videostreams schalten) **und** Konfiguration | Freigabe, Abbruch der Verbindung, Timeout am Onboard |
-| Konfig-Sitzung (neu) | `POST /api/cars/{id}/config-session` mit Server-Nonce, online wie offline | Server gegen DB-Key | nur Konfiguration, kein Fahren | Abmelden, Schließen des Browsers (Session-Cookie), Leerlauf-Timeout (Vorschlag: 2 h) |
+| Konfig-Sitzung (neu) | `POST /api/cars/{id}/config-session` mit Server-Nonce, online wie offline | Server gegen Halter-Public-Key in der DB | Konfiguration lesen und ändern, HUD, kein Fahren | Abmelden, Schließen des Browsers (Session-Cookie), Leerlauf-Timeout 2 h |
 
 Die Konfig-Sitzung trägt ein zufälliges Token in einem HttpOnly-Cookie pro
 Fahrzeug. Der Server speichert nur den Hash, die Fahrzeug-ID und den Ablauf.
-Ändert sich der Public Key des Fahrzeugs, verfallen alle Konfig-Sitzungen.
+Ändert sich der Halter-Public-Key des Fahrzeugs, verfallen alle Konfig-Sitzungen.
+Solange der Server noch keinen Halter-Public-Key kennt, gibt es keine
+Konfig-Sitzung, nur die Steuersitzung.
 
 ### Server-Prüfung
 
@@ -100,28 +127,74 @@ die Berechtigung, antwortet der Server mit 403.
 | Bereich | Endpunkte / Hub-Methoden | Braucht |
 |---|---|---|
 | Fahrzeugkonfiguration | `ChannelsController` (PUT/DELETE, Audio-Scan/-Test/-Einstellungen), `SoundsController` (POST/DELETE), `TemplatesController` apply, `SetupTemplate` import (ohne Anlage eines Setup-Eintrags als Recht), `LidarGridSource`, `ChangeVideoStreamSettings`, `OnboardLogs` DELETE, Telemetrie-Historie `settings`/`dashboard`/Sitzung löschen | `CanConfigure` |
-| HUD | Overlay `draft`, `publications`, `restore`, `assets` | heute `CanDrive`; **offen:** auf `CanConfigure` lockern, damit HUD offline bearbeitbar ist |
+| HUD | Overlay `draft`, `publications`, `restore`, `assets` | `CanConfigure` (heute `CanDrive`; wird gelockert, damit HUD offline bearbeitbar ist) |
 | Fahren und Live | `UpdateChannel`, `StartAudioTalk`/`SendAudioChunk`, `SetVideoStreamEnabled`, Datei-Upload/-Liste/-Löschen, Aufnahme-Schalter, `SetSpeakerVolume` | `CanDrive` |
 | Flow (eigener) | `FlowController` schreibend | eigener Benutzer (wie heute), kein Fahrzeug-Recht |
 | Flow (fremde) | neu: lesen und kopieren | Lesen: jeder; Kopieren in den eigenen Flow: jeder |
-| Nur Onboard | `OpenCarConnection` → neu mit Signatur, `UpdateChannelMap`, `SyncChannelMap`, `RegisterAvailableChannelTypes`, `UpdateTelemetry`, `ReportChannelHealth`, `SendOnboardLogs`, `ReportOnboardVersion`, `ReportFileTransferStatus`, `ReportAudioStatus`, `SendBashOutput` | `IsVehicle` |
+| Nur Onboard | `OpenCarConnection` → neu mit Geräte-Signatur, `UpdateChannelMap`, `SyncChannelMap`, `RegisterAvailableChannelTypes`, `UpdateTelemetry`, `ReportChannelHealth`, `SendOnboardLogs`, `ReportOnboardVersion`, `ReportFileTransferStatus`, `ReportAudioStatus`, `SendBashOutput` | `IsVehicle` |
 | Bash | `CarBashHub` | `CanDrive` (nach Prüfung von L7) |
-| Lesen | alle GET-Endpunkte | unverändert offen (siehe offene Fragen) |
+| Konfiguration lesen | GET auf Kanäle, Pin-Manager, Optionen, Sounds, Audio-Einstellungen, Overlay-Entwurf und -Historie, Onboard-Log, Telemetrie-Historie, Templates des Fahrzeugs | `CanConfigure` |
+| Fahransicht | Fahrzeugliste, Live-Status, Videostreams, Live-Telemetrie, veröffentlichtes HUD, Version | offen wie heute |
 
-### TOFU-Anmeldung des Fahrzeugs
+Welche GET-Endpunkte die Fahransicht braucht, wird in S5 einzeln festgelegt
+(Liste im Code am Filter, Test pro Endpunkt).
 
-1. `Car` bekommt `PublicKey` (SPKI, Base64) und `PublicKeyFingerprint`.
-2. `OpenCarConnection(carIdentityKey, channelMapHash)` wird zweistufig:
-   - Der Server gibt per `GetVehicleNonce()` eine Nonce aus.
-   - Das Onboard antwortet mit `OpenCarConnection(identity, hash, publicKey, signature)`.
-3. Ohne gespeicherten Key: Der Server übernimmt den Key (TOFU) und protokolliert
-   den Fingerprint.
-4. Mit gespeichertem Key: Die Signatur muss passen, ein anderer Key wird
-   abgelehnt (Log-Warnung, Status „Key-Konflikt“ in der UI).
-5. Danach wird die Verbindung als Fahrzeug markiert. Erst ab hier sind die
-   Nur-Onboard-Methoden für sie erlaubt.
-6. Schlüsseltausch: Das Fahrzeug signiert den neuen Key mit dem alten. Fehlt der
-   alte Key, setzt ein Admin den Key per CLI/DB zurück (siehe offene Fragen).
+### Anmeldung des Fahrzeugs (Geräte-Key)
+
+1. Das Onboard erzeugt beim Start `device_key`/`device_key.pub`, falls nicht
+   vorhanden. Der Geräte-Key wird **nie** ausgeliefert: kein LAN-Listener,
+   kein Hub, kein REST.
+2. `Car` bekommt `DevicePublicKey` und `OwnerPublicKey` (SPKI, Base64) sowie
+   deren Fingerprints.
+3. Handshake neu:
+   - `GetVehicleNonce()` liefert eine Server-Nonce (einmal gültig, 60 s).
+   - `OpenCarConnection(identity, hash, devicePublicKey, signature)` mit der
+     Signatur des Geräte-Keys über die Nonce.
+4. Kennt der Server noch keinen Geräte-Key für diese Identität, übernimmt er ihn
+   (TOFU) und protokolliert den Fingerprint.
+5. Kennt er einen, muss die Signatur dazu passen. Ein anderer Geräte-Key wird
+   abgelehnt: Log-Warnung, Status „Key-Konflikt“ in der UI, die Verbindung
+   bleibt im Update-Modus.
+6. Nach erfolgreicher Anmeldung wird die Verbindung als Fahrzeug markiert. Erst
+   dann gelten die Nur-Onboard-Methoden, und erst dann wird sie im
+   Connection-Store als Verbindung des Fahrzeugs eingetragen.
+7. Das angemeldete Fahrzeug meldet `ReportOwnerPublicKey(ssh_key.pub)`. Ein
+   neuer Halter-Key (Fahrzeug hat `ssh_key` neu erzeugt) wird übernommen und
+   beendet alle Konfig-Sitzungen.
+
+### Update-Modus
+
+Gilt für jede Verbindung ohne erfolgreiche Geräte-Anmeldung: alte Onboards,
+Key-Konflikte, Fälscher.
+
+- `OpenCarConnection` gelingt, liefert aber **keine** Kanalzuordnung
+  (`ChannelMap = null`). Das Onboard behält seine lokale Zuordnung.
+- `ReportOnboardVersion`, Update-Statusmeldungen und
+  `ReportFileTransferStatus` sind erlaubt, damit Auto-Update und
+  Release-Bestätigung laufen. Die Paket-Downloads sind ohnehin anonym.
+- Alle anderen Nur-Onboard-Methoden (`RegisterAvailableChannelTypes`,
+  `UpdateTelemetry`, `ReportChannelHealth`, `SendOnboardLogs`,
+  `UpdateChannelMap` …) werden **stillschweigend ignoriert**, nicht mit
+  Ausnahme abgelehnt. Grund: Das alte Onboard ruft sie im Handshake vor
+  `OnHandshakeAsync()` auf; eine Ausnahme würde den Handshake abbrechen und das
+  Update verhindern.
+- Die Verbindung wird nicht als Fahrzeugverbindung eingetragen. Sie bekommt
+  keine Steuerbefehle, und `AquireCarControl` wird nicht an sie weitergeleitet.
+  Eine echte, angemeldete Verbindung wird nie verdrängt.
+- In der UI erscheint das Fahrzeug als „Update ausstehend“ bzw. „Key-Konflikt“.
+- Onboards mit abgeschaltetem Auto-Update bleiben im Update-Modus, bis sie
+  einmal vor Ort per `update.sh` aktualisiert werden.
+
+### Key-Reset
+
+Nur direkt in der DB, kein eigenes Werkzeug:
+
+- Geräte neu aufgesetzt (neuer Geräte-Key, Verbindung hängt im
+  Update-Modus mit „Key-Konflikt“): `DevicePublicKey` und Fingerprint des
+  Fahrzeugs leeren. Die nächste Anmeldung übernimmt den neuen Key per TOFU.
+- Halter-Key verloren: Auf dem Fahrzeug `ssh_key.pub` löschen, das Onboard
+  erzeugt beim Neustart ein neues Paar und meldet den neuen Halter-Public-Key
+  selbst. Ein DB-Eingriff ist dafür nicht nötig.
 
 ### Onboard-Nonce
 
@@ -134,7 +207,7 @@ Konfig-Sitzung und der Fahrzeug-Anmeldung.
 
 - Der Konfigurationsknopf und der `ConfigGuard` fragen
   `GET /api/cars/{id}/access` → `{ drive, configure, expiresAt }`.
-- Hat der Browser den Fahrzeug-Key gespeichert, aber keine Sitzung, startet ein
+- Hat der Browser den Halter-Key gespeichert, aber keine Sitzung, startet ein
   Klick auf „Konfigurieren“ automatisch eine Konfig-Sitzung (signiert im
   Hintergrund).
 - Ohne gespeicherten Key und ohne Sitzung erscheint der Knopf nicht.
@@ -147,31 +220,22 @@ Konfig-Sitzung und der Fahrzeug-Anmeldung.
 
 | Schritt | Inhalt | Tests |
 |---|---|---|
-| S1 | Onboard-Nonce (L4) | Unit: Challenge nur einmal, Ablauf, fremde Challenge abgelehnt |
-| S2 | `Car.PublicKey` + Migration, TOFU-Anmeldung, Fahrzeug-Markierung der Verbindung, Nur-Onboard-Methoden absichern (L3) | Integration: erster Connect speichert Key, zweiter mit anderem Key abgelehnt, Browser-Verbindung darf `UpdateTelemetry` nicht |
-| S3 | `VehicleAccess` mit `CanDrive`/`CanConfigure`, Attribute/Filter | Unit pro Fall |
-| S4 | Konfig-Sitzung: Nonce-Endpunkt, Signaturprüfung gegen DB-Key, Cookie, Ablauf, Abmelden | Integration inkl. Fahrzeug offline, Key-Wechsel beendet Sitzungen |
-| S5 | Alle schreibenden Endpunkte und Hub-Methoden nach der Tabelle absichern (L1); Selbstausstellung im Template-Import entfernen (L2) | Integration: jeder Endpunkt ohne Sitzung → 403, mit Sitzung → OK |
-| S6 | Client: `access`-Endpunkt, Knopf, `ConfigGuard`, automatische Konfig-Sitzung, Merker entfernen (L6) | UI-Tests |
-| S7 | Flow fremder Benutzer: Liste, Lesen, Kopieren (Server + Client) | Integration + UI |
-| S8 | `CarBashHub` prüfen und absichern (L7) | je nach Befund |
+| S1 | Onboard-Nonce für die Halter-Challenge (L4) | Unit: Challenge nur einmal, Ablauf, fremde Challenge abgelehnt |
+| S2 | Geräte-Key auf dem Onboard, `Car.DevicePublicKey`/`OwnerPublicKey` + Migration, neuer Handshake mit Server-Nonce, TOFU, `ReportOwnerPublicKey`, Fahrzeug-Markierung der Verbindung (L3) | Integration: erster Connect speichert Key, anderer Geräte-Key → Konflikt, Browser-Verbindung darf `UpdateTelemetry` nicht |
+| S3 | Update-Modus: Handshake ohne Kanalzuordnung, stilles Ignorieren, kein Eintrag im Connection-Store, UI-Status | Integration mit einem Handshake im **alten** Ablauf (ohne Signatur): `OnHandshakeAsync` wird erreicht, keine Ausnahme; echte Verbindung wird nicht verdrängt |
+| S4 | `VehicleAccess` mit `CanDrive`/`CanConfigure`/`IsVehicle`, Attribute/Filter | Unit pro Fall |
+| S5 | Konfig-Sitzung: Nonce-Endpunkt, Signaturprüfung gegen Halter-Public-Key, Cookie, 2 h Leerlauf, Abmelden | Integration inkl. Fahrzeug offline, neuer Halter-Key beendet Sitzungen |
+| S6 | Alle Endpunkte und Hub-Methoden nach der Tabelle absichern, schreibend und lesend (L1); Selbstausstellung im Template-Import entfernen (L2) | Integration: jeder Endpunkt ohne Sitzung → 403, mit Sitzung → OK; Fahransicht ohne Sitzung weiter OK |
+| S7 | Client: `access`-Endpunkt, Knopf, `ConfigGuard`, automatische Konfig-Sitzung, Merker entfernen (L6), Status „Update ausstehend“/„Key-Konflikt“ | UI-Tests |
+| S8 | Flow fremder Benutzer: Liste, Lesen, Kopieren (Server + Client) | Integration + UI |
+| S9 | `CarBashHub` prüfen und absichern (L7) | je nach Befund |
 
-S1 und S2 brauchen ein neues Onboard. Wegen des Auto-Updates laufen Server und
-Onboard auf demselben Stand; für den Übergang siehe offene Fragen.
+Reihenfolge beim Ausrollen: Server und Onboard kommen aus demselben Commit. Der
+neue Server nimmt alte Onboards im Update-Modus an; sie aktualisieren sich
+selbst und melden sich danach mit Geräte-Key an. Zwischen Server-Update und
+Onboard-Update ist das Fahrzeug nicht steuerbar.
 
 ## Offene Fragen
 
-1. **Offline-Prüfung:** Ist die Konfig-Sitzung mit Server-Prüfung gegen den
-   DB-Key so in Ordnung? (Sie ist nötig für Offline-Konfiguration.)
-2. **Leerlauf-Timeout** der Konfig-Sitzung: 2 h passend?
-3. **HUD offline:** Soll der HUD-Editor auch mit Konfig-Sitzung speichern und
-   veröffentlichen dürfen, also ohne Fahrer zu sein?
-4. **Lesen:** Bleibt das Lesen der Konfiguration für alle offen, oder nur mit
-   Sitzung?
-5. **Übergang:** Fahrzeuge mit altem Onboard melden noch keinen Key. Ein
-   Schalter `Security:AllowUnauthenticatedVehicles` für eine Übergangszeit,
-   oder gleich hart ablehnen?
-6. **Key-Reset ohne alten Key** (Fahrzeug neu aufgesetzt): Admin-CLI, eigener
-   Server-Endpunkt mit Admin-Passwort, oder nur direkt in der DB?
-7. **Bestehende `UserSetups`-Einträge:** Bleiben als Flow-Speicher. Sollen
-   leere Einträge (ohne Flow) aufgeräumt werden?
+1. **Bestehende `UserSetups`-Einträge:** Vorschlag: bleiben unverändert als
+   Flow-Speicher, kein Aufräumen.
