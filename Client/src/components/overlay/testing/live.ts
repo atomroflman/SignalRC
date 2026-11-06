@@ -74,7 +74,9 @@ const ONBOARD_NOOPS = ["ApplyChannelMap", "ReleaseCarControl", "SubscribeToTelem
 
 /**
  * Fake onboard: registers the vehicle `identityKey` (created by the server if
- * new) and grants every AquireCarControl the session `session`.
+ * new) with a fresh device key and grants every AquireCarControl the session
+ * `session`. Use a new identity per run: a stored device key of an earlier run
+ * would be a key conflict.
  */
 export async function fakeOnboard(identityKey: string, session: string, handlers: Record<string, (...args: never[]) => unknown> = {}) {
   const conn = liveHub();
@@ -82,8 +84,26 @@ export async function fakeOnboard(identityKey: string, session: string, handlers
   for (const [m, h] of Object.entries(handlers)) conn.on(m, h as (...args: unknown[]) => unknown);
   conn.on("AquireCarControl", () => session);
   await conn.start();
-  const config = await conn.invoke("OpenCarConnection", identityKey, "");
-  return { conn, carId: config.serverAssignedCarId as number };
+  const carId = await signVehicleIn(conn, identityKey);
+  return { conn, carId };
+}
+
+/**
+ * Signed handshake of a fake onboard with a fresh device key (Docs/VehicleKeyAuth.md);
+ * an unsigned one only gets update mode. Returns the server-assigned vehicle id.
+ */
+export async function signVehicleIn(conn: signalR.HubConnection, identityKey: string): Promise<number> {
+  const key = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, false, ["sign", "verify"]);
+  const spki = new Uint8Array(await crypto.subtle.exportKey("spki", key.publicKey));
+  const nonce = await conn.invoke<string>("GetVehicleNonce");
+  // WebCrypto signs as r||s, the format .NET's ECDsa.VerifyData expects.
+  const signature = new Uint8Array(await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, key.privateKey, new TextEncoder().encode(nonce)));
+  const b64 = (bytes: Uint8Array) => Buffer.from(bytes).toString("base64");
+  const config = await conn.invoke("OpenVehicleConnection", {
+    carIdentityKey: identityKey, channelMapHash: "", devicePublicKey: b64(spki), nonce, signature: b64(signature),
+  });
+  if (config.authState !== "authenticated") throw new Error(`fake onboard not signed in (${config.authState})`);
+  return config.serverAssignedCarId as number;
 }
 
 /** The browser of `user` takes control of the vehicle (driver hub, as the driving view does). */

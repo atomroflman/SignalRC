@@ -103,6 +103,10 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
         
         // Add connection to SignalR group by CarId for targeted messaging
         await Groups.AddToGroupAsync(Context.ConnectionId, $"Car-{car.Id}");
+        // Telemetry channel subscriptions reach the vehicle through this group. Joined here:
+        // after a reconnect the onboard's RegisterAsOnboard may arrive before the signed
+        // handshake and is then ignored (Docs/VehicleKeyAuth.md).
+        await Groups.AddToGroupAsync(Context.ConnectionId, $"onboard-{car.Id}");
         Logger.LogInformation($"Car '{car.Name}' (ID: {car.Id}) connected and added to group 'Car-{car.Id}'");
         
         var carConfig = new CarConfiguration { AuthState = Shared.Security.VehicleAuthState.Authenticated };

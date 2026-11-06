@@ -38,7 +38,8 @@ public partial class CarConnectionHub
         var fingerprint = VehicleKeys.Fingerprint(hello.DevicePublicKey);
         if (car == null)
         {
-            car = new Car { CarIdentityKey = identity, Name = identity, DevicePublicKey = hello.DevicePublicKey, DeviceKeyFingerprint = fingerprint };
+            // LastSeen in UTC before the first save: Npgsql refuses the entity's local-time default.
+            car = new Car { CarIdentityKey = identity, Name = identity, DevicePublicKey = hello.DevicePublicKey, DeviceKeyFingerprint = fingerprint, LastSeen = DateTime.UtcNow };
             db.Cars.Add(car);
             await db.SaveChangesAsync();
             Logger.LogWarning("New vehicle {Identity} (ID {CarId}) registered with device key {Fingerprint}.", identity, car.Id, fingerprint);

@@ -95,6 +95,9 @@ public sealed class VehicleAuthHubTests : IDisposable
         Assert.Equal(_car, config.ServerAssignedCarId);
         Assert.Equal(Convert.ToBase64String(key.Spki), Reload().DevicePublicKey);
         Assert.True(_store.IsVehicleConnection("onboard", _car));
+        // The vehicle groups are joined by the handshake itself, whatever arrives first after a reconnect.
+        Assert.Contains(_clients.GroupAdds, g => g.Connection == "onboard" && g.Group == $"Car-{_car}");
+        Assert.Contains(_clients.GroupAdds, g => g.Connection == "onboard" && g.Group == $"onboard-{_car}");
 
         // The same key signs in again after a reconnect.
         var again = await SignIn("onboard-2", key);
