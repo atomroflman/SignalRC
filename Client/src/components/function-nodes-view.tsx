@@ -12,7 +12,7 @@ export const ONBOARD_ONLY_FUNCTIONS = ["DisconnectController", "TelemetryOut"];
 export default function FunctionNodesView({ hideFlowButtons }: { hideFlowButtons?: boolean }) {
   const { messages } = useI18n();
   const controlFlow = useControlFlowStore();
-  const functionNames = Object.keys(filterFunctionRegistry);
+  const functionNames = Object.keys(filterFunctionRegistry).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
   const [params, setParams] = React.useState<Record<string, any>>({});
   const [inputPorts, setInputPorts] = React.useState<Record<string, number>>({});
   const [outputPorts, setOutputPorts] = React.useState<Record<string, number>>({});
