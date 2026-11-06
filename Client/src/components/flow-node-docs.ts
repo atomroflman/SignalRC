@@ -166,6 +166,15 @@ const de: Record<string, FlowNodeDoc> = {
     details: ["Web und Controller werden nur gemischt, wenn der Flow es so festlegt."],
     example: "Controller-Lenkung → a, Aktiv? → aActive, Übergabe Lenkung → b → Fahrzeugkanal steering",
   },
+  TelemetryOut: {
+    summary: "Telemetrie senden: Das Fahrzeug veröffentlicht den Eingang unter key. Ein Telemetrie-Kanal vom Typ FlowValueReader mit demselben Key sendet ihn wie jeden Telemetrie-Wert (HUD, Verlauf). Nur im Fahrzeug-Flow.",
+    details: [
+      "Den Kanal unter Kanäle → Telemetrie anlegen: Typ FlowValueReader, Option Key = key dieses Knotens.",
+      "Ohne neuen Wert für StaleAfterMs (Standard 2 s), z. B. bei ausgeschaltetem Flow, gilt der Kanal als veraltet.",
+      "Der Ausgang gibt den Wert unverändert weiter.",
+    ],
+    example: "Gearbox.gearValue → Telemetrie senden (key \"gear\") → Kanal \"Gang\" (FlowValueReader, Key gear) im HUD",
+  },
   DisconnectController: {
     summary: "Controller trennen: Bei einer steigenden Flanke an trigger trennt das Fahrzeug seine Bluetooth-Controller. Nur im Fahrzeug-Flow.",
     details: [
@@ -348,6 +357,15 @@ const en: Record<string, FlowNodeDoc> = {
     summary: "Priority: passes a while aActive ≥ 0.5, otherwise b.",
     details: ["Web and controller are only mixed where the flow says so."],
     example: "Controller steering → a, Active? → aActive, handoff steering → b → vehicle channel steering",
+  },
+  TelemetryOut: {
+    summary: "Send telemetry: the vehicle publishes the input under key. A telemetry channel of type FlowValueReader with the same key sends it like any telemetry value (HUD, history). Vehicle flow only.",
+    details: [
+      "Create the channel under channels → telemetry: type FlowValueReader, option Key = this node's key.",
+      "Without a new value for StaleAfterMs (default 2 s), e.g. with the flow off, the channel counts as stale.",
+      "The output passes the value on unchanged.",
+    ],
+    example: "Gearbox.gearValue → Send telemetry (key \"gear\") → channel \"Gear\" (FlowValueReader, Key gear) in the HUD",
   },
   DisconnectController: {
     summary: "Disconnect controller: on a rising edge at trigger the vehicle disconnects its Bluetooth controllers. Vehicle flow only.",

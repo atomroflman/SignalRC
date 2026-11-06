@@ -22,6 +22,8 @@ public class FlowEngineTests
             Telemetries.TryGetValue(channelName, out var v) ? v : null;
         public List<string?> Disconnects { get; } = new();
         public void DisconnectControllers(string? filter) => Disconnects.Add(filter);
+        public Dictionary<string, double> Published { get; } = new();
+        public void PublishTelemetry(string key, double value) => Published[key] = value;
     }
 
     private static OnboardFlowNode Fn(int id, string fn, params (string, string)[] p) =>
@@ -212,5 +214,20 @@ public class FlowEngineTests
             engine.Tick(env);
         }
         Assert.Equal(["Wireless", "Wireless"], env.Disconnects);
+    }
+
+    [Fact]
+    public void TelemetryOut_publishes_under_its_key()
+    {
+        var engine = new FlowEngine();
+        engine.Load(new OnboardFlowDefinition
+        {
+            Nodes = { Input(1, "pad", 0), Fn(2, "TelemetryOut", ("key", " speed ")), Fn(3, "TelemetryOut") },
+            Links = { Link(1, 2, "value"), Link(1, 3, "value") },
+        });
+        var env = new Env();
+        env.Inputs[("pad", 0)] = 0.75;
+        engine.Tick(env);
+        Assert.Equal(new Dictionary<string, double> { ["speed"] = 0.75 }, env.Published); // node 3 has no key
     }
 }

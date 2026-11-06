@@ -27,6 +27,7 @@ public sealed class OnboardFlowService : IFlowEnvironment, IDisposable
     private readonly VehicleInputService _inputs;
     private readonly ServerConnectionService _server;
     private readonly BluetoothService? _bluetooth;
+    private readonly FlowTelemetryStore _flowTelemetry;
     private readonly FlowEngine _engine = new();
     private readonly object _lock = new();
     private readonly ConcurrentDictionary<int, (double Value, long AtMs)> _handoffs = new();
@@ -41,9 +42,10 @@ public sealed class OnboardFlowService : IFlowEnvironment, IDisposable
     private int _ticking;
     private int _reportingStatus;
 
-    public OnboardFlowService(ILogger<OnboardFlowService> logger, IControlSink control, TelemetryService telemetry, VehicleInputService inputs, ServerConnectionService server, BluetoothService? bluetooth = null)
+    public OnboardFlowService(ILogger<OnboardFlowService> logger, IControlSink control, TelemetryService telemetry, VehicleInputService inputs, ServerConnectionService server, BluetoothService? bluetooth = null, FlowTelemetryStore? flowTelemetry = null)
     {
         _bluetooth = bluetooth;
+        _flowTelemetry = flowTelemetry ?? new FlowTelemetryStore();
         _logger = logger;
         _control = control;
         _telemetry = telemetry;
@@ -176,6 +178,11 @@ public sealed class OnboardFlowService : IFlowEnvironment, IDisposable
     public (double Value, bool Connected) VehicleInput(string deviceKey, int code, bool isAxis) => _inputs.Get(deviceKey, code, isAxis);
 
     public (string Value, bool Valid)? Telemetry(string channelName) => _telemetry.Live.Get(channelName);
+
+    /// <summary>TelemetryOut in the flow (FlowValueReader channels read it).</summary>
+    public void PublishTelemetry(string key, double value) => _flowTelemetry.Set(key, value);
+
+    public FlowTelemetryStore FlowTelemetry => _flowTelemetry;
 
     /// <summary>Addresses the last DisconnectControllers call would disconnect (tests).</summary>
     public IReadOnlyList<string> LastDisconnectRequest { get; private set; } = [];

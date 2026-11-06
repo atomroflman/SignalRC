@@ -9,6 +9,8 @@ public interface IFlowFunctionContext
     (string Value, bool Valid)? Telemetry(string channelName);
     /// <summary>Disconnects the vehicle's Bluetooth controllers matching the filter (name part or address; empty = all).</summary>
     void DisconnectControllers(string? filter);
+    /// <summary>Publishes a value for FlowValueReader telemetry channels with this key.</summary>
+    void PublishTelemetry(string key, double value);
 }
 
 /// <summary>
@@ -42,7 +44,7 @@ public static class FlowFunctions
         new MultiplyFn(), new DivideFn(), new ModuloFn(), new PowerFn(), new LogFn(), new IifFn(),
         new ToggleFn(), new TurnSignalFn(), new RescaleFn(), new GearboxFn(), new FloatValueFn(),
         new SmoothFn(), new SignFn(), new HudSignalFn(), new HudInputFn(), new TelemetryFn(),
-        new ActiveFn(), new PriorityFn(), new DisconnectControllerFn(),
+        new ActiveFn(), new PriorityFn(), new DisconnectControllerFn(), new TelemetryOutFn(),
     }.ToDictionary(f => f.Name, StringComparer.Ordinal);
 
     public static FlowFunction? Get(string? name) => name != null && All.TryGetValue(name, out var f) ? f : null;
@@ -497,5 +499,24 @@ internal sealed class DisconnectControllerFn : FlowFunction
         st.Last = on;
         if (rising) c.DisconnectControllers(p.TryGetValue("device", out var d) ? d : null);
         return [rising ? 1 : 0];
+    }
+}
+
+/// <summary>
+/// "Telemetrie senden": publishes its input under <c>key</c> every evaluation; a telemetry
+/// channel of type FlowValueReader with the same key sends it to the server. Vehicle flow
+/// only. Passes the value on.
+/// </summary>
+internal sealed class TelemetryOutFn : FlowFunction
+{
+    public override string Name => "TelemetryOut";
+    public override string[] Inputs => ["value"];
+    public override string[] Outputs => ["value"];
+    public override double[] Apply(IReadOnlyDictionary<string, double> i, IReadOnlyDictionary<string, string?> p, object? s, IFlowFunctionContext c)
+    {
+        var value = In(i, "value");
+        var key = p.TryGetValue("key", out var k) ? k?.Trim() : null;
+        if (!string.IsNullOrEmpty(key)) c.PublishTelemetry(key, value);
+        return [value];
     }
 }

@@ -106,6 +106,8 @@
       { "inputs": { "trigger": 1 }, "expect": [0] },
       { "inputs": { "trigger": 0 }, "expect": [0] },
       { "inputs": { "trigger": 0.7 }, "expect": [1] } ] },
+    { "name": "telemetry out passes the value", "function": "TelemetryOut", "params": { "key": "x" }, "steps": [
+      { "inputs": { "value": 0.25 }, "expect": [0.25] } ] },
     { "name": "priority", "function": "Priority", "params": {}, "steps": [
       { "inputs": { "a": 0.3, "aActive": 1, "b": -0.8 }, "expect": [0.3] },
       { "inputs": { "a": 0.3, "aActive": 0, "b": -0.8 }, "expect": [-0.8] } ] }

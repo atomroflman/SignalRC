@@ -7,7 +7,7 @@ import { useI18n } from "@/i18n/provider";
 /** Functions that only exist in the browser flow (Server/Services/FlowZoneRules.cs). */
 export const BROWSER_ONLY_FUNCTIONS = ["HudInput", "HudSignal"];
 /** Functions that only exist in the vehicle flow. */
-export const ONBOARD_ONLY_FUNCTIONS = ["DisconnectController"];
+export const ONBOARD_ONLY_FUNCTIONS = ["DisconnectController", "TelemetryOut"];
 
 export default function FunctionNodesView({ hideFlowButtons }: { hideFlowButtons?: boolean }) {
   const { messages } = useI18n();

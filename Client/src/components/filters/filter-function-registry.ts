@@ -23,6 +23,7 @@ import { TelemetryFunction } from "./TelemetryFunction";
 import { ActiveFunction } from "./ActiveFunction";
 import { PriorityFunction } from "./PriorityFunction";
 import { DisconnectControllerFunction } from "./DisconnectControllerFunction";
+import { TelemetryOutFunction } from "./TelemetryOutFunction";
 
 export var storedToggleValues = {} as Record<number, {switchState: boolean, toggleState: boolean}>;
 
@@ -71,5 +72,6 @@ export const filterFunctionRegistry = {
   Active: new ActiveFunction(),
   Priority: new PriorityFunction(),
   DisconnectController: new DisconnectControllerFunction(),
+  TelemetryOut: new TelemetryOutFunction(),
 };
 

@@ -49,6 +49,20 @@ zwei Teilen, die im selben Editor bearbeitet werden:
   geladen, bis der nächste Fahrer die Steuerung übernimmt.
 - **Session-Timeout:** Eingaben am lokalen Controller halten die Session aktiv.
 
+## Telemetrie aus dem Flow
+
+Der Fahrzeug-Teil kann beliebige Werte als Telemetrie senden:
+
+1. Im Flow einen Knoten **„Telemetrie senden“** (`TelemetryOut`) anlegen, den Wert an
+   `value` hängen und `key` setzen, z. B. `gear`.
+2. Unter Kanäle → Telemetrie einen Kanal vom Typ **`FlowValueReader`** anlegen, mit der
+   Option `Key` = `gear`. Einheit und Nachkommastellen stellst du wie bei jedem Kanal ein.
+
+Der Kanal läuft dann wie jeder Telemetrie-Kanal: HUD, Verlauf, Abruf nach Bedarf. Bevor
+der Flow den ersten Wert schickt, hat er keine Daten. Kommt `StaleAfterMs` lang
+(Standard 2 s) kein neuer Wert, gilt er als veraltet, z. B. wenn der Flow aus ist oder
+eine andere Session ohne diesen Knoten fährt.
+
 ## Live-Werte im Editor
 
 Werte des Fahrzeug-Teils kommen vom Fahrzeug: bis zu 5-mal pro Sekunde, mit allen

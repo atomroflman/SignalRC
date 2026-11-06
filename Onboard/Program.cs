@@ -101,6 +101,7 @@ serviceCollection.AddSingleton<ServerCarConfigurationService>();
 serviceCollection.AddSingleton<ControlService>();
 serviceCollection.AddSingleton<SignalRC.Onboard.Input.VehicleInputService>();
 serviceCollection.AddSingleton<SignalRC.Onboard.Input.BluetoothService>();
+serviceCollection.AddSingleton<SignalRC.Onboard.Flow.FlowTelemetryStore>();
 serviceCollection.AddSingleton<SignalRC.Onboard.Flow.OnboardFlowService>();
 serviceCollection.AddSingleton<TelemetryService>();
 serviceCollection.AddSingleton<BashToolService>();
