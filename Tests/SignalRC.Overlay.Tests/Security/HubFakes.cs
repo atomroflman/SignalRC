@@ -37,25 +37,27 @@ public sealed class FakeCaller(string connectionId, HttpContext http) : HubCalle
 }
 
 /// <summary>Records every client call as "target:Method" and group membership.</summary>
-public sealed class RecordingHubClients : IHubCallerClients<IConnectionHubClient>, IGroupManager
+public sealed class RecordingHubClients : RecordingHubClients<IConnectionHubClient>;
+
+public class RecordingHubClients<T> : IHubCallerClients<T>, IGroupManager where T : class
 {
     public readonly ConcurrentQueue<string> Calls = new();
     public readonly ConcurrentQueue<(string Connection, string Group)> GroupAdds = new();
 
-    private IConnectionHubClient Proxy(string target) => RecordingClient.Create(target, Calls);
+    private T Proxy(string target) => RecordingClient<T>.Create(target, Calls);
 
-    public IConnectionHubClient All => Proxy("all");
-    public IConnectionHubClient Caller => Proxy("caller");
-    public IConnectionHubClient Others => Proxy("others");
-    public IConnectionHubClient AllExcept(IReadOnlyList<string> excludedConnectionIds) => Proxy("allExcept");
-    public IConnectionHubClient Client(string connectionId) => Proxy($"client:{connectionId}");
-    public IConnectionHubClient Clients(IReadOnlyList<string> connectionIds) => Proxy("clients");
-    public IConnectionHubClient Group(string groupName) => Proxy($"group:{groupName}");
-    public IConnectionHubClient GroupExcept(string groupName, IReadOnlyList<string> excludedConnectionIds) => Proxy($"group:{groupName}");
-    public IConnectionHubClient Groups(IReadOnlyList<string> groupNames) => Proxy("groups");
-    public IConnectionHubClient OthersInGroup(string groupName) => Proxy($"group:{groupName}");
-    public IConnectionHubClient User(string userId) => Proxy($"user:{userId}");
-    public IConnectionHubClient Users(IReadOnlyList<string> userIds) => Proxy("users");
+    public T All => Proxy("all");
+    public T Caller => Proxy("caller");
+    public T Others => Proxy("others");
+    public T AllExcept(IReadOnlyList<string> excludedConnectionIds) => Proxy("allExcept");
+    public T Client(string connectionId) => Proxy($"client:{connectionId}");
+    public T Clients(IReadOnlyList<string> connectionIds) => Proxy("clients");
+    public T Group(string groupName) => Proxy($"group:{groupName}");
+    public T GroupExcept(string groupName, IReadOnlyList<string> excludedConnectionIds) => Proxy($"group:{groupName}");
+    public T Groups(IReadOnlyList<string> groupNames) => Proxy("groups");
+    public T OthersInGroup(string groupName) => Proxy($"group:{groupName}");
+    public T User(string userId) => Proxy($"user:{userId}");
+    public T Users(IReadOnlyList<string> userIds) => Proxy("users");
 
     public Task AddToGroupAsync(string connectionId, string groupName, CancellationToken cancellationToken = default)
     {
@@ -66,15 +68,15 @@ public sealed class RecordingHubClients : IHubCallerClients<IConnectionHubClient
     public Task RemoveFromGroupAsync(string connectionId, string groupName, CancellationToken cancellationToken = default) => Task.CompletedTask;
 }
 
-public class RecordingClient : DispatchProxy
+public class RecordingClient<T> : DispatchProxy where T : class
 {
     private string _target = "";
     private ConcurrentQueue<string> _calls = null!;
 
-    public static IConnectionHubClient Create(string target, ConcurrentQueue<string> calls)
+    public static T Create(string target, ConcurrentQueue<string> calls)
     {
-        var proxy = Create<IConnectionHubClient, RecordingClient>();
-        var recording = (RecordingClient)(object)proxy;
+        var proxy = Create<T, RecordingClient<T>>();
+        var recording = (RecordingClient<T>)(object)proxy;
         recording._target = target;
         recording._calls = calls;
         return proxy;
