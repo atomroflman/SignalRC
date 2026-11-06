@@ -4,6 +4,7 @@ import React from "react";
 import { useControlFlowStore } from "./control-flow-store";
 import { useI18n } from "@/i18n/provider";
 import UpdatesToggleButton from "./updates-toggle-button";
+import StopSessionButton from "./stop-session-button";
 
 export default function UpdateControl() {
   const { messages } = useI18n();
@@ -25,13 +26,7 @@ export default function UpdateControl() {
         </div>
         <div className="flex items-center space-x-1">
           <UpdatesToggleButton updatesEnabled={updatesEnabled} onToggle={() => setUpdatesEnabled(!updatesEnabled)} />
-          <button
-            className="flex h-12 w-12 items-center justify-center text-xl rounded-md bg-red-600 hover:bg-red-700 text-white"
-            title={messages.carControl.stopControlSession}
-            onClick={() => { stopConnection(); setCarId(undefined); }}
-          >
-            ■
-          </button>
+          <StopSessionButton title={messages.carControl.stopControlSession} onStop={() => { stopConnection(); setCarId(undefined); }} />
         </div>
       </div>
       

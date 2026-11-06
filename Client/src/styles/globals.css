@@ -236,6 +236,26 @@ button:disabled .updates-wheel__ghost { display: none; }
   88% { transform: rotate(-4deg); }
 }
 
+/* Stop button (components/stop-session-button.tsx): pit garage. Idle: only the ignition lamp breathes.
+   Hover/focus: the car parks, the roller door closes, the key turns off, the lamp goes dark – in that order,
+   and backwards when the pointer leaves. */
+.stop-pit__lamp { fill: #4ade80; filter: drop-shadow(0 0 1.5px #4ade80); animation: stop-pit-lamp 2.4s ease-in-out infinite; transition: fill 0.2s ease, filter 0.2s ease; }
+.stop-pit__key { transform-box: view-box; transform-origin: 20.3px 3.6px; transform: rotate(90deg); transition: transform 0.25s ease-in-out 0.1s; }
+.stop-pit__car { transform-box: fill-box; transform-origin: 50% 100%; transform: translateY(1.2px) scale(1.08); transition: transform 0.5s ease-in-out 0.55s; }
+.stop-pit__taillight { fill: #f87171; transition: fill 0.2s ease 0.55s; }
+.stop-pit__door { transform-box: fill-box; transform-origin: 50% 0; transform: scaleY(0); transition: transform 0.4s ease-in 0.25s; }
+.stop-pit:hover .stop-pit__car,
+.stop-pit:focus-visible .stop-pit__car { transform: translateY(-0.6px) scale(0.72); transition: transform 0.55s ease-in-out 0s; }
+.stop-pit:hover .stop-pit__taillight,
+.stop-pit:focus-visible .stop-pit__taillight { fill: #fecaca; transition: fill 0.15s ease 0.1s; }
+.stop-pit:hover .stop-pit__door,
+.stop-pit:focus-visible .stop-pit__door { transform: scaleY(1); transition: transform 0.45s cubic-bezier(0.5, 0, 0.8, 0.6) 0.5s; }
+.stop-pit:hover .stop-pit__key,
+.stop-pit:focus-visible .stop-pit__key { transform: rotate(0deg); transition: transform 0.25s ease-in-out 1s; }
+.stop-pit:hover .stop-pit__lamp,
+.stop-pit:focus-visible .stop-pit__lamp { fill: #57534e; filter: none; animation: none; transition: fill 0.2s ease 1.2s, filter 0.2s ease 1.2s; }
+@keyframes stop-pit-lamp { 50% { filter: drop-shadow(0 0 3px #4ade80) drop-shadow(0 0 5px #4ade80); } }
+
 @media (prefers-reduced-motion: reduce) {
   .brand-logo--draw .brand-logo__trace,
   .brand-logo__comet { display: none; }
@@ -244,4 +264,6 @@ button:disabled .updates-wheel__ghost { display: none; }
   .updates-resume, .updates-resume::after { animation: none; }
   .updates-wheel__rumble, .updates-wheel__steer { animation: none; }
   .updates-wheel__ghost { display: none; }
+  .stop-pit__lamp { animation: none; }
+  .stop-pit * { transition: none !important; }
 }

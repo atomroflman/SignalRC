@@ -5,6 +5,7 @@ import { useControlFlowStore } from "./control-flow-store";
 import { useCarUiStore } from "./car-ui-store";
 import { useI18n } from "@/i18n/provider";
 import UpdatesToggleButton from "./updates-toggle-button";
+import StopSessionButton from "./stop-session-button";
 
 export default function CarControl() {
   const { messages } = useI18n();
@@ -212,16 +213,13 @@ export default function CarControl() {
               disabled={flowControl.onboardUpdating}
               onToggle={() => setUpdatesEnabled(!updatesEnabled)}
             />
-            <button
-              className="flex h-12 w-12 items-center justify-center text-xl rounded-md bg-red-600 hover:bg-red-700 text-white"
+            <StopSessionButton
               title={messages.carControl.stopControlSession}
-              onClick={() => {
+              onStop={() => {
                 flowControl.stopConnection();
                 flowControl.setCarId(undefined);
               }}
-            >
-              ■
-            </button>
+            />
           </div>
         </>
       ) : (
