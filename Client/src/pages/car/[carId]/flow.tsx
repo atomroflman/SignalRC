@@ -104,9 +104,13 @@ export default function CarControlFlowPage() {
       flowControl.setConfigMode(true);
     }
     
+    // The vehicle sends its node values only while an editor shows them.
+    flowControl.setFlowValuesWanted(true);
+
     // Cleanup: disable config mode when leaving
     return () => {
       flowControl.setConfigMode(false);
+      useControlFlowStore.getState().setFlowValuesWanted(false);
     };
   }, [carIdNum]);
 

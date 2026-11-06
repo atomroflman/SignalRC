@@ -35,6 +35,7 @@ public sealed class OnboardFlowService : IFlowEnvironment, IDisposable
     private volatile bool _webDetached;
     private volatile bool _serverConnected;
     private volatile bool _paused;
+    private volatile bool _valuesWanted;
     private long _lastStatusMs = long.MinValue;
     private string _lastStatusKey = string.Empty;
     private int _ticking;
@@ -133,6 +134,20 @@ public sealed class OnboardFlowService : IFlowEnvironment, IDisposable
         return detached;
     }
 
+    /// <summary>
+    /// Whether a flow editor shows the node values. Without one the status carries no
+    /// values and is only sent when mode, handoff or controllers change.
+    /// </summary>
+    public void SetValueDemand(bool wanted)
+    {
+        if (_valuesWanted == wanted) return;
+        _valuesWanted = wanted;
+        _logger.LogInformation("Onboard flow values {State}.", wanted ? "requested by a flow editor" : "no longer requested");
+        _ = ReportStatusAsync(force: true);
+    }
+
+    public bool ValuesWanted => _valuesWanted;
+
     /// <summary>Stops writing (onboard update, T06 lock) without forgetting the flow.</summary>
     public void Pause(bool paused) => _paused = paused;
 
@@ -146,6 +161,8 @@ public sealed class OnboardFlowService : IFlowEnvironment, IDisposable
     public void OnServerLost()
     {
         _serverConnected = false;
+        // The server tells again after the reconnect whether an editor is open.
+        _valuesWanted = false;
         _handoffs.Clear();
     }
 
@@ -245,7 +262,7 @@ public sealed class OnboardFlowService : IFlowEnvironment, IDisposable
                 Mode = def == null ? OnboardFlowMode.Off : _webDetached ? OnboardFlowMode.Detached : OnboardFlowMode.Mixed,
                 HandoffConnected = def != null && HandoffConnected,
                 Devices = _inputs.States(),
-                Values = def == null ? new() : _engine.Values().ToDictionary(kv => kv.Key, kv => Math.Round(kv.Value, 4)),
+                Outputs = def == null || !_valuesWanted ? new() : _engine.Values().ToDictionary(kv => kv.Key, kv => kv.Value.Select(v => Math.Round(v, 4)).ToArray()),
                 OwnedChannels = _engine.OwnedChannels.Order().ToList(),
             };
         }
@@ -260,7 +277,7 @@ public sealed class OnboardFlowService : IFlowEnvironment, IDisposable
         try
         {
             var status = Status();
-            var key = $"{status.Hash}|{status.Mode}|{status.HandoffConnected}|{string.Join(",", status.Devices.Select(d => d.Key + d.Connected))}|{string.Join(",", status.Values.OrderBy(v => v.Key).Select(v => v.Value))}";
+            var key = $"{status.Hash}|{status.Mode}|{status.HandoffConnected}|{string.Join(",", status.Devices.Select(d => d.Key + d.Connected))}|{string.Join(";", status.Outputs.OrderBy(v => v.Key).Select(v => string.Join(",", v.Value)))}";
             if (!force && key == _lastStatusKey) return;
             _lastStatusKey = key;
             _lastStatusMs = now;

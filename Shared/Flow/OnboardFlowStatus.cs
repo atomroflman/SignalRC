@@ -26,8 +26,13 @@ public class OnboardFlowStatus
     [Key(2)][JsonPropertyName("handoffConnected")] public bool HandoffConnected { get; set; }
     /// <summary>Controllers known to the vehicle right now.</summary>
     [Key(3)][JsonPropertyName("devices")] public List<VehicleInputDeviceState> Devices { get; set; } = new();
-    /// <summary>First output of every onboard node by node id.</summary>
-    [Key(4)][JsonPropertyName("values")] public Dictionary<int, double> Values { get; set; } = new();
+    // Key 4 held the first output per node until the status carried all outputs (Outputs).
+    /// <summary>
+    /// All outputs of every onboard node by node id, in the function's output order. Only
+    /// filled while a flow editor of the vehicle is open (SetFlowValueDemand), so the values
+    /// do not cost bandwidth while driving.
+    /// </summary>
+    [Key(7)][JsonPropertyName("outputs")] public Dictionary<int, double[]> Outputs { get; set; } = new();
     /// <summary>Control channels the onboard flow owns (ChannelMap names).</summary>
     [Key(5)][JsonPropertyName("ownedChannels")] public List<string> OwnedChannels { get; set; } = new();
     /// <summary>Setup whose flow is loaded, null without one.</summary>

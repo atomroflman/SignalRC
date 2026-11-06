@@ -112,9 +112,9 @@ public sealed class FlowEngine
         return problems;
     }
 
-    /// <summary>First output of every node, for the status (T13).</summary>
-    public Dictionary<int, double> Values() =>
-        _nodes.ToDictionary(kv => kv.Key, kv => kv.Value.Outputs.Length > 0 && double.IsFinite(kv.Value.Outputs[0]) ? kv.Value.Outputs[0] : 0);
+    /// <summary>All outputs of every node, for the status (T13); non-finite values as 0.</summary>
+    public Dictionary<int, double[]> Values() =>
+        _nodes.ToDictionary(kv => kv.Key, kv => kv.Value.Outputs.Select(v => double.IsFinite(v) ? v : 0).ToArray());
 
     /// <summary>All outputs of a node (tests, diagnostics).</summary>
     public double[]? OutputsOf(int nodeId) => _nodes.TryGetValue(nodeId, out var n) ? n.Outputs : null;

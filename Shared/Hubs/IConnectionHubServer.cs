@@ -104,4 +104,7 @@ public interface IConnectionHubServer
     // Browser: status of the car's onboard flow; returns the last known one.
     Task<OnboardFlowStatus?> SubscribeToFlowStatus(int carId);
     Task UnsubscribeFromFlowStatus(int carId);
+    // Browser (flow editor): the node values of the onboard flow, only while subscribed.
+    Task SubscribeToFlowValues(int carId);
+    Task UnsubscribeFromFlowValues(int carId);
 }

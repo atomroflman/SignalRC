@@ -243,6 +243,8 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
         await Service<TelemetryRelay>().ConnectionClosedAsync(Context.ConnectionId);
         await Service<ControlDisplayRelay>().ConnectionClosedAsync(Context.ConnectionId);
         Service<SignalRC.Server.Overlay.HudInputRateLimit>().Forget(Context.ConnectionId);
+        foreach (var emptied in FlowValues?.RemoveConnection(Context.ConnectionId) ?? [])
+            await SendFlowValueDemandAsync(emptied, false);
         if (_connectionStore.TryRemoveUpdateMode(Context.ConnectionId, out var updateMode)
             && updateMode?.CarId is int updateCar && !_connectionStore.ContainsKey(updateCar.ToString()))
         {
@@ -396,6 +398,9 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
             return;
         }
         await Groups.AddToGroupAsync(Context.ConnectionId, $"Car-{carId}");
+        // A (re)connected vehicle learns whether a flow editor shows its values.
+        if (FlowValues?.IsWanted(carId) == true)
+            await Clients.Caller.SetFlowValueDemand(true);
     }
 
     public async Task<string?> AquireCarControl(int carId, SshAuthenticationRequest authRequest)

@@ -150,6 +150,23 @@ public class OnboardFlowServiceTests
     }
 
     [Fact]
+    public void Node_values_only_while_an_editor_wants_them()
+    {
+        var (service, _, _) = Create();
+        service.OnServerConnected();
+        service.Apply(Flow());
+        service.SetHandoff(1, 0.4);
+        service.TickOnce();
+        Assert.Empty(service.Status().Outputs);
+        service.SetValueDemand(true);
+        var outputs = service.Status().Outputs;
+        Assert.Equal([0.4, 1], outputs[1]); // handoff: value and connected
+        Assert.Equal([0.4], outputs[2]);
+        service.OnServerLost();
+        Assert.False(service.ValuesWanted);
+    }
+
+    [Fact]
     public void Disconnect_targets_connected_bluetooth_controllers_matching_the_filter()
     {
         VehicleInputDeviceState[] devices =

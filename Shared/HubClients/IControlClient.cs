@@ -54,4 +54,6 @@ public interface IControlClient
     Task<bool> SetWebDetached(string sessionId, bool detached);
     /// <summary>Bluetooth action (BluetoothAction) for pairing vehicle controllers (T14).</summary>
     Task<BluetoothResult> Bluetooth(string sessionId, string action, string? address);
+    /// <summary>Whether a flow editor wants the node values in the status (no session needed: display only).</summary>
+    Task SetFlowValueDemand(bool wanted);
 }

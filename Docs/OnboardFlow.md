@@ -49,6 +49,15 @@ zwei Teilen, die im selben Editor bearbeitet werden:
   geladen, bis der nächste Fahrer die Steuerung übernimmt.
 - **Session-Timeout:** Eingaben am lokalen Controller halten die Session aktiv.
 
+## Live-Werte im Editor
+
+Werte des Fahrzeug-Teils kommen vom Fahrzeug: bis zu 5-mal pro Sekunde, mit allen
+Ausgängen eines Knotens, also auch `connected`, `valid` oder dem Gang. Das Fahrzeug
+schickt sie **nur, solange irgendwo ein Flow-Editor für das Fahrzeug offen ist**. Beim
+normalen Fahren kosten sie keine Bandbreite. Betriebsart, Übergabe- und Controller-
+Status gehen immer mit, wenn sie sich ändern. Übergabe-Knoten zeigen den Wert, den
+das Fahrzeug tatsächlich bekommt.
+
 ## Controller koppeln
 
 Flow-Editor → „Fahrzeug-Controller“ → „Bluetooth“. Das braucht die aktive

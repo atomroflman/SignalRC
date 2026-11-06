@@ -321,6 +321,12 @@ public class ControlService : IControlClient, IHubConnectionObserver
         return Task.FromResult(Flow.SetWebDetached(detached));
     }
 
+    public Task SetFlowValueDemand(bool wanted)
+    {
+        Flow.SetValueDemand(wanted);
+        return Task.CompletedTask;
+    }
+
     public async Task<BluetoothResult> Bluetooth(string sessionId, string action, string? address)
     {
         if (_sessionId != sessionId)

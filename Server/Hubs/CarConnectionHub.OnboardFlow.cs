@@ -12,6 +12,9 @@ public partial class CarConnectionHub
 {
     public static string FlowStatusGroup(int carId) => $"flow-status-{carId}";
 
+    /// <summary>Optional, so hubs built without it (tests) keep working on connect and disconnect.</summary>
+    private FlowValueDemand? FlowValues => Context.GetHttpContext()?.RequestServices.GetService<FlowValueDemand>();
+
     // -- Onboard → server ----------------------------------------------------------------
 
     public async Task ReportOnboardFlowStatus(OnboardFlowStatus status)
@@ -90,4 +93,32 @@ public partial class CarConnectionHub
 
     public Task UnsubscribeFromFlowStatus(int carId) =>
         Groups.RemoveFromGroupAsync(Context.ConnectionId, FlowStatusGroup(carId));
+
+    // Node values only while a flow editor is open (FlowValueDemand).
+    public async Task SubscribeToFlowValues(int carId)
+    {
+        if (!await Service<OverlayAccess>().CanViewCarAsync(carId)) throw new HubException("Vehicle not found.");
+        if (Service<FlowValueDemand>().Add(carId, Context.ConnectionId))
+            await SendFlowValueDemandAsync(carId, true);
+    }
+
+    public async Task UnsubscribeFromFlowValues(int carId)
+    {
+        if (Service<FlowValueDemand>().Remove(carId, Context.ConnectionId))
+            await SendFlowValueDemandAsync(carId, false);
+    }
+
+    /// <summary>Tells the vehicle whether anyone shows its flow values; ignored if it is not connected.</summary>
+    private async Task SendFlowValueDemandAsync(int carId, bool wanted)
+    {
+        if (!_connectionStore.TryGetValue(carId.ToString(), out var info) || info.ConnectionId == null) return;
+        try
+        {
+            await Service<IHubContext<CarConnectionHub, SignalRC.Shared.HubClients.IConnectionHubClient>>().Clients.Client(info.ConnectionId).SetFlowValueDemand(wanted);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogDebug(ex, "SetFlowValueDemand for car {CarId} failed", carId);
+        }
+    }
 }

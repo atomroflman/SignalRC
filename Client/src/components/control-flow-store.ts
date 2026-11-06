@@ -31,7 +31,8 @@ export type OnboardFlowStatus = {
   mode: "off" | "mixed" | "detached";
   handoffConnected: boolean;
   devices: { key: string; name: string; connected: boolean }[];
-  values: Record<string, number>;
+  /** All outputs per onboard node; only while a flow editor requested them (setFlowValuesWanted). */
+  outputs?: Record<string, number[]>;
   ownedChannels: string[];
   setupId?: number | null;
 };
@@ -130,6 +131,9 @@ export type ControlFlowState = {
   /** Zone for new function and channel nodes in the editor. */
   newNodeZone: FlowZone;
   setNewNodeZone: (zone: FlowZone) => void;
+  /** The flow editor shows the vehicle's node values: the vehicle only sends them while wanted. */
+  flowValuesWanted: boolean;
+  setFlowValuesWanted: (wanted: boolean) => Promise<void>;
   applyFlowStatus: (carId: number, status: OnboardFlowStatus | null) => void;
   sendHandoff: (nodeId: number, value: number) => Promise<void>;
   registerHandoff: (name?: string) => Promise<void>;
@@ -222,6 +226,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
   onboardUpdating: false,
   flowStatus: undefined,
   newNodeZone: "browser",
+  flowValuesWanted: false,
   async load(carId: number) {
     set({ isLoading: true, error: null });
     try {
@@ -718,6 +723,8 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
       connection.on("OnboardFlowStatus", (statusCarId: number, status: OnboardFlowStatus) => get().applyFlowStatus(statusCarId, status));
       const subscribeFlowStatus = async () => {
         try {
+          // A new connection id: the server forgot the editor's value subscription.
+          if (get().flowValuesWanted) await connection.invoke("SubscribeToFlowValues", carId);
           get().applyFlowStatus(carId, await connection.invoke("SubscribeToFlowStatus", carId));
         } catch (err) {
           console.warn("SubscribeToFlowStatus failed:", err);
@@ -996,6 +1003,16 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
   setNewNodeZone(zone) {
     set({ newNodeZone: zone });
   },
+  async setFlowValuesWanted(wanted) {
+    const { connection, carId, flowValuesWanted } = get();
+    set({ flowValuesWanted: wanted });
+    if (wanted === flowValuesWanted || !connection || !carId) return;
+    try {
+      await connection.invoke(wanted ? "SubscribeToFlowValues" : "UnsubscribeFromFlowValues", carId);
+    } catch (err) {
+      console.warn("Flow values subscription failed:", err);
+    }
+  },
   applyFlowStatus(statusCarId, status) {
     if (get().carId !== undefined && statusCarId !== get().carId) return;
     const state = get();
@@ -1006,10 +1023,13 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
     let changed = false;
     for (const node of state.nodes) {
       if (node.zone !== "onboard") continue;
-      const v = status.values?.[node.nodeId];
-      if (typeof v !== "number" || state.nodeLatestValues[node.nodeId] === v) continue;
-      state.nodeLatestValues[node.nodeId] = v;
-      node.latestValue = v;
+      const outputs = status.outputs?.[node.nodeId];
+      if (!Array.isArray(outputs) || outputs.length === 0) continue;
+      const previous = state.nodeOutputValues[node.nodeId];
+      if (previous && previous.length === outputs.length && previous.every((v, i) => v === outputs[i])) continue;
+      state.nodeLatestValues[node.nodeId] = outputs[0];
+      state.nodeOutputValues[node.nodeId] = outputs;
+      node.latestValue = outputs.length > 1 ? outputs : outputs[0];
       changed = true;
     }
     if (status.mode === "detached") {
@@ -1017,12 +1037,12 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
       clearAllResendTimers();
     }
     set(changed
-      ? { flowStatus: status, nodeLatestValues: state.nodeLatestValues, nodes: [...state.nodes], frame: state.frame + 1 }
+      ? { flowStatus: status, nodeLatestValues: state.nodeLatestValues, nodeOutputValues: state.nodeOutputValues, nodes: [...state.nodes], frame: state.frame + 1 }
       : { flowStatus: status });
   },
   async sendHandoff(nodeId, value) {
     const { carId, carSession, connection, updatesEnabled, onboardUpdating, flowStatus } = get();
-    get().nodeLatestValues[nodeId] = value;
+    // The node shows what the vehicle reports (applyFlowStatus), not what the browser sends.
     if (flowStatus?.mode === "detached") return;
     if (!(connection && carId && carSession && updatesEnabled && !onboardUpdating)) return;
     // Remember only what was sent: a value held back now is sent with the next recalculation.
