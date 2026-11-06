@@ -1,6 +1,7 @@
 # Halter-Key als Master: Berechtigungsplan
 
-Stand: 2026-11-06. Status: Plan abgestimmt, nichts umgesetzt.
+Stand: 2026-11-06. Status: S1–S9 umgesetzt und lokal getestet, nicht ausgerollt.
+Abweichungen vom Plan und der Teststand stehen unter [Umsetzung](#umsetzung).
 Branch: `feature/vehicle-key-auth` (abgezweigt von `experimental`).
 
 Dieses Dokument legt fest, wer an einem Fahrzeug etwas ändern darf und wie der
@@ -237,5 +238,59 @@ Onboard-Update ist das Fahrzeug nicht steuerbar.
 
 ## Offene Fragen
 
-1. **Bestehende `UserSetups`-Einträge:** Vorschlag: bleiben unverändert als
-   Flow-Speicher, kein Aufräumen.
+Keine. Bestehende `UserSetups`-Einträge bleiben unverändert als Flow-Speicher.
+
+## Umsetzung
+
+| Schritt | Wo |
+|---|---|
+| S1 | `Shared/Security/NonceStore.cs`, `SshKeyService.TryConsumeChallenge`, `ControlService.AquireCarControl` |
+| S2 | `Onboard/Services/DeviceKeyService.cs`, `ServerConnectionService.OpenSignedConnectionAsync`, `Server/Hubs/CarConnectionHub.VehicleAuth.cs`, Migration `AddVehicleKeys` |
+| S3 | `CarConnectionStore` (Update-Modus), Sperren in `CarConnectionHub.cs` und `.OnboardUpdate.cs`, `VersionController` |
+| S4 | `Server/Security/VehicleAccess.cs` (`VehicleAccess`, `[RequireVehicle]`, `[AllowWithoutVehicleSession]`, `IConfigSessionGrant`), `OverlayAccess.CheckAdmin`/`CheckDriver` |
+| S5 | `Server/Security/ConfigSessionStore.cs`, `VehicleAccessController.cs` |
+| S6 | Attribute an `Channels`, `Sounds`, `OnboardLogs`, `TelemetryHistory`, `SetupTemplate`, `Templates` (apply); Hub: Videostream-Einstellungen, Diagnose |
+| S7 | `Client/src/components/vehicle-access.ts`, `config-guard.tsx`, `config-button.tsx`, `config-header.tsx`, `car-control.tsx`, HUD-Route hinter dem Guard |
+| S8 | `FlowController.ListSetups`/`CopyFrom` (über den Template-Export/-Import), `flow-sharing-panel.tsx` |
+| S9 | `Server/Hubs/CarBashHub.cs`, `BashToolService` (signierte Anmeldung) |
+
+Abweichungen und Funde während der Umsetzung:
+
+- **Flow-Schreibzugriffe** prüften entgegen dem Plan („wie heute“) den Besitz
+  nicht: Knoten verschieben, löschen, verbinden, Parameter setzen und Knoten in
+  fremde Setups einfügen ging über die ID. Jetzt nur noch im eigenen Flow.
+- **`Car-{id}`-Gruppe:** Über `RegisterForControl` konnte sich jeder Browser
+  eintragen und bekam Kanaländerungen (mit Optionen) und Datei-Download-Tokens.
+  Nur noch das angemeldete Fahrzeug.
+- **Reconnect:** `RegisterAsOnboard` kann nach einem Reconnect vor dem signierten
+  Handshake ankommen und wird dann ignoriert. Der Handshake trägt das Fahrzeug
+  deshalb selbst in `Car-{id}` und `onboard-{id}` ein.
+- **Bash (L7):** Der Hub ruft `OnExecuteCommand`, das Onboard hört auf
+  `ExecuteCommand`; der Client ruft `ExecuteBashCommand` am Steuer-Hub, den es
+  nicht gibt. Die Funktion war also schon vorher nicht lauffähig. Sie ist jetzt
+  abgesichert, aber nicht repariert.
+- **`has-config-access`** bleibt für ältere Clients, fragt aber `VehicleAccess`.
+- **Konfig-Sitzungen** liegen nur im Speicher: Ein Server-Neustart beendet sie,
+  der Browser öffnet beim nächsten Fokus selbst eine neue.
+- **Hub und Konfig-Sitzung:** Ein Hub sieht die Cookies seines
+  Verbindungsaufbaus. Eine Konfig-Sitzung, die nach dem Verbinden geöffnet wird,
+  zählt für Hub-Aufrufe (Diagnose, Videostream-Einstellungen) erst nach einem
+  Reconnect. Die Setup-Diagnose baut ihre Verbindung beim Öffnen des Tabs auf und
+  ist davon nicht betroffen.
+- **`device_key*`** steht jetzt in `.gitignore` (wie `ssh_key*`).
+
+Teststand:
+
+- .NET: 818 Tests grün gegen PostgreSQL (821 gesamt, 3 übersprungen), davon neu:
+  Nonce, Geräte-Key, signierter Handshake inkl. Konflikt und Replay, kompletter
+  Startablauf eines alten Onboards ohne Ausnahme, Konfig-Sitzung, Filter,
+  Bash-Hub, Flow-Besitz und -Kopie sowie ein Inventar-Test, der jeden Endpunkt
+  mit Fahrzeug in der Route als geschützt oder bewusst offen verlangt.
+- Client: 883 Unit-Tests grün; die 9 Live-Tests laufen gegen einen lokalen
+  Server mit frischer Datenbank (gefälschtes Onboard jetzt signiert).
+- Ende-zu-Ende per `curl`/`openssl`: ohne Sitzung 403, Sitzung öffnen 200
+  (HttpOnly-Cookie), Nonce-Wiederholung 403, mit Sitzung 200, nach dem Beenden
+  mit altem Cookie 403. Dabei gefunden und behoben: Ein neues Fahrzeug scheiterte
+  beim ersten signierten Handshake an einem lokalen Zeitstempel (Npgsql).
+- Nicht getestet: echtes Onboard auf Hardware, Übergang eines alten Onboards
+  über das Auto-Update im Feld.

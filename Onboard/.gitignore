@@ -3,3 +3,4 @@ channelMap.hash
 channelMap.server.json
 appSettings.development.json
 ssh_key*
+device_key*

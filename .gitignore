@@ -21,6 +21,8 @@ SignalRC.Server/janus/janus-gateway/**/*
 SignalRC.Server/configuration.db*
 Builds/*/ssh_key
 Builds/*/ssh_key.pub
+Builds/*/device_key
+Builds/*/device_key.pub
 Builds/**/*.sqlite
 Server/Generated/**/*
 
