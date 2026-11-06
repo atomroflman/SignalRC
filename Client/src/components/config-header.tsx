@@ -5,6 +5,8 @@ import BrandLogo from "@/components/brand-logo";
 import { useControlFlowStore } from "@/components/control-flow-store";
 import { sendState } from "@/components/overlay/integration/editor-control";
 import { useI18n } from "@/i18n/provider";
+import { useRouter } from "next/router";
+import { closeConfigSession, useVehicleAccess } from "@/components/vehicle-access";
 
 /** The configuration areas of a vehicle, switched in the shared title bar. */
 export const CONFIG_SECTIONS = ["setup", "hud", "flow", "logs", "telemetry"] as const;
@@ -33,6 +35,14 @@ export default function ConfigHeader({ carId, active, actions, className = "" }:
   const { messages } = useI18n();
   const m = messages.configHeader;
   const live = useControlFlowStore(s => sendState(s, carId) === "live");
+  const router = useRouter();
+  const { access } = useVehicleAccess(carId);
+
+  // Ends the config session on the server too; driving rights are not affected.
+  const endSession = async () => {
+    await closeConfigSession(carId);
+    void router.push("/");
+  };
 
   // Opening the HUD editor pauses sending; ask first while the vehicle is driven.
   const onHudClick = (e: React.MouseEvent) => {
@@ -66,6 +76,12 @@ export default function ConfigHeader({ carId, active, actions, className = "" }:
       </div>
       <div className="flex flex-wrap items-center gap-2 pb-2">
         {actions}
+        {access?.configSession && (
+          <button type="button" onClick={endSession} title={messages.vehicleAccess.endSessionTitle}
+            className="px-2 py-1 rounded text-xs border bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border-zinc-700">
+            {messages.vehicleAccess.endSession}
+          </button>
+        )}
         <LanguageSwitcher />
       </div>
     </div>

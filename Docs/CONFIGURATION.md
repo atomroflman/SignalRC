@@ -259,8 +259,16 @@ This vehicle-side `8080` is unrelated to the server stack's nginx port (also `80
 | File | Location | Purpose |
 |------|----------|---------|
 | `carIdentityKey` | Config dir | Vehicle identity (GUID) |
-| `ssh_key` | Config dir | Private key (PKCS#8 DER) |
-| `ssh_key.pub` | Config dir | Public key (SPKI DER) |
+| `ssh_key` | Config dir | Owner private key (PKCS#8 DER), deleted after the one-time download |
+| `ssh_key.pub` | Config dir | Owner public key (SPKI DER); reported to the server for config sessions |
+| `device_key` | Config dir | Device private key (ECDSA P-256, PKCS#8 DER, mode 600); never leaves the vehicle |
+| `device_key.pub` | Config dir | Device public key (SPKI DER); the server stores it on the first signed handshake |
+
+The owner key is the master of every change: driving needs the control session the
+vehicle issues for a signature of it, configuring needs that or a config session the
+server opens for a signature of it (also while the vehicle is offline). The device key
+only proves to the server that a connection is the vehicle. Details, update mode for
+old onboards and how to reset a stored key: [VehicleKeyAuth.md](VehicleKeyAuth.md).
 
 ---
 

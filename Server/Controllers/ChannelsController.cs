@@ -1,3 +1,4 @@
+using SignalRC.Server.Security;
 using SignalRC.Server.Telemetry.History;
 using System.Text.Json;
 using SignalRC.Server.Data;
@@ -19,6 +20,8 @@ namespace SignalRC.Server.Controllers;
 // (PinManager, Address, ControlType, Options, TestDisabled added in 20260720000001).
 [ApiController]
 [Route("api/cars/{carId:int}/channels")]
+// Docs/VehicleKeyAuth.md: reading and changing the vehicle config needs a control or config session.
+[RequireVehicle]
 public class ChannelsController : ControllerBase
 {
     private readonly IHubContext<CarConnectionHub, IConnectionHubClient> _controlHub;
@@ -513,6 +516,8 @@ public class ChannelsController : ControllerBase
     }
 
     // Car-level audio: one microphone (listening) and one speaker (push-to-talk, sound channels).
+    // The driving view shows listening/push-to-talk only for configured devices.
+    [AllowWithoutVehicleSession]
     [HttpGet("audio-settings")]
     public async Task<IActionResult> GetAudioSettings(int carId)
     {

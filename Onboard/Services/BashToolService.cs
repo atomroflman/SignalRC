@@ -15,9 +15,12 @@ public class BashToolService
     private bool _isEnabled = true;
     private string _workingDirectory;
 
-    public BashToolService(ILogger<BashToolService> logger)
+    private readonly DeviceKeyService _deviceKey;
+
+    public BashToolService(ILogger<BashToolService> logger, DeviceKeyService deviceKey)
     {
         _logger = logger;
+        _deviceKey = deviceKey;
         _workingDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
     }
 
@@ -68,9 +71,13 @@ public class BashToolService
             });
 
             await _hubConnection.StartAsync();
-            await _hubConnection.InvokeAsync("RegisterCar", carIdentityKey);
-            
-            _logger.LogInformation("BashToolService connected to server");
+            // The server only accepts the vehicle with a signature of its device key (Docs/VehicleKeyAuth.md).
+            var nonce = await _hubConnection.InvokeAsync<string>("GetNonce");
+            var accepted = await _hubConnection.InvokeAsync<bool>("RegisterCarSigned", carIdentityKey, nonce, _deviceKey.Sign(nonce));
+            if (!accepted)
+                _logger.LogError("Server refused the bash registration of this vehicle (device key not signed in yet?)");
+            else
+                _logger.LogInformation("BashToolService connected to server");
         }
         catch (Exception ex)
         {

@@ -109,6 +109,7 @@ serviceCollection.AddSingleton<AudioService>();
 serviceCollection.AddSingleton<OnboardUpdateService>();
 
 serviceCollection.AddSingleton<SshKeyService>();
+serviceCollection.AddSingleton<DeviceKeyService>();
 serviceCollection.AddSingleton<TlsCertificateService>();
 serviceCollection.AddSingleton<ControlExecutionService>();
 serviceCollection.AddSingleton<TelemetryStore>();

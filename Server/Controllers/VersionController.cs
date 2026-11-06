@@ -28,13 +28,15 @@ public class VersionController : Microsoft.AspNetCore.Mvc.ControllerBase
         var server = BuildInfo.GetBuildInfo();
         var key = carId.ToString();
         ConnectionStore.TryGetValue(key, out var info);
-        var onboardBranch = info?.OnboardBranch;
-        var onboardCommit = info?.OnboardCommit;
+        // An onboard in update mode still reports its version and update progress.
+        var updateMode = info == null ? ConnectionStore.UpdateModeOfCar(carId) : null;
+        var onboardBranch = info?.OnboardBranch ?? updateMode?.OnboardBranch;
+        var onboardCommit = info?.OnboardCommit ?? updateMode?.OnboardCommit;
         var onboard = onboardBranch == null && onboardCommit == null
             ? null
             : new { branch = onboardBranch, commit = onboardCommit };
         var mismatch = onboard != null
             && (onboardBranch != server.Branch || onboardCommit != server.Commit);
-        return Ok(new { server = new { branch = server.Branch, commit = server.Commit }, onboard, mismatch, update = info?.UpdateStatus });
+        return Ok(new { server = new { branch = server.Branch, commit = server.Commit }, onboard, mismatch, update = info?.UpdateStatus ?? updateMode?.UpdateStatus, authState = updateMode?.State });
     }
 }

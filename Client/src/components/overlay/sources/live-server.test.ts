@@ -6,7 +6,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as signalR from "@microsoft/signalr";
 import { ControlDisplayPublisher } from "./control-display";
-import { browserSession, LIVE_BASE as BASE, liveEnabled as enabled, removeSessionUsers, removeVehicle, sql, until as untilMs, wait } from "../testing/live";
+import { browserSession, LIVE_BASE as BASE, liveEnabled as enabled, removeSessionUsers, removeVehicle, signVehicleIn, sql, until as untilMs, wait } from "../testing/live";
 import { SourceHub, type HubLike } from "./hub";
 
 const until = (cond: () => boolean, ms = 3000) => untilMs(cond, ms);
@@ -37,8 +37,7 @@ describe.skipIf(!enabled)("live server", () => {
     for (const m of ["ApplyChannelMap", "ReleaseCarControl", "SubscribeToTelemetryChannel", "UnsubscribeFromTelemetryChannel"]) onboard.on(m, () => {});
     onboard.on("AquireCarControl", () => "sess-ap05");
     await onboard.start();
-    const config = await onboard.invoke("OpenCarConnection", `ovl-ap05-${tag}`, "");
-    carId = config.serverAssignedCarId;
+    carId = await signVehicleIn(onboard, `ovl-ap05-${tag}`);
     const rows = sql(`insert into "CarTelemetry" ("CarId","ChannelName","ReadIntervalTicks","TelemetryType","DataType","PinManager","OptionsJson") values
       (${carId},'speed',1,'x',2,'x',null),(${carId},'volt',10,'x',2,'x',null),
       (${carId},'lidarGrid',2,'x',4,'x','{"zoneLimitsMm":[400,800,1600,3200,6400]}') returning "Id", "ChannelName"`);

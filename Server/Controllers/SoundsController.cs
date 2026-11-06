@@ -1,3 +1,4 @@
+using SignalRC.Server.Security;
 using System.Security.Cryptography;
 using SignalRC.Server.Data;
 using SignalRC.Server.Services;
@@ -12,6 +13,7 @@ namespace SignalRC.Server.Controllers;
 // Every change is pushed to the connected Onboard, which keeps a local copy.
 [ApiController]
 [Route("api/cars/{carId:int}/sounds")]
+[RequireVehicle]
 public class SoundsController : ControllerBase
 {
     private static readonly FileExtensionContentTypeProvider ContentTypes = new();

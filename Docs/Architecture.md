@@ -203,9 +203,10 @@ sequenceDiagram
 
 ### Access control
 
-- **UserSetup**: A user needs a setup for a vehicle in order to see and control its functions.
-- **UserCarSetup**: Created automatically after successful SSH authentication.
-- There is **no role-based authorization** (no roles or policies). Access control is based on ownership of the SSH key and membership in a UserSetup.
+- **Owner key** (`ssh_key`): the master of every change. Driving needs the control session the vehicle issues for a signature of a one-time challenge; configuring (reading included) needs that or a config session the server opens for a signature checked against the reported owner public key, also while the vehicle is offline.
+- **Device key** (`device_key`): the vehicle signs a server nonce with it; only such a connection acts as the vehicle. Unsigned connections run in update mode.
+- **UserCarSetup**: stores a user's flow for a vehicle; it is no permission.
+- There is **no role-based authorization** and no login beyond the anonymous session user. Every vehicle endpoint is checked on the server (`VehicleAccess`, `[RequireVehicle]`). See [VehicleKeyAuth.md](VehicleKeyAuth.md).
 
 ---
 
@@ -272,4 +273,5 @@ erDiagram
 | `channelMap.json` | Onboard | Definition of the control, telemetry, and video channels |
 | `channelMap.server.json` | Onboard | Cached server response from channel synchronization |
 | `carIdentityKey.txt` | Onboard | Generated GUID for vehicle identification |
-| `ssh_key` / `ssh_key.pub` | Onboard | RSA key pair for control authentication |
+| `ssh_key` / `ssh_key.pub` | Onboard | Owner key pair (RSA); the private part leaves once over the LAN |
+| `device_key` / `device_key.pub` | Onboard | Device key pair (ECDSA P-256) the vehicle signs in to the server with; never leaves the vehicle |

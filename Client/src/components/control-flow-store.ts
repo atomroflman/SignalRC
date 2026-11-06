@@ -91,8 +91,6 @@ export type ControlFlowState = {
   setOnboardUpdating: (updating: boolean) => void;
   pauseForOverlayEditor: () => void;
   // Authentication tracking
-  hasAuthenticatedWithCar: (carId: number) => boolean;
-  markCarAsAuthenticated: (carId: number) => void;
   // SSH key functions
   downloadSshKey: (carId: number, vehicleIp: string, saveToStorage?: boolean) => Promise<{ success: boolean; key?: string; error?: string }>;
   uploadSshKey: (carId: number, privateKey: string) => Promise<{ success: boolean; error?: string }>;
@@ -783,8 +781,6 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
       if (carSession) {
         rememberCarSession(carId, carSession);
         set({ carSession });
-        // Mark car as authenticated for config access
-        get().markCarAsAuthenticated(carId);
         return true;
       }
       return false;
@@ -1119,27 +1115,6 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
       set({ onboardUpdating: false, carSession: undefined });
     }
     console.log("Onboard update in progress:", updating);
-  },
-
-  // Authentication tracking functions
-  hasAuthenticatedWithCar: (carId: number) => {
-    try {
-      const authKey = `car_auth_${carId}`;
-      return localStorage.getItem(authKey) === "true";
-    } catch (error) {
-      console.error("Failed to check car authentication:", error);
-      return false;
-    }
-  },
-
-  markCarAsAuthenticated: (carId: number) => {
-    try {
-      const authKey = `car_auth_${carId}`;
-      localStorage.setItem(authKey, "true");
-      console.log(`Marked car ${carId} as authenticated`);
-    } catch (error) {
-      console.error("Failed to mark car as authenticated:", error);
-    }
   },
 }));
 

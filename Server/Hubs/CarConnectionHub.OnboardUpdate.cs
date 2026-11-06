@@ -11,6 +11,14 @@ public partial class CarConnectionHub
         if (!_connectionStore.TryGetCarId(Context.ConnectionId, out var carId)
             || !_connectionStore.TryGetValue(carId.ToString(), out var info))
         {
+            // Update mode: the self-update is exactly what this connection is still for.
+            if (TryGetUpdateModeCar(out var updateCar, out var entry))
+            {
+                entry.UpdateStatus = status;
+                Logger.LogInformation("Car {CarId} (update mode) update status {State} (target {Commit})", updateCar, status.State, status.TargetCommit ?? "-");
+                await Clients.All.OnboardUpdateStatusChanged(updateCar, status);
+                return;
+            }
             Logger.LogWarning("ReportOnboardUpdateStatus received without an active car connection");
             return;
         }

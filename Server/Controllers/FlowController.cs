@@ -50,6 +50,66 @@ public partial class FlowController : ControllerBase
         });
     }
 
+    // -- Flows of other drivers (Docs/VehicleKeyAuth.md: flows stay per user, but every
+    //    driver may look at the others' flows of a vehicle and copy one into their own) --
+
+    public sealed record SetupSummary(int SetupId, string Owner, bool IsMine, int NodeCount, int LinkCount);
+
+    [Security.AllowWithoutVehicleSession]
+    [HttpGet("cars/{carId:int}/setups")]
+    public async Task<IActionResult> ListSetups(int carId)
+    {
+        var user = await GetCurrentUserAsync();
+        var setups = await _context.UserSetups.AsNoTracking().Where(s => s.CarId == carId)
+            .Select(s => new { s.Id, s.UserId }).ToListAsync();
+        var setupIds = setups.Select(s => s.Id).ToList();
+        var nodes = await _context.Set<UserSetupFlowNodeBase>().AsNoTracking()
+            .Where(n => setupIds.Contains(n.UserSetupId))
+            .Select(n => new { n.Id, n.UserSetupId }).ToListAsync();
+        var nodeSetup = nodes.ToDictionary(n => n.Id, n => n.UserSetupId);
+        var nodeIds = nodeSetup.Keys.ToList();
+        var links = await _context.Set<UserSetupLink>().AsNoTracking()
+            .Where(l => nodeIds.Contains(l.UserSetupToNodeId))
+            .Select(l => l.UserSetupToNodeId).ToListAsync();
+        var userIds = setups.Select(s => s.UserId).Distinct().ToList();
+        var names = await _context.Users.AsNoTracking().Where(u => userIds.Contains(u.Id))
+            .ToDictionaryAsync(u => u.Id, u => u.LoginName ?? u.Name ?? $"User {u.Id}");
+
+        var result = setups
+            .Select(s => new SetupSummary(
+                s.Id,
+                names.GetValueOrDefault(s.UserId) ?? $"User {s.UserId}",
+                user != null && s.UserId == user.Id,
+                nodes.Count(n => n.UserSetupId == s.Id),
+                links.Count(to => nodeSetup[to] == s.Id)))
+            .Where(s => s.IsMine || s.NodeCount > 0)
+            .OrderByDescending(s => s.IsMine).ThenBy(s => s.Owner)
+            .ToList();
+        return Ok(result);
+    }
+
+    /// <summary>Replaces the caller's flow for the vehicle with a copy of another driver's flow.</summary>
+    [Security.AllowWithoutVehicleSession]
+    [HttpPost("cars/{carId:int}/copy-from/{setupId:int}")]
+    public async Task<IActionResult> CopyFrom(int carId, int setupId)
+    {
+        var user = await GetCurrentUserAsync();
+        if (user == null) return Unauthorized("User not found");
+        var source = await _context.UserSetups.AsNoTracking().FirstOrDefaultAsync(s => s.Id == setupId && s.CarId == carId);
+        if (source == null) return NotFound("Flow not found");
+        if (source.UserId == user.Id) return BadRequest("This is your own flow.");
+        var car = await _context.Cars.FirstOrDefaultAsync(c => c.Id == carId);
+        if (car == null) return NotFound("Car not found");
+
+        // Through the template: gamepad inputs are matched by device and channel name,
+        // since the other driver's gamepads are not the caller's.
+        var templates = new SetupTemplateController(_context);
+        var template = await templates.BuildTemplateAsync(car, source);
+        var result = await templates.ApplyTemplateAsync(user, carId, template);
+        _logger.LogInformation("User {UserId} copied flow {SetupId} of car {CarId}", user.Id, setupId, carId);
+        return Ok(result);
+    }
+
     [HttpPost("{nodetype}/{id?}")]
     public async Task<IActionResult> AddNode(string nodetype, int? id, [FromBody] AddNodeRequest req)
     {
@@ -57,6 +117,9 @@ public partial class FlowController : ControllerBase
         var user = await GetCurrentUserAsync();
         if (user == null)
             return Unauthorized("User not found");
+        // Only into the caller's own flow (Docs/VehicleKeyAuth.md: flows stay per user).
+        if (!await OwnSetupIds(user.Id).AnyAsync(id => id == req.UserSetupId))
+            return NotFound("UserSetup not found");
         UserSetupFlowNodeBase node;
         switch (nodetype.ToLowerInvariant())
         {
@@ -120,7 +183,9 @@ public partial class FlowController : ControllerBase
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteNode(int id)
     {
-        var node = await _context.Set<UserSetupFlowNodeBase>().FirstOrDefaultAsync(n => n.Id == id);
+        var user = await GetCurrentUserAsync();
+        if (user == null) return Unauthorized("User not found");
+        var node = await OwnNodes(user.Id).FirstOrDefaultAsync(n => n.Id == id);
         if (node == null)
             return NotFound();
 
@@ -129,6 +194,16 @@ public partial class FlowController : ControllerBase
         _context.Remove(node);
         await _context.SaveChangesAsync();
         return Ok();
+    }
+
+    // The UserSetup navigation is not mapped; a user's flow is the nodes of their setups.
+    private IQueryable<int> OwnSetupIds(int userId) =>
+        _context.UserSetups.Where(s => s.UserId == userId).Select(s => s.Id);
+
+    private IQueryable<UserSetupFlowNodeBase> OwnNodes(int userId)
+    {
+        var setupIds = OwnSetupIds(userId);
+        return _context.Set<UserSetupFlowNodeBase>().Where(n => setupIds.Contains(n.UserSetupId));
     }
 
     private NodeInfo? FlowNodeToNodeInfo(UserSetupFlowNodeBase flowNode)
@@ -181,7 +256,9 @@ public partial class FlowController : ControllerBase
     [HttpPost("movenode")]
     public async Task<IActionResult> MoveNode([FromBody] MoveNodeRequest req)
     {
-        var node = await _context.Set<UserSetupFlowNodeBase>().FirstOrDefaultAsync(n => n.Id == req.NodeId);
+        var user = await GetCurrentUserAsync();
+        if (user == null) return Unauthorized("User not found");
+        var node = await OwnNodes(user.Id).FirstOrDefaultAsync(n => n.Id == req.NodeId);
         if (node == null) return NotFound();
         node.PositionX = req.PositionX;
         node.PositionY = req.PositionY;
@@ -198,9 +275,8 @@ public partial class FlowController : ControllerBase
             return Unauthorized("User not found");
         var ids = req.Select(r => r.NodeId).Distinct().ToList();
         // The UserSetup navigation is not mapped; match the user's setups by id.
-        var setupIds = _context.UserSetups.Where(s => s.UserId == user.Id).Select(s => s.Id);
-        var nodes = await _context.Set<UserSetupFlowNodeBase>()
-            .Where(n => ids.Contains(n.Id) && setupIds.Contains(n.UserSetupId))
+        var nodes = await OwnNodes(user.Id)
+            .Where(n => ids.Contains(n.Id))
             .ToListAsync();
         if (nodes.Count != ids.Count)
             return NotFound("Node(s) not found");
@@ -217,9 +293,11 @@ public partial class FlowController : ControllerBase
     [HttpPost("link")]
     public async Task<IActionResult> LinkNode([FromBody] LinkNodeRequest req)
     {
-        var from = await _context.Set<UserSetupFlowNodeBase>().FirstOrDefaultAsync(n => n.Id == req.FromNodeId);
-        var to = await _context.Set<UserSetupFlowNodeBase>().FirstOrDefaultAsync(n => n.Id == req.ToNodeId);
-        if (from == null || to == null)
+        var user = await GetCurrentUserAsync();
+        if (user == null) return Unauthorized("User not found");
+        var from = await OwnNodes(user.Id).FirstOrDefaultAsync(n => n.Id == req.FromNodeId);
+        var to = await OwnNodes(user.Id).FirstOrDefaultAsync(n => n.Id == req.ToNodeId);
+        if (from == null || to == null || from.UserSetupId != to.UserSetupId)
             return NotFound("Node(s) not found");
 
         if (to is UserSetupUserChannelNode)
@@ -253,8 +331,11 @@ public partial class FlowController : ControllerBase
     [HttpDelete("unlink/{id}")]
     public async Task<IActionResult> UnlinkNode(int id)
     {
+        var user = await GetCurrentUserAsync();
+        if (user == null) return Unauthorized("User not found");
+        var ownNodeIds = OwnNodes(user.Id).Select(n => n.Id);
         var link = await _context.Set<UserSetupLink>()
-            .FirstOrDefaultAsync(l => l.Id == id);
+            .FirstOrDefaultAsync(l => l.Id == id && ownNodeIds.Contains(l.UserSetupToNodeId));
         if (link == null) return NotFound();
         _context.Remove(link);
         await _context.SaveChangesAsync();
@@ -264,7 +345,10 @@ public partial class FlowController : ControllerBase
     [HttpPost("{nodeId}/params")]
     public async Task<IActionResult> SetFunctionNodeParams(int nodeId, [FromBody] Dictionary<string, string?> paramDict)
     {
-        var node = await _context.Set<UserSetupFunctionNode>().FirstOrDefaultAsync(n => n.Id == nodeId);
+        var user = await GetCurrentUserAsync();
+        if (user == null) return Unauthorized("User not found");
+        var ownSetups = OwnSetupIds(user.Id);
+        var node = await _context.Set<UserSetupFunctionNode>().FirstOrDefaultAsync(n => n.Id == nodeId && ownSetups.Contains(n.UserSetupId));
         if (node == null)
             return NotFound();
         var existingParams = await _context.Set<UserSetupFunctionNodeParameter>()

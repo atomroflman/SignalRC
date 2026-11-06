@@ -81,36 +81,35 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
                     Id = car.Id.ToString(),
                     IsConnected = hasConnectionInfo,
                     DriverId = hasConnectionInfo ? connectionInfo?.DriverId : null,
-                    DriverName = hasConnectionInfo ? connectionInfo?.DriverName : null
+                    DriverName = hasConnectionInfo ? connectionInfo?.DriverName : null,
+                    AuthState = hasConnectionInfo
+                        ? Shared.Security.VehicleAuthState.Authenticated
+                        : _connectionStore.UpdateModeOfCar(car.Id)?.State
                 };
             })
             .ToArray();
         return Task.FromResult(states);
     }
     
-    public async Task<CarConfiguration> OpenCarConnection(string carIdentityKey, string channelMapHash)
+    /// <summary>
+    /// The vehicle connection proper; only reached after the device key signed the handshake
+    /// (OpenVehicleConnection, Docs/VehicleKeyAuth.md).
+    /// </summary>
+    private async Task<CarConfiguration> OpenAuthenticatedAsync(Car car, string channelMapHash, SignalRCContext dbContext)
     {
-        Logger.LogInformation("Car with identity key '{CarIdentityKey}' attempting to connect: ChannelHash '{ChannelMapHash}'", carIdentityKey, channelMapHash);
-        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<SignalRCContext>();
-        var car = dbContext.Cars.FirstOrDefault(c => c.CarIdentityKey == carIdentityKey);
-        if (car == null)
-        {
-            Logger.LogWarning($"Car with identity key {carIdentityKey} not found. Creating a new one.");
-            car = new Car() 
-            { 
-                CarIdentityKey = carIdentityKey,
-                Name = carIdentityKey // Initial name is the identity key, user can change it later
-            };
-            dbContext.Cars.Add(car);
-        }
+        _connectionStore.TryRemoveUpdateMode(Context.ConnectionId, out _);
         car.LastSeen = DateTime.UtcNow;
         await dbContext.SaveChangesAsync();
         
         // Add connection to SignalR group by CarId for targeted messaging
         await Groups.AddToGroupAsync(Context.ConnectionId, $"Car-{car.Id}");
+        // Telemetry channel subscriptions reach the vehicle through this group. Joined here:
+        // after a reconnect the onboard's RegisterAsOnboard may arrive before the signed
+        // handshake and is then ignored (Docs/VehicleKeyAuth.md).
+        await Groups.AddToGroupAsync(Context.ConnectionId, $"onboard-{car.Id}");
         Logger.LogInformation($"Car '{car.Name}' (ID: {car.Id}) connected and added to group 'Car-{car.Id}'");
         
-        var carConfig = new CarConfiguration();
+        var carConfig = new CarConfiguration { AuthState = Shared.Security.VehicleAuthState.Authenticated };
         carConfig.ServerAssignedCarId = car.Id;
         if (!string.IsNullOrWhiteSpace(_configService.Janus.PublicHostName))
             carConfig.JanusConfiguration = new Shared.JanusConfiguration { JanusServerHost = _configService.Janus.PublicHostName };
@@ -164,7 +163,8 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
             Id = car.Id.ToString(),
             IsConnected = true,
             DriverId = connectionInfo.DriverId,
-            DriverName = connectionInfo.DriverName
+            DriverName = connectionInfo.DriverName,
+            AuthState = Shared.Security.VehicleAuthState.Authenticated
         });
         return carConfig;
     }
@@ -180,6 +180,15 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
         var carId = _connectionStore.FirstOrDefault(kv => kv.Value.ConnectionId == Context.ConnectionId).Key;
         if (carId == null)
         {
+            // Update mode: the version is kept so the UI shows what is about to update.
+            if (TryGetUpdateModeCar(out var updateCar, out var entry))
+            {
+                entry.OnboardBranch = branch;
+                entry.OnboardCommit = commit;
+                Logger.LogInformation("Car {CarId} (update mode) reports onboard version {Branch}@{Commit}", updateCar, branch, commit);
+                await Clients.All.OnboardVersionChanged(updateCar);
+                return;
+            }
             Logger.LogWarning("ReportOnboardVersion received without an active car connection");
             return;
         }
@@ -213,6 +222,9 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
 
     public Task RegisterAvailableChannelTypes(int carId, AvailableChannelTypes types)
     {
+        // Only the signed-in vehicle itself; ignored silently in update mode (Docs/VehicleKeyAuth.md).
+        if (!_connectionStore.IsVehicleConnection(Context.ConnectionId, carId))
+            return Task.CompletedTask;
         _availableTypes.Set(carId, types);
         Logger.LogInformation("Car {CarId} registered {Control} control types and {Telemetry} telemetry types",
             carId, types.ControlTypes.Length, types.TelemetryTypes.Length);
@@ -231,6 +243,12 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
         await Service<TelemetryRelay>().ConnectionClosedAsync(Context.ConnectionId);
         await Service<ControlDisplayRelay>().ConnectionClosedAsync(Context.ConnectionId);
         Service<SignalRC.Server.Overlay.HudInputRateLimit>().Forget(Context.ConnectionId);
+        if (_connectionStore.TryRemoveUpdateMode(Context.ConnectionId, out var updateMode)
+            && updateMode?.CarId is int updateCar && !_connectionStore.ContainsKey(updateCar.ToString()))
+        {
+            var next = _connectionStore.UpdateModeOfCar(updateCar);
+            await Clients.All.CarStateUpdated(new CarStateModel { Id = updateCar.ToString(), IsConnected = false, AuthState = next?.State });
+        }
         if (_connectionStore.TryRemoveConnection(Context.ConnectionId, out var carId, out var connectionInfo) && carId != null)
         {
             await Clients.All.CarStateUpdated(new CarStateModel()
@@ -267,6 +285,21 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
         try
         {
             Logger.LogInformation("SyncChannelMap invoked for car {CarId}", request.CarId);
+            if (!_connectionStore.IsVehicleConnection(Context.ConnectionId, request.CarId))
+            {
+                // Update mode or a foreign caller: no server config leaves; the onboard keeps its own map.
+                // Never throw here: an old onboard calls this at startup, before its self-update.
+                var own = request.ChannelMap ?? new ChannelMap();
+                return new ChannelMapSyncResponse
+                {
+                    Hash = ChannelMapHashProvider.GenerateHash(own),
+                    ChannelMap = own,
+                    ControlIds = new(),
+                    TelemetryIds = new(),
+                    VideoIds = new(),
+                    GeneratedAtUtc = DateTime.UtcNow
+                };
+            }
             var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<SignalRCContext>();
             var car = await dbContext.Cars.FirstOrDefaultAsync(c => c.Id == request.CarId);
             if (car == null)
@@ -319,6 +352,13 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
             Logger.LogWarning("Transfer with token {Token} not found", update.Token);
             return;
         }
+        // Only the vehicle the transfer belongs to (also in update mode).
+        if (!_connectionStore.IsVehicleConnection(Context.ConnectionId, transfer.CarId)
+            && !(TryGetUpdateModeCar(out var updateCar, out _) && updateCar == transfer.CarId))
+        {
+            Logger.LogWarning("Transfer status for {Token} ignored: caller is not vehicle {CarId}", update.Token, transfer.CarId);
+            return;
+        }
 
         if (update.Status == FileTransferStatus.Completed)
         {
@@ -349,6 +389,12 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
     public async Task RegisterForControl(int carId)
     {
         Logger.LogDebug($"Invoked: RegisterForControl({carId}) => connection {Context.ConnectionId}");
+        // The group carries channel config and file tokens to the vehicle; nobody else may join it.
+        if (!_connectionStore.IsVehicleConnection(Context.ConnectionId, carId))
+        {
+            Logger.LogWarning("RegisterForControl({CarId}) ignored: connection {ConnectionId} is not the signed-in vehicle", carId, Context.ConnectionId);
+            return;
+        }
         await Groups.AddToGroupAsync(Context.ConnectionId, $"Car-{carId}");
     }
 
@@ -467,6 +513,8 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
 
     public async Task SendBashOutput(int carId, string output, bool isError)
     {
+        if (!_connectionStore.IsVehicleConnection(Context.ConnectionId, carId))
+            return;
         await Clients.All.SendBashOutput(carId, output, isError);
     }
 
@@ -626,6 +674,8 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
 
     public Task RegisterAsOnboard(string carId)
     {
+        if (!int.TryParse(carId, out var id) || !_connectionStore.IsVehicleConnection(Context.ConnectionId, id))
+            return Task.CompletedTask;
         return Groups.AddToGroupAsync(Context.ConnectionId, $"onboard-{carId}");
     }
 
@@ -701,10 +751,11 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
         var car = dbContext.Cars
             .Include(c => c.VideoStreams)
             .FirstOrDefault(c => c.CarIdentityKey == carIdentityKey);
-        if (car == null)
+        // Only the signed-in vehicle for itself; silently nothing in update mode (old onboards call this at startup).
+        if (car == null || !_connectionStore.IsVehicleConnection(Context.ConnectionId, car.Id))
         {
-            Logger.LogWarning("Car with identity key {CarIdentityKey} not found", carIdentityKey);
-            throw new InvalidOperationException($"Car with identity key {carIdentityKey} not found!");
+            Logger.LogWarning("ConnectCar({CarIdentityKey}) ignored: not the signed-in vehicle", carIdentityKey);
+            return;
         }
         await this.AddCarToGroupAsync(car.Id);
         Logger.LogInformation("Car {CarIdentityKey} connected with ID {CarId}. Starting its enabled video streams.", carIdentityKey, car.Id);
@@ -816,6 +867,7 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
     public async Task ChangeVideoStreamSettings(int streamId, VideoStreamMapItem settings)
     {
         var stream = await GetStreamAsync(streamId);
+        await EnsureCanConfigureAsync(stream.CarId);
         var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<SignalRCContext>();
         Logger.LogInformation("Changing video stream settings for stream {StreamId} ({StreamName}) for car {CarId}", stream.Id, stream.Name, stream.CarId);
         
@@ -861,12 +913,25 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
 
     public async Task<OnboardDiagnosticsReport> GetOnboardDiagnostics(int carId)
     {
+        await EnsureCanConfigureAsync(carId);
         return await ForwardDiagnosticsAsync(carId, "GetOnboardDiagnostics");
     }
 
     public async Task<OnboardDiagnosticsReport> RunOnboardStartupTest(int carId)
     {
+        await EnsureCanConfigureAsync(carId);
         return await ForwardDiagnosticsAsync(carId, "RunOnboardStartupTest");
+    }
+
+    /// <summary>
+    /// Control or config session (Docs/VehicleKeyAuth.md). The hub sees the cookies of its
+    /// connect request: a config session opened later counts after the next reconnect.
+    /// </summary>
+    private async Task EnsureCanConfigureAsync(int carId)
+    {
+        var http = Context.GetHttpContext() ?? throw new HubException("No HTTP context available.");
+        if (!await http.RequestServices.GetRequiredService<Security.VehicleAccess>().CanConfigureAsync(http, carId))
+            throw new HubException("A control or config session of this vehicle is required.");
     }
 
     private async Task<OnboardDiagnosticsReport> ForwardDiagnosticsAsync(int carId, string methodName)
@@ -975,7 +1040,7 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
         var user = await HubUserHelper.GetUserAsync(httpContext, dbContext);
         // Same rule as overlay management (Shared/Overlay/api/README.md §1).
         var access = httpContext.RequestServices.GetRequiredService<Overlay.OverlayAccess>();
-        switch (await access.CheckAdminAsync(user, carId))
+        switch (access.CheckDriver(user, carId))
         {
             case Overlay.OverlayAccessError.SessionRequired:
                 throw new HubException("No user session.");
