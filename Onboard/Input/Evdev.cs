@@ -13,6 +13,9 @@ public static class Evdev
 {
     public const int EV_KEY = 0x01;
     public const int EV_ABS = 0x03;
+    public const int EV_FF = 0x15;
+    public const int FF_RUMBLE = 0x50;
+    private const int FF_MAX = 0x7f;
     public const int ABS_MAX = 0x3f;
     public const int KEY_MAX = 0x2ff;
     public const int BTN_MISC = 0x100;
@@ -74,8 +77,62 @@ public static class Evdev
 
     public static bool BitSet(byte[]? bits, int bit) => bits != null && bit / 8 < bits.Length && (bits[bit / 8] & (1 << (bit % 8))) != 0;
 
-    /// <summary>Opens a device read-only. Throws like File.OpenHandle (e.g. no permission).</summary>
-    public static SafeFileHandle Open(string path) => File.OpenHandle(path, FileMode.Open, FileAccess.Read);
+    [DllImport("libc", SetLastError = true)]
+    private static extern nint write(int fd, byte[] buffer, nint count);
+
+    private const uint IocWrite = 1;
+
+    /// <summary>
+    /// Opens a device, for writing too if allowed (rumble and the keep-alive need it), else
+    /// read-only. Throws like File.OpenHandle (e.g. no permission at all).
+    /// </summary>
+    public static SafeFileHandle Open(string path)
+    {
+        try { return File.OpenHandle(path, FileMode.Open, FileAccess.ReadWrite); }
+        catch (UnauthorizedAccessException) { return File.OpenHandle(path, FileMode.Open, FileAccess.Read); }
+    }
+
+    /// <summary>Whether the device can rumble (EV_FF with FF_RUMBLE).</summary>
+    public static bool HasRumble(SafeFileHandle handle) => BitSet(IoctlRead(handle, 0x20 + EV_FF, (FF_MAX + 8) / 8), FF_RUMBLE);
+
+    /// <summary>
+    /// Size of struct ff_effect: 16 bytes header (type, id, direction, trigger, replay, padding)
+    /// and the union, whose largest member (periodic, with a pointer) is 32 bytes on 64-bit
+    /// and 28 on 32-bit.
+    /// </summary>
+    public static int FfEffectSize => IntPtr.Size == 8 ? 48 : 44;
+
+    /// <summary>struct ff_effect for a rumble; length 0 plays until stopped.</summary>
+    public static byte[] RumbleEffect(short id, ushort strong, ushort weak, ushort lengthMs)
+    {
+        var e = new byte[FfEffectSize];
+        BitConverter.TryWriteBytes(e.AsSpan(0), (ushort)FF_RUMBLE);
+        BitConverter.TryWriteBytes(e.AsSpan(2), id);
+        BitConverter.TryWriteBytes(e.AsSpan(10), lengthMs);
+        BitConverter.TryWriteBytes(e.AsSpan(16), strong);
+        BitConverter.TryWriteBytes(e.AsSpan(18), weak);
+        return e;
+    }
+
+    /// <summary>Uploads (or, with an existing id, updates) a rumble effect; returns its id, −1 on failure.</summary>
+    public static short UploadRumble(SafeFileHandle handle, short id, ushort strong, ushort weak, ushort lengthMs)
+    {
+        var effect = RumbleEffect(id, strong, weak, lengthMs);
+        var fd = (int)handle.DangerousGetHandle();
+        if (ioctl(fd, Ioc(IocWrite, 0x80, (uint)effect.Length), effect) < 0) return -1; // EVIOCSFF
+        return BitConverter.ToInt16(effect, 2);
+    }
+
+    /// <summary>Writes one struct input_event (time 0), e.g. EV_FF to start or stop an effect.</summary>
+    public static bool WriteEvent(SafeFileHandle handle, int type, int code, int value)
+    {
+        var e = new byte[EventSize];
+        var o = e.Length - 8;
+        BitConverter.TryWriteBytes(e.AsSpan(o), (ushort)type);
+        BitConverter.TryWriteBytes(e.AsSpan(o + 2), (ushort)code);
+        BitConverter.TryWriteBytes(e.AsSpan(o + 4), value);
+        return write((int)handle.DangerousGetHandle(), e, e.Length) == e.Length;
+    }
 
     public static DeviceInfo Describe(string path, SafeFileHandle handle)
     {

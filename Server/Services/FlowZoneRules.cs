@@ -15,7 +15,7 @@ public static class FlowZoneRules
     public static readonly IReadOnlySet<string> BrowserOnlyFunctions = new HashSet<string>(StringComparer.Ordinal) { "HudInput", "HudSignal" };
 
     /// <summary>Functions that only exist in the vehicle flow (they act on the vehicle).</summary>
-    public static readonly IReadOnlySet<string> OnboardOnlyFunctions = new HashSet<string>(StringComparer.Ordinal) { "DisconnectController", "TelemetryOut" };
+    public static readonly IReadOnlySet<string> OnboardOnlyFunctions = new HashSet<string>(StringComparer.Ordinal) { "DisconnectController", "TelemetryOut", "ControllerLight" };
 
     private enum Side { Browser, Handoff, Onboard }
 

@@ -15,6 +15,10 @@ public interface IFlowEnvironment
     void DisconnectControllers(string? filter);
     /// <summary>Side effect of the TelemetryOut function.</summary>
     void PublishTelemetry(string key, double value);
+    /// <summary>Side effect of the ControllerRumble function.</summary>
+    void ControllerRumble(string? filter, double strong, double weak);
+    /// <summary>Side effect of the ControllerLight function.</summary>
+    void ControllerLight(string? filter, double red, double green, double blue);
 }
 
 /// <summary>A value the engine wants written to a control channel.</summary>
@@ -242,5 +246,7 @@ public sealed class FlowEngine
         public (string Value, bool Valid)? Telemetry(string channelName) => env.Telemetry(channelName);
         public void DisconnectControllers(string? filter) => env.DisconnectControllers(filter);
         public void PublishTelemetry(string key, double value) => env.PublishTelemetry(key, value);
+        public void ControllerRumble(string? filter, double strong, double weak) => env.ControllerRumble(filter, strong, weak);
+        public void ControllerLight(string? filter, double red, double green, double blue) => env.ControllerLight(filter, red, green, blue);
     }
 }

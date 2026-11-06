@@ -108,6 +108,27 @@ liefert `1`/`0`, ob ein Controller verbunden ist. Mit `Device` lässt er sich au
 einen Controller eingrenzen, über einen Namensteil oder die Bluetooth-Adresse.
 Mit `report=Count` liefert er die Anzahl der verbundenen Controller.
 
+### Rütteln und Lichtleiste
+
+- **Controller rütteln** (`ControllerRumble`): `strong` (großer Motor) und `weak`
+  (kleiner Motor), je 0 … 1, `device` wie oben. Im Fahrzeug-Teil rütteln die
+  Fahrzeug-Controller, im Web-Teil die Gamepads am PC – dort nur, wenn der Browser
+  es kann (Gamepad-API „dual-rumble“, z. B. Chrome und Edge). Fragt der Flow nicht
+  mehr danach, hört das Rütteln nach einer halben Sekunde (Fahrzeug) bzw. 1,5 s
+  (Browser) auf.
+- **Controller Farbe** (`ControllerLight`): `red`, `green`, `blue` je 0 … 1, nur im
+  Fahrzeug-Teil. Setzt die Lichtleiste von PS4- und PS5-Controllern über
+  `/sys/class/leds`. Dafür braucht der Dienst Schreibrechte, die eine udev-Regel aus
+  dem Setup-Skript vergibt (siehe unten). Browser können die Lichtleiste nicht setzen.
+
+### Lebenszeichen
+
+Ein PS4-Controller über Bluetooth hört nach einer Weile ohne Nachricht vom Fahrzeug
+auf zu senden, obwohl er verbunden bleibt: Tasten und Sticks kommen dann nicht mehr
+an. Das Fahrzeug schickt deshalb jedem Controller, der rütteln kann, spätestens alle
+5 s ein Rütteln der Stärke 0. Ein echtes Rütteln oder eine Farbänderung zählt
+ebenfalls.
+
 ## Voraussetzungen auf dem Fahrzeug
 
 `scripts/onboard-setup-bluetooth.sh` richtet alles ein. `install.sh` und
@@ -118,6 +139,8 @@ Mit `report=Count` liefert er die Anzahl der verbundenen Controller.
   Neustart des Dienstes, den `update.sh` danach ohnehin macht
 - die rfkill-Sperre für Bluetooth aufheben
 - `bluetooth.service` aktivieren und den Adapter einschalten
+- eine udev-Regel (`/etc/udev/rules.d/71-signalrc-controller-leds.rules`), die die
+  LEDs der Controller für die Gruppe `input` beschreibbar macht (`ControllerLight`)
 
 Das Skript lässt sich mehrfach ausführen und bricht weder Installation noch Update
 ab. Von Hand:

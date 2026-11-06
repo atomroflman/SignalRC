@@ -186,6 +186,26 @@ const de: Record<string, FlowNodeDoc> = {
     ],
     example: "Gearbox.gearValue → Telemetrie senden (key \"gear\") → Kanal \"Gang\" (FlowValueReader, Key gear) im HUD",
   },
+  ControllerRumble: {
+    summary: "Controller rütteln: lässt die passenden Controller vibrieren, strong = großer Motor, weak = kleiner Motor (je 0…1).",
+    details: [
+      "Im Fahrzeug-Flow rütteln die am Fahrzeug gekoppelten Controller, im Web-Flow die Gamepads am PC – dort nur, wenn der Browser es kann (z. B. Chrome, Edge).",
+      "device grenzt ein: Teil des Namens oder die Bluetooth-Adresse; leer = alle.",
+      "Fragt der Flow nicht mehr danach (Knoten gelöscht, Flow aus), hört das Rütteln nach kurzer Zeit auf.",
+      "Der Ausgang gibt den stärkeren der beiden Motoren aus.",
+    ],
+    example: "Telemetrie Motorstrom → Rescale 0…1 → Controller rütteln.strong",
+  },
+  ControllerLight: {
+    summary: "Controller Farbe: setzt die Farbe der Lichtleiste der Fahrzeug-Controller, red/green/blue je 0…1. Nur im Fahrzeug-Flow.",
+    details: [
+      "Für PS4- und PS5-Controller; Browser können die Farbe nicht setzen.",
+      "device grenzt ein: Teil des Namens oder die Bluetooth-Adresse; leer = alle.",
+      "Nicht verbundene Farben sind 0; alle drei 0 = aus.",
+      "Der Ausgang gibt den hellsten Kanal aus.",
+    ],
+    example: "Iif (Akku < 20 %, true → 1) → Controller Farbe.red",
+  },
   DisconnectController: {
     summary: "Controller trennen: Bei einer steigenden Flanke an trigger trennt das Fahrzeug seine Bluetooth-Controller. Nur im Fahrzeug-Flow.",
     details: [
@@ -388,6 +408,26 @@ const en: Record<string, FlowNodeDoc> = {
       "The output passes the value on unchanged.",
     ],
     example: "Gearbox.gearValue → Send telemetry (key \"gear\") → channel \"Gear\" (FlowValueReader, Key gear) in the HUD",
+  },
+  ControllerRumble: {
+    summary: "Rumble controller: makes the matching controllers vibrate, strong = big motor, weak = small motor (0…1 each).",
+    details: [
+      "In the vehicle flow the controllers paired with the vehicle rumble, in the web flow the gamepads at the PC – there only if the browser supports it (e.g. Chrome, Edge).",
+      "device narrows it down: part of the name or the Bluetooth address; empty = all.",
+      "When the flow no longer asks for it (node deleted, flow off), the rumble stops shortly after.",
+      "The output is the stronger of the two motors.",
+    ],
+    example: "Telemetry motor current → Rescale 0…1 → Rumble controller.strong",
+  },
+  ControllerLight: {
+    summary: "Controller colour: sets the light bar colour of the vehicle's controllers, red/green/blue 0…1 each. Vehicle flow only.",
+    details: [
+      "For PS4 and PS5 controllers; browsers cannot set the colour.",
+      "device narrows it down: part of the name or the Bluetooth address; empty = all.",
+      "Unconnected colours are 0; all three 0 = off.",
+      "The output is the brightest channel.",
+    ],
+    example: "Iif (battery < 20 %, true → 1) → Controller colour.red",
   },
   DisconnectController: {
     summary: "Disconnect controller: on a rising edge at trigger the vehicle disconnects its Bluetooth controllers. Vehicle flow only.",

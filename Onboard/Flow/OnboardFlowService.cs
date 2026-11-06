@@ -184,6 +184,12 @@ public sealed class OnboardFlowService : IFlowEnvironment, IDisposable
 
     public FlowTelemetryStore FlowTelemetry => _flowTelemetry;
 
+    /// <summary>ControllerRumble in the flow.</summary>
+    public void ControllerRumble(string? filter, double strong, double weak) => _inputs.SetRumble(filter, strong, weak);
+
+    /// <summary>ControllerLight in the flow.</summary>
+    public void ControllerLight(string? filter, double red, double green, double blue) => _inputs.SetLight(filter, red, green, blue);
+
     /// <summary>Addresses the last DisconnectControllers call would disconnect (tests).</summary>
     public IReadOnlyList<string> LastDisconnectRequest { get; private set; } = [];
 

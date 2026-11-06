@@ -64,4 +64,16 @@ public class EvdevTests
         Assert.Equal("BTN_SOUTH", Evdev.KeyName(0x130));
         Assert.Equal("BTN_0x2c0", Evdev.KeyName(0x2c0));
     }
+
+    [Fact]
+    public void Rumble_effect_has_the_kernel_layout()
+    {
+        var e = Evdev.RumbleEffect(-1, 0x1234, 0x5678, 0);
+        Assert.Equal(IntPtr.Size == 8 ? 48 : 44, e.Length);
+        Assert.Equal(Evdev.FF_RUMBLE, BitConverter.ToUInt16(e, 0));
+        Assert.Equal(-1, BitConverter.ToInt16(e, 2));
+        Assert.Equal(0, BitConverter.ToUInt16(e, 10)); // replay.length 0: until stopped
+        Assert.Equal(0x1234, BitConverter.ToUInt16(e, 16));
+        Assert.Equal(0x5678, BitConverter.ToUInt16(e, 18));
+    }
 }

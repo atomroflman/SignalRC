@@ -24,6 +24,10 @@ public class FlowEngineTests
         public void DisconnectControllers(string? filter) => Disconnects.Add(filter);
         public Dictionary<string, double> Published { get; } = new();
         public void PublishTelemetry(string key, double value) => Published[key] = value;
+        public List<(string? Filter, double Strong, double Weak)> Rumbles { get; } = new();
+        public List<(string? Filter, double R, double G, double B)> Lights { get; } = new();
+        public void ControllerRumble(string? filter, double strong, double weak) => Rumbles.Add((filter, strong, weak));
+        public void ControllerLight(string? filter, double red, double green, double blue) => Lights.Add((filter, red, green, blue));
     }
 
     private static OnboardFlowNode Fn(int id, string fn, params (string, string)[] p) =>
@@ -229,5 +233,22 @@ public class FlowEngineTests
         env.Inputs[("pad", 0)] = 0.75;
         engine.Tick(env);
         Assert.Equal(new Dictionary<string, double> { ["speed"] = 0.75 }, env.Published); // node 3 has no key
+    }
+
+    [Fact]
+    public void Rumble_and_light_reach_the_controllers_clamped()
+    {
+        var engine = new FlowEngine();
+        engine.Load(new OnboardFlowDefinition
+        {
+            Nodes = { Input(1, "pad", 0), Fn(2, "ControllerRumble", ("device", "Wireless")), Fn(3, "ControllerLight") },
+            Links = { Link(1, 2, "strong", "value"), Link(1, 3, "blue", "value") },
+        });
+        var env = new Env();
+        env.Inputs[("pad", 0)] = 1.5;
+        engine.Tick(env);
+        Assert.Equal([("Wireless", 1.0, 0.0)], env.Rumbles);
+        Assert.Equal([((string?)null, 0.0, 0.0, 1.0)], env.Lights);
+        Assert.Equal([1.0], engine.OutputsOf(2));
     }
 }

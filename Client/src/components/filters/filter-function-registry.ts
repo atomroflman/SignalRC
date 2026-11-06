@@ -23,6 +23,8 @@ import { TelemetryFunction } from "./TelemetryFunction";
 import { ActiveFunction } from "./ActiveFunction";
 import { PriorityFunction } from "./PriorityFunction";
 import { MaxFunction } from "./MaxFunction";
+import { ControllerRumbleFunction } from "./ControllerRumbleFunction";
+import { ControllerLightFunction } from "./ControllerLightFunction";
 import { MinFunction } from "./MinFunction";
 import { DisconnectControllerFunction } from "./DisconnectControllerFunction";
 import { TelemetryOutFunction } from "./TelemetryOutFunction";
@@ -74,6 +76,8 @@ export const filterFunctionRegistry = {
   Active: new ActiveFunction(),
   Priority: new PriorityFunction(),
   Max: new MaxFunction(),
+  ControllerRumble: new ControllerRumbleFunction(),
+  ControllerLight: new ControllerLightFunction(),
   Min: new MinFunction(),
   DisconnectController: new DisconnectControllerFunction(),
   TelemetryOut: new TelemetryOutFunction(),

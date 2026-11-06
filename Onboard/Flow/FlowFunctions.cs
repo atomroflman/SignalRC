@@ -11,6 +11,10 @@ public interface IFlowFunctionContext
     void DisconnectControllers(string? filter);
     /// <summary>Publishes a value for FlowValueReader telemetry channels with this key.</summary>
     void PublishTelemetry(string key, double value);
+    /// <summary>Rumble of the vehicle's matching controllers (strengths 0…1); asked for every evaluation.</summary>
+    void ControllerRumble(string? filter, double strong, double weak);
+    /// <summary>Light bar colour of the vehicle's matching controllers (channels 0…1).</summary>
+    void ControllerLight(string? filter, double red, double green, double blue);
 }
 
 /// <summary>
@@ -45,6 +49,7 @@ public static class FlowFunctions
         new ToggleFn(), new TurnSignalFn(), new RescaleFn(), new GearboxFn(), new FloatValueFn(),
         new SmoothFn(), new SignFn(), new HudSignalFn(), new HudInputFn(), new TelemetryFn(),
         new ActiveFn(), new PriorityFn(), new MaxFn(), new MinFn(), new DisconnectControllerFn(), new TelemetryOutFn(),
+        new ControllerRumbleFn(), new ControllerLightFn(),
     }.ToDictionary(f => f.Name, StringComparer.Ordinal);
 
     public static FlowFunction? Get(string? name) => name != null && All.TryGetValue(name, out var f) ? f : null;
@@ -538,5 +543,43 @@ internal sealed class TelemetryOutFn : FlowFunction
         var key = p.TryGetValue("key", out var k) ? k?.Trim() : null;
         if (!string.IsNullOrEmpty(key)) c.PublishTelemetry(key, value);
         return [value];
+    }
+}
+
+/// <summary>
+/// "Controller rütteln": rumble of the controllers matching <c>device</c> (name part or
+/// address; empty = all), strengths 0…1. In the vehicle flow the vehicle's controllers, in
+/// the browser flow the browser's gamepads. Outputs the stronger motor.
+/// </summary>
+internal sealed class ControllerRumbleFn : FlowFunction
+{
+    public override string Name => "ControllerRumble";
+    public override string[] Inputs => ["strong", "weak"];
+    public override string[] Outputs => ["value"];
+    public override double[] Apply(IReadOnlyDictionary<string, double> i, IReadOnlyDictionary<string, string?> p, object? s, IFlowFunctionContext c)
+    {
+        var strong = Math.Clamp(In(i, "strong"), 0, 1);
+        var weak = Math.Clamp(In(i, "weak"), 0, 1);
+        c.ControllerRumble(p.TryGetValue("device", out var d) ? d : null, strong, weak);
+        return [Math.Max(strong, weak)];
+    }
+}
+
+/// <summary>
+/// "Controller Farbe": light bar colour of the vehicle's controllers matching <c>device</c>,
+/// channels 0…1. Vehicle flow only (browsers cannot set it). Outputs the brightest channel.
+/// </summary>
+internal sealed class ControllerLightFn : FlowFunction
+{
+    public override string Name => "ControllerLight";
+    public override string[] Inputs => ["red", "green", "blue"];
+    public override string[] Outputs => ["value"];
+    public override double[] Apply(IReadOnlyDictionary<string, double> i, IReadOnlyDictionary<string, string?> p, object? s, IFlowFunctionContext c)
+    {
+        var r = Math.Clamp(In(i, "red"), 0, 1);
+        var g = Math.Clamp(In(i, "green"), 0, 1);
+        var b = Math.Clamp(In(i, "blue"), 0, 1);
+        c.ControllerLight(p.TryGetValue("device", out var d) ? d : null, r, g, b);
+        return [Math.Max(r, Math.Max(g, b))];
     }
 }

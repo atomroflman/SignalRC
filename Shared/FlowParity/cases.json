@@ -123,6 +123,13 @@
       { "inputs": { "trigger": 0.7 }, "expect": [1] } ] },
     { "name": "telemetry out passes the value", "function": "TelemetryOut", "params": { "key": "x" }, "steps": [
       { "inputs": { "value": 0.25 }, "expect": [0.25] } ] },
+    { "name": "controller rumble clamps and outputs the stronger motor", "function": "ControllerRumble", "params": { "device": "" }, "steps": [
+      { "inputs": { "strong": 0.3, "weak": 0.8 }, "expect": [0.8] },
+      { "inputs": { "strong": 2, "weak": -1 }, "expect": [1] },
+      { "inputs": {}, "expect": [0] } ] },
+    { "name": "controller light outputs the brightest channel", "function": "ControllerLight", "params": {}, "steps": [
+      { "inputs": { "red": 0.2, "green": 0.6, "blue": 0.1 }, "expect": [0.6] },
+      { "inputs": { "blue": 3 }, "expect": [1] } ] },
     { "name": "priority", "function": "Priority", "params": {}, "steps": [
       { "inputs": { "a": 0.3, "aActive": 1, "b": -0.8 }, "expect": [0.3] },
       { "inputs": { "a": 0.3, "aActive": 0, "b": -0.8 }, "expect": [-0.8] } ] }

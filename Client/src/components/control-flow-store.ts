@@ -1,4 +1,5 @@
 import { newNodePosition } from "./flow-new-node-position";
+import { stopBrowserRumble } from "./filters/ControllerRumbleFunction";
 import { create } from 'zustand';
 import { filterFunctionRegistry } from './filters/filter-function-registry';
 import { hudInputValues } from './filters/HudInputFunction';
@@ -664,6 +665,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
     }));
   },
   async deleteNode(nodeId: number) {
+    stopBrowserRumble(nodeId);
     var res = await fetch(`/api/flow/${nodeId}`, {
       method: "DELETE"
     })

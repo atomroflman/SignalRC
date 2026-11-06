@@ -9,6 +9,8 @@
 #   country is set, and the service user cannot lift it. systemd-rfkill stores the state,
 #   so it holds across reboots.
 # - bluetooth.service enabled and the adapter powered on
+# - udev rule: the light bar LEDs of controllers (/sys/class/leds/inputN:*) writable for the
+#   group input, so the flow can set their colour (ControllerLight)
 set -u
 
 RUN_USER="${1:?usage: onboard-setup-bluetooth.sh <service-user>}"
@@ -38,6 +40,17 @@ for rfkill_dev in /sys/class/rfkill/rfkill*; do
         echo "Warning: Bluetooth is hard-blocked ($(cat "$rfkill_dev/name")); a switch or the firmware blocks it."
     fi
 done
+
+LED_RULE=/etc/udev/rules.d/71-signalrc-controller-leds.rules
+LED_RULE_CONTENT='# SignalRC (scripts/onboard-setup-bluetooth.sh): controller light bars writable for the group input.
+ACTION=="add", SUBSYSTEM=="leds", KERNEL=="input*", RUN+="/bin/sh -c '"'"'cd /sys%p && chgrp input brightness multi_intensity 2>/dev/null; chmod g+w brightness multi_intensity 2>/dev/null; true'"'"'"'
+if [ -d /etc/udev/rules.d ] && [ "$(cat "$LED_RULE" 2>/dev/null)" != "$LED_RULE_CONTENT" ]; then
+    printf '%s\n' "$LED_RULE_CONTENT" > "$LED_RULE" && echo "Bluetooth: udev rule for the controller LEDs installed."
+    if command -v udevadm >/dev/null 2>&1; then
+        udevadm control --reload >/dev/null 2>&1 || true
+        udevadm trigger --subsystem-match=leds --action=add >/dev/null 2>&1 || true
+    fi
+fi
 
 if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files bluetooth.service >/dev/null 2>&1; then
     systemctl enable --now bluetooth.service >/dev/null 2>&1 || echo "Warning: bluetooth.service could not be started."
