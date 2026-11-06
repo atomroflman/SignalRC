@@ -26,6 +26,8 @@ const TALK_FORMATS: Array<{ mimeType: string; format: string }> = [
 // Small chunks: the vehicle can start playing sooner and each late chunk hurts less.
 const TALK_TIMESLICE_MS = 60;
 const TALK_BITRATE = 32000;
+// Select value for the computer's own sound instead of a microphone.
+const PC_AUDIO_INPUT = 'pc-audio';
 const MIC_GAIN_STORAGE_KEY = 'signalrc.pttMicGain';
 const MAX_MIC_GAIN = 3;
 const MAX_SPEAKER_VOLUME = 2;
@@ -192,6 +194,50 @@ export default function AudioChat({ carId, embedded }: AudioChatProps) {
   }, [setTalking]);
 
   /**
+   * Captures tab or system sound through screen sharing. Browsers demand a fresh click or key press
+   * for the picker, so it opens on selection, not from a held push-to-talk or a gamepad button.
+   * Voice processing stays off: it would treat music and game sound as noise.
+   */
+  const openPcAudio = useCallback(async () => {
+    setError(null);
+    releaseMicrophone();
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+        systemAudio: 'include',
+      } as DisplayMediaStreamOptions);
+    } catch (err) {
+      setError(messages.audioChat.pcAudioDenied(err instanceof Error ? err.message : String(err)));
+      return;
+    }
+    const [track] = stream.getAudioTracks();
+    if (!track) {
+      stream.getTracks().forEach((t) => t.stop());
+      setError(messages.audioChat.pcAudioNoTrack);
+      return;
+    }
+    // Only the sound is used.
+    stream.getVideoTracks().forEach((t) => t.stop());
+    track.onended = () => {
+      if (micGraphRef.current?.stream === stream) releaseMicrophone();
+    };
+    const graph = createMicGraph(stream, micGainRef.current, PC_AUDIO_INPUT);
+    micGraphRef.current = graph;
+    setMicAnalyser(graph.analyser);
+  }, [messages, releaseMicrophone]);
+
+  const selectInput = useCallback(
+    (value: string) => {
+      setSelectedInput(value);
+      if (micGraphRef.current?.deviceId === PC_AUDIO_INPUT) releaseMicrophone();
+      if (value === PC_AUDIO_INPUT) void openPcAudio();
+    },
+    [openPcAudio, releaseMicrophone],
+  );
+
+  /**
    * Opens the microphone on first use and keeps it for the whole control session, so later presses
    * record at once (no permission prompt, no device start-up). Reopens when another microphone is picked.
    */
@@ -230,6 +276,15 @@ export default function AudioChat({ carId, embedded }: AudioChatProps) {
     if (!talkFormat) {
       setError(messages.audioChat.recordingUnsupported);
       return;
+    }
+
+    // PC audio was stopped or refused: this press only reopens the picker, the next one talks.
+    if (selectedInput === PC_AUDIO_INPUT) {
+      const live = micGraphRef.current?.stream.getAudioTracks().some((t) => t.readyState === 'live');
+      if (!live) {
+        await openPcAudio();
+        return;
+      }
     }
 
     setTalking(true);
@@ -297,7 +352,7 @@ export default function AudioChat({ carId, embedded }: AudioChatProps) {
     burst.queue.forEach(sendChunk);
     burst.queue = [];
     if (burst.stopped) sendStop(); // released before the vehicle answered
-  }, [hasSession, connection, carId, carSession, messages, ensureMicrophone, setTalking]);
+  }, [hasSession, connection, carId, carSession, messages, ensureMicrophone, setTalking, selectedInput, openPcAudio]);
 
   useEffect(() => {
     if (hasSession) {
@@ -487,7 +542,7 @@ export default function AudioChat({ carId, embedded }: AudioChatProps) {
               <label className="block text-xs text-zinc-400 mb-1">{messages.audioChat.microphone}</label>
               <select
                 value={selectedInput}
-                onChange={(e) => setSelectedInput(e.target.value)}
+                onChange={(e) => selectInput(e.target.value)}
                 className="w-full text-xs p-1.5 bg-zinc-700 border border-zinc-600 rounded text-zinc-200"
                 disabled={talking}
               >
@@ -498,6 +553,9 @@ export default function AudioChat({ carId, embedded }: AudioChatProps) {
                   </option>
                 ))}
                 {microphones.length === 0 && <option value="">{messages.audioChat.noMicrophone}</option>}
+                {typeof navigator.mediaDevices?.getDisplayMedia === 'function' && (
+                  <option value={PC_AUDIO_INPUT}>{messages.audioChat.pcAudio}</option>
+                )}
               </select>
             </div>
             <button
