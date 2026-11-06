@@ -6,6 +6,8 @@ type CarUiStateModel = {
   isConnected: boolean;
   driverId?: string | null;
   driverName?: string | null;
+  /** "updateOnly" or "keyConflict" while the onboard is only connected in update mode (Docs/VehicleKeyAuth.md). */
+  authState?: string | null;
 };
 
 type CarUiState = {

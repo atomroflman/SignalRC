@@ -15,6 +15,7 @@ import ConfigGuard from "@/components/config-guard";
 import UpdateControl from "@/components/update-control";
 import ConfigHeader from "@/components/config-header";
 import SetupTemplatePanel from "@/components/setup-template-panel";
+import FlowSharingPanel from "@/components/flow-sharing-panel";
 import { useI18n } from "@/i18n/provider";
 
 const nodeTypes = { custom: CustomFlowNode, clusterFrame: ClusterFrameNode };
@@ -145,6 +146,7 @@ export default function CarControlFlowPage() {
           <FunctionNodesView />
           {carIdNum && <CarFunctionsView carId={carIdNum} hideFlowButtons={false} />}
           {carIdNum && <SetupTemplatePanel carId={carIdNum} />}
+          {carIdNum && <FlowSharingPanel carId={carIdNum} />}
         </div>
         <div className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg p-2 min-h-[600px]">
           <ReactFlowProvider>

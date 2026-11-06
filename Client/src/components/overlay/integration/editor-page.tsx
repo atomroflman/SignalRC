@@ -3,6 +3,7 @@
 // preview, real assets, sources, streams and video, publishing/history, the
 // sending pause on opening and the keyboard separation (api/README.md §6).
 import ConfigHeader from "@/components/config-header";
+import { useVehicleAccess } from "@/components/vehicle-access";
 import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useCarUiStore } from "../../car-ui-store";
 import { useControlFlowStore } from "../../control-flow-store";
@@ -135,7 +136,9 @@ export function OverlayEditorPage({ carId }: { carId: number }) {
   const [me, setMe] = useState<MeLike | null | undefined>(undefined);
   const connectCarUi = useCarUiStore((s) => s.connect);
   const carState = useCarUiStore((s) => s.states[carId]);
-  const reason = controlReason(me, carState);
+  // A config session manages the HUD like the driver, also while the vehicle is offline (Docs/VehicleKeyAuth.md).
+  const { access } = useVehicleAccess(carId);
+  const reason = access?.configure ? "control" : controlReason(me, carState);
   const hasControl = reason === "control";
 
   // Opening pauses sending; leaving never reactivates (api/README.md §6).

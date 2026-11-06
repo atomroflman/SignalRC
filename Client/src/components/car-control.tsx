@@ -26,6 +26,7 @@ export default function CarControl() {
   const carsWithLiveStatus = cars?.map(car => ({
     ...car,
     isConnected: liveCarStates[car.id]?.isConnected ?? car.isConnected,
+    authState: liveCarStates[car.id]?.authState ?? null,
   })) ?? null;
   const selectedCar = carsWithLiveStatus?.find(car => car.id === flowControl.carId);
   const carOnline = selectedCar?.isConnected ?? null;
@@ -141,7 +142,6 @@ export default function CarControl() {
       
       if (carSession) {
         flowControl.setCarSession(carSession);
-        flowControl.markCarAsAuthenticated(flowControl.carId);
         setControlMessage({ type: 'success', text: messages.carControl.acquireSuccess });
       } else {
         setControlMessage({ type: 'error', text: messages.carControl.authFailed });
@@ -265,7 +265,15 @@ export default function CarControl() {
                     <span className={`inline-block h-2 w-2 rounded-full ${selectedCar.isConnected ? 'bg-green-500' : 'bg-amber-500'}`} />
                     <span className="font-medium">{selectedCar.isConnected ? messages.carControl.vehicleOnline : messages.carControl.vehicleOffline}</span>
                   </div>
-                  {!selectedCar.isConnected && (
+                  {!selectedCar.isConnected && (selectedCar.authState === 'updateOnly' || selectedCar.authState === 'keyConflict') ? (
+                    // Connected, but only in update mode (Docs/VehicleKeyAuth.md).
+                    <div className={`mt-1 text-[11px] ${selectedCar.authState === 'keyConflict' ? 'text-red-700' : ''}`}>
+                      <span className="font-semibold">
+                        {selectedCar.authState === 'keyConflict' ? messages.vehicleAccess.keyConflict : messages.vehicleAccess.updatePending}:
+                      </span>{' '}
+                      {selectedCar.authState === 'keyConflict' ? messages.vehicleAccess.keyConflictHint : messages.vehicleAccess.updatePendingHint}
+                    </div>
+                  ) : !selectedCar.isConnected && (
                     <div className="mt-1 text-[11px] opacity-80">
                       {messages.carControl.vehicleOfflineHint}
                     </div>
