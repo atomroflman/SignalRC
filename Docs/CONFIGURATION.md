@@ -365,6 +365,7 @@ There is no `ServoControl` or `GearControl` type in the current code.
 | Type | Description |
 |------|-------------|
 | `CpuTemperatureReader` | CPU temperature in °C as a plain number (data type Number; the unit belongs to the channel) |
+| `PowerSupplyReader` | Raspberry Pi power supply from `vcgencmd get_throttled` (fallback: the `rpi_volt` hwmon alarm). `report`: `Ok` (default; `1` while there is no under-voltage, i.e. the 5 V input is above about 4.63 V), `UnderVoltage`, `UnderVoltageSinceBoot`, `Throttled`, `ThrottledSinceBoot` (frequency capped, throttled or soft temperature limit; `1`/`0`), `Raw` (bits as hex), `CoreVolts` (SoC core voltage in V – not the 5 V input, which a Pi 3 cannot measure). |
 | `ApplicationLifetimeReader` | Onboard uptime in whole seconds (data type Integer, unit `s`) |
 | `JbdBmsTelemetryReader` | Battery BMS via UART |
 | `GpioPinReader` | State of a digital pin (`1`/`0`, data type Boolean) from the channel's `pinManager` + `address`. `latch` (default true) keeps a pulse shorter than the read interval for one read; `report: Edges` counts debounced edges instead. Works for inputs and outputs. |
