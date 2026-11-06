@@ -374,3 +374,19 @@ There is no `ServoControl` or `GearControl` type in the current code.
 Readers declare what they deliver per value key with `[TelemetryValue(key, dataType, unit, Decimals = …, When = "option=Value")]` (empty key: the single value of a one-value reader). The onboard reports this with the option schema; the channel editor of the setup page takes it over as data type, unit and decimals when a channel is created (until one of them is edited by hand) and offers an **Apply** button on existing channels that differ. `TelemetryValueHintTests` checks that the track drive and LiDAR readers declare every key they produce. JBD BMS values only have suggestions for the keys the code knows (`voltage`, `current`, `soc`, `remaining`, `capacity`, `cycles`, `temperature`, `currentAvg`, `runtime`); the others come from jbdtool unchanged.
 
 Both pin readers take `pinManager` and `address` from the channel itself and share the module instance of the control on the same pin. In flows the node **Telemetry** (`channel`, `fallback`; outputs `value`, `valid`) turns any telemetry channel into a flow input; it runs in the driver's browser, so end stops and e-stops belong on the vehicle.
+
+## Export and import of the vehicle configuration
+
+Setup page → **Konfiguration exportieren** downloads `signalrc-car-<id>-config-<date>.json`
+(`GET /api/cars/{id}/config`): pin managers, control, telemetry and video channels in the
+shapes the channel editor saves, plus the audio settings. User flows are not part of it
+(flow page → setup template).
+
+**Konfiguration importieren** reads such a file and first shows a preview
+(`POST /api/cars/{id}/config/import?dryRun=true`): per area what is new, changed, the
+same, and what the vehicle has but the file lacks. Missing entries stay unless
+"Kanäle löschen, die nicht in der Datei stehen" is ticked (`removeMissing=true`); deleting a
+control channel also deletes the output nodes pointing to it in flows, the preview counts
+them. The import writes in one transaction and pushes the channel map to the vehicle once.
+From another vehicle, video ports are not taken over (existing streams keep theirs, new
+ones get free ports).

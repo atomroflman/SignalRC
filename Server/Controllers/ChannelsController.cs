@@ -142,16 +142,7 @@ public class ChannelsController : ControllerBase
                 if (old != null) _context.CarChannels.Remove(old);
             }
         }
-        if (body.DisplayName != null) ch.DisplayName = body.DisplayName;
-        ch.IsEnabled = body.IsEnabled;
-        ch.RequiresAxis = body.RequiresAxis;
-        ch.MaxResendInterval = body.MaxResendInterval;
-        if (body.ControlType != null) ch.ControlType = body.ControlType;
-        if (body.PinManager != null) ch.PinManager = body.PinManager;
-        ch.Address = body.Address;
-        ch.OptionsJson = SerializeOptions(body.Options);
-        if (body.TestDisabled.HasValue) ch.TestDisabled = body.TestDisabled.Value;
-        ch.ModifiedAt = DateTime.UtcNow;
+        VehicleConfigMapper.Apply(ch, body);
         await _context.SaveChangesAsync();
         await UpdateCarChannelMapHashAsync(carId);
 
@@ -219,9 +210,7 @@ public class ChannelsController : ControllerBase
                 if (old != null) _context.CarPinManagers.Remove(old);
             }
         }
-        pm.Type = body.Type ?? string.Empty;
-        pm.OptionsJson = SerializeOptions(body.Options);
-        pm.ModifiedAt = DateTime.UtcNow;
+        VehicleConfigMapper.Apply(pm, body);
         await _context.SaveChangesAsync();
         await UpdateCarChannelMapHashAsync(carId);
         await PushFullChannelMapAsync(carId);
@@ -266,15 +255,7 @@ public class ChannelsController : ControllerBase
                 if (old != null) _context.CarTelemetry.Remove(old);
             }
         }
-        t.ReadIntervalTicks = body.ReadIntervalTicks;
-        t.TelemetryType = body.TelemetryType ?? string.Empty;
-        t.DataType = body.DataType;
-        t.Unit = body.Unit;
-        t.Decimals = body.Decimals;
-        if (body.PinManager != null) t.PinManager = body.PinManager;
-        t.Address = body.Address;
-        t.OptionsJson = SerializeOptions(body.Options);
-        t.ModifiedAt = DateTime.UtcNow;
+        VehicleConfigMapper.Apply(t, body);
         await _context.SaveChangesAsync();
         await UpdateCarChannelMapHashAsync(carId);
 
@@ -314,17 +295,7 @@ public class ChannelsController : ControllerBase
         var wasEnabled = s?.Enabled ?? false;
         if (s == null)
         {
-            s = new CarVideoStream
-            {
-                CarId = carId,
-                StreamId = sid,
-                Name = body.Name ?? sid,
-                Type = body.Type ?? "unknown",
-                StartTime = DateTime.UtcNow,
-                Protocol = body.Protocol ?? StreamProtocol.TCP,
-                Port = body.Port ?? 0,
-                Enabled = body.Enabled,
-            };
+            s = VehicleConfigMapper.NewStream(carId, sid, body);
             _context.CarVideoStreams.Add(s);
             if (sid != streamId)
             {
@@ -334,27 +305,7 @@ public class ChannelsController : ControllerBase
             }
         }
         var previousPort = s.Port;
-        s.Name = body.Name ?? s.Name;
-        s.Type = body.Type ?? s.Type;
-        s.Location = body.Location;
-        s.Enabled = body.Enabled;
-        if (body.Width.HasValue) s.Width = body.Width.Value;
-        if (body.Height.HasValue) s.Height = body.Height.Value;
-        if (body.Framerate.HasValue) s.Framerate = body.Framerate.Value;
-        if (body.BitrateKbps.HasValue) s.Bitrate = body.BitrateKbps.Value;
-        if (body.Brightness.HasValue) s.Brightness = body.Brightness.Value;
-        if (body.Priority.HasValue) s.Priority = body.Priority.Value;
-        if (body.Port.HasValue) s.Port = body.Port.Value;
-        if (body.JanusPort.HasValue) s.JanusPort = body.JanusPort;
-        if (body.Protocol.HasValue) s.Protocol = body.Protocol.Value;
-        s.CameraDevice = body.CameraDevice;
-        s.RpiCamId = body.RpiCamId;
-        s.OptionsJson = SerializeOptions(body.Options);
-        s.ProcessArguments = body.ProcessArguments;
-        s.StreamPurpose = body.StreamPurpose;
-        s.Description = body.Description;
-        s.LastStatusUpdate = DateTime.UtcNow;
-        s.ModifiedAt = DateTime.UtcNow;
+        VehicleConfigMapper.Apply(s, body);
         await _context.SaveChangesAsync();
         await UpdateCarChannelMapHashAsync(carId);
 

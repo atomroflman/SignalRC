@@ -20,6 +20,7 @@ import { findSchema, parseOptionSchemas, type ChannelTypeSchema, type SchemaKind
 import { suggestTelemetryValue } from "@/components/config/telemetry-value-hint";
 import WiringPanel from "@/components/config/pin-boards/wiring-panel";
 import { downloadVehicleConfig } from "@/components/setup/config-export";
+import { ConfigImportButton } from "@/components/setup/config-import-dialog";
 import PinBoardEditor, { boardKindOf, type NewChannelRequest, type OtherPinManager } from "@/components/config/pin-boards/pin-board-editor";
 import type { ChannelRef } from "@/components/config/pin-boards/pin-boards";
 
@@ -847,6 +848,7 @@ export default function SetupPage() {
             >
               {sp.exportConfig}
             </button>
+            <ConfigImportButton carId={carIdNum} onImported={reload} />
             <button className={btnGhost} onClick={reload}>{sp.reload}</button>
           </>} />
 
