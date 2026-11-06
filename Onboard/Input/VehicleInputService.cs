@@ -54,7 +54,15 @@ public sealed class VehicleInputService : IDisposable
     public const int KeepAliveMs = 5000;
     /// <summary>A rumble the flow no longer asks for ends after this time (flow cleared, node removed).</summary>
     public const int RumbleHoldMs = 500;
-    private const int MinOutputIntervalMs = 40;
+    /// <summary>
+    /// At most one message (rumble or light) per controller this often. Every change is an
+    /// output report over Bluetooth, and the UART Bluetooth of a Raspberry Pi 3 also carries
+    /// the controller's ~800 input reports a second: a flood of output reports (a pulsing
+    /// rumble, a colour following a sensor) made its chip hang (command tx timeout).
+    /// </summary>
+    public const int MinOutputIntervalMs = 100;
+    /// <summary>Rumble strength steps (0…1 in 16 steps): small changes of an analog value send nothing.</summary>
+    private const int MotorSteps = 16;
     private const string LedDirectory = "/sys/class/leds";
     private static long NowMs => Environment.TickCount64;
 
@@ -115,13 +123,14 @@ public sealed class VehicleInputService : IDisposable
             }
     }
 
-    private static ushort ToMotor(double v) => double.IsFinite(v) ? (ushort)Math.Round(Math.Clamp(v, 0, 1) * 0xffff) : (ushort)0;
+    private static ushort ToMotor(double v) =>
+        double.IsFinite(v) ? (ushort)Math.Round(Math.Round(Math.Clamp(v, 0, 1) * MotorSteps) / MotorSteps * 0xffff) : (ushort)0;
     private static byte ToByte(double v) => double.IsFinite(v) ? (byte)Math.Round(Math.Clamp(v, 0, 1) * 255) : (byte)0;
 
     private void ApplyRumble(Device device)
     {
         var now = NowMs;
-        if (device.WantedRumble == device.Rumble || now - device.RumbleAtMs < MinOutputIntervalMs) return;
+        if (device.WantedRumble == device.Rumble || now - device.LastOutputMs < MinOutputIntervalMs) return;
         var (strong, weak) = device.WantedRumble;
         var id = Evdev.UploadRumble(device.Handle, device.EffectId, strong, weak, 0);
         if (id < 0) return;
@@ -137,7 +146,7 @@ public sealed class VehicleInputService : IDisposable
     private void ApplyLight(Device device)
     {
         var now = NowMs;
-        if (device.WantedLight == null || device.WantedLight == device.Light || device.LightDenied || now - device.LightAtMs < MinOutputIntervalMs) return;
+        if (device.WantedLight == null || device.WantedLight == device.Light || device.LightDenied || now - device.LastOutputMs < MinOutputIntervalMs || now - device.LightAtMs < 2 * MinOutputIntervalMs) return;
         var (r, g, b) = device.WantedLight.Value;
         try
         {

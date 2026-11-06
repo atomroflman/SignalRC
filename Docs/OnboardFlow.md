@@ -86,7 +86,7 @@ damit bremst, sollte `ok` mit auswerten: ohne Lidar ist `distance` = `none`.
 Beispiel Einparkhilfe – je näher, desto schneller pulst das Rütteln:
 
 ```
-Lidar Objekt.distance → Rescale (inMin 150, inMax 20, outMin 1, outMax 10)
+Lidar Objekt.distance → Rescale (inMin 150, inMax 20, outMin 1, outMax 5)
   → Pulsieren (duty 0.5) → Controller rütteln.strong
 ```
 
@@ -153,6 +153,15 @@ Mit `report=Count` liefert er die Anzahl der verbundenen Controller.
   Fahrzeug-Teil. Setzt die Lichtleiste von PS4- und PS5-Controllern über
   `/sys/class/leds`. Dafür braucht der Dienst Schreibrechte, die eine udev-Regel aus
   dem Setup-Skript vergibt (siehe unten). Browser können die Lichtleiste nicht setzen.
+
+Ausgabe an einen Controller ist gedrosselt: höchstens eine Nachricht (Rütteln oder
+Farbe) alle 100 ms, Rütteln in 16 Stärkestufen, die Farbe höchstens alle 200 ms.
+Jede Änderung ist ein Bluetooth-Paket, und das UART-Bluetooth eines Raspberry Pi 3
+trägt zugleich die rund 800 Eingabe-Pakete pro Sekunde des Controllers. Ungedrosselt
+(pulsierendes Rütteln, Farbe nach einem Sensorwert) blieb der Bluetooth-Chip hängen
+(`hci0: command … tx timeout`); dann hilft nur `sudo hciconfig hci0 reset`, ein
+Neustart von `bluetooth.service` oder ein Reboot. Pulsieren ist am Rütteln deshalb
+bis etwa 5 Hz zu spüren.
 
 ### Lebenszeichen
 
