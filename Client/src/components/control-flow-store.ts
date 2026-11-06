@@ -1,3 +1,4 @@
+import { newNodePosition } from "./flow-new-node-position";
 import { create } from 'zustand';
 import { filterFunctionRegistry } from './filters/filter-function-registry';
 import { hudInputValues } from './filters/HudInputFunction';
@@ -38,6 +39,13 @@ export type OnboardFlowStatus = {
 };
 
 /** Nodes the browser does not compute: everything in the onboard zone except the handoff, whose input the browser feeds. */
+/** Position of a new node in the request body: centred in the visible editor (fallback: the old column). */
+function placeNewNode(fallbackY: number): { positionX: number; positionY: number } {
+  const nodes = useControlFlowStore.getState().nodes;
+  const p = newNodePosition({ x: 100, y: fallbackY + nodes.length * 40 }, nodes.map(n => n.position));
+  return { positionX: p.x, positionY: p.y };
+}
+
 export function isOnboardComputed(node: Pick<ControlFlowNode, "zone" | "nodeTypeName">): boolean {
   return node.zone === "onboard" && node.nodeTypeName !== "UserSetupHandoffNode";
 }
@@ -546,8 +554,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
       body: JSON.stringify({
         userSetupId: get().userSetupId,
         id: dbId,
-        positionX: 100,
-        positionY: 100 + get().nodes.length * 40,
+        ...placeNewNode(100),
       })
     });
     if (!res.ok) {
@@ -585,8 +592,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
         userSetupId: get().userSetupId,
         id: dbId,
         zone: get().newNodeZone === "onboard" ? 1 : 0,
-        positionX: 100,
-        positionY: 400 + get().nodes.length * 40,
+        ...placeNewNode(400),
       })
     });
     if (!res.ok) {
@@ -625,8 +631,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
         userSetupId: get().userSetupId,
         SetupFunctionName: fnName,
         zone: get().newNodeZone === "onboard" ? 1 : 0,
-        positionX: 100,
-        positionY: 200 + get().nodes.length * 40,
+        ...placeNewNode(200),
         params,
         inputPorts,
         outputPorts,
@@ -1065,7 +1070,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
     const res = await fetch(`/api/flow/handoff`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userSetupId: get().userSetupId, name: name ?? "", positionX: 100, positionY: 300 + get().nodes.length * 40 }),
+      body: JSON.stringify({ userSetupId: get().userSetupId, name: name ?? "", ...placeNewNode(300) }),
     });
     if (!res.ok) throw new Error(await res.text());
     const node = await res.json();
@@ -1076,7 +1081,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
     const res = await fetch(`/api/flow/vehicleinput/${vehicleInputChannelId}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userSetupId: get().userSetupId, id: vehicleInputChannelId, positionX: 100, positionY: 100 + get().nodes.length * 40 }),
+      body: JSON.stringify({ userSetupId: get().userSetupId, id: vehicleInputChannelId, ...placeNewNode(100) }),
     });
     if (!res.ok) throw new Error(await res.text());
     const node = await res.json();

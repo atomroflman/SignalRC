@@ -20,6 +20,7 @@ import { useI18n } from "@/i18n/provider";
 import OnboardFlowStatusBanner from "@/components/onboard-flow-status";
 import VehicleInputsView from "@/components/vehicle-inputs-view";
 import { isAllowedLink, portZone } from "@/components/flow-zone-rules";
+import { FlowViewportCenter } from "@/components/flow-new-node-position";
 
 const nodeTypes = { custom: CustomFlowNode, clusterFrame: ClusterFrameNode };
 const edgeTypes = { flow: FlowEdge };
@@ -218,6 +219,7 @@ export default function CarControlFlowPage() {
                 maskColor="rgba(9, 9, 11, 0.6)"
               />
               <FlowLayoutPanel onArranged={setArranged} />
+              <FlowViewportCenter />
               <Controls />
               <Background color="#3f3f46" gap={20} />
             </ReactFlow>
