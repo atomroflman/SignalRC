@@ -6,6 +6,7 @@ import { useCarUiStore } from "./car-ui-store";
 import { useI18n } from "@/i18n/provider";
 import UpdatesToggleButton from "./updates-toggle-button";
 import StopSessionButton from "./stop-session-button";
+import OnboardFlowStatusBanner from "./onboard-flow-status";
 
 export default function CarControl() {
   const { messages } = useI18n();
@@ -221,6 +222,8 @@ export default function CarControl() {
               }}
             />
           </div>
+          {/* Which flow drives the vehicle; detach the web for the local controller (E13). */}
+          <OnboardFlowStatusBanner showToggle className="mt-2" />
         </>
       ) : (
         <>

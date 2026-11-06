@@ -27,7 +27,60 @@ const SPECIALIZED_NODES: Record<string, React.ComponentType<CustomFlowNodeProps>
   Smooth: SmoothFlowNode,
 };
 
+/** Node kinds that are not filter functions. */
+const CHANNEL_TYPES = ["input", "output", "vehicleInput", "handoff"];
+
+/**
+ * Frame showing the node's zone (OnboardFlow-Arbeitspakete.md OF10): vehicle nodes get an
+ * amber ring and badge; functions and vehicle channels can move to the other zone; browser
+ * vehicle channels are marked as not available locally once the flow has a vehicle part (E07).
+ */
+function ZoneFrame({ node, children }: { node: any; children: React.ReactNode }) {
+  const { messages } = useI18n();
+  const t = messages.onboardFlow;
+  const hasOnboardPart = useControlFlowStore(s => s.nodes.some(n => n.zone === "onboard"));
+  const setNodeZone = useControlFlowStore(s => s.setNodeZone);
+  if (!node) return <>{children}</>;
+  const onboard = node.zone === "onboard";
+  const movable = node.nodeTypeName === "UserSetupFunctionNode" || node.nodeTypeName === "UserSetupCarChannelNode";
+  const move = async () => {
+    const error = await setNodeZone(node.nodeId, onboard ? "browser" : "onboard");
+    if (error) alert(error);
+  };
+  return (
+    <div className={onboard ? "relative rounded-lg ring-2 ring-amber-500/80" : "relative rounded-lg"}>
+      {(onboard || movable || (hasOnboardPart && node.type === "output")) && (
+        <div className="absolute -top-5 left-0 flex items-center gap-1 text-[10px] whitespace-nowrap">
+          {onboard && <span className="px-1 rounded bg-amber-700 text-amber-50">{t.onboardBadge}</span>}
+          {!onboard && hasOnboardPart && node.type === "output" && (
+            <span className="px-1 rounded bg-zinc-700 text-zinc-300">{t.localUnavailable}</span>
+          )}
+          {movable && (
+            <button
+              className="nodrag px-1 rounded bg-zinc-800 border border-zinc-600 text-zinc-300 hover:bg-zinc-700"
+              title={onboard ? t.moveToBrowser : t.moveToOnboard}
+              onClick={move}
+            >
+              {onboard ? "→ " + t.zoneBrowser : "→ " + t.zoneOnboard}
+            </button>
+          )}
+        </div>
+      )}
+      {children}
+    </div>
+  );
+}
+
 export default function CustomFlowNode(props: NodeProps) {
+  const data = useControlFlowStore(s => s.nodes.find(n => n.nodeId == props?.data?.nodeId));
+  return (
+    <ZoneFrame node={data}>
+      <CustomFlowNodeContent {...props} />
+    </ZoneFrame>
+  );
+}
+
+function CustomFlowNodeContent(props: NodeProps) {
   const { messages } = useI18n();
   if (!props || !props.data) {
     console.warn('CustomFlowNode: props oder props.data ist null/undefined', { props });
@@ -82,6 +135,11 @@ export default function CustomFlowNode(props: NodeProps) {
       outputs.push("out");
     } else if (data?.type === "output") {
       inputs.push("in");
+    } else if (data?.type === "vehicleInput") {
+      outputs.push("value", "connected");
+    } else if (data?.type === "handoff") {
+      inputs.push("in");
+      outputs.push("value", "connected");
     } else {
       if (data?.metadata?.functionName) {
         const definition = filterFunctionRegistry[data?.metadata?.functionName as keyof typeof filterFunctionRegistry];
@@ -97,10 +155,11 @@ export default function CustomFlowNode(props: NodeProps) {
   }, [data?.type, data?.metadata?.functionName, JSON.stringify(data?.params)]);
   
   // Check for undefined function after useMemo
-  if (data?.type !== "input" && data?.type !== "output" && !data?.metadata?.functionName) {
+  const isChannel = CHANNEL_TYPES.includes(data?.type ?? "");
+  if (!isChannel && !data?.metadata?.functionName) {
     return brokenNode("undefined!");
   }
-  if (data?.type !== "input" && data?.type !== "output" && data?.metadata?.functionName) {
+  if (!isChannel && data?.metadata?.functionName) {
     const definition = filterFunctionRegistry[data?.metadata?.functionName as keyof typeof filterFunctionRegistry];
     if (!definition) {
       return brokenNode(messages.flowNode.functionNotFound);
@@ -149,7 +208,7 @@ export default function CustomFlowNode(props: NodeProps) {
     <div className={`${flowNodeStyles.card} min-w-[180px]`}>
       <FlowNodeHeader
         title={data?.label}
-        docKey={data?.type === "input" || data?.type === "output" ? data.type : data?.metadata?.functionName}
+        docKey={CHANNEL_TYPES.includes(data?.type ?? "") ? data!.type : data?.metadata?.functionName}
         value={Array.isArray(data?.latestValue)
           ? data.latestValue.map((v: number) => Number(v).toFixed(3)).join(", ")
           : Number(data?.latestValue ?? 0).toFixed(3)}

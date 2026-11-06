@@ -33,6 +33,8 @@ const DEFAULT_SIZE: Size = { width: 180, height: 60 };
 export function nodePorts(node: ControlFlowNode): { inputs: string[]; outputs: string[] } {
   if (node.type === "input") return { inputs: [], outputs: ["out"] };
   if (node.type === "output") return { inputs: ["in"], outputs: [] };
+  if (node.type === "vehicleInput") return { inputs: [], outputs: ["value", "connected"] };
+  if (node.type === "handoff") return { inputs: ["in"], outputs: ["value", "connected"] };
   const def = filterFunctionRegistry[node.metadata?.functionName as keyof typeof filterFunctionRegistry];
   return { inputs: [...(def?.inputLabels ?? [])], outputs: [...(def?.outputLabels ?? [])] };
 }
@@ -96,7 +98,7 @@ function elkGraph(cluster: FlowCluster, nodes: ControlFlowNode[], edges: Control
       height: 1,
       layoutOptions: { "elk.port.side": dir === "in" ? "NORTH" : "SOUTH" },
     }));
-    const layer = n.type === "input" || (n.metadata?.functionName === "HudInput" || n.metadata?.functionName === "Telemetry") ? "FIRST" : n.type === "output" || n.metadata?.functionName === "HudSignal" ? "LAST" : "NONE";
+    const layer = n.type === "input" || n.type === "vehicleInput" || (n.metadata?.functionName === "HudInput" || n.metadata?.functionName === "Telemetry") ? "FIRST" : n.type === "output" || n.metadata?.functionName === "HudSignal" ? "LAST" : "NONE";
     return {
       id: String(n.nodeId),
       width: size.width,

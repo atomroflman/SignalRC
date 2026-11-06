@@ -293,7 +293,8 @@ public partial class FlowController : ControllerBase
                 result.Label = handoff.Name;
                 break;
             case UserSetupVehicleInputNode vehicleInput:
-                result.Type = "input";
+                // Own type: its id is a VehicleInputChannel id, not a UserChannel id like "input".
+                result.Type = "vehicleInput";
                 result.RepresentingId = vehicleInput.VehicleInputChannelId;
                 var vehicleChannel = _context.VehicleInputChannels.Include(c => c.VehicleInputDevice)
                     .FirstOrDefault(c => c.Id == vehicleInput.VehicleInputChannelId);

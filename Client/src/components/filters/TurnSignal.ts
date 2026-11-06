@@ -27,8 +27,10 @@ export class TurnSignal implements FilterFunctionDef<readonly ["enable", "steeri
     if (nodeId === undefined) return [0];
     const enable = Math.round(inputs.enable);
     const steering = inputs.steering ?? 0;
-    const steps = typeof params?.steps === 'number' ? params.steps : 5;
-    const isLeftTurn = typeof params?.isLeftTurn === 'boolean' ? params.isLeftTurn : true;
+    // Parameters arrive as text from the server ("5", "false"); same parsing as the onboard engine.
+    const parsedSteps = Number(params?.steps ?? 5);
+    const steps = Number.isFinite(parsedSteps) && parsedSteps > 0 ? parsedSteps : 5;
+    const isLeftTurn = !(params?.isLeftTurn === false || String(params?.isLeftTurn ?? "").trim().toLowerCase() === "false");
 
     const clickSize = 1.0 / steps;
 

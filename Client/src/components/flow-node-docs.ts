@@ -149,9 +149,38 @@ const de: Record<string, FlowNodeDoc> = {
     details: [
       "channel ist der Name des Telemetrie-Kanals. Zahlen kommen unverändert, true/false als 1/0.",
       "valid ist 1, solange der Wert frisch ist; bei veraltetem, fehlerhaftem oder fehlendem Wert ist valid 0 und value der fallback.",
-      "Läuft im Browser des Fahrers: zwischen Pin und Reaktion liegen Leseintervall und Netzwerk. Endschalter oder Not-Aus gehören aufs Fahrzeug.",
+      "Im Browser-Flow liegen Leseintervall und Netzwerk zwischen Pin und Reaktion. Im Fahrzeug-Flow liest der Knoten den Wert direkt auf dem Fahrzeug – dorthin gehören Endschalter oder Not-Aus.",
     ],
     example: "Telemetrie \"doorOpen\" → Iif → Fahrzeugkanal warnLight",
+  },
+  Active: {
+    summary: "Aktiv?: 1, solange der Eingang bewegt wird (|Eingang| > threshold), und noch hold Sekunden danach; sonst 0.",
+    details: [
+      "Erkennt, ob eine Quelle gerade benutzt wird, z. B. der Controller am Fahrzeug.",
+      "Zusammen mit Vorrang: Der lokale Controller übersteuert das Web, solange er bewegt wird.",
+    ],
+    example: "Controller-Lenkung → Aktiv? → Vorrang.aActive",
+  },
+  Priority: {
+    summary: "Vorrang: gibt a weiter, solange aActive ≥ 0,5 ist, sonst b.",
+    details: ["Web und Controller werden nur gemischt, wenn der Flow es so festlegt."],
+    example: "Controller-Lenkung → a, Aktiv? → aActive, Übergabe Lenkung → b → Fahrzeugkanal steering",
+  },
+  vehicleInput: {
+    summary: "Fahrzeug-Controller: eine Achse oder Taste eines Controllers, der direkt am Fahrzeug gekoppelt ist. Nur im Fahrzeug-Flow.",
+    details: [
+      "Achsen liefern −1 … 1, Trigger 0 … 1, Tasten 0 oder 1.",
+      "connected ist 1, solange der Controller verbunden ist. Ohne Verbindung sind beide Ausgänge 0.",
+    ],
+    example: "Controller ABS_X → DeadZone → Fahrzeugkanal steering",
+  },
+  handoff: {
+    summary: "Übergabe: reicht einen Wert vom Browser-Flow an den Fahrzeug-Flow weiter.",
+    details: [
+      "connected ist 1, solange Werte aus dem Browser ankommen. Bei abgekoppeltem Web oder ohne Server sind value und connected 0.",
+      "Der Fahrzeug-Flow kann nie zurück in den Browser-Flow liefern.",
+    ],
+    example: "Gamepad-Lenkung → Rescale → Übergabe \"Lenkung\" → Vorrang.b",
   },
 };
 
@@ -294,9 +323,38 @@ const en: Record<string, FlowNodeDoc> = {
     details: [
       "channel is the name of the telemetry channel. Numbers pass unchanged, true/false as 1/0.",
       "valid is 1 while the value is fresh; for a stale, failed or missing value valid is 0 and value is the fallback.",
-      "Runs in the driver's browser: read interval and network lie between pin and reaction. End stops or an e-stop belong on the vehicle.",
+      "In the browser flow, read interval and network lie between pin and reaction. In the vehicle flow the node reads the value on the vehicle itself – that is where end stops or an e-stop belong.",
     ],
     example: "Telemetry \"doorOpen\" → Iif → vehicle channel warnLight",
+  },
+  Active: {
+    summary: "Active?: 1 while the input is moved (|input| > threshold) and for hold seconds after; otherwise 0.",
+    details: [
+      "Tells whether a source is being used, e.g. the controller on the vehicle.",
+      "With Priority: the local controller overrides the web while it is moved.",
+    ],
+    example: "Controller steering → Active? → Priority.aActive",
+  },
+  Priority: {
+    summary: "Priority: passes a while aActive ≥ 0.5, otherwise b.",
+    details: ["Web and controller are only mixed where the flow says so."],
+    example: "Controller steering → a, Active? → aActive, handoff steering → b → vehicle channel steering",
+  },
+  vehicleInput: {
+    summary: "Vehicle controller: an axis or button of a controller paired with the vehicle. Vehicle flow only.",
+    details: [
+      "Axes give −1 … 1, triggers 0 … 1, buttons 0 or 1.",
+      "connected is 1 while the controller is connected. Without a connection both outputs are 0.",
+    ],
+    example: "Controller ABS_X → DeadZone → vehicle channel steering",
+  },
+  handoff: {
+    summary: "Handoff: passes a value from the browser flow to the vehicle flow.",
+    details: [
+      "connected is 1 while values arrive from the browser. With the web detached or without the server, value and connected are 0.",
+      "The vehicle flow can never feed back into the browser flow.",
+    ],
+    example: "Gamepad steering → Rescale → handoff \"steering\" → Priority.b",
   },
 };
 

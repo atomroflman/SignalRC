@@ -4,7 +4,7 @@ import { flowNodeDocs } from "./flow-node-docs";
 
 describe("flow node descriptions", () => {
   it("describe every registered function and the channel nodes in every language", () => {
-    const keys = [...Object.keys(filterFunctionRegistry), "input", "output"].sort();
+    const keys = [...Object.keys(filterFunctionRegistry), "input", "output", "vehicleInput", "handoff"].sort();
     for (const docs of Object.values(flowNodeDocs)) {
       expect(Object.keys(docs).sort()).toEqual(keys);
       for (const doc of Object.values(docs)) {

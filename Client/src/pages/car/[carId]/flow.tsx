@@ -17,6 +17,9 @@ import ConfigHeader from "@/components/config-header";
 import SetupTemplatePanel from "@/components/setup-template-panel";
 import FlowSharingPanel from "@/components/flow-sharing-panel";
 import { useI18n } from "@/i18n/provider";
+import OnboardFlowStatusBanner from "@/components/onboard-flow-status";
+import VehicleInputsView from "@/components/vehicle-inputs-view";
+import { isAllowedLink } from "@/components/flow-zone-rules";
 
 const nodeTypes = { custom: CustomFlowNode, clusterFrame: ClusterFrameNode };
 const edgeTypes = { flow: FlowEdge };
@@ -104,6 +107,12 @@ export default function CarControlFlowPage() {
     flowControl.addEdge(params);
   }, [flowControl]);
 
+  // Top-down only (OnboardFlow-Arbeitspakete.md T03); the server checks again.
+  const isValidConnection = useCallback((c: Connection) => {
+    const nodes = useControlFlowStore.getState().nodes;
+    return isAllowedLink(nodes.find(n => String(n.nodeId) === c.source), nodes.find(n => String(n.nodeId) === c.target));
+  }, []);
+
   const onEdgeClick = useCallback((event: any, edge: Edge<any>) => {
     setSelectedEdgeId(id => id === edge.id ? null : edge.id);
   }, []);
@@ -139,12 +148,14 @@ export default function CarControlFlowPage() {
     <ConfigGuard carId={carIdNum}>
       <div className="flex flex-col p-4 bg-zinc-950 text-zinc-100 min-h-screen">
       <ConfigHeader carId={carIdNum} active="flow" className="mb-4" />
+      <OnboardFlowStatusBanner showToggle className="mb-4" />
       <div className="flex flex-1 flex-col md:flex-row gap-4">
         <div className="w-full md:w-1/4 space-y-4">
           <UpdateControl />
           <GamepadViewer hideFlowButtons={false} />
           <FunctionNodesView />
           {carIdNum && <CarFunctionsView carId={carIdNum} hideFlowButtons={false} />}
+          {carIdNum && <VehicleInputsView carId={carIdNum} />}
           {carIdNum && <SetupTemplatePanel carId={carIdNum} />}
           {carIdNum && <FlowSharingPanel carId={carIdNum} />}
         </div>
@@ -157,6 +168,7 @@ export default function CarControlFlowPage() {
               onNodeDrag={onNodeDrag}
               onNodeDragStop={onNodeDragStop}
               onConnect={onConnect}
+              isValidConnection={isValidConnection}
               onEdgeClick={onEdgeClick}
               onEdgesDelete={onEdgesDelete}
               onPaneClick={() => setSelectedEdgeId(null)}

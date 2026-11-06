@@ -19,7 +19,27 @@ export type ControlFlowNode = {
   inputPorts?: number;
   outputPorts?: number;
   maxResendInterval?: number;
+  /** Where the node runs (OnboardFlow-Arbeitspakete.md T01); missing = browser. */
+  zone?: FlowZone;
 };
+
+export type FlowZone = "browser" | "onboard";
+
+/** Status of the vehicle's onboard flow (Shared/Flow/OnboardFlowStatus.cs). */
+export type OnboardFlowStatus = {
+  hash?: string | null;
+  mode: "off" | "mixed" | "detached";
+  handoffConnected: boolean;
+  devices: { key: string; name: string; connected: boolean }[];
+  values: Record<string, number>;
+  ownedChannels: string[];
+  setupId?: number | null;
+};
+
+/** Nodes the browser does not compute: everything in the onboard zone except the handoff, whose input the browser feeds. */
+export function isOnboardComputed(node: Pick<ControlFlowNode, "zone" | "nodeTypeName">): boolean {
+  return node.zone === "onboard" && node.nodeTypeName !== "UserSetupHandoffNode";
+}
 
 export type FunctionMetadata = {
   functionName: string;
@@ -104,7 +124,25 @@ export type ControlFlowState = {
   removeSshPrivateKey: (carId: number) => boolean;
   // Build local download URL for vehicle key (HTTP, local network only)
   getSshKeyDownloadUrl: (carId: number, vehicleIp: string) => Promise<string | null>;
+  // Onboard flow (OnboardFlow-Arbeitspakete.md OF09–OF11)
+  /** Last status the vehicle reported; undefined until known. */
+  flowStatus?: OnboardFlowStatus;
+  /** Zone for new function and channel nodes in the editor. */
+  newNodeZone: FlowZone;
+  setNewNodeZone: (zone: FlowZone) => void;
+  applyFlowStatus: (carId: number, status: OnboardFlowStatus | null) => void;
+  sendHandoff: (nodeId: number, value: number) => Promise<void>;
+  registerHandoff: (name?: string) => Promise<void>;
+  registerVehicleInput: (vehicleInputChannelId: number) => Promise<void>;
+  setNodeZone: (nodeId: number, zone: FlowZone) => Promise<string | null>;
+  /** Detaches or reattaches the web (E13); returns the state the vehicle reports. */
+  setWebDetached: (detached: boolean) => Promise<boolean>;
+  /** Bluetooth action on the vehicle (OF08); needs the control session. */
+  vehicleBluetooth: (action: string, address?: string) => Promise<BluetoothResult>;
 };
+
+export type BluetoothDevice = { address: string; name: string; paired: boolean; trusted: boolean; connected: boolean };
+export type BluetoothResult = { success: boolean; message?: string | null; devices: BluetoothDevice[] };
 
 /**
  * The value an edge carries: the source node's output at the edge's source
@@ -125,6 +163,10 @@ export function edgeValue(
 }
 
 const _resendTimers = new Map<number, ReturnType<typeof setInterval>>();
+// Handoff values are repeated so the vehicle sees the browser is still there (T08).
+const HANDOFF_RESEND_MS = 500;
+const _handoffTimers = new Map<number, ReturnType<typeof setInterval>>();
+const _handoffValues = new Map<number, number>();
 const _lastSentValues = new Map<number, number>();
 const _channelResendIntervals = new Map<number, number>();
 
@@ -153,7 +195,9 @@ let _connecting: Promise<void> | undefined;
 function clearAllResendTimers() {
   for (const timer of _resendTimers.values()) {
     clearInterval(timer);
-  }
+    _handoffTimers.forEach(t => clearInterval(t));
+  _handoffTimers.clear();
+}
   _resendTimers.clear();
   _lastSentValues.clear();
 }
@@ -176,6 +220,8 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
   updatesEnabled: true,
   editorPaused: false,
   onboardUpdating: false,
+  flowStatus: undefined,
+  newNodeZone: "browser",
   async load(carId: number) {
     set({ isLoading: true, error: null });
     try {
@@ -213,7 +259,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
       // Initial calculation for all function nodes without incoming edges
       const state = get();
       state.nodes.forEach(node => {
-        if (node.nodeTypeName === "UserSetupFunctionNode") {
+        if (node.nodeTypeName === "UserSetupFunctionNode" && !isOnboardComputed(node)) {
           const fnName: string | undefined = node.metadata?.functionName;
           if (fnName) {
             const fnDef = filterFunctionRegistry[fnName as keyof typeof filterFunctionRegistry];
@@ -270,6 +316,20 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
     const state = get();
     const node = state.nodes.find(n => n.nodeId === nodeId);
     if (!node) return;
+
+    // The vehicle computes its own flow; its values come with the status (applyFlowStatus).
+    if (isOnboardComputed(node)) return;
+
+    // Handoff: the browser feeds its input, the vehicle takes it from there (T08).
+    if (node.nodeTypeName === "UserSetupHandoffNode") {
+      const incomingEdge = state.edges.find(e => e.target === nodeId);
+      if (!incomingEdge) return;
+      const inputValue = edgeValue(state, incomingEdge);
+      if (_handoffValues.get(nodeId) !== inputValue) {
+        state.sendHandoff(nodeId, inputValue);
+      }
+      return;
+    }
 
     // Handle input nodes - just pass through the value
     if (node.nodeTypeName === "UserSetupUserChannelNode") {
@@ -438,8 +498,12 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
         toPort: params.targetHandle,
       })
     });
-    if (!newEdgeRes.ok) 
-      throw new Error("Linking failed...");
+    if (!newEdgeRes.ok) {
+      // The server explains refused links (zone rules, loops); show it instead of failing silently.
+      const reason = await newEdgeRes.text();
+      if (typeof window !== "undefined") alert(reason || "Linking failed");
+      return;
+    }
     const newEdge = await newEdgeRes.json();
     set((state) => { 
       return {
@@ -455,6 +519,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
         ]
       };
     });
+    get().recalculateNode(Number(newEdge.target));
   },
   async removeEdge(dbId: number) {
     await fetch(`/api/flow/unlink/` + dbId, {
@@ -512,12 +577,14 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
       body: JSON.stringify({
         userSetupId: get().userSetupId,
         id: dbId,
+        zone: get().newNodeZone === "onboard" ? 1 : 0,
         positionX: 100,
         positionY: 400 + get().nodes.length * 40,
       })
     });
     if (!res.ok) {
-      console.error("Failed to register input node", res.status, res.statusText);
+      console.error("Failed to register output node", res.status, res.statusText);
+      alert(await res.text());
       return {};
     }
     const output = await res.json();
@@ -535,6 +602,8 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
             nodeTypeName: output.nodeTypeName,
             metadata: undefined,
             label: output.label,
+            zone: output.zone,
+            maxResendInterval: output.maxResendInterval,
             params: {}, // immer ein Objekt
           },
         ],
@@ -548,6 +617,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
       body: JSON.stringify({
         userSetupId: get().userSetupId,
         SetupFunctionName: fnName,
+        zone: get().newNodeZone === "onboard" ? 1 : 0,
         positionX: 100,
         positionY: 200 + get().nodes.length * 40,
         params,
@@ -557,6 +627,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
     });
     if (!res.ok) {
       console.error("Failed to register function node", res.status, res.statusText);
+      alert(await res.text());
       return;
     }
     const fnNode = await res.json();
@@ -573,6 +644,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
           metadata: fnNode.metadata,
           label: fnNode.label,
           params: fnNode.params || params || {},
+          zone: fnNode.zone,
           inputPorts: fnNode.inputPorts || inputPorts,
           outputPorts: fnNode.outputPorts || outputPorts,
         },
@@ -595,6 +667,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
     const { carId, carSession, connection, updatesEnabled, isInConfigMode, onboardUpdating } = get();
     console.log("send out", carId, carSession, connection?.state, "updatesEnabled:", updatesEnabled, "isInConfigMode:", isInConfigMode);
     
+    if (get().flowStatus?.mode === "detached") return; // the vehicle ignores the browser now (E13)
     if (connection && carId && carSession && updatesEnabled && !onboardUpdating) {
       await connection.invoke("UpdateChannel", carId, carSession, channelId, value);
       _lastSentValues.set(channelId, value);
@@ -641,7 +714,18 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
       connection.on("HudInput", (inputCarId: number, input: string, action: HudInputAction, value: number) => {
         if (get().carId === inputCarId && get().carSession) get().applyHudInput(input, action, value);
       });
+      // Status of the vehicle's own flow (T13): mode, controllers, values of the onboard nodes.
+      connection.on("OnboardFlowStatus", (statusCarId: number, status: OnboardFlowStatus) => get().applyFlowStatus(statusCarId, status));
+      const subscribeFlowStatus = async () => {
+        try {
+          get().applyFlowStatus(carId, await connection.invoke("SubscribeToFlowStatus", carId));
+        } catch (err) {
+          console.warn("SubscribeToFlowStatus failed:", err);
+        }
+      };
+      connection.onreconnected(() => { subscribeFlowStatus(); });
       await connection.start();
+      subscribeFlowStatus();
       // ponytail: only replace carSession when the connection is brand-new.
       // On a remount (page nav, / → /car/[id] → /) the zustand store
       // survives but this useEffect re-runs and would clobber the
@@ -909,6 +993,106 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
       return null;
     }
   },
+  setNewNodeZone(zone) {
+    set({ newNodeZone: zone });
+  },
+  applyFlowStatus(statusCarId, status) {
+    if (get().carId !== undefined && statusCarId !== get().carId) return;
+    const state = get();
+    if (!status) {
+      set({ flowStatus: undefined });
+      return;
+    }
+    let changed = false;
+    for (const node of state.nodes) {
+      if (node.zone !== "onboard") continue;
+      const v = status.values?.[node.nodeId];
+      if (typeof v !== "number" || state.nodeLatestValues[node.nodeId] === v) continue;
+      state.nodeLatestValues[node.nodeId] = v;
+      node.latestValue = v;
+      changed = true;
+    }
+    if (status.mode === "detached") {
+      // Nothing the browser sends counts now; stop repeating.
+      clearAllResendTimers();
+    }
+    set(changed
+      ? { flowStatus: status, nodeLatestValues: state.nodeLatestValues, nodes: [...state.nodes], frame: state.frame + 1 }
+      : { flowStatus: status });
+  },
+  async sendHandoff(nodeId, value) {
+    const { carId, carSession, connection, updatesEnabled, onboardUpdating, flowStatus } = get();
+    get().nodeLatestValues[nodeId] = value;
+    if (flowStatus?.mode === "detached") return;
+    if (!(connection && carId && carSession && updatesEnabled && !onboardUpdating)) return;
+    // Remember only what was sent: a value held back now is sent with the next recalculation.
+    _handoffValues.set(nodeId, value);
+    await connection.invoke("UpdateFlowHandoff", carId, carSession, nodeId, value);
+    if (!_handoffTimers.has(nodeId)) {
+      _handoffTimers.set(nodeId, setInterval(() => {
+        const s = get();
+        const last = _handoffValues.get(nodeId);
+        if (s.connection && s.carId && s.carSession && s.updatesEnabled && !s.onboardUpdating && s.flowStatus?.mode !== "detached" && last !== undefined) {
+          s.connection.invoke("UpdateFlowHandoff", s.carId, s.carSession, nodeId, last)
+            .catch((err: any) => console.error("Handoff resend failed:", err));
+        }
+      }, HANDOFF_RESEND_MS));
+    }
+  },
+  async registerHandoff(name) {
+    const res = await fetch(`/api/flow/handoff`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userSetupId: get().userSetupId, name: name ?? "", positionX: 100, positionY: 300 + get().nodes.length * 40 }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const node = await res.json();
+    set(state => ({ nodes: [...state.nodes, { ...node, data: { ...node }, params: {} } as ControlFlowNode] }));
+  },
+  async registerVehicleInput(vehicleInputChannelId) {
+    if (get().nodes.some(n => n.type === "vehicleInput" && n.representingId === vehicleInputChannelId)) return;
+    const res = await fetch(`/api/flow/vehicleinput/${vehicleInputChannelId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userSetupId: get().userSetupId, id: vehicleInputChannelId, positionX: 100, positionY: 100 + get().nodes.length * 40 }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const node = await res.json();
+    set(state => ({ nodes: [...state.nodes, { ...node, data: { ...node }, params: {} } as ControlFlowNode] }));
+  },
+  async setNodeZone(nodeId, zone) {
+    const res = await fetch(`/api/flow/${nodeId}/zone`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ zone: zone === "onboard" ? 1 : 0 }),
+    });
+    if (!res.ok) return await res.text();
+    const info = await res.json();
+    set(state => ({ nodes: state.nodes.map(n => n.nodeId === nodeId ? { ...n, zone: info.zone } : n) }));
+    // Back in the browser: compute it here again.
+    if (zone === "browser") get().recalculateNode(nodeId);
+    return null;
+  },
+  async setWebDetached(detached) {
+    const { connection, carId, carSession } = get();
+    if (!(connection && carId && carSession)) return false;
+    const result: boolean = await connection.invoke("SetWebDetached", carId, carSession, detached);
+    // Take the new mode right away; the vehicle's status follows.
+    const current = get().flowStatus;
+    if (current) set({ flowStatus: { ...current, mode: result ? "detached" : current.hash ? "mixed" : "off" } });
+    if (!result) {
+      // Attached again: send everything once more so the vehicle has current values.
+      _lastSentValues.forEach((value, channelId) => get().sendOutput(channelId, value));
+      _handoffValues.clear();
+      get().nodes.filter(n => n.nodeTypeName === "UserSetupHandoffNode").forEach(n => get().recalculateNode(n.nodeId));
+    }
+    return result;
+  },
+  async vehicleBluetooth(action, address) {
+    const { connection, carId, carSession } = get();
+    if (!(connection && carId && carSession)) return { success: false, message: "no session", devices: [] };
+    return await connection.invoke("VehicleBluetooth", carId, carSession, action, address ?? null);
+  },
   async stopConnection() {
     clearAllResendTimers();
     const { connection, carId, carSession } = get();
@@ -940,7 +1124,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
     
     // Find all input nodes that represent this channel
     const inputNodes = state.nodes.filter(node => 
-      node.type === "input" && node.representingId === inputDbId
+      node.type === "input" && node.nodeTypeName === "UserSetupUserChannelNode" && node.representingId === inputDbId
     );
     
     // Update the value for each input node and trigger recalculation
@@ -1090,6 +1274,11 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
     if (!enabled) clearAllResendTimers();
     // An explicit enable is the deliberate release that ends an editor pause.
     set(enabled ? { updatesEnabled: true, editorPaused: false } : { updatesEnabled: false });
+    if (enabled) {
+      // Handoffs hand their current value to the vehicle right away.
+      _handoffValues.clear();
+      get().nodes.filter(n => n.nodeTypeName === "UserSetupHandoffNode").forEach(n => get().recalculateNode(n.nodeId));
+    }
     console.log("Updates enabled:", enabled);
   },
 
