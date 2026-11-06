@@ -69,6 +69,11 @@ Wertebereiche:
 
 Jeder Controller-Knoten hat zusätzlich den Ausgang `connected`.
 
+Für HUD und Telemetrie gibt es den Telemetrie-Typ `VehicleControllerReader`. Er
+liefert `1`/`0`, ob ein Controller verbunden ist. Mit `Device` lässt er sich auf
+einen Controller eingrenzen, über einen Namensteil oder die Bluetooth-Adresse.
+Mit `report=Count` liefert er die Anzahl der verbundenen Controller.
+
 ## Voraussetzungen auf dem Fahrzeug
 
 `scripts/onboard-setup-bluetooth.sh` richtet alles ein. `install.sh` und
