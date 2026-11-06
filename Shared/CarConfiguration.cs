@@ -19,4 +19,11 @@ public class CarConfiguration : IConfigurationModel
     /// Hash of the server-pushed channel map. The client should compare this with its local hash.
     /// </summary>
     public string ChannelMapHash { get; set; } = string.Empty;
+
+    /// <summary>
+    /// How the server accepted this vehicle (Security.VehicleAuthState). Anything but
+    /// "authenticated" means update mode: no channel map, no control, no telemetry.
+    /// Old onboards ignore the field.
+    /// </summary>
+    public string? AuthState { get; set; }
 }

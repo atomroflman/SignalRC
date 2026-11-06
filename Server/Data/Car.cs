@@ -9,6 +9,21 @@ public class Car : EntityBase
     public string ChannelMapHash { get; set; } = string.Empty;
     public DateTime LastSeen { get; set; } = DateTime.Now;
 
+    // Docs/VehicleKeyAuth.md: the device key signs the vehicle in (TOFU on the first
+    // signed handshake), the owner key is the master of every change and is checked
+    // here for config sessions while the vehicle is offline. Reset = set to null in the DB.
+    /// <summary>Device public key, Base64 SPKI (ECDSA P-256); null until the first signed handshake.</summary>
+    [MaxLength(Shared.Security.VehicleKeys.MaxPublicKeyLength)]
+    public string? DevicePublicKey { get; set; }
+    [MaxLength(64)]
+    public string? DeviceKeyFingerprint { get; set; }
+    /// <summary>Owner public key (ssh_key.pub), Base64 SPKI (RSA); reported by the signed-in vehicle.</summary>
+    [MaxLength(Shared.Security.VehicleKeys.MaxPublicKeyLength)]
+    public string? OwnerPublicKey { get; set; }
+    [MaxLength(64)]
+    public string? OwnerKeyFingerprint { get; set; }
+    public DateTime? OwnerKeyChangedAt { get; set; }
+
     // Car-level audio, see SignalRC.Shared.Audio.AudioSettings for the meaning of each value.
     /// <summary>ALSA capture device of the vehicle microphone; null hides listening in the UI.</summary>
     [MaxLength(100)]

@@ -8,6 +8,8 @@ using SignalRC.Onboard.Video;
 using SignalRC.Shared;
 using SignalRC.Shared.Channels;
 using SignalRC.Shared.HubClients;
+using SignalRC.Shared.Security;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -176,11 +178,19 @@ public class ServerConnectionService
 
             // Prefer hash from last SyncChannelMap (if sync already performed before OpenCarConnection is called)
             var channelMapHash = _lastSync?.Hash ?? ChannelMapHashProvider.GenerateHash(_channelMap);
-            var config = await connectionServer.OpenCarConnection(_carIdentityKey, channelMapHash);
+            var config = await OpenSignedConnectionAsync(connectionServer, channelMapHash);
             if (config == null)
             {
                 Logger.LogError("Failed to open car connection.");
                 return;
+            }
+            if (config.AuthState != null && config.AuthState != VehicleAuthState.Authenticated)
+            {
+                // Update mode: the server keeps the version report and the self-update, nothing else.
+                Logger.LogError(
+                    "The server accepts this vehicle in update mode only ({State}). Device key fingerprint {Fingerprint}. " +
+                    "For a key conflict the stored device key must be reset in the server database (Docs/VehicleKeyAuth.md).",
+                    config.AuthState, VehicleKeys.Fingerprint(ServiceProvider.GetRequiredService<DeviceKeyService>().PublicKey));
             }
 
             // Store server-assigned CarId for all future operations
@@ -211,6 +221,9 @@ public class ServerConnectionService
                 Logger.LogWarning(ex, "Failed to report onboard version to server");
             }
 
+            if (config.AuthState == VehicleAuthState.Authenticated)
+                await ReportOwnerPublicKeyAsync(connectionServer);
+
             await RegisterAvailableTypesAsync();
             // The server forgets the report with the connection.
             await ServiceProvider.GetRequiredService<ChannelHealthService>().PublishAsync();
@@ -220,6 +233,48 @@ public class ServerConnectionService
         catch (Exception ex)
         {
             Logger.LogError(ex, "Failed to perform server handshake.");
+        }
+    }
+
+    /// <summary>
+    /// Signed handshake (Docs/VehicleKeyAuth.md): a nonce from the server, signed with the
+    /// device key. A server that does not know it yet gets the legacy handshake.
+    /// </summary>
+    private async Task<CarConfiguration?> OpenSignedConnectionAsync(IConnectionHubServer server, string channelMapHash)
+    {
+        string nonce;
+        try
+        {
+            nonce = await server.GetVehicleNonce();
+        }
+        catch (HubException ex)
+        {
+            Logger.LogWarning("Server has no signed vehicle handshake ({Message}); using the legacy handshake.", ex.Message);
+            return await server.OpenCarConnection(_carIdentityKey!, channelMapHash);
+        }
+        var keys = ServiceProvider.GetRequiredService<DeviceKeyService>();
+        return await server.OpenVehicleConnection(new VehicleHello
+        {
+            CarIdentityKey = _carIdentityKey!,
+            ChannelMapHash = channelMapHash,
+            DevicePublicKey = keys.PublicKey,
+            Nonce = nonce,
+            Signature = keys.Sign(nonce),
+        });
+    }
+
+    /// <summary>The owner public key lets the server check config sessions while the vehicle is offline.</summary>
+    private async Task ReportOwnerPublicKeyAsync(IConnectionHubServer server)
+    {
+        try
+        {
+            var ownerKey = ServiceProvider.GetRequiredService<DeviceKeyService>().OwnerPublicKey;
+            if (ownerKey != null)
+                await server.ReportOwnerPublicKey(ownerKey);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to report the owner public key to the server");
         }
     }
 

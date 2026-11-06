@@ -12,7 +12,13 @@ using SignalRC.Shared.Video;
 public interface IConnectionHubServer
 {
     // Connection lifecycle (onboard → server, browser → server)
+    // Legacy handshake of onboards without a device key: update mode only (Docs/VehicleKeyAuth.md).
     Task<CarConfiguration> OpenCarConnection(string carIdentityKey, string channelMapHash);
+    // Signed handshake: nonce for this connection, then the hello signed with the device key.
+    Task<string> GetVehicleNonce();
+    Task<CarConfiguration> OpenVehicleConnection(SignalRC.Shared.Security.VehicleHello hello);
+    // The owner public key (ssh_key.pub, Base64 SPKI); only from a signed-in vehicle.
+    Task ReportOwnerPublicKey(string ownerPublicKey);
     Task ReportOnboardVersion(string branch, string? commit);
     Task RegisterAvailableChannelTypes(int carId, AvailableChannelTypes types);
     // The car follows from the calling onboard connection.

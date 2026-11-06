@@ -7,9 +7,40 @@ using SignalRC.Shared.Update;
 
 namespace SignalRC.Server;
 
+/// <summary>
+/// Signed-in vehicle connections by car id (Docs/VehicleKeyAuth.md). Only a vehicle that
+/// signed its handshake with its device key gets an entry; connections in update mode
+/// are kept apart and never displace or act as the vehicle.
+/// </summary>
 public class CarConnectionStore : ConcurrentDictionary<string, CarConnectionInfo>
 {
     private readonly ConcurrentDictionary<string, string> _connectionToCarMap = new();
+    private readonly ConcurrentDictionary<string, UpdateModeConnection> _updateMode = new();
+
+    /// <summary>Marks a connection that is only allowed to report its version and update itself.</summary>
+    public UpdateModeConnection EnterUpdateMode(string connectionId, int? carId, string state)
+    {
+        var entry = new UpdateModeConnection { CarId = carId, State = state, Since = DateTime.UtcNow };
+        _updateMode[connectionId] = entry;
+        return entry;
+    }
+
+    public bool TryGetUpdateMode(string connectionId, out UpdateModeConnection entry) =>
+        _updateMode.TryGetValue(connectionId, out entry!);
+
+    public bool TryRemoveUpdateMode(string connectionId, out UpdateModeConnection? entry) =>
+        _updateMode.TryRemove(connectionId, out entry);
+
+    /// <summary>The latest update-mode connection of a car that has no signed-in connection; null otherwise.</summary>
+    public UpdateModeConnection? UpdateModeOfCar(int carId)
+    {
+        if (ContainsKey(carId.ToString())) return null;
+        return _updateMode.Values.Where(e => e.CarId == carId).OrderByDescending(e => e.Since).FirstOrDefault();
+    }
+
+    /// <summary>True for the current, signed-in onboard connection of <paramref name="carId"/>.</summary>
+    public bool IsVehicleConnection(string connectionId, int carId) =>
+        TryGetCarId(connectionId, out var registered) && registered == carId;
 
     public CarConnectionInfo RegisterConnection(string carId, string connectionId)
     {
@@ -80,6 +111,18 @@ public class CarConnectionStore : ConcurrentDictionary<string, CarConnectionInfo
         info.OnboardCommit = commit;
         return true;
     }
+}
+
+/// <summary>An onboard connection without device sign-in (old onboard, key conflict).</summary>
+public class UpdateModeConnection
+{
+    public int? CarId { get; init; }
+    /// <summary>Security.VehicleAuthState: updateOnly or keyConflict.</summary>
+    public string State { get; init; } = SignalRC.Shared.Security.VehicleAuthState.UpdateOnly;
+    public DateTime Since { get; init; }
+    public string? OnboardBranch { get; set; }
+    public string? OnboardCommit { get; set; }
+    public OnboardUpdateStatus? UpdateStatus { get; set; }
 }
 
 public class CarConnectionInfo

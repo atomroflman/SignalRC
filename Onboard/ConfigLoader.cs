@@ -12,6 +12,9 @@ public class ConfigLoader
     public string AppSettingsPath => Path.Combine(_configDir, "appSettings.json");
     public string SshKeyPath => Path.Combine(_configDir, "ssh_key");
     public string SshPublicKeyPath => Path.Combine(_configDir, "ssh_key.pub");
+    // Device key: never served anywhere, only signs server nonces (Docs/VehicleKeyAuth.md).
+    public string DeviceKeyPath => Path.Combine(_configDir, "device_key");
+    public string DevicePublicKeyPath => Path.Combine(_configDir, "device_key.pub");
 
     public ConfigLoader(string configDir)
     {
