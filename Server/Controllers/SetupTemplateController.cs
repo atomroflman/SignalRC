@@ -20,12 +20,18 @@ public class SetupTemplateController : ControllerBase
         if (user == null) return Unauthorized();
         var car = await _context.Cars.FirstOrDefaultAsync(c => c.Id == carId);
         if (car == null) return NotFound("Car not found");
+        var setup = await _context.UserSetups.FirstOrDefaultAsync(s => s.UserId == user.Id && s.CarId == carId);
+        return Ok(await BuildTemplateAsync(car, setup));
+    }
 
+    /// <summary>The flow of <paramref name="setup"/> (any user's) as template, gamepad inputs by device and channel name.</summary>
+    internal async Task<VehicleSetupTemplate> BuildTemplateAsync(Car car, UserCarSetup? setup)
+    {
+        var carId = car.Id;
         var channels = await _context.CarChannels.Where(c => c.CarId == carId).ToListAsync();
         var telemetries = await _context.CarTelemetry.Where(t => t.CarId == carId).ToListAsync();
         var streams = await _context.CarVideoStreams.Where(v => v.CarId == carId).ToListAsync();
 
-        var setup = await _context.UserSetups.FirstOrDefaultAsync(s => s.UserId == user.Id && s.CarId == carId);
         var nodes = setup == null
             ? new List<UserSetupFlowNodeBase>()
             : await _context.Set<UserSetupFlowNodeBase>().Where(n => n.UserSetupId == setup.Id).ToListAsync();
@@ -166,7 +172,7 @@ public class SetupTemplateController : ControllerBase
                 }).ToList(),
         };
 
-        return Ok(template);
+        return template;
     }
 
     [RequireVehicle]
@@ -177,8 +183,12 @@ public class SetupTemplateController : ControllerBase
         if (user == null) return Unauthorized();
         var car = await _context.Cars.FirstOrDefaultAsync(c => c.Id == carId);
         if (car == null) return NotFound("Car not found");
+        return Ok(await ApplyTemplateAsync(user, carId, req.Template, req.ControllerBindings));
+    }
 
-        var template = req.Template;
+    /// <summary>Replaces the flow of <paramref name="user"/> for the vehicle with the template.</summary>
+    internal async Task<TemplateImportResult> ApplyTemplateAsync(User user, int carId, VehicleSetupTemplate template, IReadOnlyDictionary<string, ControllerBinding>? controllerBindings = null)
+    {
         var result = new TemplateImportResult();
 
         var setup = await _context.UserSetups.FirstOrDefaultAsync(s => s.UserId == user.Id && s.CarId == carId);
@@ -214,7 +224,7 @@ public class SetupTemplateController : ControllerBase
             {
                 case "input":
                     var binding = tnode.Binding;
-                    if (req.ControllerBindings.TryGetValue(tnode.Id, out var ov))
+                    if (controllerBindings != null && controllerBindings.TryGetValue(tnode.Id, out var ov))
                         binding = ov;
                     if (binding == null || string.IsNullOrEmpty(binding.DeviceName) || string.IsNullOrEmpty(binding.ChannelName))
                     {
@@ -324,6 +334,6 @@ public class SetupTemplateController : ControllerBase
         result.TelemetrySubscribed = subEntities.Count;
 
         await _context.SaveChangesAsync();
-        return Ok(result);
+        return result;
     }
 }

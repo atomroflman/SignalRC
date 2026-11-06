@@ -50,6 +50,66 @@ public partial class FlowController : ControllerBase
         });
     }
 
+    // -- Flows of other drivers (Docs/VehicleKeyAuth.md: flows stay per user, but every
+    //    driver may look at the others' flows of a vehicle and copy one into their own) --
+
+    public sealed record SetupSummary(int SetupId, string Owner, bool IsMine, int NodeCount, int LinkCount);
+
+    [Security.AllowWithoutVehicleSession]
+    [HttpGet("cars/{carId:int}/setups")]
+    public async Task<IActionResult> ListSetups(int carId)
+    {
+        var user = await GetCurrentUserAsync();
+        var setups = await _context.UserSetups.AsNoTracking().Where(s => s.CarId == carId)
+            .Select(s => new { s.Id, s.UserId }).ToListAsync();
+        var setupIds = setups.Select(s => s.Id).ToList();
+        var nodes = await _context.Set<UserSetupFlowNodeBase>().AsNoTracking()
+            .Where(n => setupIds.Contains(n.UserSetupId))
+            .Select(n => new { n.Id, n.UserSetupId }).ToListAsync();
+        var nodeSetup = nodes.ToDictionary(n => n.Id, n => n.UserSetupId);
+        var nodeIds = nodeSetup.Keys.ToList();
+        var links = await _context.Set<UserSetupLink>().AsNoTracking()
+            .Where(l => nodeIds.Contains(l.UserSetupToNodeId))
+            .Select(l => l.UserSetupToNodeId).ToListAsync();
+        var userIds = setups.Select(s => s.UserId).Distinct().ToList();
+        var names = await _context.Users.AsNoTracking().Where(u => userIds.Contains(u.Id))
+            .ToDictionaryAsync(u => u.Id, u => u.LoginName ?? u.Name ?? $"User {u.Id}");
+
+        var result = setups
+            .Select(s => new SetupSummary(
+                s.Id,
+                names.GetValueOrDefault(s.UserId) ?? $"User {s.UserId}",
+                user != null && s.UserId == user.Id,
+                nodes.Count(n => n.UserSetupId == s.Id),
+                links.Count(to => nodeSetup[to] == s.Id)))
+            .Where(s => s.IsMine || s.NodeCount > 0)
+            .OrderByDescending(s => s.IsMine).ThenBy(s => s.Owner)
+            .ToList();
+        return Ok(result);
+    }
+
+    /// <summary>Replaces the caller's flow for the vehicle with a copy of another driver's flow.</summary>
+    [Security.AllowWithoutVehicleSession]
+    [HttpPost("cars/{carId:int}/copy-from/{setupId:int}")]
+    public async Task<IActionResult> CopyFrom(int carId, int setupId)
+    {
+        var user = await GetCurrentUserAsync();
+        if (user == null) return Unauthorized("User not found");
+        var source = await _context.UserSetups.AsNoTracking().FirstOrDefaultAsync(s => s.Id == setupId && s.CarId == carId);
+        if (source == null) return NotFound("Flow not found");
+        if (source.UserId == user.Id) return BadRequest("This is your own flow.");
+        var car = await _context.Cars.FirstOrDefaultAsync(c => c.Id == carId);
+        if (car == null) return NotFound("Car not found");
+
+        // Through the template: gamepad inputs are matched by device and channel name,
+        // since the other driver's gamepads are not the caller's.
+        var templates = new SetupTemplateController(_context);
+        var template = await templates.BuildTemplateAsync(car, source);
+        var result = await templates.ApplyTemplateAsync(user, carId, template);
+        _logger.LogInformation("User {UserId} copied flow {SetupId} of car {CarId}", user.Id, setupId, carId);
+        return Ok(result);
+    }
+
     [HttpPost("{nodetype}/{id?}")]
     public async Task<IActionResult> AddNode(string nodetype, int? id, [FromBody] AddNodeRequest req)
     {
