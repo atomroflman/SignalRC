@@ -387,6 +387,6 @@ shapes the channel editor saves, plus the audio settings. User flows are not par
 same, and what the vehicle has but the file lacks. Missing entries stay unless
 "Kanäle löschen, die nicht in der Datei stehen" is ticked (`removeMissing=true`); deleting a
 control channel also deletes the output nodes pointing to it in flows, the preview counts
-them. The import writes in one transaction and pushes the channel map to the vehicle once.
+them. The import saves everything in one SaveChanges (all or nothing) and pushes the channel map to the vehicle once.
 From another vehicle, video ports are not taken over (existing streams keep theirs, new
 ones get free ports).

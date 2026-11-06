@@ -18,7 +18,7 @@ namespace SignalRC.Server.Controllers;
 /// Export and import of the whole vehicle configuration (setup page): pin managers,
 /// control, telemetry and video channels and the audio settings (<see cref="VehicleConfigFile"/>).
 /// The import first answers with a plan (dryRun) and only writes on the second call; channels
-/// the file lacks are removed only with removeMissing. One transaction, one push to the vehicle.
+/// the file lacks are removed only with removeMissing. One SaveChanges (atomic), one push to the vehicle.
 /// </summary>
 [ApiController]
 [Route("api/cars/{carId:int}/config")]
@@ -220,14 +220,13 @@ public class VehicleConfigController : ControllerBase
             await _streamActivation.StopAsync(carId, s.StreamId, s.Id);
         _context.CarVideoStreams.RemoveRange(streamsToStop);
 
-        await using (var tx = await _context.Database.BeginTransactionAsync())
-        {
-            await _context.SaveChangesAsync();
-            var map = await ChannelMapMapper.FromDbAsync(carId, _context);
-            car.ChannelMapHash = ChannelMapHashProvider.GenerateHash(map);
-            await _context.SaveChangesAsync();
-            await tx.CommitAsync();
-        }
+        // One SaveChanges is one transaction: the whole import or nothing. (A transaction of
+        // our own is refused by the retrying Npgsql execution strategy.) The hash follows from
+        // the saved rows, like after every channel edit.
+        await _context.SaveChangesAsync();
+        var map = await ChannelMapMapper.FromDbAsync(carId, _context);
+        car.ChannelMapHash = ChannelMapHashProvider.GenerateHash(map);
+        await _context.SaveChangesAsync();
 
         var pushed = await ChannelMapMapper.FromDbAsync(carId, _context);
         await _controlHub.Clients.Group($"Car-{carId}").ApplyChannelMap(pushed, ChannelMapHashProvider.GenerateHash(pushed));
