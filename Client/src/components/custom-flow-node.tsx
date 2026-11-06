@@ -11,6 +11,7 @@ import { flowNodeStyles, handleOffset } from "./flow-node-styles";
 import { FlowNodeHeader } from "./flow-node-header";
 import { useI18n } from "@/i18n/provider";
 import { portZone } from "./flow-zone-rules";
+import { FlowTelemetryKeySelect } from "./flow-telemetry-key-select";
 import { hudSignalProblem as findHudSignalProblem } from "./overlay/integration/control-display-binding";
 import { hudInputProblem as findHudInputProblem } from "./overlay/integration/hud-input";
 
@@ -229,7 +230,9 @@ function CustomFlowNodeContent(props: NodeProps) {
 
       {(params.length > 0 || hudSignalProblem) && (
         <div className={`${flowNodeStyles.body} gap-1.5`}>
-          {params.map((e) => (
+          {params.map((e) => data?.metadata?.functionName === "TelemetryOut" && e.name === "key" ? (
+            <FlowTelemetryKeySelect key={e.name} name={e.name} value={String(e.value ?? "")} onChange={handleParamChange} />
+          ) : (
             <ParamInput
               key={e.name}
               name={e.name}
