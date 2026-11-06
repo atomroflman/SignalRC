@@ -180,9 +180,39 @@ textarea {
   50% { filter: drop-shadow(0 0 calc(var(--brand-halo-1) / 2) var(--brand-glow)) drop-shadow(0 0 calc(var(--brand-halo-2) * 1.6) var(--brand-glow)) drop-shadow(0 0 calc(var(--brand-halo-2) * 2.8) var(--brand-glow)); }
 }
 
+/* Resume button while updates are paused (components/updates-toggle-button.tsx):
+   green play button pulsing in the Signal-RC "live" glow, so a click visibly resumes. */
+.updates-resume {
+  position: relative;
+  background: #16a34a; /* green-600 */
+  box-shadow: 0 0 6px #4ade80;
+  animation: updates-resume-pulse 1.6s ease-in-out infinite;
+}
+.updates-resume:hover:not(:disabled) { background: #15803d; animation-play-state: paused; box-shadow: 0 0 10px #4ade80, 0 0 20px #4ade80; }
+.updates-resume::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 2px solid #4ade80;
+  pointer-events: none;
+  animation: updates-resume-ring 1.6s ease-out infinite;
+}
+.updates-resume:disabled,
+.updates-resume:disabled::after { animation: none; box-shadow: none; }
+.updates-resume:disabled::after { opacity: 0; }
+@keyframes updates-resume-pulse {
+  50% { box-shadow: 0 0 10px #4ade80, 0 0 22px #4ade80; }
+}
+@keyframes updates-resume-ring {
+  from { opacity: 0.9; transform: scale(1); }
+  to { opacity: 0; transform: scale(1.6); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .brand-logo--draw .brand-logo__trace,
   .brand-logo__comet { display: none; }
   .brand-logo--draw .brand-logo__fill { animation: none; opacity: 1; }
   .brand-logo--live { animation: none; }
+  .updates-resume, .updates-resume::after { animation: none; }
 }

@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { useControlFlowStore } from "./control-flow-store";
 import { useCarUiStore } from "./car-ui-store";
 import { useI18n } from "@/i18n/provider";
+import UpdatesToggleButton from "./updates-toggle-button";
 
 export default function CarControl() {
   const { messages } = useI18n();
@@ -206,14 +207,11 @@ export default function CarControl() {
             )}
           </div>
           <div className="mt-2 flex items-center space-x-1">
-            <button
-              className={`px-2 py-1 text-xs rounded ${updatesEnabled ? 'bg-amber-600 hover:bg-amber-700' : 'bg-green-600 hover:bg-green-700'} text-white disabled:opacity-40`}
-              title={updatesEnabled ? messages.carControl.pauseUpdates : messages.carControl.resumeUpdates}
+            <UpdatesToggleButton
+              updatesEnabled={updatesEnabled}
               disabled={flowControl.onboardUpdating}
-              onClick={() => setUpdatesEnabled(!updatesEnabled)}
-            >
-              ⏸
-            </button>
+              onToggle={() => setUpdatesEnabled(!updatesEnabled)}
+            />
             <button
               className="px-2 py-1 text-xs rounded bg-red-600 hover:bg-red-700 text-white"
               title={messages.carControl.stopControlSession}

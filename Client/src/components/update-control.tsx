@@ -3,6 +3,7 @@
 import React from "react";
 import { useControlFlowStore } from "./control-flow-store";
 import { useI18n } from "@/i18n/provider";
+import UpdatesToggleButton from "./updates-toggle-button";
 
 export default function UpdateControl() {
   const { messages } = useI18n();
@@ -23,13 +24,7 @@ export default function UpdateControl() {
           <h3 className="text-sm font-medium">{messages.updateControl.title}</h3>
         </div>
         <div className="flex items-center space-x-1">
-          <button
-            className="px-2 py-1 text-xs rounded bg-amber-600 hover:bg-amber-700 text-white"
-            title={updatesEnabled ? messages.carControl.pauseUpdates : messages.carControl.resumeUpdates}
-            onClick={() => setUpdatesEnabled(!updatesEnabled)}
-          >
-            ⏸
-          </button>
+          <UpdatesToggleButton updatesEnabled={updatesEnabled} onToggle={() => setUpdatesEnabled(!updatesEnabled)} />
           <button
             className="px-2 py-1 text-xs rounded bg-red-600 hover:bg-red-700 text-white"
             title={messages.carControl.stopControlSession}

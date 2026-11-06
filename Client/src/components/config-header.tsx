@@ -53,7 +53,9 @@ export default function ConfigHeader({ carId, active, actions, className = "" }:
     <div className={`flex flex-wrap items-end justify-between gap-x-4 gap-y-2 border-b border-zinc-800 ${className}`.trim()}>
       <div className="flex flex-wrap items-end gap-x-4 gap-y-1 min-w-0">
         <div className="flex items-center gap-3 pb-2">
-          <BrandLogo carId={carId} className="h-12 w-auto" />
+          <Link href="/" title={m.back} aria-label={m.back} className="shrink-0">
+            <BrandLogo carId={carId} className="h-12 w-auto" />
+          </Link>
           <Link href="/" className="text-blue-400 hover:underline text-sm">&larr; {m.back}</Link>
           <h1 className="text-lg whitespace-nowrap">{m.vehicle(carId)}</h1>
         </div>
