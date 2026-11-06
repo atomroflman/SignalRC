@@ -71,6 +71,8 @@ const deMessages = {
     unauthenticated: 'Kein Benutzer angemeldet.',
     title: 'Control Deck',
     activeVehicle: (id: number) => `Aktive Fahrzeug-ID ${id}`,
+    configure: 'Konfigurieren',
+    configureTitle: (id: number) => `Fahrzeug ${id} konfigurieren: Setup, HUD, Flow Engine, Log und Telemetrie`,
     noVehicleSelected: 'Kein Fahrzeug ausgewahlt',
   },
   installDialog: {
@@ -103,7 +105,6 @@ const deMessages = {
     pauseUpdates: 'Updates pausieren',
     resumeUpdates: 'Updates fortsetzen',
     stopControlSession: 'Steuerungssitzung beenden',
-    openFlowEditor: 'Flow-Control-Editor offnen',
     vehicle: 'Fahrzeug',
     chooseControlTarget: 'Steuerziel auswahlen',
     selectVehicle: 'Fahrzeug auswahlen...',
@@ -608,6 +609,8 @@ const enMessages: Messages = {
     unauthenticated: 'No user signed in.',
     title: 'Control Deck',
     activeVehicle: (id: number) => `Active vehicle ID ${id}`,
+    configure: 'Configure',
+    configureTitle: (id: number) => `Configure vehicle ${id}: setup, HUD, flow engine, log and telemetry`,
     noVehicleSelected: 'No vehicle selected',
   },
   installDialog: {
@@ -640,7 +643,6 @@ const enMessages: Messages = {
     pauseUpdates: 'Pause updates',
     resumeUpdates: 'Resume updates',
     stopControlSession: 'Stop control session',
-    openFlowEditor: 'Open Flow Control Editor',
     vehicle: 'Vehicle',
     chooseControlTarget: 'Choose control target',
     selectVehicle: 'Select a vehicle...',

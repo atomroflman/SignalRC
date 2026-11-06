@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState } from "react";
 import { useControlFlowStore } from "./control-flow-store";
-import { useRouter } from "next/navigation";
 import { useCarUiStore } from "./car-ui-store";
 import { useI18n } from "@/i18n/provider";
 
@@ -15,7 +14,6 @@ export default function CarControl() {
   const [controlMessage, setControlMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
   const [isAcquiringControl, setIsAcquiringControl] = useState(false);
   const flowControl = useControlFlowStore();
-  const router = useRouter();
   const updatesEnabled = flowControl.updatesEnabled;
   const setUpdatesEnabled = flowControl.setUpdatesEnabled;
   const liveCarStates = useCarUiStore(state => state.states);
@@ -225,20 +223,6 @@ export default function CarControl() {
               }}
             >
               ■
-            </button>
-            <button
-              className="ml-auto px-2 py-1 text-xs rounded bg-zinc-700 hover:bg-zinc-600 text-zinc-100"
-              title={messages.carControl.openFlowEditor}
-              onClick={() => router.push(`/car/${flowControl.carId}/flow`)}
-            >
-              🧭
-            </button>
-            <button
-              className="px-2 py-1 text-xs rounded bg-zinc-700 hover:bg-zinc-600 text-zinc-100"
-              title={messages.overlay.editorPage.open}
-              onClick={() => router.push(`/car/${flowControl.carId}/overlay`)}
-            >
-              HUD
             </button>
           </div>
         </>

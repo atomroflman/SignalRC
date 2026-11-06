@@ -33,7 +33,6 @@ const de = {
   editorPage: {
     tabsLabel: "HUD-Bereiche",
     tabs: { editor: "Editor", diagnostics: "Diagnose" },
-    open: "HUD-Editor öffnen (pausiert die Steuerung)",
     loading: "Laden…",
     /** D73: why the editor edits locally only (controlReason). */
     localOnly: {
@@ -245,7 +244,6 @@ const en: typeof de = {
   editorPage: {
     tabsLabel: "HUD areas",
     tabs: { editor: "Editor", diagnostics: "Diagnostics" },
-    open: "Open HUD editor (pauses control)",
     loading: "Loading…",
     localOnly: {
       noSession: "No user session – draft, history and saving on the server are locked. Locally loaded states can still be edited.",

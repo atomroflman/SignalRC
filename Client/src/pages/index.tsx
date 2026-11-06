@@ -20,6 +20,7 @@ import { useCarAudioSettings } from "@/components/audio-store";
 import SshKeyManager from "@/components/ssh-key-manager";
 import SortableSectionList from "@/components/sortable-section-list";
 import RecordingSwitch from "@/components/telemetry-history/recording-switch";
+import ConfigButton from "@/components/config-button";
 import BrandLogo, { useBrandStatus } from "@/components/brand-logo";
 import { pillClass, StatusDot } from "@/components/status-pill";
 import { useI18n } from "@/i18n/provider";
@@ -158,6 +159,7 @@ export default function Home() {
                 {selectedCarId ? messages.home.activeVehicle(selectedCarId) : messages.home.noVehicleSelected}
               </div>
               </div>
+              <ConfigButton carId={selectedCarId} />
             </div>
           </div>
 
