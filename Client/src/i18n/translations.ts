@@ -553,6 +553,9 @@ const deMessages = {
   },
   setupPage: {
     reload: 'Neu laden',
+    exportConfig: 'Konfiguration exportieren',
+    exportConfigHint: 'Lädt die komplette Fahrzeugkonfiguration als JSON-Datei herunter: pinManager, Steuer-, Telemetrie- und Videokanäle, Audio.',
+    exportConfigFailed: 'Export fehlgeschlagen',
     tabsLabel: 'Setup-Bereiche',
     tabs: { control: 'Steuerung', telemetry: 'Telemetrie', video: 'Video', audio: 'Audio', hardware: 'Hardware', wiring: 'Schaltplan', diagnostics: 'Diagnose' },
     tabProblems: (count: number) => `${count} Problem${count === 1 ? '' : 'e'}`,
@@ -1163,6 +1166,9 @@ const enMessages: Messages = {
   },
   setupPage: {
     reload: 'Reload',
+    exportConfig: 'Export configuration',
+    exportConfigHint: 'Downloads the whole vehicle configuration as a JSON file: pin managers, control, telemetry and video channels, audio.',
+    exportConfigFailed: 'Export failed',
     tabsLabel: 'Setup areas',
     tabs: { control: 'Controls', telemetry: 'Telemetry', video: 'Video', audio: 'Audio', hardware: 'Hardware', wiring: 'Wiring diagram', diagnostics: 'Diagnostics' },
     tabProblems: (count: number) => `${count} problem${count === 1 ? '' : 's'}`,

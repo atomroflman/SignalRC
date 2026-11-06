@@ -19,6 +19,7 @@ import OptionsJsonField from "@/components/config/options-json-field";
 import { findSchema, parseOptionSchemas, type ChannelTypeSchema, type SchemaKind } from "@/components/config/options-language";
 import { suggestTelemetryValue } from "@/components/config/telemetry-value-hint";
 import WiringPanel from "@/components/config/pin-boards/wiring-panel";
+import { downloadVehicleConfig } from "@/components/setup/config-export";
 import PinBoardEditor, { boardKindOf, type NewChannelRequest, type OtherPinManager } from "@/components/config/pin-boards/pin-board-editor";
 import type { ChannelRef } from "@/components/config/pin-boards/pin-boards";
 
@@ -838,7 +839,16 @@ export default function SetupPage() {
       <OptionsInfo.Provider value={optionsInfo}>
       <div className="min-h-screen bg-zinc-950 text-zinc-100 p-4 print:bg-white print:text-black">
         <ConfigHeader carId={carIdNum} active="setup" className="mb-4 print:hidden"
-          actions={<button className={btnGhost} onClick={reload}>{sp.reload}</button>} />
+          actions={<>
+            <button
+              className={btnGhost}
+              title={sp.exportConfigHint}
+              onClick={() => downloadVehicleConfig(carIdNum).catch(e => alert(`${sp.exportConfigFailed}: ${String(e?.message ?? e)}`))}
+            >
+              {sp.exportConfig}
+            </button>
+            <button className={btnGhost} onClick={reload}>{sp.reload}</button>
+          </>} />
 
         <div className="print:hidden"><HealthSummary health={health} /></div>
 
