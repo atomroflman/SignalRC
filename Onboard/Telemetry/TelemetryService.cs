@@ -59,6 +59,9 @@ public class TelemetryService : IHubConnectionObserver, ITelemetryClient
     public ChannelMap ChannelMap { get; }
     public ServerCarConfigurationService CarConfigurationService { get; }
 
+    /// <summary>Latest sample per telemetry channel, read by the onboard flow (OnboardFlow-Arbeitspakete.md E05).</summary>
+    public LiveTelemetrySnapshot Live { get; } = new();
+
 public TelemetryService(ChannelMap channelMap, ServerConnectionService serverConnectionService, IConfiguration configuration, ILogger<TelemetryService> logger, IServiceProvider serviceProvider, ServerCarConfigurationService carConfigurationService, ChannelHealthService? health = null)
     {
         _health = health;
@@ -255,6 +258,8 @@ public TelemetryService(ChannelMap channelMap, ServerConnectionService serverCon
                 {
                     continue;
                 }
+                // The onboard flow reads telemetry directly, also without a server id (E05).
+                Live.Set(channelName, sample);
                 if (!TryGetServerId(channelName, out var serverId))
                 {
                     continue;

@@ -281,7 +281,13 @@ public class ControlExecutionService
         _health.Problems(ChannelTypeSchema.Control, name, _buildProblems.GetValueOrDefault(name) ?? []);
     }
 
-    public void ReleaseControl()
+    public void ReleaseControl() => ReleaseControl(_ => true);
+
+    /// <summary>
+    /// Puts the channels that match <paramref name="include"/> to neutral, e.g. only those the
+    /// browser drives while the onboard flow keeps its own (OnboardFlow-Arbeitspakete.md T09).
+    /// </summary>
+    public void ReleaseControl(Func<string, bool> include)
     {
         if (RunInTestMode)
         {
@@ -292,6 +298,8 @@ public class ControlExecutionService
         {
             foreach (var control in _controls)
             {
+                if (!include(control.Key))
+                    continue;
                 try
                 {
                     control.Value.Control.OnControlReleased();

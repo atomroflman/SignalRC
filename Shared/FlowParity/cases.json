@@ -1,0 +1,107 @@
+{
+  "description": "Reference cases for the flow functions. Run by the browser (vitest, Client/src/components/filters/flow-parity.test.ts) and the onboard engine (xunit, Tests/SignalRC.Overlay.Tests/Flow/FlowParityTests.cs). Inputs not listed are 0, as for an unconnected port. Parameters are text, as stored by the server. Expected outputs are edge values (numeric text as number, other text 0). Every flow function needs at least one case (OnboardFlow-Arbeitspakete.md T15).",
+  "cases": [
+    { "name": "abs", "function": "Abs", "params": {}, "steps": [
+      { "inputs": { "input": -0.5 }, "expect": [0.5] },
+      { "inputs": {}, "expect": [0] } ] },
+    { "name": "clamp default", "function": "Clamp", "params": {}, "steps": [
+      { "inputs": { "input": 2 }, "expect": [1] },
+      { "inputs": { "input": -3 }, "expect": [-1] },
+      { "inputs": { "input": 0.3 }, "expect": [0.3] } ] },
+    { "name": "clamp params", "function": "Clamp", "params": { "min": "0", "max": "0.5" }, "steps": [
+      { "inputs": { "input": 0.7 }, "expect": [0.5] },
+      { "inputs": { "input": -0.2 }, "expect": [0] } ] },
+    { "name": "deadzone rescale", "function": "DeadZone", "params": { "deadzone": "0.1" }, "steps": [
+      { "inputs": { "input": 0.05 }, "expect": [0] },
+      { "inputs": { "input": 0.55 }, "expect": [0.5] },
+      { "inputs": { "input": -1 }, "expect": [-1] } ] },
+    { "name": "deadzone pass", "function": "DeadZone", "params": { "deadzone": "0.1", "rescale": "0" }, "steps": [
+      { "inputs": { "input": 0.55 }, "expect": [0.55] } ] },
+    { "name": "reverse", "function": "Reverse", "params": {}, "steps": [
+      { "inputs": { "input": 0.25 }, "expect": [-0.25] } ] },
+    { "name": "add", "function": "Add", "params": {}, "steps": [
+      { "inputs": { "a": 1, "b": 2.5 }, "expect": [3.5] },
+      { "inputs": { "a": 1 }, "expect": [1] } ] },
+    { "name": "subtract", "function": "Subtract", "params": {}, "steps": [
+      { "inputs": { "a": 1, "b": 2.5 }, "expect": [-1.5] } ] },
+    { "name": "multiply", "function": "Multiply", "params": {}, "steps": [
+      { "inputs": { "a": -2, "b": 0.5 }, "expect": [-1] } ] },
+    { "name": "divide", "function": "Divide", "params": {}, "steps": [
+      { "inputs": { "a": 1, "b": 4 }, "expect": [0.25] },
+      { "inputs": { "a": 1, "b": 0 }, "expect": [0] } ] },
+    { "name": "modulo", "function": "Modulo", "params": {}, "steps": [
+      { "inputs": { "a": 7, "b": 3 }, "expect": [1] },
+      { "inputs": { "a": -7, "b": 3 }, "expect": [-1] },
+      { "inputs": { "a": 7, "b": 0 }, "expect": [0] } ] },
+    { "name": "power", "function": "Power", "params": {}, "steps": [
+      { "inputs": { "base": 2, "exponent": 3 }, "expect": [8] },
+      { "inputs": { "base": 0.5, "exponent": 2 }, "expect": [0.25] } ] },
+    { "name": "log", "function": "Log", "params": {}, "steps": [
+      { "inputs": { "value": 8, "base": 2 }, "expect": [3] },
+      { "inputs": { "value": 0, "base": 2 }, "expect": [0] },
+      { "inputs": { "value": 5, "base": 1 }, "expect": [0] } ] },
+    { "name": "iif greater", "function": "Iif", "params": {}, "steps": [
+      { "inputs": { "a": 2, "b": 1, "ifTrue": 10, "ifFalse": 20 }, "expect": [10] },
+      { "inputs": { "a": 0, "b": 1, "ifTrue": 10, "ifFalse": 20 }, "expect": [20] } ] },
+    { "name": "iif equal", "function": "Iif", "params": { "operator": "==" }, "steps": [
+      { "inputs": { "a": 0.5, "b": 0.500001, "ifTrue": 1, "ifFalse": 0 }, "expect": [1] },
+      { "inputs": { "a": 0.5, "b": 0.6, "ifTrue": 1, "ifFalse": 0 }, "expect": [0] } ] },
+    { "name": "iif not equal and lte", "function": "Iif", "params": { "operator": "<=" }, "steps": [
+      { "inputs": { "a": 1, "b": 1, "ifTrue": 3 }, "expect": [3] } ] },
+    { "name": "toggle", "function": "Toggle", "params": {}, "steps": [
+      { "inputs": { "input": 0 }, "expect": [0] },
+      { "inputs": { "input": 1 }, "expect": [1] },
+      { "inputs": { "input": 1 }, "expect": [1] },
+      { "inputs": { "input": 0 }, "expect": [1] },
+      { "inputs": { "input": 0.6 }, "expect": [0] } ] },
+    { "name": "turn signal left", "function": "TurnSignal", "params": { "steps": "5", "isLeftTurn": "true" }, "steps": [
+      { "inputs": { "enable": 0, "steering": 0 }, "expect": [0] },
+      { "inputs": { "enable": 1, "steering": 0 }, "expect": [1] },
+      { "inputs": { "enable": 0, "steering": -0.5 }, "expect": [1] },
+      { "inputs": { "enable": 0, "steering": -0.1 }, "expect": [0] } ] },
+    { "name": "turn signal right", "function": "TurnSignal", "params": { "steps": "10", "isLeftTurn": "false" }, "steps": [
+      { "inputs": { "enable": 1, "steering": 0 }, "expect": [1] },
+      { "inputs": { "enable": 0, "steering": 0.35 }, "expect": [1] },
+      { "inputs": { "enable": 0, "steering": 0.15 }, "expect": [0] } ] },
+    { "name": "rescale", "function": "Rescale", "params": { "inMin": "-1", "inMax": "1", "outMin": "0", "outMax": "100" }, "steps": [
+      { "inputs": { "input": 0 }, "expect": [50] },
+      { "inputs": { "input": 1 }, "expect": [100] } ] },
+    { "name": "rescale default", "function": "Rescale", "params": {}, "steps": [
+      { "inputs": { "input": -1 }, "expect": [0] } ] },
+    { "name": "gearbox", "function": "Gearbox", "params": { "gearNames": "R,N,1,2" }, "steps": [
+      { "inputs": {}, "expect": [1, 0.3333333333333333, 0] },
+      { "inputs": { "shiftUp": 1 }, "expect": [2, 0.6666666666666666, 1] },
+      { "inputs": { "shiftUp": 1 }, "expect": [2, 0.6666666666666666, 1] },
+      { "inputs": {}, "expect": [2, 0.6666666666666666, 1] },
+      { "inputs": { "shiftUp": 1 }, "expect": [3, 1, 2] },
+      { "inputs": { "shiftUp": 0 }, "expect": [3, 1, 2] },
+      { "inputs": { "shiftUp": 1 }, "expect": [3, 1, 2] },
+      { "inputs": { "shiftDown": 1 }, "expect": [2, 0.6666666666666666, 1] } ] },
+    { "name": "gearbox initial", "function": "Gearbox", "params": { "initialGear": "0" }, "steps": [
+      { "inputs": { "shiftDown": 1 }, "expect": [0, 0, 0] } ] },
+    { "name": "float value", "function": "FloatValue", "params": { "value": "0.123456789", "min": "-1", "max": "1", "digits": "3" }, "steps": [
+      { "inputs": {}, "expect": [0.123] } ] },
+    { "name": "float value clamped", "function": "FloatValue", "params": { "value": "5" }, "steps": [
+      { "inputs": {}, "expect": [1] } ] },
+    { "name": "float value missing", "function": "FloatValue", "params": {}, "steps": [
+      { "inputs": {}, "expect": [0] } ] },
+    { "name": "smooth first value", "function": "Smooth", "params": {}, "steps": [
+      { "inputs": { "input": 0.4 }, "expect": [0.4] } ] },
+    { "name": "sign", "function": "Sign", "params": {}, "steps": [
+      { "inputs": { "input": -3 }, "expect": [-1] },
+      { "inputs": { "input": 0 }, "expect": [0] },
+      { "inputs": { "input": 0.1 }, "expect": [1] } ] },
+    { "name": "hud signal", "function": "HudSignal", "params": { "signal": "x" }, "steps": [
+      { "inputs": { "value": 0.7 }, "expect": [0.7] } ] },
+    { "name": "hud input without clicks", "function": "HudInput", "params": { "input": "x" }, "steps": [
+      { "inputs": {}, "expect": [0] } ] },
+    { "name": "telemetry without value", "function": "Telemetry", "params": { "channel": "missing", "fallback": "0.5" }, "steps": [
+      { "inputs": {}, "expect": [0.5, 0] } ] },
+    { "name": "active instant", "function": "Active", "params": { "threshold": "0.1" }, "steps": [
+      { "inputs": { "input": 0.05 }, "expect": [0] },
+      { "inputs": { "input": -0.5 }, "expect": [1] } ] },
+    { "name": "priority", "function": "Priority", "params": {}, "steps": [
+      { "inputs": { "a": 0.3, "aActive": 1, "b": -0.8 }, "expect": [0.3] },
+      { "inputs": { "a": 0.3, "aActive": 0, "b": -0.8 }, "expect": [-0.8] } ] }
+  ]
+}

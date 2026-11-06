@@ -1,5 +1,8 @@
 using CSharpVitamins;
 using SignalRC.Onboard.Data;
+using SignalRC.Onboard.Flow;
+using SignalRC.Onboard.Input;
+using SignalRC.Shared.Flow;
 using SignalRC.Onboard.Hardware;
 using SignalRC.Onboard.Services;
 using SignalRC.Onboard.Telemetry;
@@ -34,6 +37,8 @@ public class ControlService : IControlClient, IHubConnectionObserver
     public IMediaMtxConfigurator MediaMtx { get; }
     public ChannelHealthService Health { get; }
     public Process BashProcess { get; } = new Process();
+    public OnboardFlowService Flow { get; }
+    public BluetoothService BluetoothService { get; }
 
     private string? _sessionId;
     private DateTime _lastControlUpdate = DateTime.Now;
@@ -61,6 +66,7 @@ public class ControlService : IControlClient, IHubConnectionObserver
     public void LockForUpdate()
     {
         _lockedForUpdate = true;
+        Flow.Pause(true);
         Control.ReleaseControl();
         Logger.LogWarning("Controls locked for the onboard update.");
     }
@@ -69,6 +75,7 @@ public class ControlService : IControlClient, IHubConnectionObserver
     public async Task UnlockAfterFailedUpdateAsync()
     {
         _lockedForUpdate = false;
+        Flow.Pause(false);
         if (_sessionId != null)
             await ReleaseCarControl(_sessionId);
         Logger.LogWarning("Controls unlocked after the failed onboard update.");
@@ -81,9 +88,13 @@ public class ControlService : IControlClient, IHubConnectionObserver
     public void MarkSessionActivity() => _lastControlUpdate = DateTime.Now;
     private IConnectionHubServer _server = null!;
 
-    public ControlService(ILogger<ControlService> logger, TelemetryService telemetryService, ControlExecutionService control, IServiceProvider serviceProvider, IConfiguration configuration, ServerConnectionService serverConnectionService, SshKeyService sshKeyService, ServerCarConfigurationService carConfigurationService, OnboardChannelStore channelStore, ChannelMap channelMap, IMediaMtxConfigurator mediaMtx, ChannelHealthService health)
+    public ControlService(ILogger<ControlService> logger, TelemetryService telemetryService, ControlExecutionService control, IServiceProvider serviceProvider, IConfiguration configuration, ServerConnectionService serverConnectionService, SshKeyService sshKeyService, ServerCarConfigurationService carConfigurationService, OnboardChannelStore channelStore, ChannelMap channelMap, IMediaMtxConfigurator mediaMtx, ChannelHealthService health, OnboardFlowService flow, BluetoothService bluetooth, VehicleInputService vehicleInputs)
     {
         Health = health;
+        Flow = flow;
+        BluetoothService = bluetooth;
+        // Someone driving with the local controller keeps the session alive (T10).
+        vehicleInputs.Activity += () => { if (_sessionId != null) MarkSessionActivity(); };
         Logger = logger;
         TelemetryService = telemetryService;
         Control = control;
@@ -163,6 +174,7 @@ public class ControlService : IControlClient, IHubConnectionObserver
             return;
         }
         await _server.RegisterForControl(carId.Value);
+        Flow.OnServerConnected();
         Logger.LogInformation($"Connected to control server with CarId: {carId}");
         await TelemetryService.UpdateTelemetry("Control Server", "Connected");
     }
@@ -194,6 +206,8 @@ public class ControlService : IControlClient, IHubConnectionObserver
         {
             // Generate a new session ID using ShortGuid (22 chars instead of 36)
             var newSessionId = ShortGuid.NewGuid().ToString();
+            // The previous driver's onboard flow ends with their session; the server pushes the new one (E04).
+            Flow.Clear();
             _sessionId = newSessionId;
             SessionChanged?.Invoke();
             Logger.LogInformation($"Acquired control for car using SSH key. SessionID: {_sessionId}.");
@@ -218,6 +232,7 @@ public class ControlService : IControlClient, IHubConnectionObserver
         if (_sessionId != sessionId)
             return;
         Logger.LogInformation($"Release control for session {sessionId}");
+        Flow.Clear();
         Control.ReleaseControl();
         await TelemetryService.UpdateTelemetry("Control Session", "Ended");
         _sessionId = null;
@@ -227,6 +242,9 @@ public class ControlService : IControlClient, IHubConnectionObserver
     public Task UpdateChannel(string sessionId, string channelId, decimal value)
     {
         if (_sessionId != sessionId || _lockedForUpdate)
+            return Task.CompletedTask;
+        // Never mixed (E03): channels of the onboard flow, and everything while detached, ignore the browser.
+        if (Flow.WebDetached || Flow.OwnsChannel(channelId))
             return Task.CompletedTask;
         Logger.LogDebug($"Update channel {channelId} to {value}");
         Control.SetControl(channelId, value);
@@ -241,7 +259,7 @@ public class ControlService : IControlClient, IHubConnectionObserver
 
     public async Task OnClosed(Exception? exception)
     {
-        Control.ReleaseControl();
+        ReleaseBrowserChannels();
         await TelemetryService.UpdateTelemetry("Control Server", "Disconnected");
     }
 
@@ -252,13 +270,62 @@ public class ControlService : IControlClient, IHubConnectionObserver
         {
             await _server.RegisterForControl(carId.Value);
         }
+        Flow.OnServerConnected();
         await TelemetryService.UpdateTelemetry("Control Server", "Connected");
     }
 
     public async Task OnReconnecting(Exception? exception)
     {
-        Control.ReleaseControl();
+        ReleaseBrowserChannels();
         await TelemetryService.UpdateTelemetry("Control Server", "Disconnected");
+    }
+
+    /// <summary>
+    /// Server lost (T09): handoffs disconnect, browser channels go neutral unless the web is
+    /// detached, the onboard flow keeps running.
+    /// </summary>
+    private void ReleaseBrowserChannels()
+    {
+        Flow.OnServerLost();
+        if (!Flow.WebDetached)
+            Control.ReleaseControl(c => !Flow.OwnsChannel(c));
+    }
+
+    // -- Onboard flow (OnboardFlow-Arbeitspakete.md OF06) --------------------------------
+
+    public Task ApplyOnboardFlow(string sessionId, OnboardFlowDefinition? flow)
+    {
+        if (_sessionId != sessionId)
+        {
+            Logger.LogWarning("Onboard flow ignored: not the current control session.");
+            return Task.CompletedTask;
+        }
+        Flow.Apply(flow);
+        return Task.CompletedTask;
+    }
+
+    public Task UpdateFlowHandoff(string sessionId, int nodeId, decimal value)
+    {
+        if (_sessionId != sessionId || _lockedForUpdate)
+            return Task.CompletedTask;
+        Flow.SetHandoff(nodeId, (double)value);
+        _lastControlUpdate = DateTime.Now;
+        return Task.CompletedTask;
+    }
+
+    public Task<bool> SetWebDetached(string sessionId, bool detached)
+    {
+        if (_sessionId != sessionId || _lockedForUpdate)
+            return Task.FromResult(Flow.WebDetached);
+        _lastControlUpdate = DateTime.Now;
+        return Task.FromResult(Flow.SetWebDetached(detached));
+    }
+
+    public async Task<BluetoothResult> Bluetooth(string sessionId, string action, string? address)
+    {
+        if (_sessionId != sessionId)
+            return new BluetoothResult { Success = false, Message = "Invalid session" };
+        return await BluetoothService.ExecuteAsync(action, address);
     }
 
     private string FileTransferBasePath =>

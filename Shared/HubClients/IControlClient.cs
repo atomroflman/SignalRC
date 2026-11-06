@@ -1,5 +1,6 @@
 using SignalRC.Shared.Channels;
 using SignalRC.Shared.FileTransfer;
+using SignalRC.Shared.Flow;
 
 namespace SignalRC.Shared.HubClients;
 
@@ -43,4 +44,14 @@ public interface IControlClient
     /// Server pushes the entire channel map to the client (SPOT). The client must replace its local config.
     /// </summary>
     Task ApplyChannelMap(ChannelMap channelMap, string channelMapHash);
+
+    // Onboard flow (OnboardFlow-Arbeitspakete.md OF00). All require the control session.
+    /// <summary>Replaces the onboard flow in one step; null switches it off (T06).</summary>
+    Task ApplyOnboardFlow(string sessionId, OnboardFlowDefinition? flow);
+    /// <summary>Value of a handoff node, computed by the browser flow (T08).</summary>
+    Task UpdateFlowHandoff(string sessionId, int nodeId, decimal value);
+    /// <summary>Detaches the web (E13): the onboard flow runs without the browser. Returns the new state.</summary>
+    Task<bool> SetWebDetached(string sessionId, bool detached);
+    /// <summary>Bluetooth action (BluetoothAction) for pairing vehicle controllers (T14).</summary>
+    Task<BluetoothResult> Bluetooth(string sessionId, string action, string? address);
 }

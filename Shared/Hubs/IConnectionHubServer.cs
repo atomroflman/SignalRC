@@ -2,6 +2,7 @@ using SignalRC.Shared;
 using SignalRC.Shared.Audio;
 using SignalRC.Shared.Channels;
 using SignalRC.Shared.FileTransfer;
+using SignalRC.Shared.Flow;
 using SignalRC.Shared.Logs;
 using SignalRC.Shared.Telemetry;
 using SignalRC.Shared.Update;
@@ -91,4 +92,16 @@ public interface IConnectionHubServer
     Task ReportOnboardUpdateStatus(OnboardUpdateStatus status);
     // Browser → server → onboard. Requires the control session id.
     Task<OnboardUpdateRequestResult> RequestOnboardUpdate(int carId, string sessionId);
+
+    // Onboard flow (OnboardFlow-Arbeitspakete.md OF00)
+    // Onboard → server: the car follows from the calling onboard connection.
+    Task ReportOnboardFlowStatus(OnboardFlowStatus status);
+    Task ReportVehicleInputDevices(VehicleInputDeviceInfo[] devices);
+    // Browser → server → onboard. Require the control session id.
+    Task UpdateFlowHandoff(int carId, string sessionId, int nodeId, decimal value);
+    Task<bool> SetWebDetached(int carId, string sessionId, bool detached);
+    Task<BluetoothResult> VehicleBluetooth(int carId, string sessionId, string action, string? address);
+    // Browser: status of the car's onboard flow; returns the last known one.
+    Task<OnboardFlowStatus?> SubscribeToFlowStatus(int carId);
+    Task UnsubscribeFromFlowStatus(int carId);
 }

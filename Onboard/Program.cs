@@ -99,6 +99,9 @@ serviceCollection.AddSingleton<IMediaMtxConfigurator, MediaMtxConfigurator>();
 serviceCollection.AddSingleton<VideoStreamService>();
 serviceCollection.AddSingleton<ServerCarConfigurationService>();
 serviceCollection.AddSingleton<ControlService>();
+serviceCollection.AddSingleton<SignalRC.Onboard.Input.VehicleInputService>();
+serviceCollection.AddSingleton<SignalRC.Onboard.Input.BluetoothService>();
+serviceCollection.AddSingleton<SignalRC.Onboard.Flow.OnboardFlowService>();
 serviceCollection.AddSingleton<TelemetryService>();
 serviceCollection.AddSingleton<BashToolService>();
 serviceCollection.AddSingleton<OnboardDiagnosticsService>();
@@ -192,6 +195,8 @@ logger.LogInformation($"Car Engine Started...");
 // Initialize Car remote control
 logger.LogInformation("Initializing car control...");
 carControlService.Initialize();
+// Controllers connected to the vehicle feed the onboard flow (OnboardFlow-Arbeitspakete.md OF07).
+serviceProvider.GetRequiredService<SignalRC.Onboard.Input.VehicleInputService>().Start();
 
 // Initialize video streaming
 var videoStreamService = serviceProvider.GetRequiredService<VideoStreamService>();
