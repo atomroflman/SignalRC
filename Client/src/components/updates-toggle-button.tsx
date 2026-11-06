@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useId, useState } from "react";
 import { useI18n } from "@/i18n/provider";
 
 type Props = {
@@ -194,7 +194,7 @@ function RaceTrackIcon({ animate }: { animate: boolean }) {
 
   return (
     // Remounted per run, so all SMIL animations restart together at time 0.
-    <svg key={id} viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
+    <svg key={id} viewBox="0 0 24 24" className="h-10 w-10" aria-hidden="true">
       {/* Two kerb lines: a wide white stroke with the asphalt drawn on top of it. */}
       <path d={TRACK} fill="none" stroke="#fff" strokeWidth={5.4} strokeLinejoin="round" />
       <path d={TRACK} fill="none" stroke="#14532d" strokeWidth={3.6} strokeLinejoin="round" />
@@ -227,15 +227,26 @@ function RaceTrackIcon({ animate }: { animate: boolean }) {
 }
 
 function SteeringWheelIcon() {
+  const id = `wheel-${useId().replace(/:/g, "")}`;
   return (
-    <svg viewBox="0 0 24 24" className="updates-wheel h-5 w-5" aria-hidden="true">
-      <g className="updates-wheel__rumble">
-        <g className="updates-wheel__steer" fill="none" stroke="currentColor" strokeLinecap="round">
+    <svg viewBox="0 0 24 24" className="updates-wheel h-10 w-10" aria-hidden="true">
+      <defs>
+        <g id={id} fill="none" stroke="currentColor" strokeLinecap="round">
           <circle cx={12} cy={12} r={8.5} strokeWidth={2.4} />
           <circle cx={12} cy={12} r={2.2} strokeWidth={1.8} />
           <path d="M3.8 11.2 9.8 11.6M14.2 11.6 20.2 11.2M12 14.2 12 20.3" strokeWidth={2} />
-          {/* Top marker, so the wild steering is readable. */}
+          {/* Top marker, so the steering is readable. */}
           <path d="M12 3.4V5.6" stroke="#fde68a" strokeWidth={2.4} />
+        </g>
+      </defs>
+      <g className="updates-wheel__rumble">
+        <g className="updates-wheel__steer">
+          {/* Motion blur: blurred ghosts slightly turned to both sides, then the sharp-ish wheel. */}
+          <use href={`#${id}`} className="updates-wheel__ghost" transform="rotate(-12 12 12)" />
+          <use href={`#${id}`} className="updates-wheel__ghost" transform="rotate(12 12 12)" />
+          <use href={`#${id}`} className="updates-wheel__ghost updates-wheel__ghost--near" transform="rotate(-6 12 12)" />
+          <use href={`#${id}`} className="updates-wheel__ghost updates-wheel__ghost--near" transform="rotate(6 12 12)" />
+          <use href={`#${id}`} className="updates-wheel__main" />
         </g>
       </g>
     </svg>
@@ -251,8 +262,8 @@ export default function UpdatesToggleButton({ updatesEnabled, onToggle, disabled
     <button
       type="button"
       className={updatesEnabled
-        ? "p-0.5 rounded bg-amber-600 hover:bg-amber-700 text-white disabled:opacity-40"
-        : "updates-resume p-0.5 rounded text-white disabled:opacity-40"}
+        ? "p-1 rounded-md bg-amber-600 hover:bg-amber-700 text-white disabled:opacity-40"
+        : "updates-resume p-1 rounded-md text-white disabled:opacity-40"}
       title={label}
       aria-label={label}
       aria-pressed={!updatesEnabled}

@@ -213,7 +213,7 @@ export default function CarControl() {
               onToggle={() => setUpdatesEnabled(!updatesEnabled)}
             />
             <button
-              className="px-2 py-1 text-xs rounded bg-red-600 hover:bg-red-700 text-white"
+              className="flex h-12 w-12 items-center justify-center text-xl rounded-md bg-red-600 hover:bg-red-700 text-white"
               title={messages.carControl.stopControlSession}
               onClick={() => {
                 flowControl.stopConnection();

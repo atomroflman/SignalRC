@@ -209,11 +209,15 @@ textarea {
   to { opacity: 0; transform: scale(1.6); }
 }
 
-/* Steering wheel while updates are sent: rumbles and steers wildly. */
-.updates-wheel__rumble { animation: updates-wheel-rumble 0.14s linear infinite; }
-.updates-wheel__steer { transform-box: view-box; transform-origin: 12px 12px; animation: updates-wheel-steer 2.6s ease-in-out infinite; }
+/* Steering wheel while updates are sent: rumbles and steers fast, with motion blur ghosts. */
+.updates-wheel__rumble { animation: updates-wheel-rumble 0.12s linear infinite; }
+.updates-wheel__steer { transform-box: view-box; transform-origin: 12px 12px; animation: updates-wheel-steer 1.3s ease-in-out infinite; }
+.updates-wheel__ghost { opacity: 0.22; filter: blur(0.9px); }
+.updates-wheel__ghost--near { opacity: 0.4; filter: blur(0.5px); }
+.updates-wheel__main { filter: blur(0.2px); }
 button:disabled .updates-wheel__rumble,
 button:disabled .updates-wheel__steer { animation: none; }
+button:disabled .updates-wheel__ghost { display: none; }
 @keyframes updates-wheel-rumble {
   0%, 100% { transform: translate(0, 0); }
   25% { transform: translate(0.5px, -0.4px); }
@@ -222,14 +226,14 @@ button:disabled .updates-wheel__steer { animation: none; }
 }
 @keyframes updates-wheel-steer {
   0%, 100% { transform: rotate(0deg); }
-  12% { transform: rotate(-75deg); }
-  22% { transform: rotate(-40deg); }
-  34% { transform: rotate(95deg); }
-  46% { transform: rotate(60deg); }
-  55% { transform: rotate(-20deg); }
-  68% { transform: rotate(-110deg); }
-  80% { transform: rotate(30deg); }
-  90% { transform: rotate(-15deg); }
+  10% { transform: rotate(-28deg); }
+  19% { transform: rotate(-12deg); }
+  31% { transform: rotate(38deg); }
+  42% { transform: rotate(18deg); }
+  52% { transform: rotate(-6deg); }
+  64% { transform: rotate(-40deg); }
+  76% { transform: rotate(14deg); }
+  88% { transform: rotate(-4deg); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -239,4 +243,5 @@ button:disabled .updates-wheel__steer { animation: none; }
   .brand-logo--live { animation: none; }
   .updates-resume, .updates-resume::after { animation: none; }
   .updates-wheel__rumble, .updates-wheel__steer { animation: none; }
+  .updates-wheel__ghost { display: none; }
 }
