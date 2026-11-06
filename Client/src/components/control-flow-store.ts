@@ -510,10 +510,12 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
       return;
     }
     const newEdge = await newEdgeRes.json();
-    set((state) => { 
+    set((state) => {
       return {
+        // The server allows one link per input port and replaces an existing one; drop it here too.
         edges: [
-          ...state.edges, 
+          ...state.edges.filter(e => e.id != newEdge.id
+            && !(String(e.target) == String(newEdge.target) && (e.targetPort ?? null) == (newEdge.targetPort ?? null))),
           {
             id: newEdge.id,
             source: newEdge.source,
