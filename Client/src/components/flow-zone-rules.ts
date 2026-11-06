@@ -18,3 +18,14 @@ export function isAllowedLink(from: ControlFlowNode | undefined, to: ControlFlow
   if (from.type === "output") return false;
   return ALLOWED.has(`${flowSide(from)}>${flowSide(to)}`);
 }
+
+/**
+ * Zone a port belongs to, for its colour (web blue, vehicle orange): the handoff takes the
+ * web value in and gives it out in the vehicle; controllers of the vehicle are vehicle side.
+ */
+export function portZone(node: Pick<ControlFlowNode, "zone" | "nodeTypeName" | "type"> | undefined, port: "source" | "target"): "browser" | "onboard" {
+  if (!node) return "browser";
+  if (node.nodeTypeName === "UserSetupHandoffNode") return port === "target" ? "browser" : "onboard";
+  if (node.type === "vehicleInput") return "onboard";
+  return node.zone === "onboard" ? "onboard" : "browser";
+}

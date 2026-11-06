@@ -33,20 +33,59 @@ textarea {
   font: inherit;
 }
 
-/* Flow editor: neutral gray canvas parts; node cards use flow-node-styles.ts. */
+/* Flow editor: neutral gray canvas parts; node cards use flow-node-styles.ts.
+   Ports and connections carry the zone colour: web blue, vehicle orange. An input
+   is a ring with a hole (socket), an output is filled (plug). */
+.react-flow {
+  --flow-zone-browser: #3b82f6;
+  --flow-zone-browser-hi: #93c5fd;
+  --flow-zone-onboard: #f97316;
+  --flow-zone-onboard-hi: #fdba74;
+}
+
 .react-flow .react-flow__handle {
-  width: 10px;
-  height: 10px;
-  border: 2px solid #d4d4d8;
-  background: #18181b;
+  --port: #d4d4d8;
+  width: 12px;
+  height: 12px;
+  border: 3px solid var(--port);
+  background: #09090b;
 }
 
 .react-flow .react-flow__handle.source {
-  background: #d4d4d8;
-  border-color: #27272a;
+  background: var(--port);
+  border-color: var(--port);
 }
 
-.react-flow .react-flow__edge-path,
+.flow-zone-browser .react-flow__handle,
+.flow-zone-handoff .react-flow__handle.target {
+  --port: var(--flow-zone-browser);
+}
+
+.flow-zone-onboard .react-flow__handle,
+.flow-zone-handoff .react-flow__handle.source {
+  --port: var(--flow-zone-onboard);
+}
+
+.react-flow .react-flow__edge {
+  --edge: #71717a;
+  --edge-hi: #e4e4e7;
+}
+
+.react-flow .react-flow__edge.flow-edge-browser {
+  --edge: var(--flow-zone-browser);
+  --edge-hi: var(--flow-zone-browser-hi);
+}
+
+.react-flow .react-flow__edge.flow-edge-onboard {
+  --edge: var(--flow-zone-onboard);
+  --edge-hi: var(--flow-zone-onboard-hi);
+}
+
+.react-flow .react-flow__edge-path {
+  stroke: var(--edge, #71717a);
+  stroke-width: 2;
+}
+
 .react-flow .react-flow__connection-path {
   stroke: #71717a;
   stroke-width: 1.5;
@@ -79,8 +118,8 @@ textarea {
 
 /* Start connector after a click (click-to-connect) and the snapped target while dragging. */
 .react-flow .react-flow__handle.connecting {
-  background: #f59e0b;
-  box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.5);
+  background: #fafafa;
+  box-shadow: 0 0 0 4px rgba(250, 250, 250, 0.5);
 }
 
 .react-flow .react-flow__handle.connecting.valid {
@@ -105,13 +144,13 @@ textarea {
 }
 
 .react-flow .react-flow__edge:hover .react-flow__edge-path {
-  stroke: #e4e4e7;
-  stroke-width: 2.5;
+  stroke: var(--edge-hi, #e4e4e7);
+  stroke-width: 3;
 }
 
 .react-flow .react-flow__edge.selected .react-flow__edge-path {
-  stroke: #fafafa;
-  stroke-width: 3;
+  stroke: var(--edge-hi, #fafafa);
+  stroke-width: 3.5;
 }
 
 /* Flow editor: cluster frames of the auto arrangement are background only. */

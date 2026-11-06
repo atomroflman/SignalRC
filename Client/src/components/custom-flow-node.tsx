@@ -10,6 +10,7 @@ import { ParamInput } from "./param-input";
 import { flowNodeStyles, handleOffset } from "./flow-node-styles";
 import { FlowNodeHeader } from "./flow-node-header";
 import { useI18n } from "@/i18n/provider";
+import { portZone } from "./flow-zone-rules";
 import { hudSignalProblem as findHudSignalProblem } from "./overlay/integration/control-display-binding";
 import { hudInputProblem as findHudInputProblem } from "./overlay/integration/hud-input";
 
@@ -32,7 +33,7 @@ const CHANNEL_TYPES = ["input", "output", "vehicleInput", "handoff"];
 
 /**
  * Frame showing the node's zone (OnboardFlow-Arbeitspakete.md OF10): vehicle nodes get an
- * amber ring and badge; functions and vehicle channels can move to the other zone; browser
+ * orange ring and badge; functions and vehicle channels can move to the other zone; browser
  * vehicle channels are marked as not available locally once the flow has a vehicle part (E07).
  */
 function ZoneFrame({ node, children }: { node: any; children: React.ReactNode }) {
@@ -48,10 +49,11 @@ function ZoneFrame({ node, children }: { node: any; children: React.ReactNode })
     if (error) alert(error);
   };
   return (
-    <div className={onboard ? "relative rounded-lg ring-2 ring-amber-500/80" : "relative rounded-lg"}>
+    // The zone class colours the ports (globals.css): web blue, vehicle orange, handoff both.
+    <div className={`${onboard ? "relative rounded-lg ring-2 ring-orange-500/80" : "relative rounded-lg"} ${zoneClass(node)}`}>
       {(onboard || movable || (hasOnboardPart && node.type === "output")) && (
         <div className="pointer-events-none absolute -top-6 left-0 flex items-center gap-1 text-[10px] whitespace-nowrap">
-          {onboard && <span className="px-1 rounded bg-amber-700 text-amber-50">{t.onboardBadge}</span>}
+          {onboard && <span className="px-1 rounded bg-orange-700 text-orange-50">{t.onboardBadge}</span>}
           {!onboard && hasOnboardPart && node.type === "output" && (
             <span className="px-1 rounded bg-zinc-700 text-zinc-300">{t.localUnavailable}</span>
           )}
@@ -69,6 +71,11 @@ function ZoneFrame({ node, children }: { node: any; children: React.ReactNode })
       {children}
     </div>
   );
+}
+
+function zoneClass(node: any): string {
+  if (node.nodeTypeName === "UserSetupHandoffNode") return "flow-zone-handoff";
+  return `flow-zone-${portZone(node, "source")}`;
 }
 
 export default function CustomFlowNode(props: NodeProps) {

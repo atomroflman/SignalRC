@@ -67,8 +67,15 @@ export default function IifFlowNode(props: CustomFlowNodeProps) {
   
   const aValue = getInputValue('a');
   const bValue = getInputValue('b');
-  const trueValue = getInputValue('trueValue');
-  const falseValue = getInputValue('falseValue');
+  // Switches "true → 1" / "false → 1": that branch outputs 1 instead of its input (IifFunction).
+  const flag = (name: string) => {
+    const v = (data.params ?? {})[name];
+    return v === true || String(v ?? "").trim().toLowerCase() === "true";
+  };
+  const trueIs1 = flag('trueIs1');
+  const falseIs1 = flag('falseIs1');
+  const trueValue = trueIs1 ? 1 : getInputValue('ifTrue');
+  const falseValue = falseIs1 ? 1 : getInputValue('ifFalse');
   
   // Calculate condition result
   let conditionResult = false;
@@ -174,6 +181,21 @@ export default function IifFlowNode(props: CustomFlowNodeProps) {
           </select>
         </div>
 
+        {/* Switches: a branch outputs 1 instead of its input, so a comparison needs only a and b */}
+        <div className="mb-2 flex gap-3">
+          {([['trueIs1', trueIs1, 'true → 1'], ['falseIs1', falseIs1, 'false → 1']] as const).map(([name, on, label]) => (
+            <label key={name} className="nodrag flex items-center gap-1.5 text-xs text-zinc-200 cursor-pointer">
+              <input
+                type="checkbox"
+                className="nodrag accent-zinc-300"
+                checked={on}
+                onChange={(e) => handleParamChange(name, e.target.checked ? "true" : "false")}
+              />
+              {label}
+            </label>
+          ))}
+        </div>
+
         {/* Logic Display */}
         <div className={`${flowNodeStyles.panel} text-xs text-zinc-200 font-mono text-center`}>
           <div className="mb-1">
@@ -185,10 +207,10 @@ export default function IifFlowNode(props: CustomFlowNodeProps) {
             </span>
           </div>
           <div className={`${conditionResult ? 'text-zinc-50 font-semibold' : 'text-zinc-400'}`}>
-            → trueValue ({trueValue.toFixed(2)})
+            → ifTrue ({trueIs1 ? '1' : trueValue.toFixed(2)})
           </div>
           <div className={`${!conditionResult ? 'text-zinc-50 font-semibold' : 'text-zinc-400'}`}>
-            → falseValue ({falseValue.toFixed(2)})
+            → ifFalse ({falseIs1 ? '1' : falseValue.toFixed(2)})
           </div>
         </div>
       </div>

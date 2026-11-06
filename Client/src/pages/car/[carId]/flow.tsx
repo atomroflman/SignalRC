@@ -19,7 +19,7 @@ import FlowSharingPanel from "@/components/flow-sharing-panel";
 import { useI18n } from "@/i18n/provider";
 import OnboardFlowStatusBanner from "@/components/onboard-flow-status";
 import VehicleInputsView from "@/components/vehicle-inputs-view";
-import { isAllowedLink } from "@/components/flow-zone-rules";
+import { isAllowedLink, portZone } from "@/components/flow-zone-rules";
 
 const nodeTypes = { custom: CustomFlowNode, clusterFrame: ClusterFrameNode };
 const edgeTypes = { flow: FlowEdge };
@@ -80,12 +80,16 @@ export default function CarControlFlowPage() {
     });
   }
 
+  const nodeById = new Map(flowNodes.map(n => [n.nodeId, n]));
+
   function controlEdgeToReact(input: ControlFlowEdge): Edge<any> {
     return {
       id: input.id.toString(),
       source: input.source.toString(),
       target: input.target.toString(),
       type: "flow",
+      // Coloured by the zone of the output it comes from: web blue, vehicle orange.
+      className: `flow-edge-${portZone(nodeById.get(Number(input.source)), "source")}`,
       animated: true,
       selected: input.id.toString() === selectedEdgeId,
       sourceHandle: input.sourcePort,
@@ -163,7 +167,7 @@ export default function CarControlFlowPage() {
   const reactEdges = useMemo(
     () => flowEdges.map(controlEdgeToReact),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [flowEdges, selectedEdgeId],
+    [flowEdges, selectedEdgeId, structure],
   );
 
   if (isLoading)

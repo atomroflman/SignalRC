@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isAllowedLink } from "./flow-zone-rules";
+import { isAllowedLink, portZone } from "./flow-zone-rules";
 import type { ControlFlowNode } from "./control-flow-store";
 
 const node = (nodeId: number, type: string, nodeTypeName: string, zone?: "browser" | "onboard") =>
@@ -31,5 +31,17 @@ describe("flow zone rules (same as the server)", () => {
     expect(isAllowedLink(handoff, browserFn)).toBe(false);
     expect(isAllowedLink(onboardFn, controller)).toBe(false);
     expect(isAllowedLink(browserOut, browserFn)).toBe(false);
+  });
+});
+
+describe("portZone", () => {
+  it("colours ports by zone, the handoff takes web in and gives vehicle out", () => {
+    const handoff = { nodeTypeName: "UserSetupHandoffNode", zone: "onboard", type: "handoff" } as any;
+    expect(portZone(handoff, "target")).toBe("browser");
+    expect(portZone(handoff, "source")).toBe("onboard");
+    expect(portZone({ nodeTypeName: "UserSetupVehicleInputNode", type: "vehicleInput" } as any, "source")).toBe("onboard");
+    expect(portZone({ nodeTypeName: "UserSetupFunctionNode", zone: "onboard", type: "function" } as any, "source")).toBe("onboard");
+    expect(portZone({ nodeTypeName: "UserSetupFunctionNode", zone: "browser", type: "function" } as any, "target")).toBe("browser");
+    expect(portZone(undefined, "source")).toBe("browser");
   });
 });
