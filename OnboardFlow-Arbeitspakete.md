@@ -1,6 +1,8 @@
 # Onboard-Flow und lokaler Controller: Plan und Arbeitspakete
 
-Stand: 2026-11-06, Branch `feature/onboard-flow`.
+Stand: 2026-11-06, Branch `feature/onboard-flow`. OF00–OF12 sind umgesetzt.
+Bei OF13 sind die automatischen Tests fertig, die Hardware-Checkliste am Fahrzeug
+ist noch offen. Benutzerdoku: [Docs/OnboardFlow.md](Docs/OnboardFlow.md).
 
 „Umgesetzt“ heißt: implementiert, gebaut, mit Modultests geprüft und lokal
 committet. Ein Rollout auf `lte-rc-server` oder ein Fahrzeug ist damit nicht
@@ -72,20 +74,20 @@ Server:   AquireCarControl / Flow-Änderung ─► OnboardFlowBuilder ─► App
 
 | ID | Status | Inhalt |
 | --- | --- | --- |
-| OF00 | ⬜ | Verträge in `Shared/Flow`: Flow-Definition, Status, Controller- und Bluetooth-DTOs, Hub-Methoden |
-| OF01 | ⬜ | C#-Flow-Engine (`Onboard/Flow`): alle Funktionen, Topologie, Takt, Erhalt der Knotenzustände, Paritätstests |
-| OF02 | ⬜ | Neue Knoten „Aktiv?“ (`Active`) und „Vorrang“ (`Priority`) in TS und C# |
-| OF03 | ⬜ | Datenmodell und Migration: Zone, Übergabe-Knoten, Fahrzeug-Controller, Controller-Eingangsknoten |
-| OF04 | ⬜ | Server-Regeln: Knoten anlegen mit Zone, Kantenprüfung, exklusive Kanäle, Zyklen, Vorlagen und Kopieren |
-| OF05 | ⬜ | Push und Hub: `OnboardFlowBuilder`, Push bei Übernahme und Änderung, Übergabe-Relay, Abkoppeln, Status-Relay |
-| OF06 | ⬜ | Onboard-Integration: `OnboardFlowService`, Session-Regeln, Kanalbesitz, Serververlust, lokale Telemetrie |
-| OF07 | ⬜ | Onboard-Eingabe: evdev-Leser, Hotplug, Normierung, Anmeldung der Controller beim Server |
-| OF08 | ⬜ | Bluetooth-Pairing: `bluetoothctl`-Wrapper, Hub-Relay, UI |
-| OF09 | ⬜ | Client-Engine: Auswertung nur der Browser-Zone, Übergabe-Senden, Live-Werte des Onboard-Flows |
-| OF10 | ⬜ | Editor: Zonen, Palette, Verbindungsprüfung, Statusbanner, Controller-Panel |
-| OF11 | ⬜ | Fahrseite: Schalter „Web abkoppeln“ und Status |
-| OF12 | ⬜ | Installation: bluez, Gruppen `input`/`bluetooth`, Doku |
-| OF13 | ⬜ | Abnahme: automatische Tests ✅, Hardware-Checkliste am Fahrzeug offen |
+| OF00 | ✅ | Verträge in `Shared/Flow`: Flow-Definition, Status, Controller- und Bluetooth-DTOs, Hub-Methoden |
+| OF01 | ✅ | C#-Flow-Engine (`Onboard/Flow`): alle Funktionen, Topologie, Takt, Erhalt der Knotenzustände, Paritätstests |
+| OF02 | ✅ | Neue Knoten „Aktiv?“ (`Active`) und „Vorrang“ (`Priority`) in TS und C# |
+| OF03 | ✅ | Datenmodell und Migration: Zone, Übergabe-Knoten, Fahrzeug-Controller, Controller-Eingangsknoten |
+| OF04 | ✅ | Server-Regeln: Knoten anlegen mit Zone, Kantenprüfung, exklusive Kanäle, Zyklen, Vorlagen und Kopieren |
+| OF05 | ✅ | Push und Hub: `OnboardFlowBuilder`, Push bei Übernahme und Änderung, Übergabe-Relay, Abkoppeln, Status-Relay |
+| OF06 | ✅ | Onboard-Integration: `OnboardFlowService`, Session-Regeln, Kanalbesitz, Serververlust, lokale Telemetrie |
+| OF07 | ✅ | Onboard-Eingabe: evdev-Leser, Hotplug, Normierung, Anmeldung der Controller beim Server |
+| OF08 | ✅ | Bluetooth-Pairing: `bluetoothctl`-Wrapper, Hub-Relay, UI |
+| OF09 | ✅ | Client-Engine: Auswertung nur der Browser-Zone, Übergabe-Senden, Live-Werte des Onboard-Flows |
+| OF10 | ✅ | Editor: Zonen, Palette, Verbindungsprüfung, Statusbanner, Controller-Panel |
+| OF11 | ✅ | Fahrseite: Schalter „Web abkoppeln“ und Status |
+| OF12 | ✅ | Installation: bluez, Gruppen `input`/`bluetooth`, Doku |
+| OF13 | ◐ | Abnahme: automatische Tests ✅, Hardware-Checkliste am Fahrzeug offen |
 
 ### OF00 – Verträge
 
@@ -196,3 +198,34 @@ Manuell am Fahrzeug:
 5. Controller ausschalten → Onboard-Kanäle neutral (bei entsprechendem Flow).
 6. Flow im Editor ändern → wirkt sofort, der Gang bleibt erhalten.
 7. Onboard neu starten → nicht abgekoppelt, kein Onboard-Flow bis zur nächsten Übernahme.
+
+## Umsetzung
+
+Teststand am 2026-11-06:
+
+- .NET: 820 Tests grün, 78 übersprungen; davon 76 im Bereich Flow (Parität, Engine, Zonenregeln,
+  Builder, Modusregeln des `OnboardFlowService`, evdev).
+- Client: 919 vitest-Tests grün; neu sind Parität und Zonenregeln.
+- Client-Typecheck, Server-Build und Onboard-Build ohne Fehler und Warnungen.
+
+Abweichungen vom Plan:
+
+- **T11/T12 Geräteschlüssel:** `uniq/Name`, ohne `uniq` `vendor:product/Name`. So
+  unterscheiden sich Gamepad- und Bewegungssensor-Knoten desselben Controllers.
+- **Knotentyp:** Controller-Knoten liefern im Client den Typ `vehicleInput`, nicht
+  `input`. Ihre Id ist eine `VehicleInputChannel`-Id und darf nicht mit den
+  Browser-Gamepads verwechselt werden.
+- **TurnSignal (Browser):** Die Parameter `steps` und `isLeftTurn` werden jetzt aus
+  dem gespeicherten Text gelesen. Bisher galten im Browser immer 5 und links. Das
+  war nötig, damit die Referenzfälle in beiden Engines gleich laufen.
+- **Testbarkeit:** `OnboardFlowService` schreibt über `IControlSink`. Der
+  `ControlExecutionService` implementiert diese Schnittstelle.
+- **Neue Endpunkte über den Plan hinaus:** Zone eines Knotens ändern
+  (`POST api/flow/{id}/zone`) und Übergabe umbenennen (`POST api/flow/{id}/name`).
+
+Offen:
+
+- Hardware-Checkliste (OF13, Punkte 1–7) am Fahrzeug.
+- Bestehende Fahrzeuge brauchen einmalig bluez und die Gruppen `input`/`bluetooth`,
+  siehe Docs/OnboardFlow.md.
+- Nicht ausgerollt.

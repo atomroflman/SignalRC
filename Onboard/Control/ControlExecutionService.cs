@@ -16,7 +16,7 @@ namespace SignalRC.Onboard.Control;
 /// and left out; it never takes the other channels or the onboard down. Channels are
 /// rebuilt when the server pushes a changed config (<see cref="Reload"/>, <see cref="ReloadAll"/>).
 /// </summary>
-public class ControlExecutionService
+public class ControlExecutionService : IControlSink
 {
     public IServiceProvider ServiceProvider { get; }
     public ILogger<ControlExecutionService> Logger { get; }

@@ -22,7 +22,7 @@ public sealed class OnboardFlowService : IFlowEnvironment, IDisposable
     private const int StatusIntervalMs = 200;
 
     private readonly ILogger<OnboardFlowService> _logger;
-    private readonly ControlExecutionService _control;
+    private readonly IControlSink _control;
     private readonly TelemetryService _telemetry;
     private readonly VehicleInputService _inputs;
     private readonly ServerConnectionService _server;
@@ -39,17 +39,21 @@ public sealed class OnboardFlowService : IFlowEnvironment, IDisposable
     private int _ticking;
     private int _reportingStatus;
 
-    public OnboardFlowService(ILogger<OnboardFlowService> logger, ControlExecutionService control, TelemetryService telemetry, VehicleInputService inputs, ServerConnectionService server)
+    public OnboardFlowService(ILogger<OnboardFlowService> logger, IControlSink control, TelemetryService telemetry, VehicleInputService inputs, ServerConnectionService server)
     {
         _logger = logger;
         _control = control;
         _telemetry = telemetry;
         _inputs = inputs;
         _server = server;
+        Clock = () => _clock.ElapsedMilliseconds;
         _inputs.DevicesChanged += () => _ = ReportDevicesAsync();
     }
 
-    public long NowMs => _clock.ElapsedMilliseconds;
+    /// <summary>Monotonic milliseconds; replaceable for tests.</summary>
+    public Func<long> Clock { get; set; }
+
+    public long NowMs => Clock();
 
     /// <summary>An onboard flow is loaded and runs.</summary>
     public bool IsActive { get { lock (_lock) return _engine.Definition != null; } }
@@ -95,7 +99,7 @@ public sealed class OnboardFlowService : IFlowEnvironment, IDisposable
         {
             _logger.LogInformation("Onboard flow {Hash} of setup {Setup} loaded: {Nodes} nodes, {Links} links, channels {Channels}",
                 Short(definition.Hash), definition.SetupId, definition.Nodes.Count, definition.Links.Count, string.Join(", ", _engine.OwnedChannels));
-            _timer ??= new Timer(_ => Tick(), null, 0, TickMs);
+            if (AutoTick) _timer ??= new Timer(_ => TickOnce(), null, 0, TickMs);
         }
         _ = ReportStatusAsync(force: true);
     }
@@ -157,7 +161,11 @@ public sealed class OnboardFlowService : IFlowEnvironment, IDisposable
     private bool HandoffConnected =>
         !_webDetached && _serverConnected && _handoffs.Values.Any(h => NowMs - h.AtMs <= HandoffTimeoutMs);
 
-    private void Tick()
+    /// <summary>False in tests: ticks only through <see cref="TickOnce"/>.</summary>
+    public bool AutoTick { get; set; } = true;
+
+    /// <summary>One evaluation of the flow; called by the 50 Hz timer.</summary>
+    public void TickOnce()
     {
         if (Interlocked.Exchange(ref _ticking, 1) == 1) return;
         try

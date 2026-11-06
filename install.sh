@@ -530,7 +530,8 @@ if [ "$DEPLOY_MODE" = "onboard" ]; then
     echo "── Phase 1: System packages ──────────────────────────"
     pkg_update
 
-    base_packages=(git curl ffmpeg alsa-utils i2c-tools python3)
+    # bluez: controllers paired with the vehicle feed the onboard flow (OnboardFlow-Arbeitspakete.md OF12).
+    base_packages=(git curl ffmpeg alsa-utils i2c-tools python3 bluez)
     camera_packages=()
 
     if pkg_candidate_exists rpicam-apps; then
@@ -569,11 +570,15 @@ if [ "$DEPLOY_MODE" = "onboard" ]; then
         usermod -aG audio "$RUN_USER"
     fi
     # /dev/gpiochip* and /dev/i2c-* (GPIO pins, PCA9685) belong to these groups on Raspberry Pi OS.
-    for hw_group in gpio i2c; do
+    # input: /dev/input/event* of vehicle controllers; bluetooth: pairing via bluetoothctl (D-Bus policy).
+    for hw_group in gpio i2c input bluetooth; do
         if getent group "$hw_group" >/dev/null; then
             usermod -aG "$hw_group" "$RUN_USER"
         fi
     done
+    if command -v systemctl >/dev/null && systemctl list-unit-files bluetooth.service >/dev/null 2>&1; then
+        systemctl enable --now bluetooth.service || echo "Warning: bluetooth.service could not be started."
+    fi
 
     # ── Phase 2: mediamtx ───────────────────────────────────────────
     echo ""

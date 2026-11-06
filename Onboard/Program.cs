@@ -115,6 +115,7 @@ serviceCollection.AddSingleton<SshKeyService>();
 serviceCollection.AddSingleton<DeviceKeyService>();
 serviceCollection.AddSingleton<TlsCertificateService>();
 serviceCollection.AddSingleton<ControlExecutionService>();
+serviceCollection.AddSingleton<IControlSink>(sp => sp.GetRequiredService<ControlExecutionService>());
 serviceCollection.AddSingleton<TelemetryStore>();
 serviceCollection.AddTransient<Bash>();
 serviceCollection.AddSingleton<IModuleManagerFactory, ModuleManagerFactory>();
