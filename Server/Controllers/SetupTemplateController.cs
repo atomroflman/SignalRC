@@ -1,3 +1,4 @@
+using SignalRC.Server.Security;
 using SignalRC.Server.Data;
 using SignalRC.Shared.SetupTemplate;
 using Microsoft.AspNetCore.Mvc;
@@ -11,6 +12,7 @@ public class SetupTemplateController : ControllerBase
 {
     public SetupTemplateController(SignalRCContext context) : base(context) { }
 
+    [RequireVehicle]
     [HttpGet("export/{carId:int}")]
     public async Task<IActionResult> Export(int carId)
     {
@@ -167,6 +169,7 @@ public class SetupTemplateController : ControllerBase
         return Ok(template);
     }
 
+    [RequireVehicle]
     [HttpPost("import/{carId:int}")]
     public async Task<IActionResult> Import(int carId, [FromBody] TemplateImportRequest req)
     {

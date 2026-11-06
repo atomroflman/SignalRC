@@ -863,6 +863,7 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
     public async Task ChangeVideoStreamSettings(int streamId, VideoStreamMapItem settings)
     {
         var stream = await GetStreamAsync(streamId);
+        await EnsureCanConfigureAsync(stream.CarId);
         var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<SignalRCContext>();
         Logger.LogInformation("Changing video stream settings for stream {StreamId} ({StreamName}) for car {CarId}", stream.Id, stream.Name, stream.CarId);
         
@@ -908,12 +909,25 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
 
     public async Task<OnboardDiagnosticsReport> GetOnboardDiagnostics(int carId)
     {
+        await EnsureCanConfigureAsync(carId);
         return await ForwardDiagnosticsAsync(carId, "GetOnboardDiagnostics");
     }
 
     public async Task<OnboardDiagnosticsReport> RunOnboardStartupTest(int carId)
     {
+        await EnsureCanConfigureAsync(carId);
         return await ForwardDiagnosticsAsync(carId, "RunOnboardStartupTest");
+    }
+
+    /// <summary>
+    /// Control or config session (Docs/VehicleKeyAuth.md). The hub sees the cookies of its
+    /// connect request: a config session opened later counts after the next reconnect.
+    /// </summary>
+    private async Task EnsureCanConfigureAsync(int carId)
+    {
+        var http = Context.GetHttpContext() ?? throw new HubException("No HTTP context available.");
+        if (!await http.RequestServices.GetRequiredService<Security.VehicleAccess>().CanConfigureAsync(http, carId))
+            throw new HubException("A control or config session of this vehicle is required.");
     }
 
     private async Task<OnboardDiagnosticsReport> ForwardDiagnosticsAsync(int carId, string methodName)
@@ -1022,7 +1036,7 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
         var user = await HubUserHelper.GetUserAsync(httpContext, dbContext);
         // Same rule as overlay management (Shared/Overlay/api/README.md §1).
         var access = httpContext.RequestServices.GetRequiredService<Overlay.OverlayAccess>();
-        switch (await access.CheckAdminAsync(user, carId))
+        switch (access.CheckDriver(user, carId))
         {
             case Overlay.OverlayAccessError.SessionRequired:
                 throw new HubException("No user session.");

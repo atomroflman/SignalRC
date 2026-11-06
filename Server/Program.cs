@@ -62,6 +62,9 @@ builder.Services.AddSingleton<CarConnectionStore>();
 // Docs/VehicleKeyAuth.md: one-time nonces (vehicle handshake, config sessions) and config sessions.
 builder.Services.AddSingleton(new SignalRC.Shared.Security.NonceStore(maxEntries: 4096));
 builder.Services.AddSingleton<SignalRC.Server.Security.ConfigSessionStore>(_ => new SignalRC.Server.Security.ConfigSessionStore());
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<SignalRC.Server.Security.VehicleAccess>();
+builder.Services.AddScoped<SignalRC.Server.Security.IConfigSessionGrant, SignalRC.Server.Security.RequestConfigSessionGrant>();
 builder.Services.AddSingleton<OnboardLogStore>();
 builder.Services.AddSingleton<AvailableTypesRegistry>();
 builder.Services.AddSingleton<IServerBuildInfoService, ServerBuildInfoService>();

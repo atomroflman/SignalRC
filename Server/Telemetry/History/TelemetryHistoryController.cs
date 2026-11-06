@@ -1,3 +1,4 @@
+using SignalRC.Server.Security;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -12,6 +13,8 @@ namespace SignalRC.Server.Telemetry.History;
 /// </summary>
 [ApiController]
 [Route("api/cars/{carId:int}/telemetry-history")]
+// Control or config session (Docs/VehicleKeyAuth.md); the recording switch belongs to the driving view.
+[RequireVehicle]
 public class TelemetryHistoryController(
     SignalRCContext context,
     TelemetryRecorder recorder,
@@ -83,6 +86,7 @@ public class TelemetryHistoryController(
     // --- Master switch (main page) ---
 
     /// <summary>Whether recording is stopped, how many channels are selected and whether the caller may switch it.</summary>
+    [AllowWithoutVehicleSession]
     [HttpGet("recording")]
     public async Task<IActionResult> GetRecording(int carId)
     {
@@ -98,7 +102,7 @@ public class TelemetryHistoryController(
             stopped = car.TelemetryRecordingStopped,
             channels = channels.Count(TelemetryRecorder.IsRecordable),
             recording = active,
-            canChange = access.CheckAdmin(user, carId) == SignalRC.Server.Overlay.OverlayAccessError.None,
+            canChange = access.CheckDriver(user, carId) == SignalRC.Server.Overlay.OverlayAccessError.None,
         });
     }
 
@@ -108,12 +112,14 @@ public class TelemetryHistoryController(
     }
 
     /// <summary>Stops or resumes all recording of the vehicle; only the driver who holds control.</summary>
+    // Checks the driver itself.
+    [AllowWithoutVehicleSession]
     [HttpPut("recording")]
     public async Task<IActionResult> PutRecording(int carId, [FromBody] RecordingDto body)
     {
         var user = await GetCurrentUserAsync();
         if (user == null) return Unauthorized();
-        if (access.CheckAdmin(user, carId) != SignalRC.Server.Overlay.OverlayAccessError.None)
+        if (access.CheckDriver(user, carId) != SignalRC.Server.Overlay.OverlayAccessError.None)
         {
             return StatusCode(StatusCodes.Status403Forbidden, "Only the driver who controls the vehicle can change this.");
         }

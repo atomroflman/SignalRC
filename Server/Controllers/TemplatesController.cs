@@ -1,3 +1,4 @@
+using SignalRC.Server.Security;
 using SignalRC.Server.Data;
 using SignalRC.Server.Hubs;
 using SignalRC.Server.Services;
@@ -83,6 +84,7 @@ public class TemplatesController : Server.Controllers.ControllerBase
     /// Applies a template to a car, replacing the car's channel configuration.
     /// If the car is currently connected, the new channel map is pushed immediately.
     /// </summary>
+    [RequireVehicle]
     [HttpPost("cars/{carId:int}/apply/{templateId:int}")]
     public async Task<IActionResult> ApplyTemplate(int carId, int templateId)
     {

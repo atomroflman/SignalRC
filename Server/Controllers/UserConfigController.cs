@@ -58,8 +58,10 @@ namespace SignalRC.Server.Controllers
             if (user == null)
                 return Unauthorized("User not found");
 
-            var hasAccess = await _context.UserSetups
-                .AnyAsync(u => u.UserId == user.Id && u.CarId == carId);
+            // Docs/VehicleKeyAuth.md: a user setup is no permission any more; only a control or
+            // config session (owner key signature) is. Kept for older clients; new ones use /api/cars/{id}/access.
+            var access = HttpContext.RequestServices.GetRequiredService<Security.VehicleAccess>();
+            var hasAccess = await access.CanConfigureAsync(HttpContext, carId);
 
             return Ok(new { hasAccess });
         }
