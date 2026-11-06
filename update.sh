@@ -146,6 +146,10 @@ elif [ "$DEPLOY_TYPE" = "onboard" ]; then
         systemctl daemon-reload
     fi
     systemctl reset-failed signalrc-onboard.service signalrc-mediamtx.service 2>/dev/null || true
+
+    # Vehicle controllers (Docs/OnboardFlow.md): bluez, groups input/bluetooth, rfkill unblock.
+    # Before the restart below, so new groups take effect.
+    bash "$SCRIPT_DIR/scripts/onboard-setup-bluetooth.sh" "$RUN_USER" || true
 fi
 
 # ── 3. Service stoppen ───────────────────────────────────────────────

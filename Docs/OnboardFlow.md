@@ -71,17 +71,27 @@ Jeder Controller-Knoten hat zusätzlich den Ausgang `connected`.
 
 ## Voraussetzungen auf dem Fahrzeug
 
-`install.sh` richtet das bei Neuinstallationen ein. Bei bestehenden Fahrzeugen
-einmal von Hand:
+`scripts/onboard-setup-bluetooth.sh` richtet alles ein. `install.sh` und
+`sudo ./update.sh` rufen es bei jedem Lauf auf einer Onboard-Installation auf:
+
+- bluez installieren, falls es fehlt
+- den Service-User in die Gruppen `input` und `bluetooth` aufnehmen; das wirkt ab dem
+  Neustart des Dienstes, den `update.sh` danach ohnehin macht
+- die rfkill-Sperre für Bluetooth aufheben
+- `bluetooth.service` aktivieren und den Adapter einschalten
+
+Das Skript lässt sich mehrfach ausführen und bricht weder Installation noch Update
+ab. Von Hand:
 
 ```bash
-sudo apt-get install -y bluez
-sudo usermod -aG input,bluetooth <service-user>
-sudo systemctl enable --now bluetooth
-sudo rfkill unblock bluetooth             # oder: echo 0 | sudo tee /sys/class/rfkill/rfkill*/soft (Typ bluetooth)
-bluetoothctl power on
-sudo systemctl restart signalrc-onboard   # damit die Gruppen greifen
+sudo bash scripts/onboard-setup-bluetooth.sh <service-user>
+sudo systemctl restart signalrc-onboard
 ```
+
+Die aufgehobene Sperre hält über Neustarts: `systemd-rfkill` speichert den
+Zustand unter `/var/lib/systemd/rfkill/` und stellt ihn beim Booten wieder her.
+Das Self-Update des Onboards (Docs/OnboardAutoUpdate.md) läuft ohne root und
+führt das Skript nicht aus.
 
 Ist der Adapter per rfkill gesperrt (`bluetoothctl show` zeigt `PowerState: off-blocked`),
 meldet das Bluetooth-Panel genau das. Auf Raspberry Pi OS passiert das, solange kein
