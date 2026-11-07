@@ -28,6 +28,7 @@ if [ -z "${SUDO_USER:-}" ] || [ "$SUDO_USER" = "root" ]; then
 fi
 
 RUN_USER="$SUDO_USER"
+VIDEO_REBOOT=""
 RUN_USER_HOME="$(eval echo "~$RUN_USER")"
 
 run_as_user() {
@@ -150,6 +151,9 @@ elif [ "$DEPLOY_TYPE" = "onboard" ]; then
     # Vehicle controllers (Docs/OnboardFlow.md): bluez, groups input/bluetooth, rfkill unblock.
     # Before the restart below, so new groups take effect.
     bash "$SCRIPT_DIR/scripts/onboard-setup-bluetooth.sh" "$RUN_USER" || true
+
+    # USB-Webcams über GStreamer; auf Pi 1-4 gpu_mem>=128, nur nach Rückfrage (Exit 3 = Power Cycle nötig).
+    bash "$SCRIPT_DIR/scripts/onboard-setup-video.sh" || [ $? -ne 3 ] || VIDEO_REBOOT="yes"
 fi
 
 # ── 3. Service stoppen ───────────────────────────────────────────────
@@ -174,3 +178,9 @@ echo ""
 echo "============================================"
 echo "  Update abgeschlossen"
 echo "============================================"
+if [ -n "$VIDEO_REBOOT" ]; then
+    echo ""
+    echo "  POWER CYCLE NÖTIG: gpu_mem wurde in config.txt geändert."
+    echo "  Wirksam erst nach:  sudo reboot"
+    echo "============================================"
+fi

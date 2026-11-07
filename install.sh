@@ -577,6 +577,9 @@ if [ "$DEPLOY_MODE" = "onboard" ]; then
     done
     # Vehicle controllers: groups input/bluetooth, rfkill unblock, adapter on (Docs/OnboardFlow.md).
     bash "$REPO_DIR/scripts/onboard-setup-bluetooth.sh" "$RUN_USER"
+    # USB webcams on GStreamer; on a Pi 1-4 gpu_mem>=128, only after an OK (exit 3 = power cycle needed).
+    VIDEO_REBOOT=""
+    bash "$REPO_DIR/scripts/onboard-setup-video.sh" || [ $? -ne 3 ] || VIDEO_REBOOT="yes"
 
     # ── Phase 2: mediamtx ───────────────────────────────────────────
     echo ""
@@ -737,6 +740,12 @@ EOF
     echo "  Logs  :  $LOG_DIR/onboard.log"
     echo "  Manage:  sudo systemctl {start|stop|restart|status} signalrc-onboard.service"
     echo "============================================"
+    if [ -n "$VIDEO_REBOOT" ]; then
+        echo ""
+        echo "  POWER CYCLE NEEDED: gpu_mem was changed in config.txt."
+        echo "  It takes effect only after:  sudo reboot"
+        echo "============================================"
+    fi
     exit 0
 fi
 
