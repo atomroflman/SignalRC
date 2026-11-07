@@ -77,6 +77,8 @@ Two-way audio between driver and vehicle, plus sound files the driver can trigge
 | Browser → vehicle (push-to-talk) | Only the driver (active control session) | *Audio → Speaker*: device, default volume, mute microphone while talking |
 | Sound channels → vehicle | Whoever drives (control channels) | *Sounds* (files) + control channels of type `SoundPlayer` |
 
+Push-to-talk can send the computer's sound instead of a microphone: pick *PC audio* in the input list and share a tab or the system with sound. This uses the browser's screen sharing, so availability depends on browser and OS (Chromium only; system sound on Windows, on Linux usually tab sound).
+
 The settings are stored per car (`Car.Audio*`, `SignalRC.Shared.Audio.AudioSettings`) and pushed to the Onboard on every (re)connect and on every change; a running uplink or speaker adapts without a restart where possible.
 
 ### Audio engine on the vehicle
