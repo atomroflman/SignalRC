@@ -146,9 +146,9 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator
 
             if (IsV4l2Camera(stream.Value))
             {
-                // A USB webcam has no native mediamtx source: ffmpeg encodes it and sends RTP straight
-                // to the server, mediamtx only keeps the process alive.
-                generatedPaths.AppendLine($"    runOnInit: {BuildV4l2Command(stream.Value, cameraDevice, $"rtp://{sourceHost}:{stream.Value.Port}?pkt_size=1300")}");
+                // A USB webcam has no native mediamtx source: ffmpeg or GStreamer encodes it and sends RTP
+                // straight to the server, mediamtx only keeps the process alive.
+                generatedPaths.AppendLine($"    runOnInit: {V4l2RunOnInit(stream.Value, cameraDevice, sourceHost, stream.Value.Port)}");
                 generatedPaths.AppendLine($"    runOnInitRestart: yes");
                 continue;
             }
@@ -183,6 +183,9 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator
 
     private static readonly string[] V4l2Types = ["v4l2", "webcam", "usb"];
 
+    /// <summary>Capture/encode programs of a USB webcam (option "pipeline"), default first.</summary>
+    private static readonly string[] V4l2Pipelines = ["ffmpeg", "gstreamer"];
+
     /// <summary>ffmpeg -loglevel values, quietest first.</summary>
     private static readonly string[] FfmpegLogLevels = ["quiet", "panic", "fatal", "error", "warning", "info", "verbose", "debug"];
     private const string DefaultFfmpegLogLevel = "warning";
@@ -198,9 +201,18 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator
     {
         Kind = ChannelTypeSchema.Video,
         TypeName = type,
-        Description = "USB webcam captured with ffmpeg (V4L2).",
+        Description = "USB webcam captured with ffmpeg or GStreamer (V4L2).",
         Options =
         [
+            new OptionSchema
+            {
+                Name = "pipeline", Type = "string", Values = V4l2Pipelines, DefaultJson = "\"ffmpeg\"",
+                Description = "Program that captures and encodes. ffmpeg (default): decodes MJPEG and converts the pixels on the CPU "
+                    + "(a Pi 3 needs about 1.3 cores at 1280x720/22 fps even with hwEncoder). gstreamer: MJPEG decoding and H.264 "
+                    + "encoding both on the SoC (about 0.6 cores at 1280x720/30 fps); needs gstreamer1.0-tools and -plugins-good, "
+                    + "on a Pi 3 gpu_mem=128 next to a Pi camera, and stays usable up to 1280x720 (larger MJPEG frames drop to a few fps). "
+                    + "With gstreamer, hwEncoder, ffmpegLogLevel, brightness and contrast have no effect; inputFormat h264 falls back to ffmpeg.",
+            },
             FfmpegLogLevelOption,
             new OptionSchema
             {
@@ -210,7 +222,7 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator
             new OptionSchema
             {
                 Name = "hwEncoder", Type = "boolean", DefaultJson = "false",
-                Description = "Encode with the SoC's H.264 block (h264_v4l2m2m) instead of libx264, which takes most of a Pi 3's CPU at 720p and above.",
+                Description = "ffmpeg only: encode with the SoC's H.264 block (h264_v4l2m2m) instead of libx264, which takes most of a Pi 3's CPU at 720p and above.",
             },
         ],
     }).Append(new ChannelTypeSchema
@@ -263,6 +275,49 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator
     /// </summary>
     private static bool IsV4l2Camera(VideoStreamMapItem stream) =>
         V4l2Types.Contains(stream.Type?.Trim(), StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The runOnInit command of a USB webcam: ffmpeg, or GStreamer when the option "pipeline" says so.</summary>
+    public static string V4l2RunOnInit(VideoStreamMapItem stream, string cameraDevice, string host, int port)
+    {
+        var inputFormat = OptionText(stream, "inputFormat")?.ToLowerInvariant();
+        // GStreamer has no path for a camera's own H.264 here (h264parse is in plugins-bad): ffmpeg copies it.
+        if (OptionText(stream, "pipeline")?.ToLowerInvariant() == "gstreamer" && inputFormat != "h264")
+            return BuildGStreamerCommand(stream, cameraDevice, host, port);
+        return BuildV4l2Command(stream, cameraDevice, $"rtp://{host}:{port}?pkt_size=1300");
+    }
+
+    private static string? OptionText(VideoStreamMapItem stream, string name) =>
+        stream.Options.TryGetValue(name, out var raw) && raw?.ToString()?.Trim() is { Length: > 0 } text ? text : null;
+
+    /// <summary>
+    /// The whole chain on the SoC: the webcam's MJPEG through the V4L2 JPEG decoder straight into the
+    /// V4L2 H.264 encoder (no CPU decode or pixel conversion), or raw YUYV straight into the encoder.
+    /// Webcams often offer MJPEG at their full rate only, so a lower framerate drops whole frames before
+    /// decoding. jpegparse is in plugins-bad; the camera delivers one complete JPEG per buffer, so
+    /// "parsed=true" on the caps satisfies the decoder. rtph264pay config-interval=-1 repeats SPS/PPS
+    /// before every keyframe like ffmpeg's dump_extra; Constrained Baseline matches Janus' default fmtp.
+    /// </summary>
+    public static string BuildGStreamerCommand(VideoStreamMapItem stream, string cameraDevice, string host, int port)
+    {
+        var size = stream.Width is { } w && stream.Height is { } h ? $",width={w},height={h}" : "";
+        var yuyv = OptionText(stream, "inputFormat")?.ToLowerInvariant() == "yuyv422";
+        var media = yuyv ? "video/x-raw,format=YUY2" : "image/jpeg";
+        var cmd = new StringBuilder("gst-launch-1.0 -q");
+        cmd.Append($" v4l2src device={cameraDevice} ! {media}{size}{(yuyv ? "" : ",parsed=true")}");
+        if (stream.Framerate is { } fps)
+            cmd.Append($" ! videorate drop-only=true ! {media},framerate={fps}/1");
+        if (!yuyv)
+            cmd.Append(" ! v4l2jpegdec");
+        var controls = new StringBuilder("controls,repeat_sequence_header=1");
+        if (stream.Bitrate is { } bitrate)
+            controls.Append($",video_bitrate={bitrate}");
+        // Keyframe every second so viewers joining mid-stream get a picture quickly.
+        controls.Append($",h264_i_frame_period={stream.Framerate ?? 30}");
+        cmd.Append($" ! v4l2h264enc extra-controls={controls}");
+        cmd.Append(" ! video/x-h264,profile=(string)constrained-baseline,level=(string)4");
+        cmd.Append($" ! rtph264pay config-interval=-1 pt=96 mtu=1300 ! udpsink host={host} port={port} sync=false");
+        return cmd.ToString();
+    }
 
     private static string BuildV4l2Command(VideoStreamMapItem stream, string cameraDevice, string target)
     {

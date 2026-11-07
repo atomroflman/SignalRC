@@ -93,7 +93,14 @@ There's no `minPulse`/`maxPulse`/`centerPulse` or `priority` field on channel it
 
 #### `options`
 
-The `options` of pin managers, control channels and telemetry channels are set on the public writable properties of the type with the same name (case-insensitive, `ChannelOptionBinder`); unknown keys are logged and skipped. Control properties that come from the channel itself (`name`, `address`, `pinManager`, …) cannot be overridden through `options`. Video stream `options` are read by `MediaMtxConfigurator` (`inputFormat`, `hwEncoder` for V4L2 webcams).
+The `options` of pin managers, control channels and telemetry channels are set on the public writable properties of the type with the same name (case-insensitive, `ChannelOptionBinder`); unknown keys are logged and skipped. Control properties that come from the channel itself (`name`, `address`, `pinManager`, …) cannot be overridden through `options`. Video stream `options` are read by `MediaMtxConfigurator`: for V4L2 webcams `pipeline`, `inputFormat`, `hwEncoder`, `ffmpegLogLevel`; for the Pi camera `sensorMode`, `ffmpegLogLevel`.
+
+V4L2 webcams are captured by **ffmpeg** (default) or, with `"pipeline": "gstreamer"`, by **GStreamer**. ffmpeg decodes the webcam's MJPEG and converts the pixels on the CPU even with `hwEncoder` (Pi 3B+, 1280x720 at 22 fps: about 1.3 cores). GStreamer decodes MJPEG with the SoC's V4L2 JPEG decoder and feeds the frames straight into the V4L2 H.264 encoder (same camera: about 0.4 cores; raw `yuyv422` at 640x480/30 fps: about 0.1 cores). Requirements and limits of GStreamer:
+
+- packages `gstreamer1.0-tools` and `gstreamer1.0-plugins-good` (`jpegparse`/`h264parse` from plugins-bad are not needed);
+- on a Pi 3 together with a Pi camera `gpu_mem=128` in `/boot/firmware/config.txt`: with the default 76 MB the decoder fails with `Not enough GPU mem?`, which can leave the GPU interface hung until a reboot;
+- the Pi 3's JPEG decoder keeps up to 1280x720 at 30 fps; larger MJPEG frames drop to a few fps;
+- `hwEncoder`, `ffmpegLogLevel`, brightness and contrast have no effect; `inputFormat: h264` falls back to ffmpeg.
 
 The onboard reports these options per type when it connects (`OptionSchemaBuilder`: JSON type, default of a fresh instance, XML doc summary as description); the server serves them at `GET /api/cars/{carId}/channels/option-schemas`. The channel config page uses them in its options editor: Ctrl+Space completes keys and values, hovering a key shows its description, and unknown keys, wrong types and unknown pin manager names are flagged. A new option property only needs a `/// <summary>` to be documented there.
 
