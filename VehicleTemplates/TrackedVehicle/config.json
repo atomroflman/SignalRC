@@ -93,6 +93,43 @@
         "unit": "°C",
         "decimals": 1
       },
+      "cpuLoad": {
+        "telemetryType": "SignalRC.Onboard.Telemetry.CpuLoadReader",
+        "dataType": "Number",
+        "readIntervalTicks": 10,
+        "unit": "%",
+        "decimals": 0
+      },
+      "cpuLoadBusiestCore": {
+        "telemetryType": "SignalRC.Onboard.Telemetry.CpuLoadReader",
+        "dataType": "Number",
+        "readIntervalTicks": 10,
+        "unit": "%",
+        "decimals": 0,
+        "options": {
+          "report": "BusiestCore"
+        }
+      },
+      "networkUpload": {
+        "telemetryType": "SignalRC.Onboard.Telemetry.NetworkTrafficReader",
+        "dataType": "Number",
+        "readIntervalTicks": 10,
+        "unit": "kbit/s",
+        "decimals": 0,
+        "options": {
+          "report": "Tx"
+        }
+      },
+      "networkDownload": {
+        "telemetryType": "SignalRC.Onboard.Telemetry.NetworkTrafficReader",
+        "dataType": "Number",
+        "readIntervalTicks": 10,
+        "unit": "kbit/s",
+        "decimals": 0,
+        "options": {
+          "report": "Rx"
+        }
+      },
       "lidar": {
         "pinManager": "lidar",
         "telemetryType": "SignalRC.Onboard.Telemetry.LidarTelemetryReader",
