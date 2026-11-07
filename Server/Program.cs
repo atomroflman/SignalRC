@@ -90,7 +90,11 @@ builder.Services.AddControllers().AddJsonOptions(options =>
 });
 builder.Services.AddSignalR()
     .AddMessagePackProtocol()
-    .AddJsonProtocol();
+    .AddJsonProtocol()
+    // The vehicle registers its channel types with every option description (RegisterAvailableChannelTypes),
+    // about 35 KB in MessagePack and growing with each reader. Above the 32 KB default the server closed the
+    // connection and the types never arrived.
+    .AddHubOptions<CarConnectionHub>(options => options.MaximumReceiveMessageSize = 1024 * 1024);
 
 var dataProtectionKeysPath = Path.Combine(Directory.GetCurrentDirectory(), "DataProtectionKeys");
 Directory.CreateDirectory(dataProtectionKeysPath);
