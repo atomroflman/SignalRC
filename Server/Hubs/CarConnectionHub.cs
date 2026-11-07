@@ -850,31 +850,9 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
             .ThenBy(s => s.Name)
             .ToListAsync();
 
-        return streams
-            .Select(s => new VideoStreamMapItem()
-            {
-                Name = s.Name,
-                StreamId = s.StreamId,
-                Type = s.Type,
-                Location = s.Location,
-                Width = s.Width,
-                Height = s.Height,
-                Bitrate = s.Bitrate,
-                Framerate = s.Framerate,
-                Brightness = s.Brightness,
-                Gain = s.Gain,
-                Shutter = s.Shutter,
-                Contrast = s.Contrast,
-                EV = s.EV,
-                Exposure = s.Exposure,
-                Enabled = s.Enabled,
-                CameraDevice = s.CameraDevice,
-                ModifiedAt = s.ModifiedAt,
-                Port = s.Port,
-                RpiCamId = s.RpiCamId,
-                ServerId = s.Id,
-            })
-            .ToList();
+        // The same mapping as the setup's per-stream push: the vehicle also syncs its streams from
+        // here (VideoStreamService.GetStream), and a hand-written copy here once dropped Options.
+        return streams.Select(ChannelMapMapper.ToMapItem).ToList();
     }
 
     public async Task ChangeVideoStreamSettings(int streamId, VideoStreamMapItem settings)
@@ -901,27 +879,9 @@ public partial class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHu
         
         Logger.LogInformation("Restarting video stream {StreamId} ({StreamName}) for car {CarId} with new settings", stream.Id, stream.Name, stream.CarId);
 
-        settings.Name = stream.Name;
-        settings.Type = stream.Type;
-        settings.Location = stream.Location;
-        settings.Enabled = stream.Enabled;
-        settings.CameraDevice = stream.CameraDevice;
-        settings.RpiCamId = stream.RpiCamId;
-        settings.Port = stream.OnboardTargetPort;
-        settings.Width = stream.Width;
-        settings.Height = stream.Height;
-        settings.Framerate = stream.Framerate;
-        settings.Bitrate = stream.Bitrate;
-        settings.Brightness = stream.Brightness;
-        settings.Gain = stream.Gain;
-        settings.Shutter = stream.Shutter;
-        settings.Contrast = stream.Contrast;
-        settings.EV = stream.EV;
-        settings.Exposure = stream.Exposure;
-        settings.ServerId = stream.Id;
-        settings.ModifiedAt = stream.ModifiedAt;
-
-        await Clients.Car(stream.CarId).UpdateVideoStream(stream.StreamId, settings);
+        // The vehicle replaces its whole stream entry with this, so it must carry every field the
+        // setup sends (Options with e.g. sensorMode included): the same mapper, from the saved row.
+        await Clients.Car(stream.CarId).UpdateVideoStream(stream.StreamId, ChannelMapMapper.ToMapItem(stream));
     }
 
     public async Task<OnboardDiagnosticsReport> GetOnboardDiagnostics(int carId)
