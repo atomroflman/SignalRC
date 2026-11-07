@@ -48,7 +48,7 @@ export interface PartOverride {
 
 export type ElementType =
   | "group" | "rect" | "ellipse" | "line" | "arc" | "text" | "valueText"
-  | "linearGauge" | "radialGauge" | "svgAsset" | "lidarWidget";
+  | "linearGauge" | "radialGauge" | "svgAsset" | "lidarWidget" | "videoStream";
 
 export interface OverlayElement {
   type: ElementType;

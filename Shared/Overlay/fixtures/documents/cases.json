@@ -27,6 +27,11 @@
       "diagnostics": []
     },
     {
+      "file": "valid/video-stream.json",
+      "schemaValid": true,
+      "diagnostics": []
+    },
+    {
       "file": "invalid-schema/unknown-schema-version.json",
       "schemaValid": false
     },
@@ -56,6 +61,10 @@
     },
     {
       "file": "invalid-schema/interaction-unknown-kind.json",
+      "schemaValid": false
+    },
+    {
+      "file": "invalid-schema/video-without-source.json",
       "schemaValid": false
     },
     {
@@ -294,6 +303,20 @@
           "location": {
             "element": "e_l",
             "property": "display"
+          }
+        }
+      ]
+    },
+    {
+      "file": "invalid-semantic/video-fit-not-allowed.json",
+      "schemaValid": true,
+      "diagnostics": [
+        {
+          "code": "OVL_PROP_OUT_OF_RANGE",
+          "category": "structure",
+          "location": {
+            "element": "e_v",
+            "property": "fit"
           }
         }
       ]

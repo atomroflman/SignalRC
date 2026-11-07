@@ -419,6 +419,17 @@ export function validate(input: unknown, context: ResolveContext = {}): Diagnost
       }
     }
   }
+  if (ctx.streams) {
+    // A picture-in-picture of a missing stream only shows its frame: a warning, never blocking.
+    const stream = (element: OverlayElement, loc: DiagnosticLocation) => {
+      if (element.type !== "videoStream" || element.source === undefined || ctx.streams!.includes(element.source)) return;
+      out.add("OVL_REF_UNKNOWN_SOURCE", "warning", { ...loc, field: "source", ref: element.source }, `Stream ${element.source} gibt es nicht`);
+    };
+    for (const [id, element] of sortedEntries(doc.elements)) stream(element, { element: id });
+    for (const [streamId, variant] of sortedEntries(doc.variants)) {
+      for (const [id, element] of sortedEntries(variant.addedElements)) stream(element, { variant: streamId, element: id });
+    }
+  }
   if (ctx.assets) {
     const asset = (element: OverlayElement, loc: DiagnosticLocation) => {
       if (element.type === "svgAsset" && element.assetId && !ctx.assets![element.assetId]) {

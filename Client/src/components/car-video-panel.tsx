@@ -223,6 +223,17 @@ export default function CarVideoPanel({ carId }: CarVideoPanelProps): JSX.Elemen
     [published?.publication, selectedStream?.streamId],
   );
 
+  // Only what a picture-in-picture needs, so viewer counts in the stream list don't churn the HUD.
+  const pipKey = JSON.stringify([selectedStream?.streamId ?? null, streams.map(s => [s.streamId, s.serverId, s.enabled])]);
+  const pip = useMemo(
+    () => ({
+      mainStreamId: selectedStream?.streamId,
+      streams: streams.map(s => ({ streamId: s.streamId, serverId: s.serverId, enabled: s.enabled })),
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pipKey],
+  );
+
   const hud = useMemo<VideoHudInput | undefined>(() => {
     if (!carId || !published) return undefined;
     const problem = published.problem
@@ -235,8 +246,9 @@ export default function CarVideoPanel({ carId }: CarVideoPanelProps): JSX.Elemen
       hidden: hudHidden,
       onHiddenChange: changeHudHidden,
       problem,
+      pip,
     };
-  }, [carId, published, hudConfig, hudHidden, changeHudHidden, messages]);
+  }, [carId, published, hudConfig, hudHidden, changeHudHidden, messages, pip]);
 
   // NOTE: Streams are no longer activated/deactivated automatically when the
   // panel mounts or the selection changes. Use the Video Settings panel to

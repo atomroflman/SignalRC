@@ -10,7 +10,7 @@ export interface DocumentReferences {
   telemetry: Record<string, number>;
   /** Output (control channel) → number of uses. */
   outputs: Record<string, number>;
-  /** StreamIds of the variants. */
+  /** StreamIds of the variants and of picture-in-picture elements, sorted. */
   streams: string[];
   /** Referenced asset ids, sorted. */
   assets: string[];
@@ -138,12 +138,14 @@ export function collectReferences(doc: OverlayDocument): DocumentReferences {
     return expr;
   });
   const assets = new Set<string>();
+  const streams = new Set(Object.keys(doc.variants ?? {}));
   for (const el of allElements(doc)) {
     if (el.type === "lidarWidget" && typeof el.source === "string") count(telemetry, el.source);
+    if (el.type === "videoStream" && typeof el.source === "string") streams.add(el.source);
     if (typeof el.assetId === "string") assets.add(el.assetId);
   }
   for (const name of Object.keys(doc.sources?.telemetry ?? {})) count(telemetry, name);
-  return { telemetry, outputs, streams: Object.keys(doc.variants ?? {}).sort(), assets: [...assets].sort() };
+  return { telemetry, outputs, streams: [...streams].sort(), assets: [...assets].sort() };
 }
 
 export class MappingError extends Error {
@@ -152,13 +154,15 @@ export class MappingError extends Error {
   }
 }
 
-/** Applies the renaming to formulas, LiDAR sources, deadline overrides, variant keys and asset ids. */
+/** Applies the renaming to formulas, LiDAR and video sources, deadline overrides, variant keys and asset ids. */
 export function applyReferenceMapping(doc: OverlayDocument, mapping: ReferenceMapping): OverlayDocument {
   const out = mapFormulas(doc, (expr) => renameInFormula(expr, mapping));
   const tel = mapping.telemetry ?? {};
   const assets = mapping.assets ?? {};
+  const streamMap = mapping.streams ?? {};
   for (const el of allElements(out)) {
     if (el.type === "lidarWidget" && typeof el.source === "string" && tel[el.source] !== undefined) el.source = tel[el.source];
+    if (el.type === "videoStream" && typeof el.source === "string" && streamMap[el.source]) el.source = streamMap[el.source];
     if (typeof el.assetId === "string" && assets[el.assetId] !== undefined) el.assetId = assets[el.assetId];
   }
   const overrides = out.sources?.telemetry;

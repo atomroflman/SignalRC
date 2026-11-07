@@ -78,10 +78,11 @@ export function OverlayEditor(props: OverlayEditorProps) {
       ...(props.channels ?? channelDirectory({ channels: source?.channels?.(), sources: props.resolveContext?.sources })),
       ...(props.flowSignals ? { flowSignals: props.flowSignals } : {}),
       ...(props.flowInputs ? { flowInputs: props.flowInputs } : {}),
+      ...(props.streams ? { streams: props.streams } : {}),
     }),
     // channelCount re-reads the provider after its metadata arrived.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [props.channels, source, props.resolveContext, channelCount, props.flowSignals, props.flowInputs],
+    [props.channels, source, props.resolveContext, channelCount, props.flowSignals, props.flowInputs, props.streams],
   );
 
   useEffect(() => {
@@ -138,7 +139,7 @@ export function OverlayEditor(props: OverlayEditorProps) {
   return (
     <div className={`relative flex flex-col gap-2 text-zinc-100 min-h-0 ${props.className ?? ""}`} data-ovl-editor={carId}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <Toolbar store={store} m={m} onDelete={requestDelete} onFit={() => setFitKey((k) => k + 1)} />
+        <Toolbar store={store} m={m} onDelete={requestDelete} onFit={() => setFitKey((k) => k + 1)} streams={props.streams} />
         {save && <SaveStatus save={save} m={m} carId={carId} />}
       </div>
       {save && <SaveNotices save={save} m={m} carId={carId} />}

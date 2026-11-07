@@ -122,6 +122,16 @@ public class ValidateTests
     }
 
     [Fact]
+    public void WarnsAboutAPictureInPictureOfAnUnknownStreamOnlyWhenStreamsAreKnown()
+    {
+        var d0 = Doc("""{ "elements": { "e_v": { "type": "videoStream", "source": "gone" } }, "children": ["e_v"] }""");
+        Assert.Empty(DocumentResolver.Validate(d0));
+        Assert.Empty(DocumentResolver.Validate(d0, new ResolveContext { Streams = ["gone"] }));
+        AssertMatches(DocumentResolver.Validate(d0, new ResolveContext { Streams = ["front"] }),
+            """[{ "code": "OVL_REF_UNKNOWN_SOURCE", "category": "warning", "location": { "element": "e_v", "field": "source", "ref": "gone" } }]""");
+    }
+
+    [Fact]
     public void ReportsAVariantOnlyOwnershipConflictAsPublish()
     {
         var d = DocumentResolver.Validate(Doc("""

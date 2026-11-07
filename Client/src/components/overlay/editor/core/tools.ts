@@ -271,11 +271,15 @@ export function duplicateCommand(config: EffectiveConfig, ids: string[], taken: 
   return { type: "addElements", elements, roots, container, index };
 }
 
+/** Placeholder stream of a picture-in-picture inserted without known streams; the inspector picks the real one. */
+export const DEFAULT_VIDEO_STREAM = "camera";
+
 /** Starting element of a type at a workspace point (catalog defaults otherwise). */
-export function newElement(type: ElementType, at: Point): OverlayElement {
+export function newElement(type: ElementType, at: Point, defaults: { stream?: string } = {}): OverlayElement {
   const el: OverlayElement = { type, props: { x: round(at.x), y: round(at.y) } };
   if (type === "group") el.children = [];
   if (type === "lidarWidget") el.source = LIDAR_GRID_CHANNEL;
+  if (type === "videoStream") el.source = defaults.stream || DEFAULT_VIDEO_STREAM;
   return el;
 }
 

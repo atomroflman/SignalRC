@@ -691,6 +691,29 @@ Arbeitspakete: [Overlay-Arbeitspakete.md](Overlay-Arbeitspakete.md).
   Varianten-Überschreibungen von Teilen ist sie nicht erlaubt.
 - Kompatible Erweiterung: `catalogVersion` 2, `schemaVersion` bleibt 1.
 
+### D76 – Bild-in-Bild als Elementtyp `videoStream`
+
+- Ein Element `videoStream` zeigt einen weiteren Videostream des Fahrzeugs
+  im HUD. `source` ist dessen `StreamId` (Pflicht, wie Varianten-Schlüssel).
+  Eigenschaften: `width`, `height`, `cornerRadius`, `fit` (`cover`,
+  `contain`), `background`, `stroke`, `strokeWidth`; dazu die gemeinsamen
+  Transformationen, `opacity` und `visible` (z. B. per Bindung nur beim
+  Rückwärtsfahren).
+- Zusammengesetzt wird im Browser, nicht auf dem Fahrzeug: jedes gezeigte
+  Element öffnet ein eigenes Abo des Janus-Mountpoints. Das Fahrzeug sendet
+  unverändert jeden aktivierten Stream einzeln; Bandbreite = Summe der Streams.
+- Die Runtime liefert je sichtbarem Element einen Video-Platz (Weltmatrix
+  inkl. `rootTransform`, Box, Gesamtdeckkraft). Der Gastgeber legt dort ein
+  HTML-Video **unter** die SVG-Zeichnung; die SVG zeichnet nur den Rahmen.
+  Alle anderen HUD-Elemente liegen damit über dem Bild-in-Bild.
+- Ist der Stream unbekannt, deaktiviert oder gerade der groß angezeigte,
+  bleibt nur der Hintergrund sichtbar. Unbekannte Streams sind mit
+  Stream-Kontext eine Warnung (`OVL_REF_UNKNOWN_SOURCE`), nie blockierend.
+- Im Entwurfsmodus zeichnet die Szene einen gefüllten Platzhalter mit dem
+  Streamnamen. Beim Austausch zählen die Quellen zu den Stream-Referenzen und
+  folgen der Stream-Zuordnung.
+- Kompatible Erweiterung: `catalogVersion` 4, `schemaVersion` bleibt 1.
+
 ## Spezifikationsstand
 
 ### S01 – Dokumentmodell und Property-Katalog v1 (Entwurf)
@@ -826,6 +849,7 @@ Gerätelauf ([modules §4](Shared/Overlay/modules/README.md)).
 | 2026-11-02 | D74: LiDAR-Kontur-Modus (LiDAR-Vertrag §6 neu gegliedert, §6.2 Kontur); Katalog `lidarWidget` um `display`, `contourJoinMm`, `contourWidth`, `contourShadow`, `contourShadowOpacity`; Referenzfälle `contour` in `fixtures/lidar/cases.json`, Dokument-Fixtures `valid/lidar-contour.json`, `invalid-semantic/lidar-display-not-allowed.json`; Vorlage `lidarContour` | AP01, AP08, AP10, AP12 |
 | 2026-11-04 | D75: klickbare HUD-Elemente; Attribut `interaction` an Elementen und Element-Teilen (Schema `interaction`, `partOverrideMap` für Varianten), `catalogVersion` 2; Flow-Knoten `HudInput`; Hub-Aufruf `HudInput` und Weiterleitung an die Fahrerverbindung (API §4); Fixtures `valid/interactions.json`, `invalid-schema/interaction-unknown-kind.json` | AP01, AP08, AP10, AP13 |
 | 2026-11-04 | Katalog `svgAsset` um `fill`/`stroke` (Standard `fromAsset`) für das ganze Asset; Teil-Farben färben den ganzen Teil (SVG-Vertrag §5); `catalogVersion` 3 | AP07, AP08, AP10 |
+| 2026-11-07 | D76: Elementtyp `videoStream` (Bild-in-Bild) in Schema und Katalog, `catalogVersion` 4; Warnung `OVL_REF_UNKNOWN_SOURCE` für unbekannte Streams; Fixtures `valid/video-stream.json`, `invalid-schema/video-without-source.json`, `invalid-semantic/video-fit-not-allowed.json` | AP01, AP08, AP10, AP12, AP13 |
 
 ## Prüfpunkte nach Freigabe
 

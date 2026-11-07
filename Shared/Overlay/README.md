@@ -70,6 +70,7 @@ die beiden letzten gehören zum Persistenzvertrag, nicht ins Dokument.
 | `line` | – | Startpunkt; Ende bei `(x2, y2)` |
 | `arc`, `radialGauge` | – | oben links; Mittelpunkt bei `(radius, radius)` |
 | `lidarWidget` | `source` (Kanalname des Rasters) | oben links; Mittelpunkt bei `(radius, radius)` |
+| `videoStream` | `source` (`StreamId` des gezeigten Streams, D76) | Ecke oben links der Box `width × height` |
 | `text`, `valueText` | – | Ausrichtungspunkt (`align`) auf der alphabetischen Grundlinie |
 | `linearGauge` | – | Ecke oben links der Box |
 | `svgAsset` | `assetId`, `parts` | Ursprung der normalisierten Asset-ViewBox |
@@ -281,7 +282,7 @@ ordinal kleineren ID; gemeldet wird jede weitere Spur.
 | `OVL_REF_UNKNOWN_CLIP` | structure | Überschreibung eines unbekannten Clips |
 | `OVL_REF_UNKNOWN_PART` | structure | unbekannter SVG-Teil (nur mit Asset-Metadaten) |
 | `OVL_REF_UNKNOWN_ASSET` | publish | Asset nicht vorhanden (nur mit Asset-Kontext; nie abgeschwächt) |
-| `OVL_REF_UNKNOWN_SOURCE` | publish / warning | unbekannte Quelle in Formel oder LiDAR-Widget; unbekannter Kanal in `sources.telemetry` nur `warning` |
+| `OVL_REF_UNKNOWN_SOURCE` | publish / warning | unbekannte Quelle in Formel oder LiDAR-Widget; unbekannter Kanal in `sources.telemetry` und unbekannter Stream eines `videoStream` (nur mit Stream-Kontext) nur `warning` |
 | `OVL_PROP_UNKNOWN` | structure | Eigenschaft gibt es für den Typ nicht |
 | `OVL_PROP_MODE_NOT_ALLOWED` | structure | Steuerungsmodus nicht erlaubt |
 | `OVL_PROP_TYPE` | structure | Wert hat den falschen Typ (auch Keyframe-Werte) |

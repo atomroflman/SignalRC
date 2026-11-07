@@ -24,6 +24,14 @@ import VideoHud, { VideoFrameLayer } from './overlay/integration/video-hud';
 import type { EffectiveConfig } from './overlay/document';
 import type { RuntimeAsset } from './overlay/runtime/types';
 import type { Size, VideoGeometry } from './overlay/integration/video-frame';
+import type { VideoSlot } from './overlay/runtime/types';
+
+/** Streams a HUD picture-in-picture element can show, by StreamId. */
+export interface HudPipStreams {
+  /** StreamId shown full size; a picture-in-picture of it stays empty. */
+  mainStreamId?: string;
+  streams: { streamId: string; serverId: number; enabled: boolean }[];
+}
 
 /** The vehicle HUD over this stream (AP13); absent or config null = no HUD. */
 export interface VideoHudInput {
@@ -34,6 +42,8 @@ export interface VideoHudInput {
   onHiddenChange: (hidden: boolean) => void;
   /** Hint about the newest publication (not usable / not loaded). */
   problem?: string;
+  /** Streams for the HUD's picture-in-picture elements. */
+  pip?: HudPipStreams;
 }
 
 // Video only: the vehicle microphone has its own mountpoint, see vehicle-audio.tsx.
@@ -582,6 +592,15 @@ function JanusStreamList({ streams, messages }: JanusStreamListProps) {
   );
 }
 
+/**
+ * A stream as plain video filling its box, e.g. a HUD picture-in-picture.
+ * Its own Janus session; without a picture the box's background shows.
+ */
+export function StreamVideo({ streamId, fit }: { streamId: number; fit: 'cover' | 'contain' }) {
+  const { videoRef } = useJanusStreaming(streamId);
+  return <video ref={videoRef} autoPlay playsInline muted className="block h-full w-full" style={{ objectFit: fit }} />;
+}
+
 type FullscreenDocument = Document & { webkitFullscreenElement?: Element | null; webkitExitFullscreen?: () => Promise<void> | void };
 type FullscreenElement = HTMLElement & { webkitRequestFullscreen?: () => Promise<void> | void };
 
@@ -656,6 +675,12 @@ export default function VideoStream({
 
   const hudConfig = hud?.config ?? null;
   const hudMessages = messages.overlay.hud;
+  const pip = hud?.pip;
+  const renderPip = useCallback((slot: VideoSlot) => {
+    const stream = pip?.streams.find((s) => s.streamId === slot.source);
+    if (!stream || !stream.enabled || stream.streamId === pip?.mainStreamId) return null;
+    return <StreamVideo key={stream.serverId} streamId={stream.serverId} fit={slot.fit} />;
+  }, [pip]);
 
   return (
     <div ref={containerRef} className="relative flex h-full min-h-0 w-full items-center justify-center">
@@ -732,6 +757,7 @@ export default function VideoStream({
           containerRef={containerRef}
           videoRef={videoRef}
           pausedText={hudMessages.controlPaused}
+          renderVideo={renderPip}
         />
       )}
       {frameLayer && (

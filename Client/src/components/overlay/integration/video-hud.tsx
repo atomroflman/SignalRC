@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 import type { EffectiveConfig } from "../document";
 import { OverlayRenderer } from "../runtime/overlay-renderer";
-import type { FrameResult, Locale, RuntimeAsset } from "../runtime/types";
+import type { FrameResult, Locale, RuntimeAsset, VideoSlot } from "../runtime/types";
 import { sharedSourceHub, type CarSourceProvider } from "../sources";
 import { showsPausedControl } from "./hud-config";
 import { useHudInteraction } from "./hud-interaction";
@@ -71,9 +71,11 @@ export interface VideoHudProps {
   containerRef: RefObject<HTMLElement | null>;
   videoRef: RefObject<HTMLVideoElement | null>;
   pausedText: string;
+  /** Content of the HUD's picture-in-picture elements (videoStream); only while the HUD is shown. */
+  renderVideo?: (slot: VideoSlot) => ReactNode;
 }
 
-export default function VideoHud({ carId, config, assets, locale, visible, containerRef, videoRef, pausedText }: VideoHudProps) {
+export default function VideoHud({ carId, config, assets, locale, visible, containerRef, videoRef, pausedText, renderVideo }: VideoHudProps) {
   // Without a displayed picture (no stream, connecting, stream lost) the HUD
   // covers the workspace fitted into the player, so telemetry stays visible.
   const frame = layerRect(useVideoGeometry(containerRef, videoRef), config.workspace);
@@ -130,6 +132,7 @@ export default function VideoHud({ carId, config, assets, locale, visible, conta
         active={active}
         onFrame={onFrame}
         onDiagnostics={onDiagnostics}
+        renderVideo={renderVideo}
         className="absolute inset-0 h-full w-full"
       />
       {active && paused && (

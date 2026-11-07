@@ -121,7 +121,7 @@ export function localBox(
   childBox?: (id: string) => Box | undefined,
 ): Box {
   switch (el.type) {
-    case "rect": case "ellipse": case "linearGauge":
+    case "rect": case "ellipse": case "linearGauge": case "videoStream":
       return [0, 0, n(p.width), n(p.height)];
     case "line": {
       const x2 = n(p.x2);

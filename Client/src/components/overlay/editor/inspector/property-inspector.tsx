@@ -97,6 +97,7 @@ export function PropertyInspector(props: PropertyInspectorProps) {
         </label>
       )}
       {el.type === "lidarWidget" && part === undefined && <LidarSource ctx={ctx} />}
+      {el.type === "videoStream" && part === undefined && <VideoSource ctx={ctx} />}
       {el.type !== "lidarWidget" && <InteractionEditor store={store} el={el} part={part} dir={dir} m={m} />}
       {sections(el, part).map((s) => (
         <div key={s.key} className="flex flex-col gap-1" data-ovl-section={s.key}>
@@ -107,6 +108,24 @@ export function PropertyInspector(props: PropertyInspectorProps) {
           })}
         </div>
       ))}
+    </div>
+  );
+}
+
+function VideoSource({ ctx }: { ctx: RowContext }) {
+  const { el, m, dir, store } = ctx;
+  const options = dir.streams ?? [];
+  return (
+    <div className="flex flex-col gap-0.5" data-ovl-video-source={el.source ?? ""}>
+      <label className="flex items-center gap-1">
+        <span className="text-zinc-400 shrink-0">{m.videoSource}</span>
+        {/* source is required: there is no "none" entry, an unknown name stays selectable. */}
+        <select className={input} value={el.source ?? ""} onChange={(e) => { if (e.target.value) store.dispatch(lidarSourceCommand(el.id, e.target.value)); }}>
+          {el.source && !options.some((o) => o.streamId === el.source) && <option value={el.source}>{el.source}</option>}
+          {options.map((o) => <option key={o.streamId} value={o.streamId}>{o.name ? `${o.name} (${o.streamId})` : o.streamId}</option>)}
+        </select>
+      </label>
+      <span className="text-[11px] text-zinc-500">{m.videoSourceHint}</span>
     </div>
   );
 }

@@ -5,7 +5,7 @@ import type { EffectiveConfig } from "../document/types";
 import type { OverlaySourceProvider, OverlayValueSource, Requirement } from "../sources/types";
 import { createRuntime, type Runtime, type RuntimeSource } from "./runtime";
 import { SceneBuilder } from "./scene";
-import type { Clock, FrameResult, Locale, RenderMode, RuntimeAsset, RuntimeDiagnostic, Scrub } from "./types";
+import type { Clock, FrameResult, Locale, RenderMode, RuntimeAsset, RuntimeDiagnostic, Scrub, VideoSlot } from "./types";
 import { create, patch, type DomDocument, type DomNode, type VNode } from "./vnode";
 
 /** A plain value source, or a provider whose requirement the controller manages. */
@@ -25,6 +25,8 @@ export interface ControllerOptions {
   onDiagnostics?: (diagnostics: RuntimeDiagnostic[]) => void;
   /** Called after every rendered frame (editor inspection, tests). */
   onFrame?: (frame: FrameResult) => void;
+  /** Called when the shown picture-in-picture elements change (count, place, size, look). */
+  onVideos?: (videos: VideoSlot[]) => void;
 }
 
 const NO_ASSETS: Record<string, RuntimeAsset> = {};
@@ -54,6 +56,7 @@ export class OverlayController {
   private vnode: VNode | undefined;
   private dom: DomNode | undefined;
   private lastDiagnostics = "";
+  private lastVideos = "[]";
   private disposed = false;
   readonly consumerId = `overlay-hud-${++consumerCounter}`;
 
@@ -104,7 +107,7 @@ export class OverlayController {
 
   private sceneOptions() {
     const o = this.options;
-    return { locale: o.locale, pxPerUnit: o.pxPerUnit ?? 1, idPrefix: o.idPrefix ?? "ovl-", assets: o.assets ?? NO_ASSETS };
+    return { locale: o.locale, pxPerUnit: o.pxPerUnit ?? 1, idPrefix: o.idPrefix ?? "ovl-", assets: o.assets ?? NO_ASSETS, mode: o.mode };
   }
 
   private compile() {
@@ -201,11 +204,19 @@ export class OverlayController {
         this.dom = patch(this.doc, this.host, this.dom, this.vnode, scene.tree);
       }
       this.vnode = scene.tree;
+      this.reportVideos(scene.videos);
     } catch (e) {
       diagnostics = [...diagnostics, { code: "OVL_RUNTIME_ERROR", severity: "error", location: {}, message: String(e instanceof Error ? e.message : e) }];
     }
     this.report(diagnostics);
     this.options.onFrame?.(frame);
+  }
+
+  private reportVideos(videos: VideoSlot[]) {
+    const key = JSON.stringify(videos);
+    if (key === this.lastVideos) return;
+    this.lastVideos = key;
+    this.options.onVideos?.(videos);
   }
 
   private report(diagnostics: RuntimeDiagnostic[]) {

@@ -85,6 +85,7 @@ const types = (de: boolean): Record<ElementType, string> => ({
   radialGauge: de ? "Rundanzeige" : "Radial gauge",
   svgAsset: "SVG",
   lidarWidget: "LiDAR",
+  videoStream: de ? "Video (Bild-in-Bild)" : "Video (picture-in-picture)",
 });
 
 const de: EditorMessages = {

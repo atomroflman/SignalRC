@@ -266,6 +266,11 @@ internal sealed partial class SchemaCheck(Action<string, string> report)
             if (!Object(o, p, [.. CommonAttrs, "source"], ["type", "source"])) return;
             Expect(Json.IsString(o["source"], 64, 1), Pointer(p, "source"), "Kanalname erwartet");
         }
+        else if (type == "videoStream")
+        {
+            if (!Object(o, p, [.. CommonAttrs, "source"], ["type", "source"])) return;
+            Expect(Json.IsString(o["source"], 50, 1), Pointer(p, "source"), "StreamId erwartet");
+        }
         else
         {
             report(Pointer(p, "type"), "unbekannter Elementtyp");

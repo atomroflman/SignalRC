@@ -74,6 +74,8 @@ export type DynamicsMessages = {
   lidarSourceNone: string;
   lidarZones: (limits: string) => string;
   lidarSourceHint: string;
+  videoSource: string;
+  videoSourceHint: string;
   invalidInput: Record<"type" | "range", string>;
   // Timeline
   timeline: string;
@@ -187,6 +189,8 @@ const de: DynamicsMessages = {
   lidarSourceNone: "keine",
   lidarZones: (l) => `Zonengrenzen der Quelle: ${l}`,
   lidarSourceHint: "Zonen, Gruppenerkennung und Montageversatz gehören zur Quelle (Kanalverwaltung), nicht zum HUD.",
+  videoSource: "Stream",
+  videoSourceHint: "Der Stream muss aktiviert sein. Ist er gerade der groß angezeigte, bleibt das Bild-in-Bild leer.",
   invalidInput: { type: "Wert passt nicht zum Typ", range: "Wert außerhalb des erlaubten Bereichs" },
   timeline: "Zeitachse",
   clips: "Clips",
@@ -299,6 +303,8 @@ const en: DynamicsMessages = {
   lidarSourceNone: "none",
   lidarZones: (l) => `Zone limits of the source: ${l}`,
   lidarSourceHint: "Zones, group detection and mounting offset belong to the source (channel settings), not to the HUD.",
+  videoSource: "Stream",
+  videoSourceHint: "The stream must be enabled. While it is the one shown full size, the picture-in-picture stays empty.",
   invalidInput: { type: "Value does not fit the type", range: "Value out of the allowed range" },
   timeline: "Timeline",
   clips: "Clips",

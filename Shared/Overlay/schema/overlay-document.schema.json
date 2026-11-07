@@ -247,6 +247,15 @@
           },
           "required": ["source"],
           "additionalProperties": false
+        },
+        {
+          "properties": {
+            "type": { "const": "videoStream" },
+            "source": { "$ref": "#/$defs/streamId" },
+            "name": true, "disabled": true, "locked": true, "editorHidden": true, "lockAspect": true, "onInvalid": true, "props": true, "interaction": true
+          },
+          "required": ["source"],
+          "additionalProperties": false
         }
       ]
     },

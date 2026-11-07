@@ -81,11 +81,11 @@ export function distribute(store: EditorStore, axis: "x" | "y") {
 }
 
 /** Inserts a new element in the workspace center (inside the entered group if any). */
-export function insertElement(store: EditorStore, type: ElementType) {
+export function insertElement(store: EditorStore, type: ElementType, defaults: { stream?: string } = {}) {
   const ws = store.effective().workspace;
   const id = newElementId(store);
   const container = store.getState().view.enteredGroup ?? undefined;
-  const el = newElement(type, container ? { x: 0, y: 0 } : { x: ws.width / 2 - 50, y: ws.height / 2 - 50 });
+  const el = newElement(type, container ? { x: 0, y: 0 } : { x: ws.width / 2 - 50, y: ws.height / 2 - 50 }, defaults);
   const ok = store.dispatch({ type: "addElements", elements: { [id]: el }, roots: [id], container }).ok;
   if (ok) store.select([id]);
   return ok;

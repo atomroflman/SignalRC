@@ -525,6 +525,16 @@ public static partial class DocumentResolver
                 }
             }
         }
+        if (ctx.Streams is { } streams)
+        {
+            // A picture-in-picture of a missing stream only shows its frame: a warning, never blocking.
+            foreach (var (element, loc) in AllElements(doc))
+            {
+                if (element.Str("type") != "videoStream" || element.Str("source") is not { } stream || streams.Contains(stream)) continue;
+                output.Add("OVL_REF_UNKNOWN_SOURCE", DiagnosticCategory.Warning, loc with { Field = "source", Ref = stream },
+                    $"Stream {stream} gibt es nicht");
+            }
+        }
         if (ctx.Assets is { } assets)
         {
             foreach (var (element, loc) in AllElements(doc))

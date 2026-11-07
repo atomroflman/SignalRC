@@ -6,7 +6,7 @@ import {
   apply, arcPath, elementMatrix, IDENTITY, matrixAttr, multiply, polar, transformBox, unionBox, type Box, type Mat,
 } from "./geometry";
 import { AssetParseError, parseAsset, partsBelow, recolor, scopeIds, withParts, type ParsedAsset } from "./svg-asset";
-import type { ElementFrame, FrameResult, Locale, Marker, RuntimeAsset, RuntimeDiagnostic } from "./types";
+import type { ElementFrame, FrameResult, Locale, Marker, RenderMode, RuntimeAsset, RuntimeDiagnostic, VideoSlot } from "./types";
 import { h, num, type VNode } from "./vnode";
 import { lidarScene } from "./widgets/lidar/lidar-scene";
 
@@ -17,11 +17,15 @@ export interface SceneOptions {
   /** Prefix of scoped asset ids, `ovl-` by contract. */
   idPrefix: string;
   assets: Record<string, RuntimeAsset>;
+  /** Design mode draws a filled placeholder with the stream name for videoStream elements. */
+  mode?: RenderMode;
 }
 
 export interface Scene {
   tree: VNode;
   diagnostics: RuntimeDiagnostic[];
+  /** Shown videoStream elements, in drawing order; the host lays the videos under the SVG. */
+  videos: VideoSlot[];
 }
 
 export const MARKER_SIZE_PX = 16;
@@ -121,6 +125,7 @@ export class SceneBuilder {
   private readonly assetInstances = new Map<string, AssetInstance>();
   private diagnostics: RuntimeDiagnostic[] = [];
   private markers: VNode[] = [];
+  private videos: VideoSlot[] = [];
   private frame!: FrameResult;
 
   constructor(
@@ -133,7 +138,7 @@ export class SceneBuilder {
   setOptions(options: Partial<SceneOptions>) {
     const before = this.options;
     this.options = { ...this.options, ...options };
-    if (before.locale !== this.options.locale || before.assets !== this.options.assets || before.idPrefix !== this.options.idPrefix) {
+    if (before.locale !== this.options.locale || before.assets !== this.options.assets || before.idPrefix !== this.options.idPrefix || before.mode !== this.options.mode) {
       this.staticCache.clear();
       this.assetInstances.clear();
     }
@@ -143,22 +148,23 @@ export class SceneBuilder {
     this.frame = frame;
     this.diagnostics = [];
     this.markers = [];
+    this.videos = [];
     const rt = this.config.rootTransform;
     const root: Mat = rt ? [rt.scale, 0, 0, rt.scale, rt.offsetX, rt.offsetY] : IDENTITY;
-    const children = this.config.root.map((id) => this.element(id, root, true)).filter((c): c is VNode => !!c);
+    const children = this.config.root.map((id) => this.element(id, root, true, 1)).filter((c): c is VNode => !!c);
     const tree = h("g", {}, [
       h("g", { "data-ovl-root": "", transform: matrixAttr(root) }, children),
       h("g", { "data-ovl-markers": "" }, this.markers),
     ]);
-    return { tree, diagnostics: this.diagnostics };
+    return { tree, diagnostics: this.diagnostics, videos: this.videos };
   }
 
-  private element(id: string, parent: Mat, shown: boolean): VNode | undefined {
+  private element(id: string, parent: Mat, shown: boolean, parentOpacity: number): VNode | undefined {
     const el = this.config.elements[id];
     const f = this.frame.elements[id];
     if (!el || !f) return this.lastGood.get(id);
     try {
-      const node = this.renderElement(el, f, parent, shown);
+      const node = this.renderElement(el, f, parent, shown, parentOpacity);
       this.lastGood.set(id, node);
       return node;
     } catch (e) {
@@ -167,7 +173,7 @@ export class SceneBuilder {
     }
   }
 
-  private renderElement(el: EffectiveElement, f: ElementFrame, parent: Mat, parentShown: boolean): VNode {
+  private renderElement(el: EffectiveElement, f: ElementFrame, parent: Mat, parentShown: boolean, parentOpacity: number): VNode {
     const p = f.props;
     let marker = f.marker;
     let content: (VNode | string)[] | undefined;
@@ -188,9 +194,23 @@ export class SceneBuilder {
       const s = 1 / Math.max(1e-6, this.options.pxPerUnit);
       this.markers.push(h("g", { "data-ovl-marker": marker, "data-ovl-for": el.id, transform: `translate(${num(x)} ${num(y)}) scale(${num(s)})` }, markerSymbol(marker)));
     }
+    const opacity = n(p.opacity, 1) * (marker === "invalid" ? 0.4 : 1);
+    if (el.type === "videoStream" && shown && el.source) {
+      this.videos.push({
+        element: el.id,
+        source: el.source,
+        matrix: world,
+        width: n(p.width),
+        height: n(p.height),
+        cornerRadius: n(p.cornerRadius),
+        fit: p.fit === "contain" ? "contain" : "cover",
+        background: typeof p.background === "string" ? p.background : "#000000",
+        opacity: parentOpacity * opacity,
+      });
+    }
     let children: (VNode | string)[];
     if (el.type === "group") {
-      children = (el.children ?? []).map((c) => this.element(c, world, shown)).filter((c): c is VNode => !!c);
+      children = (el.children ?? []).map((c) => this.element(c, world, shown, parentOpacity * opacity)).filter((c): c is VNode => !!c);
     } else if (content) {
       children = content;
     } else {
@@ -201,7 +221,6 @@ export class SceneBuilder {
         if (this.staticIds.has(el.id)) this.staticCache.set(el.id, h("g", {}, children));
       }
     }
-    const opacity = n(p.opacity, 1) * (marker === "invalid" ? 0.4 : 1);
     return h("g", {
       "data-ovl-id": el.id,
       ...interactionAttrs(el.interaction),
@@ -215,7 +234,7 @@ export class SceneBuilder {
   private localBox(el: EffectiveElement, f: ElementFrame): Box {
     const p = f.props;
     switch (el.type) {
-      case "rect": case "ellipse": case "linearGauge":
+      case "rect": case "ellipse": case "linearGauge": case "videoStream":
         return [0, 0, n(p.width), n(p.height)];
       case "line": {
         const x2 = n(p.x2);
@@ -281,6 +300,8 @@ export class SceneBuilder {
         return this.linearGauge(p);
       case "radialGauge":
         return this.radialGauge(p);
+      case "videoStream":
+        return this.videoFrame(el, p);
       case "lidarWidget":
         return f.lidar ? lidarScene({
           radius: n(p.radius),
@@ -296,6 +317,29 @@ export class SceneBuilder {
       default:
         return [];
     }
+  }
+
+  /**
+   * The SVG part of a picture-in-picture: the video itself is an HTML element
+   * under the SVG (VideoSlot), here only its frame. Design mode has no video
+   * and draws a filled placeholder with the stream name instead.
+   */
+  private videoFrame(el: EffectiveElement, p: Record<string, unknown>): VNode[] {
+    const w = n(p.width);
+    const ht = n(p.height);
+    const cr = n(p.cornerRadius);
+    const stroke = color(p.stroke);
+    const sw = n(p.strokeWidth);
+    const rx = cr > 0 ? cr : undefined;
+    const out: VNode[] = [];
+    if (this.options.mode === "design") {
+      out.push(h("rect", { width: w, height: ht, rx, fill: color(p.background) }));
+      const fs = Math.max(8, Math.min(ht / 6, w / 10));
+      out.push(h("text", { x: w / 2, y: ht / 2, "text-anchor": "middle", "dominant-baseline": "middle", "font-family": "sans-serif", "font-size": fs, fill: "#ffffff99" },
+        [`▶ ${el.source ?? "?"}`]));
+    }
+    if (stroke !== "none" && sw > 0) out.push(h("rect", { width: w, height: ht, rx, fill: "none", stroke, "stroke-width": sw }));
+    return out;
   }
 
   private linearGauge(p: Record<string, unknown>): VNode[] {

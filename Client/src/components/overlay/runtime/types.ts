@@ -104,6 +104,24 @@ export interface ClipFrame {
   marker?: Marker;
 }
 
+/**
+ * A shown picture-in-picture element (videoStream): where the host lays its
+ * video. `matrix` maps the element's local box (0,0)–(width,height) into
+ * workspace units, root transform included; `opacity` includes the groups'.
+ */
+export interface VideoSlot {
+  element: string;
+  /** StreamId of the shown stream. */
+  source: string;
+  matrix: readonly [number, number, number, number, number, number];
+  width: number;
+  height: number;
+  cornerRadius: number;
+  fit: "cover" | "contain";
+  background: string;
+  opacity: number;
+}
+
 export interface FrameResult {
   t: number;
   elements: Record<string, ElementFrame>;

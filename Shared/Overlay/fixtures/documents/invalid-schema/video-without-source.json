@@ -1,0 +1,5 @@
+{
+  "schemaVersion": 1, "workspace": { "width": 1280, "height": 720 },
+  "elements": { "e_v": { "type": "videoStream", "props": { "width": 320, "height": 180 } } },
+  "children": ["e_v"]
+}

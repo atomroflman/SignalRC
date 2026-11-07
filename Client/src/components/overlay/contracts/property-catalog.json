@@ -1,5 +1,5 @@
 {
-  "catalogVersion": 3,
+  "catalogVersion": 4,
   "kinds": {
     "number":  { "valueType": "number", "interpolation": "linear", "modes": ["static", "binding", "rate", "clip"] },
     "length":  { "valueType": "number", "unit": "logicalPx", "interpolation": "linear", "modes": ["static", "binding", "rate", "clip"] },
@@ -161,6 +161,17 @@
         "contourWidth":    { "kind": "length", "default": 3, "min": 0, "max": 50, "modes": ["static"] },
         "contourShadow":   { "kind": "bool",   "default": true, "modes": ["static"] },
         "contourShadowOpacity": { "kind": "config", "default": 0.25, "min": 0, "max": 1 }
+      }
+    },
+    "videoStream": {
+      "props": {
+        "width":        { "kind": "length", "default": 320, "min": 0 },
+        "height":       { "kind": "length", "default": 180, "min": 0 },
+        "cornerRadius": { "kind": "length", "default": 0, "min": 0 },
+        "fit":          { "kind": "enum",   "default": "cover", "values": ["cover", "contain"] },
+        "background":   { "kind": "color",  "default": "#000000" },
+        "stroke":       { "kind": "color",  "default": "#ffffff" },
+        "strokeWidth":  { "kind": "length", "default": 2, "min": 0 }
       }
     }
   }

@@ -8,9 +8,9 @@ import { useEditorState } from "./hooks";
 import type { EditorMessages } from "./messages";
 
 const btn = "px-2 py-0.5 rounded text-xs border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 disabled:opacity-40";
-const INSERTABLE: ElementType[] = ["rect", "ellipse", "line", "arc", "text", "valueText", "linearGauge", "radialGauge", "group", "lidarWidget"];
+const INSERTABLE: ElementType[] = ["rect", "ellipse", "line", "arc", "text", "valueText", "linearGauge", "radialGauge", "group", "lidarWidget", "videoStream"];
 
-export function Toolbar({ store, m, onDelete, onFit }: { store: EditorStore; m: EditorMessages; onDelete: () => void; onFit: () => void }) {
+export function Toolbar({ store, m, onDelete, onFit, streams = [] }: { store: EditorStore; m: EditorMessages; onDelete: () => void; onFit: () => void; streams?: { streamId: string }[] }) {
   const state = useEditorState(store);
   const config = store.effective();
   const sel = state.selection;
@@ -22,7 +22,7 @@ export function Toolbar({ store, m, onDelete, onFit }: { store: EditorStore; m: 
       <button className={btn} disabled={!state.history.canUndo} title={state.history.undoLabel} onClick={() => store.undo()}>↶ {m.undo}</button>
       <button className={btn} disabled={!state.history.canRedo} title={state.history.redoLabel} onClick={() => store.redo()}>↷ {m.redo}</button>
       {sep}
-      <select className={btn} value="" onChange={(e) => { if (e.target.value) insertElement(store, e.target.value as ElementType); }}>
+      <select className={btn} value="" onChange={(e) => { if (e.target.value) insertElement(store, e.target.value as ElementType, { stream: pipStream(streams, state.activeVariant) }); }}>
         <option value="">{m.add} …</option>
         {INSERTABLE.map((t) => <option key={t} value={t}>{m.types[t]}</option>)}
       </select>
@@ -57,4 +57,9 @@ export function Toolbar({ store, m, onDelete, onFit }: { store: EditorStore; m: 
       </label>
     </div>
   );
+}
+
+/** Default stream of a new picture-in-picture: another stream than the variant being edited, if there is one. */
+function pipStream(streams: { streamId: string }[], activeVariant: string | null): string | undefined {
+  return (streams.find((s) => s.streamId !== activeVariant) ?? streams[0])?.streamId;
 }

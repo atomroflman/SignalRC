@@ -209,6 +209,9 @@ class Checker {
     } else if (type === "lidarWidget") {
       if (!this.object(v, p, [...COMMON_ATTRS, "source"], ["type", "source"])) return;
       this.expect(isString(v.source, 64, 1), pointer(p, "source"), "Kanalname erwartet");
+    } else if (type === "videoStream") {
+      if (!this.object(v, p, [...COMMON_ATTRS, "source"], ["type", "source"])) return;
+      this.expect(isString(v.source, 50, 1), pointer(p, "source"), "StreamId erwartet");
     } else {
       return this.report(pointer(p, "type"), "unbekannter Elementtyp");
     }

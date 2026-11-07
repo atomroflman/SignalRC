@@ -16,6 +16,8 @@ export interface ChannelDirectory {
   flowSignals?: string[];
   /** Input names of the driver's HUD-Eingabe flow nodes (D75), offered for clickable elements. */
   flowInputs?: string[];
+  /** Video streams of the vehicle, offered as picture-in-picture sources. */
+  streams?: { streamId: string; name?: string | null }[];
 }
 
 export interface ChannelDirectoryInput {

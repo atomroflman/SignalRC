@@ -111,7 +111,7 @@ export function LayersPanel({ store, m }: { store: EditorStore; m: EditorMessage
 
 const FIELDS: { name: string; types?: EffectiveElement["type"][] }[] = [
   { name: "x" }, { name: "y" }, { name: "rotation" }, { name: "scaleX" }, { name: "scaleY" },
-  { name: "width", types: ["rect", "ellipse", "linearGauge"] }, { name: "height", types: ["rect", "ellipse", "linearGauge"] },
+  { name: "width", types: ["rect", "ellipse", "linearGauge", "videoStream"] }, { name: "height", types: ["rect", "ellipse", "linearGauge", "videoStream"] },
   { name: "radius", types: ["arc", "radialGauge", "lidarWidget"] }, { name: "pivotX" }, { name: "pivotY" },
 ];
 

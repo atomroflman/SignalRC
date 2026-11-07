@@ -75,6 +75,15 @@ describe("validate rules beyond the fixtures", () => {
     expect(validate(d0, { streams: ["front"] })).toMatchObject([{ code: "OVL_VARIANT_ORPHANED", category: "warning", location: { variant: "gone" } }]);
   });
 
+  it("warns about a picture-in-picture of an unknown stream only when streams are known", () => {
+    const d0 = doc({ elements: { e_v: { type: "videoStream", source: "gone" } }, children: ["e_v"] });
+    expect(validate(d0)).toEqual([]);
+    expect(validate(d0, { streams: ["gone"] })).toEqual([]);
+    expect(validate(d0, { streams: ["front"] })).toMatchObject([
+      { code: "OVL_REF_UNKNOWN_SOURCE", category: "warning", location: { element: "e_v", field: "source", ref: "gone" } },
+    ]);
+  });
+
   it("reports a variant-only ownership conflict as publish (D38)", () => {
     const d = validate(doc({
       elements: { e_a: { type: "rect" } },
