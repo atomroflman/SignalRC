@@ -1,7 +1,14 @@
 // Text values and number formatting (Shared/Overlay/expression/README.md §6).
+import { formatDateSegment, type DateMode } from "./date-format";
 
-/** Text is kept as segments so numbers can be localized only when displayed (D48). */
-export type Segment = { text: string } | { number: number; decimals: number };
+/**
+ * Text is kept as segments so numbers and dates can be localized only when
+ * displayed (D48, §6a).
+ */
+export type Segment =
+  | { text: string }
+  | { number: number; decimals: number }
+  | { date: number; format: string; mode: DateMode };
 export type TextValue = Segment[];
 
 /**
@@ -43,15 +50,23 @@ function increment(digits: string): string {
   return "1" + chars.join("");
 }
 
-/** Language-independent form used for comparisons and tests. */
+/** Language-independent form used for comparisons and tests (dates: invariant/English names). */
 export function canonical(text: TextValue): string {
-  return text.map((s) => ("text" in s ? s.text : formatDecimal(s.number, s.decimals))).join("");
+  return text.map((s) => {
+    if ("text" in s) return s.text;
+    if ("date" in s) return formatDateSegment(s.date, s.format, s.mode, "en");
+    return formatDecimal(s.number, s.decimals);
+  }).join("");
 }
 
-/** Display form: number segments use the viewer's decimal separator, no grouping. */
+/**
+ * Display form: number segments use the viewer's decimal separator, no
+ * grouping; date segments the viewer's month/day names and date separator.
+ */
 export function localized(text: TextValue, locale: "de" | "en"): string {
   return text.map((s) => {
     if ("text" in s) return s.text;
+    if ("date" in s) return formatDateSegment(s.date, s.format, s.mode, locale);
     const n = formatDecimal(s.number, s.decimals);
     return locale === "de" ? n.replace(".", ",") : n;
   }).join("");

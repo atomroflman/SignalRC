@@ -3,6 +3,7 @@ import { readContractJson } from "../testing/fixtures";
 import { analyze, type AnalysisEnv, type TelemetryDataType } from "./analyze";
 import { evaluate, type ValueSource, type ValueState } from "./evaluate";
 import { canonical, formatDecimal, localized, type TextValue } from "./text";
+import { formatDuration, formatTimestamp } from "./date-format";
 
 interface Expected { code: string; category: string; offset: number }
 interface Case {
@@ -78,6 +79,41 @@ describe("number formatting", () => {
     expect(canonical(text)).toBe("U: 1.5 V 12.35");
     expect(localized(text, "de")).toBe("U: 1.5 V 12,35");
     expect(localized(text, "en")).toBe("U: 1.5 V 12.35");
+  });
+});
+
+describe("date formatting", () => {
+  const ts = 1762611045.123; // 2025-11-08T14:10:45.123Z, a Saturday
+
+  it("localizes names and the date separator of date segments", () => {
+    const text: TextValue = [{ date: ts, format: "dddd, d. MMM yyyy, dd/MM", mode: "utc" }];
+    expect(canonical(text)).toBe("Saturday, 8. Nov 2025, 08/11");
+    expect(localized(text, "de")).toBe("Samstag, 8. Nov. 2025, 08.11");
+  });
+
+  it.each([
+    ["d", "en", "11/08/2025"], ["d", "de", "08.11.2025"], ["G", "de", "08.11.2025 14:10:45"],
+    ["D", "de", "Samstag, 8. November 2025"], ["u", "en", "2025-11-08 14:10:45Z"], ["s", "en", "2025-11-08T14:10:45"],
+    ["HH:mm:ss.FFF", "en", "14:10:45.123"], ["ss.FFFFFF", "en", "45.123"], ["hh tt", "en", "02 PM"], ["yyy", "en", "2025"],
+    ["%d", "en", "8"], ["zzz", "en", "+00:00"], ['"Uhr" H', "de", "Uhr 14"],
+  ] as const)("formatTimestamp(%s, %s)", (format, locale, expected) => {
+    expect(formatTimestamp(ts, format, "utc", locale)).toBe(expected);
+  });
+
+  it("uses the viewer's time zone for local dates", () => {
+    const d = new Date(Math.round(ts * 1000));
+    const pad = (n: number) => String(n).padStart(2, "0");
+    expect(formatTimestamp(ts, "HH:mm", "local", "en")).toBe(`${pad(d.getHours())}:${pad(d.getMinutes())}`);
+    const off = -d.getTimezoneOffset();
+    expect(formatTimestamp(ts, "K", "local", "en")).toBe(`${off < 0 ? "-" : "+"}${pad(Math.floor(Math.abs(off) / 60))}:${pad(Math.abs(off) % 60)}`);
+  });
+
+  it.each([
+    [0, "hh:mm:ss", "00:00:00"], [59.9996, "ss.fff", "00.000"], [61, "m\\:ss", "1:01"], [90061.25, "dd\\.hh\\:mm\\:ss\\.ff", "01.01:01:01.25"],
+    [90061, "c", "1.01:01:01"], [61.5, "G", "0:00:01:01.5000000"], [3600.1, "g", "1:00:00.1"], [-3.5, "s\\.f", "-3.5"],
+    [400000, "ddd'T 'hh'h'", "004T 15h"],
+  ])("formatDuration(%s, %s) = %s", (x, format, expected) => {
+    expect(formatDuration(x, format)).toBe(expected);
   });
 });
 

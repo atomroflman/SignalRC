@@ -8,6 +8,7 @@ export { evaluate } from "./evaluate";
 export type { RuntimeValue, SourceValue, ValueSource, ValueState, Value } from "./evaluate";
 export { canonical, formatDecimal, localized } from "./text";
 export type { Segment, TextValue } from "./text";
+export { formatDuration, formatTimestamp } from "./date-format";
 
 /** The expression port of the document validation (AP01). */
 export const expressionAnalyzer: ExpressionAnalyzer = {

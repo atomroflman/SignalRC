@@ -73,7 +73,10 @@ public static class Analyzer
         ["concat"] = (ExprType.Text, ExprType.Text),
     };
 
-    private static readonly string[] Special = ["tel", "out", "sig", "if", "valid", "fallback", "format"];
+    private static readonly string[] Special = ["tel", "out", "sig", "if", "valid", "fallback", "format", "formatDate", "formatDateUtc", "formatDuration"];
+
+    /// <summary>Longest date/duration format literal (§6a).</summary>
+    public const int MaxDateFormatLength = 64;
 
     public static readonly IReadOnlySet<string> Functions = new HashSet<string>(Fixed.Keys.Concat(Variadic.Keys).Concat(Special));
 
@@ -231,6 +234,21 @@ public static class Analyzer
                     else if (!double.IsInteger(digits.Value) || digits.Value < 0 || digits.Value > 6)
                     {
                         Error("OVL_EXPR_ARGUMENT_RANGE", d.Start, "Dezimalstellen 0–6 erwartet");
+                    }
+                    return ExprType.Text;
+                }
+                case "formatDate" or "formatDateUtc" or "formatDuration":
+                {
+                    if (!Arity(node, 2)) return ExprType.Text;
+                    Expect(args[0], types[0], ExprType.Number);
+                    var f = args[1];
+                    if (f is not TextNode format)
+                    {
+                        Error("OVL_EXPR_LITERAL_REQUIRED", f.Start, "Format muss ein Textliteral sein");
+                    }
+                    else if (format.Value.Length == 0 || format.Value.Length > MaxDateFormatLength)
+                    {
+                        Error("OVL_EXPR_ARGUMENT_RANGE", f.Start, $"Format mit 1–{MaxDateFormatLength} Zeichen erwartet");
                     }
                     return ExprType.Text;
                 }

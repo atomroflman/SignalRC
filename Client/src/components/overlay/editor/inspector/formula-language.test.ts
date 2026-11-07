@@ -39,7 +39,7 @@ describe("formula catalog", () => {
   });
 
   it("documented arities pass the AP06 check", () => {
-    const literal = { number: "1", bool: "true", text: "\"a\"", T: "1", name: "\"speed\"", "0–6": "2" } as const;
+    const literal = { number: "1", bool: "true", text: "\"a\"", T: "1", name: "\"speed\"", format: "\"HH:mm\"","0–6": "2" } as const;
     for (const f of FUNCTION_DOCS) {
       const expr = `${f.name}(${f.params.map((p) => literal[p.type]).join(", ")})`;
       const codes = analyze(expr, env, "any").diagnostics.map((d) => d.code);

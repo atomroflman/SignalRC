@@ -3,8 +3,8 @@
 // those of AP06 (analyze.ts); a test keeps both lists in step.
 import type { Locale } from "../../runtime/types";
 
-/** Parameter type as shown: a static type, `T` (same type), a text literal or a digit literal. */
-export type ParamType = "number" | "bool" | "text" | "T" | "name" | "0–6";
+/** Parameter type as shown: a static type, `T` (same type), a text literal, a format literal or a digit literal. */
+export type ParamType = "number" | "bool" | "text" | "T" | "name" | "format" | "0–6";
 
 export interface FunctionDoc {
   name: string;
@@ -64,6 +64,18 @@ export const FUNCTION_DOCS: FunctionDoc[] = [
   math("pi", [], "Die Zahl π.", "The number π."),
   { name: "format", params: [n("x"), { name: "stellen", type: "0–6" }], result: "text", group: "text",
     doc: { de: "Zahl als Text mit festen Nachkommastellen (Literal 0–6).", en: "Number as text with fixed decimals (literal 0–6)." } },
+  { name: "formatDate", params: [{ name: "zeitstempel", type: "number" }, { name: "format", type: "format" }], result: "text", group: "text",
+    doc: {
+      de: "Unix-Zeitstempel in Sekunden als Datum in Ortszeit, Format wie C# DateTime (z. B. \"dd.MM.yyyy HH:mm:ss\", \"HH:mm:ss.fff\", \"G\"). Millisekunden: tel(\"ts\") / 1000. Sekunden seit Start: Startzeitstempel + Sekunden.",
+      en: "Unix timestamp in seconds as a local date, C# DateTime format (e.g. \"yyyy-MM-dd HH:mm:ss\", \"HH:mm:ss.fff\", \"G\"). Milliseconds: tel(\"ts\") / 1000. Seconds since start: start timestamp + seconds.",
+    } },
+  { name: "formatDateUtc", params: [{ name: "zeitstempel", type: "number" }, { name: "format", type: "format" }], result: "text", group: "text",
+    doc: { de: "Wie formatDate, aber in UTC.", en: "Like formatDate, but in UTC." } },
+  { name: "formatDuration", params: [{ name: "sekunden", type: "number" }, { name: "format", type: "format" }], result: "text", group: "text",
+    doc: {
+      de: "Dauer in Sekunden, Format wie C# TimeSpan: d (Tage), hh, mm, ss, fff, z. B. \"hh:mm:ss\", \"d'd 'hh:mm\", oder \"c\"/\"g\"/\"G\".",
+      en: "Duration in seconds, C# TimeSpan format: d (days), hh, mm, ss, fff, e.g. \"hh:mm:ss\", \"d'd 'hh:mm\", or \"c\"/\"g\"/\"G\".",
+    } },
   { name: "concat", params: [{ name: "a", type: "text" }, { name: "b", type: "text" }], variadic: true, result: "text", group: "text",
     doc: { de: "Texte verbinden (2–16 Argumente); Zahlen über format().", en: "Joins texts (2–16 arguments); numbers via format()." } },
 ];

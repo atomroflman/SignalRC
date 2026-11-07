@@ -145,7 +145,7 @@ export function expectedAt(ctx: CursorContext, root: ExprType | undefined): Expe
     if (f.name === "if" && f.arg === 0) return "bool";
     if (f.name === "if" || f.name === "fallback") continue;
     const param = doc.variadic ? doc.params[Math.min(f.arg, doc.params.length - 1)] : doc.params[f.arg];
-    if (!param || param.type === "T" || param.type === "name") return undefined;
+    if (!param || param.type === "T" || param.type === "name" || param.type === "format") return undefined;
     return param.type === "0–6" ? "digits" : param.type;
   }
   return root;

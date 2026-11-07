@@ -4,6 +4,7 @@ import type { Analysis } from "./analyze";
 import type { Node } from "./parser";
 import type { TextValue } from "./text";
 import { canonical } from "./text";
+import { MAX_TIMESTAMP_SECONDS, type DateMode } from "./date-format";
 
 export type ValueState = "valid" | "unchecked" | "invalid";
 
@@ -180,6 +181,12 @@ class Evaluator {
       case "format": {
         const decimals = (args[1] as Extract<Node, { kind: "number" }>).value;
         return strict([this.eval(args[0])], ([x]) => [{ number: x as number, decimals }]);
+      }
+      case "formatDate": case "formatDateUtc": case "formatDuration": {
+        const format = (args[1] as Extract<Node, { kind: "text" }>).value;
+        const mode: DateMode = name === "formatDate" ? "local" : name === "formatDateUtc" ? "utc" : "duration";
+        return strict([this.eval(args[0])], ([x]) =>
+          Math.abs(x as number) > MAX_TIMESTAMP_SECONDS ? domain() : [{ date: x as number, format, mode }]);
       }
       case "concat":
         return strict(args.map((a) => this.eval(a)), (values) => (values as TextValue[]).flat());

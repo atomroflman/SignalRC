@@ -69,7 +69,10 @@ const VARIADIC: Record<string, { arg: ExprType; result: ExprType }> = {
   max: { arg: "number", result: "number" },
   concat: { arg: "text", result: "text" },
 };
-const SPECIAL = ["tel", "out", "sig", "if", "valid", "fallback", "format"];
+const SPECIAL = ["tel", "out", "sig", "if", "valid", "fallback", "format", "formatDate", "formatDateUtc", "formatDuration"];
+
+/** Longest date/duration format literal (§6a). */
+export const MAX_DATE_FORMAT_LENGTH = 64;
 
 export const FUNCTIONS = new Set([...Object.keys(FIXED), ...Object.keys(VARIADIC), ...SPECIAL]);
 
@@ -204,6 +207,16 @@ class Analyzer {
         if (d.kind !== "number") this.error("OVL_EXPR_LITERAL_REQUIRED", d.start, "Dezimalstellen müssen eine feste Zahl sein");
         else if (!Number.isInteger(d.value) || d.value < 0 || d.value > 6) {
           this.error("OVL_EXPR_ARGUMENT_RANGE", d.start, "Dezimalstellen 0–6 erwartet");
+        }
+        return "text";
+      }
+      case "formatDate": case "formatDateUtc": case "formatDuration": {
+        if (!this.arity(node, 2)) return "text";
+        this.expect(args[0], types[0], "number");
+        const f = args[1];
+        if (f.kind !== "text") this.error("OVL_EXPR_LITERAL_REQUIRED", f.start, "Format muss ein Textliteral sein");
+        else if (f.value.length === 0 || f.value.length > MAX_DATE_FORMAT_LENGTH) {
+          this.error("OVL_EXPR_ARGUMENT_RANGE", f.start, `Format mit 1–${MAX_DATE_FORMAT_LENGTH} Zeichen erwartet`);
         }
         return "text";
       }

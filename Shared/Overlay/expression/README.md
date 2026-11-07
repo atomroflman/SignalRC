@@ -147,11 +147,14 @@ Es gibt kein implizites Null (D27).
 | `pi()` | → number | |
 | `format(x, d)` | number, Ganzzahl-Literal 0–6 → text | s. §6 |
 | `concat(a, b, …)` | 2–16 × text → text | Zahlen nur über `format()` |
+| `formatDate(t, f)` | number, Textliteral → text | Unix-Zeitstempel in Sekunden, Ortszeit des Betrachters; s. §6a |
+| `formatDateUtc(t, f)` | number, Textliteral → text | wie `formatDate`, in UTC |
+| `formatDuration(s, f)` | number, Textliteral → text | Dauer in Sekunden; s. §6a |
 
 Unbekannte Funktion: `OVL_EXPR_UNKNOWN_FUNCTION`. Falsche Argumentanzahl:
 `OVL_EXPR_ARITY`. Kein Literal, wo eines verlangt ist: `OVL_EXPR_LITERAL_REQUIRED`.
-Literal außerhalb des erlaubten Bereichs (z. B. `format(x, 7)`):
-`OVL_EXPR_ARGUMENT_RANGE`.
+Literal außerhalb des erlaubten Bereichs (z. B. `format(x, 7)`, leeres oder
+über 64 Zeichen langes Datumsformat): `OVL_EXPR_ARGUMENT_RANGE`.
 
 ## 6. Text und Zahlenformat (D48)
 
@@ -172,6 +175,33 @@ Ein Textwert besteht intern aus Segmenten: Literaltext und formatierte Zahl
   gilt für `valueText`.
 - Telemetrietexte (`tel` mit Typ `String`) sind reiner Literaltext und werden
   nicht lokalisiert.
+
+## 6a. Datum und Dauer
+
+`formatDate`, `formatDateUtc` und `formatDuration` erzeugen ein Datumssegment
+(Wert, Format, Modus). Wie Zahlsegmente wird es erst bei der Anzeige nach der
+Sprache des Betrachters formatiert; die kanonische Form verwendet englische
+(invariante) Namen und `/` als Datumstrenner. Es gibt weiterhin keine
+Funktion für die aktuelle Zeit (D51): Zeitstempel kommen aus der Telemetrie.
+
+- Eingabe: Sekunden (Bruchteile erlaubt, auf Millisekunden gerundet).
+  Millisekunden-Zeitstempel teilt man durch 1000; „Sekunden seit Start" wird
+  über einen Startzeitstempel zu einem Datum: `formatDate(tel("start") + tel("uptime"), "G")`.
+- `|t| > 8.64e12` → `invalid` mit `OVL_EXPR_DOMAIN`.
+- Das Format ist ein Textliteral mit 1–64 UTF-16-Zeichen. Die Prüfung
+  (Client und Server) kontrolliert nur Literal und Länge; unbekannte Zeichen
+  werden unverändert ausgegeben.
+
+**Datumsformat** (wie .NET `DateTime.ToString`): `d dd ddd dddd`, `M MM MMM MMMM`,
+`y yy yyy yyyy`, `h hh` (12 h), `H HH`, `m mm`, `s ss`, `f`…`fffffff`,
+`F`…`FFFFFFF` (ohne Endnullen), `t tt`, `z zz zzz`, `K`, `/` (Datumstrenner
+der Sprache: de `.`, en `/`), `'…'`, `"…"`, `\x`, `%x`. Ein einzelner Buchstabe
+ist ein Standardformat: `d D t T f F g G M Y s o u`.
+
+**Dauerformat** (wie .NET `TimeSpan.ToString`): `d`…`dddddddd` (Tage),
+`h hh`, `m mm`, `s ss` (jeweils Rest unter der nächsten Einheit), `f…`, `F…`,
+`'…'`, `\x`. Andere Zeichen bleiben stehen (`"hh:mm:ss"` funktioniert ohne
+Escapes). Standardformate: `c`, `g`, `G`. Negative Dauern erhalten ein `-`.
 
 ## 7. Statische Analyse und Grenzen
 

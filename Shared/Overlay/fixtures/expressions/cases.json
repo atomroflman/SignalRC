@@ -812,6 +812,180 @@
    }
   },
   {
+   "id": "format-date-utc-custom",
+   "expr": "formatDateUtc(1762611045.123, \"yyyy-MM-dd HH:mm:ss.fff\")",
+   "analysis": {
+    "type": "text",
+    "dependencies": [],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "valid",
+    "value": "2025-11-08 14:10:45.123"
+   }
+  },
+  {
+   "id": "format-date-utc-names",
+   "expr": "formatDateUtc(1762611045, \"ddd, d. MMMM yy h:mm tt\")",
+   "analysis": {
+    "type": "text",
+    "dependencies": [],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "valid",
+    "value": "Sat, 8. November 25 2:10 PM"
+   }
+  },
+  {
+   "id": "format-date-utc-literals",
+   "expr": "formatDateUtc(1762611045, \"dd/MM 'um' HH\\\\:mm K\")",
+   "analysis": {
+    "type": "text",
+    "dependencies": [],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "valid",
+    "value": "08/11 um 14:10 Z"
+   }
+  },
+  {
+   "id": "format-date-utc-standard",
+   "expr": "formatDateUtc(1762611045.5, \"o\")",
+   "analysis": {
+    "type": "text",
+    "dependencies": [],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "valid",
+    "value": "2025-11-08T14:10:45.5000000Z"
+   }
+  },
+  {
+   "id": "format-date-sum",
+   "expr": "formatDateUtc(1762611000 + tel(\"count\"), \"T\")",
+   "analysis": {
+    "type": "text",
+    "dependencies": [
+     {
+      "kind": "tel",
+      "name": "count"
+     }
+    ],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "valid",
+    "value": "14:10:03"
+   }
+  },
+  {
+   "id": "format-duration-custom",
+   "expr": "formatDuration(93784.5, \"d'd 'hh:mm:ss.ff\")",
+   "analysis": {
+    "type": "text",
+    "dependencies": [],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "valid",
+    "value": "1d 02:03:04.50"
+   }
+  },
+  {
+   "id": "format-duration-unescaped",
+   "expr": "formatDuration(3725, \"hh:mm:ss\")",
+   "analysis": {
+    "type": "text",
+    "dependencies": [],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "valid",
+    "value": "01:02:05"
+   }
+  },
+  {
+   "id": "format-duration-negative",
+   "expr": "formatDuration(-90, \"c\")",
+   "analysis": {
+    "type": "text",
+    "dependencies": [],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "valid",
+    "value": "-00:01:30"
+   }
+  },
+  {
+   "id": "format-duration-general",
+   "expr": "formatDuration(3725.25, \"g\")",
+   "analysis": {
+    "type": "text",
+    "dependencies": [],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "valid",
+    "value": "1:02:05.25"
+   }
+  },
+  {
+   "id": "format-date-out-of-range",
+   "expr": "formatDateUtc(1e13, \"d\")",
+   "analysis": {
+    "type": "text",
+    "dependencies": [],
+    "diagnostics": []
+   },
+   "result": {
+    "state": "invalid",
+    "runtimeDiagnostic": "OVL_EXPR_DOMAIN"
+   }
+  },
+  {
+   "id": "format-date-literal-required",
+   "expr": "formatDate(1, tel(\"mode\"))",
+   "analysis": {
+    "diagnostics": [
+     {
+      "code": "OVL_EXPR_LITERAL_REQUIRED",
+      "category": "publish",
+      "offset": 14
+     }
+    ]
+   }
+  },
+  {
+   "id": "format-date-empty-format",
+   "expr": "formatDuration(1, \"\")",
+   "analysis": {
+    "diagnostics": [
+     {
+      "code": "OVL_EXPR_ARGUMENT_RANGE",
+      "category": "publish",
+      "offset": 18
+     }
+    ]
+   }
+  },
+  {
+   "id": "format-date-number-required",
+   "expr": "formatDate(\"x\", \"d\")",
+   "analysis": {
+    "diagnostics": [
+     {
+      "code": "OVL_EXPR_TYPE",
+      "category": "publish",
+      "offset": 11
+     }
+    ]
+   }
+  },
+  {
    "id": "text-plus-number",
    "expr": "\"a\" + 1",
    "analysis": {
