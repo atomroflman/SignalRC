@@ -103,6 +103,9 @@ LiDAR-Vertrags.
   nicht gewrappt.
 - Erster gültiger Wert der Sitzung bzw. nach Ungültigkeit: `y = x`, also ohne
   Einschwingen vom Grundwert.
+- Geglättet werden nur Zahlen: Eigenschaften vom Typ Zahl außer ganzzahligen, und
+  Eigenschaften vom Typ `any` (z. B. `valueText.value`), solange der Wert eine
+  Zahl ist. Andere Werte übernimmt die Bindung sofort.
 
 ## 5. Raten
 

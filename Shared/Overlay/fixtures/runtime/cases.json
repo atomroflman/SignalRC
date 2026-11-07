@@ -1538,6 +1538,38 @@
      }
     }
    ]
+  },
+  {
+   "id": "smooth-any-number",
+   "description": "Eigenschaft vom Typ any (valueText.value) mit Zahlenwert wird geglättet",
+   "kind": "binding",
+   "propertyKind": "any",
+   "base": 0,
+   "smoothing": {
+    "timeConstantS": 1
+   },
+   "frames": [
+    {
+     "t": 0,
+     "input": {
+      "state": "valid",
+      "value": 0
+     },
+     "expect": {
+      "value": 0
+     }
+    },
+    {
+     "t": 1,
+     "input": {
+      "state": "valid",
+      "value": 10
+     },
+     "expect": {
+      "value": 6.321205588285577
+     }
+    }
+   ]
   }
  ]
 }

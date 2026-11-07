@@ -336,7 +336,8 @@ export function createRuntime(config: EffectiveConfig, options: RuntimeOptions =
       const c = coerce(s, rv.value);
       if (c.ok) {
         let x = c.value;
-        const smooth = d.smoothing !== undefined && s.kind.valueType === "number" && !(s.def.integer ?? s.kind.integer);
+        // Numbers only: number kinds, and "any" (valueText.value) while the value is a number (D28, runtime §4).
+        const smooth = d.smoothing !== undefined && (s.kind.valueType === "number" || s.kind.valueType === "any") && !(s.def.integer ?? s.kind.integer);
         if (smooth && s.hasValue && !s.fresh && typeof s.value === "number" && typeof x === "number") {
           const y = s.value;
           const delta = s.def.kind === "angle" ? wrapAngleDelta(x - y) : x - y;

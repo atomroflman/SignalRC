@@ -20,7 +20,7 @@ interface Case {
   id: string;
   kind: "clip" | "rate" | "binding";
   base: number;
-  propertyKind?: "number" | "angle";
+  propertyKind?: "number" | "angle" | "any";
   clip?: Clip;
   rate?: { expr: string; wrap?: { min: number; max: number } };
   smoothing?: { timeConstantS: number };
@@ -49,12 +49,13 @@ function setup(c: Case) {
     prop = { base: c.base, rate: { ...c.rate!, expr: 'tel("r")' } };
   } else {
     if (c.propertyKind === "angle") property = "rotation";
+    if (c.propertyKind === "any") property = "value";
     prop = { base: c.base, binding: { expr: 'tel("x")', ...(c.smoothing ? { smoothing: c.smoothing } : {}) } };
   }
   const doc: OverlayDocument = {
     schemaVersion: 1,
     workspace: { width: 100, height: 100 },
-    elements: { e_a: { type: "rect", props: { [property]: prop } } },
+    elements: { e_a: { type: c.propertyKind === "any" ? "valueText" : "rect", props: { [property]: prop } } },
     children: ["e_a"],
     clips,
   };
