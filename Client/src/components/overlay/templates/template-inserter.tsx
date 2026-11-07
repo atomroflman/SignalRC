@@ -7,7 +7,7 @@ import type { OverlayDocument } from "../document/types";
 import type { EditorStore } from "../editor/core/store";
 import { OverlayRenderer } from "../runtime/overlay-renderer";
 import type { Locale } from "../runtime/types";
-import { suggestConversion } from "./conversions";
+import { suggestConversion, unitMismatch } from "./conversions";
 import { checkMapping, insertTemplate, instantiate, paramValues, type ChannelOption } from "./instantiate";
 import { TEMPLATES } from "./library";
 import { templateMessages } from "./messages";
@@ -92,6 +92,7 @@ export function TemplateInserter({ store, locale, channels, initialTemplate }: T
         const options = channels.filter((c) => fits(slot, c));
         const a = mapping.slots[slot.id];
         const pid = presetId(slot, a?.conversion);
+        const unit = a ? channels.find((c) => c.name === a.channel)?.unit : undefined;
         return (
           <fieldset key={slot.id} className="flex flex-col gap-1 border border-zinc-800 rounded p-1" data-ovl-slot={slot.id}>
             <legend className="text-zinc-300">{slot.label[locale]}</legend>
@@ -102,6 +103,9 @@ export function TemplateInserter({ store, locale, channels, initialTemplate }: T
             </select>
             {slot.kind === "number" && a && (
               <>
+                {pid !== "custom" && unit && unitMismatch(slot, unit) && (
+                  <span className="text-amber-300" data-ovl-unit-mismatch>{m.unitMismatch(unit, slot.unit ?? "?")}</span>
+                )}
                 <label className="flex items-center gap-1">
                   {m.conversion}
                   <select

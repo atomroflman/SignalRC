@@ -79,6 +79,19 @@ public class ReaderQualityTests
         var calibrated = CanTrackDriveTelemetryReader.BuildSamples(
             Snapshot(Node(true, 0.01), Node(true, 0.01), calibrated: true), Timeout);
         Assert.Equal(TelemetrySampleState.Valid, calibrated["odoSpeed"].State);
+        Assert.Equal(new TelemetrySample("", TelemetrySampleState.NoData, 0), s["odoLeftSpeed"]);
+    }
+
+    [Fact]
+    public void CanPerTrackSpeedInMetresFollowsItsOwnNode()
+    {
+        var snapshot = Snapshot(Node(true, 0.01), Node(true, 0.8), calibrated: true) with
+        {
+            Odometry = new TrackOdometry { Calibrated = true, LeftSpeedMetersPerSecond = 1.25, RightSpeedMetersPerSecond = -0.5 },
+        };
+        var s = CanTrackDriveTelemetryReader.BuildSamples(snapshot, Timeout);
+        Assert.Equal(new TelemetrySample("1.25", TelemetrySampleState.Valid, 10), s["odoLeftSpeed"]);
+        Assert.Equal(new TelemetrySample("-0.5", TelemetrySampleState.Stale, 800), s["odoRightSpeed"]);
     }
 
     [Fact]

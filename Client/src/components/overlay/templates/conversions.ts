@@ -32,6 +32,17 @@ export function suggestConversion(slot: TemplateSlot, channelUnit: string | null
   return p ? { factor: p.factor, offset: p.offset } : IDENTITY;
 }
 
+/**
+ * The channel names a unit, but none of the slot's presets converts from it.
+ * suggestConversion then falls back to the first preset, which is a guess -
+ * e.g. a motor speed in rad/s would be shown as m/s unconverted.
+ */
+export function unitMismatch(slot: TemplateSlot, channelUnit: string | null | undefined): boolean {
+  const unit = (channelUnit ?? "").trim().toLowerCase();
+  const presets = slot.presets ?? [];
+  return unit.length > 0 && presets.length > 0 && !presets.some((p) => p.from.includes(unit));
+}
+
 /** Number literal for formulas, rounded to 10 significant digits. */
 export function formatNumber(x: number): string {
   if (!Number.isFinite(x)) throw new RangeError("Zahl ist nicht endlich");

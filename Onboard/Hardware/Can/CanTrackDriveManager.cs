@@ -1480,6 +1480,12 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
                     RightTravelRad = _odoRightRad,
                     TravelDifferenceRad = _odoRightRad - _odoLeftRad,
                     SpeedMetersPerSecond = _odoSpeed,
+                    // Live rather than integrated: the node's latest speed times the
+                    // rolling radius, zero while uncalibrated like the other metres.
+                    LeftSpeedMetersPerSecond = WheelRadiusM > 0.0 && TrackWidthM > 0.0
+                        ? _nodes[CanTrackProtocol.LeftNode].Speed * WheelRadiusM : 0.0,
+                    RightSpeedMetersPerSecond = WheelRadiusM > 0.0 && TrackWidthM > 0.0
+                        ? _nodes[CanTrackProtocol.RightNode].Speed * WheelRadiusM : 0.0,
                     YawRateRadPerSecond = _odoYawRate,
                     X = _odoX,
                     Y = _odoY,

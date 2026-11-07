@@ -98,6 +98,8 @@ namespace SignalRC.Onboard.Telemetry;
 [TelemetryValue("odoTravelDiff", TelemetryDataType.Number, "rad", Decimals = 1)]
 [TelemetryValue("odoCalibrated", TelemetryDataType.Boolean)]
 [TelemetryValue("odoSpeed", TelemetryDataType.Number, "m/s", Decimals = 2)]
+[TelemetryValue("odoLeftSpeed", TelemetryDataType.Number, "m/s", Decimals = 2)]
+[TelemetryValue("odoRightSpeed", TelemetryDataType.Number, "m/s", Decimals = 2)]
 [TelemetryValue("odoYawRate", TelemetryDataType.Number, "°/s", Decimals = 1)]
 [TelemetryValue("odoHeading", TelemetryDataType.Number, "°", Decimals = 0)]
 [TelemetryValue("odoDistance", TelemetryDataType.Number, "m", Decimals = 1)]
@@ -191,6 +193,10 @@ public class CanTrackDriveTelemetryReader : TelemetryReaderBase
         // Empty rather than zero while uncalibrated: a speed of "0.0 m/s" on a
         // moving vehicle is worse than an empty field.
         values["odoSpeed"] = odo.Calibrated ? Num(odo.SpeedMetersPerSecond) : string.Empty;
+        // Per track in m/s. leftSpeed/rightSpeed are motor rad/s, which is not
+        // what a speed display or the track-run overlay expects.
+        values["odoLeftSpeed"] = odo.Calibrated ? Num(odo.LeftSpeedMetersPerSecond) : string.Empty;
+        values["odoRightSpeed"] = odo.Calibrated ? Num(odo.RightSpeedMetersPerSecond) : string.Empty;
         values["odoYawRate"] = odo.Calibrated ? Num(odo.YawRateRadPerSecond * 180.0 / Math.PI) : string.Empty;
         values["odoHeading"] = odo.Calibrated ? Num(odo.HeadingRad * 180.0 / Math.PI) : string.Empty;
         values["odoDistance"] = odo.Calibrated ? Num(odo.DistanceMeters) : string.Empty;
@@ -225,7 +231,8 @@ public class CanTrackDriveTelemetryReader : TelemetryReaderBase
     /// temperature (thermistor open/shorted) is an Error of its own.
     /// <c>*Present</c> is judged now and therefore Valid.</item>
     /// <item>Odometry depends on both nodes and takes the worse of the two;
-    /// the metric fields are NoData while uncalibrated.</item>
+    /// the metric fields are NoData while uncalibrated. <c>odoLeftSpeed</c>/
+    /// <c>odoRightSpeed</c> follow their own node only.</item>
     /// <item><c>controlAge</c> is NoData before the first control input.</item>
     /// <item>Everything else (bus state, counters, commanded values, mode,
     /// inhibit) is the manager's own state at snapshot time: Valid, age 0.</item>
@@ -251,6 +258,11 @@ public class CanTrackDriveTelemetryReader : TelemetryReaderBase
         {
             Set(samples, key, snapshot.Odometry.Calibrated ? odo : (TelemetrySampleState.NoData, 0));
         }
+
+        // A track's own speed depends on that node only.
+        var calibrated = snapshot.Odometry.Calibrated;
+        Set(samples, "odoLeftSpeed", calibrated ? left : (TelemetrySampleState.NoData, 0));
+        Set(samples, "odoRightSpeed", calibrated ? right : (TelemetrySampleState.NoData, 0));
 
         if (double.IsInfinity(snapshot.ControlAgeSeconds))
         {

@@ -130,6 +130,10 @@ public sealed record TrackOdometry
     public double TravelDifferenceRad { get; init; }
 
     public double SpeedMetersPerSecond { get; init; }
+    /// <summary>Ground speed of each track: its reported rad/s times the
+    /// effective rolling radius. Vehicle coordinates, positive is forward.</summary>
+    public double LeftSpeedMetersPerSecond { get; init; }
+    public double RightSpeedMetersPerSecond { get; init; }
     /// <summary>Positive is a left turn, the usual right-handed convention.
     /// Note that positive STEERING speeds the left track up and therefore
     /// turns right, so the two signs are opposite by design.</summary>

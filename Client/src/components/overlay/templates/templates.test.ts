@@ -10,7 +10,7 @@ import { targetContext } from "../exchange/import";
 import { createRuntime } from "../runtime/runtime";
 import { SceneBuilder } from "../runtime/scene";
 import { FakeValueSource } from "../sources/testing/fake-value-source";
-import { convertedRef, formatNumber, suggestConversion } from "./conversions";
+import { convertedRef, formatNumber, suggestConversion, unitMismatch } from "./conversions";
 import { checkMapping, insertTemplate, instantiate, type ChannelOption } from "./instantiate";
 import { TEMPLATES, templateById } from "./library";
 import type { TemplateDefinition, TemplateMapping } from "./types";
@@ -105,6 +105,15 @@ describe("templates", () => {
     const doc = docWith(compass);
     const rose = Object.values(doc.elements).find((e) => e.name === "Rose")!;
     expect(rose.props!.rotation).toMatchObject({ binding: { expr: '-(tel("yaw") * 57.29577951)' } });
+  });
+
+  it("flags a channel unit no preset converts from", () => {
+    const left = templateById("trackRun")!.slots[0];
+    expect(unitMismatch(left, "rad/s")).toBe(true);
+    expect(unitMismatch(left, "m/s")).toBe(false);
+    expect(unitMismatch(left, "KM/H")).toBe(false);
+    expect(unitMismatch(left, "")).toBe(false);
+    expect(unitMismatch(left, null)).toBe(false);
   });
 
   it("refuses incomplete or unfitting mappings", () => {

@@ -16,6 +16,7 @@ export type TemplateMessages = {
   insert: string;
   cancel: string;
   noChannels: string;
+  unitMismatch: (channelUnit: string, slotUnit: string) => string;
   issue: (i: MappingIssue) => string;
   hint: string;
 };
@@ -34,6 +35,7 @@ const de: TemplateMessages = {
   insert: "Einfügen",
   cancel: "Abbrechen",
   noChannels: "Kein passender Kanal auf diesem Fahrzeug – die Vorlage braucht vorhandene Messwerte.",
+  unitMismatch: (c, s) => `Der Kanal liefert ${c}, die Vorlage erwartet ${s}. Keine Umrechnung passt – Faktor selbst prüfen oder einen Kanal in ${s} wählen.`,
   issue: (i) => {
     switch (i.code) {
       case "TPL_SLOT_UNASSIGNED": return "Bitte allen Eingängen einen Kanal zuordnen.";
@@ -60,6 +62,7 @@ const en: TemplateMessages = {
   insert: "Insert",
   cancel: "Cancel",
   noChannels: "No fitting channel on this vehicle – the template needs existing measurements.",
+  unitMismatch: (c, s) => `The channel delivers ${c}, the template expects ${s}. No conversion fits – check the factor yourself or choose a channel in ${s}.`,
   issue: (i) => {
     switch (i.code) {
       case "TPL_SLOT_UNASSIGNED": return "Please map a channel to every input.";
