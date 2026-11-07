@@ -124,12 +124,18 @@ export default function VideoSettingsControl(props: { carId?: number; canManageE
     };
   }, []);
 
+  // Includes the native sensor modes of the Pi Camera Module 3 (imx708): 1536x864, 2304x1296, 4608x2592.
+  // The Pi's hardware H.264 encoder stops at 1920x1080; larger sizes only suit cameras that encode themselves.
   const resolutionPresets = [
+    { key: '4608x2592', w: 4608, h: 2592 },
+    { key: '3840x2160', w: 3840, h: 2160 },
+    { key: '2304x1296', w: 2304, h: 1296 },
     { key: '1920x1080', w: 1920, h: 1080 },
+    { key: '1536x864', w: 1536, h: 864 },
     { key: '1280x720', w: 1280, h: 720 },
+    { key: '1024x768', w: 1024, h: 768 },
     { key: '800x600', w: 800, h: 600 },
     { key: '640x480', w: 640, h: 480 },
-    { key: '3840x2160', w: 3840, h: 2160 },
     { key: 'custom', w: null, h: null }
   ];
 
