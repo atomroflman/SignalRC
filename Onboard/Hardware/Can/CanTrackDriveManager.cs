@@ -103,6 +103,17 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
     public float CurrentLimitAmps { get; set; }
 
     /// <summary>
+    /// The firmware's I_PEAK in amps, the full scale of the CurrentLimit
+    /// channel: a value of 0.5 there requests half of this. Only for scaling;
+    /// the node clamps to its own maximum regardless.
+    /// </summary>
+    public float PeakCurrentAmps { get; set; } = 10f;
+
+    /// <summary>The node floors the current request here; below it the drive
+    /// could no longer brake.</summary>
+    private const float MinCurrentLimitAmps = 2f;
+
+    /// <summary>
     /// How often 0x101 is repeated. The node does not store the request and
     /// drops it on master timeout, and a node that restarts has none, so it
     /// is sent periodically and not only on change. A change goes out at
@@ -149,7 +160,8 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
     /// </summary>
     public bool BrakeAtStandstill { get; set; } = true;
 
-    private CanTrackProtocol.DriveMode StandstillMode => BrakeAtStandstill
+    /// <summary>Must be called under _stateLock.</summary>
+    private CanTrackProtocol.DriveMode StandstillMode => BrakeAtStandstill && !_freewheel
         ? CanTrackProtocol.DriveMode.Brake
         : CanTrackProtocol.DriveMode.Coast;
 
@@ -278,6 +290,8 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
     private float? _directRight;
     private bool _faultResetPending;
     private float _speedLimitFactor = 1f;
+    private float _currentLimitFactor = 1f;
+    private bool _freewheel;
     private bool _limitsDirty = true;
     private long _limitsSentMs = -1;
     private long _lastControlMs = -1; //!< -1 means nothing has ever arrived
@@ -608,6 +622,12 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
             case TrackDriveAxis.SpeedLimit:
                 SetSpeedLimitFactor(value);
                 break;
+            case TrackDriveAxis.CurrentLimit:
+                SetCurrentLimitFactor(value);
+                break;
+            case TrackDriveAxis.Freewheel:
+                SetFreewheel(MathF.Abs(value) >= 0.5f);
+                break;
         }
     }
 
@@ -626,6 +646,39 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
             _limitsDirty = true;
         }
         _logger.LogInformation("Speed limit factor {Factor:0.##}.", factor);
+    }
+
+    /// <summary>
+    /// Run-time share of <see cref="PeakCurrentAmps"/>, see
+    /// <see cref="TrackDriveAxis.CurrentLimit"/>. Anything not in (0, 1]
+    /// means no reduction.
+    /// </summary>
+    public void SetCurrentLimitFactor(float value)
+    {
+        var factor = float.IsNaN(value) || value <= 0f ? 1f : MathF.Min(value, 1f);
+        lock (_stateLock)
+        {
+            if (factor == _currentLimitFactor) return;
+            _currentLimitFactor = factor;
+            _limitsDirty = true;
+        }
+        _logger.LogInformation("Current limit factor {Factor:0.##}.", factor);
+    }
+
+    /// <summary>
+    /// Releases the brake at standstill, see <see cref="TrackDriveAxis.Freewheel"/>.
+    /// Takes effect with the next command frame; the standstill latch reads it
+    /// every frame, so switching it on a parked vehicle frees the wheels at once
+    /// and switching it off brakes them again.
+    /// </summary>
+    public void SetFreewheel(bool on)
+    {
+        lock (_stateLock)
+        {
+            if (on == _freewheel) return;
+            _freewheel = on;
+        }
+        _logger.LogInformation(on ? "Brake released, freewheel at standstill." : "Brake applied at standstill.");
     }
 
     /// <summary>
@@ -657,6 +710,13 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
                 // Released means whoever lowered it is gone; the drive stops
                 // anyway once the control inputs go stale.
                 SetSpeedLimitFactor(1f);
+                break;
+            case TrackDriveAxis.CurrentLimit:
+                SetCurrentLimitFactor(1f);
+                break;
+            case TrackDriveAxis.Freewheel:
+                // Fail towards the brake: whoever released it is gone.
+                SetFreewheel(false);
                 break;
         }
     }
@@ -894,7 +954,16 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
 
     /// <summary>Current limit to request, or null for none. Must be called
     /// under _stateLock.</summary>
-    private double? RequestedCurrentLimit() => CurrentLimitAmps > 0f ? CurrentLimitAmps : null;
+    private double? RequestedCurrentLimit()
+    {
+        double? limit = CurrentLimitAmps > 0f ? CurrentLimitAmps : null;
+        if (_currentLimitFactor < 1f && PeakCurrentAmps > 0f)
+        {
+            var scaled = Math.Max(MinCurrentLimitAmps, PeakCurrentAmps * (double)_currentLimitFactor);
+            limit = limit.HasValue ? Math.Min(limit.Value, scaled) : scaled;
+        }
+        return limit;
+    }
 
     /// <summary>
     /// Sends 0x101 on change and otherwise every <see cref="LimitIntervalMs"/>.
@@ -1056,7 +1125,9 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
             _idleSinceMs = _standingSinceMs = -1;
             return mode;
         }
-        if (!CoastAtStandstill) return mode;
+        // Freewheel needs the standstill logic even where it is switched off,
+        // otherwise Stop would keep the short-circuit brake on (Z2).
+        if (!CoastAtStandstill && !_freewheel) return mode;
         if (_coasting) return StandstillMode;
 
         if (_idleSinceMs < 0) _idleSinceMs = nowMs;
@@ -1450,6 +1521,8 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
                 SpeedLimitFactor = _speedLimitFactor,
                 RequestedSpeedLimit = speedLimit > 0.0 ? speedLimit : null,
                 RequestedCurrentLimit = RequestedCurrentLimit(),
+                CurrentLimitFactor = _currentLimitFactor,
+                Freewheel = _freewheel,
                 BusUp = _socket != null,
                 AllNodesPresent = present >= ExpectedNodes,
                 DriveEnabled = _inhibitReason == null,

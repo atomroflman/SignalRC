@@ -78,6 +78,16 @@
         "pinManager": "trackDrive",
         "controlType": "TrackSpeedLimit",
         "testDisabled": true
+      },
+      "currentLimit": {
+        "pinManager": "trackDrive",
+        "controlType": "TrackCurrentLimit",
+        "testDisabled": true
+      },
+      "freewheel": {
+        "pinManager": "trackDrive",
+        "controlType": "TrackFreewheel",
+        "testDisabled": true
       }
     },
     "telemetryChannels": {

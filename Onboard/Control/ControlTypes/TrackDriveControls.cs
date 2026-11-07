@@ -160,6 +160,41 @@ public class TrackSpeedLimitControl : TrackDriveControlBase
     protected override TrackDriveAxis Axis => TrackDriveAxis.SpeedLimit;
 }
 
+/// <summary>
+/// Lowers the phase current limit while driving: a value in (0, 1] is the
+/// share of the manager's peakCurrentAmps (10 A, the firmware's I_PEAK) that
+/// the nodes may use (0x101). The nodes floor it at 2 A. 0, negative or
+/// released means no reduction, so use a slider from e.g. 0.2 to 1. A fixed
+/// currentLimitAmps on the manager still caps it. Less current means less
+/// torque, both driving and braking. Not part of the channel test.
+/// </summary>
+[ControlType("TrackCurrentLimit")]
+public class TrackCurrentLimitControl : TrackDriveControlBase
+{
+    public TrackCurrentLimitControl(ILogger<TrackCurrentLimitControl> logger) : base(logger)
+    {
+        TestDisabled = true;
+    }
+    protected override TrackDriveAxis Axis => TrackDriveAxis.CurrentLimit;
+}
+
+/// <summary>
+/// Toggle. On (0.5 or more) releases the brake: at standstill the nodes get
+/// Coast instead of Brake, the gate driver sleeps and the wheels turn freely,
+/// for pushing or towing. Driving is unaffected; a rolling vehicle is still
+/// braked to a stop first. Off or released brakes again - on a slope the
+/// vehicle rolls while it is on. Not part of the channel test.
+/// </summary>
+[ControlType("TrackFreewheel")]
+public class TrackFreewheelControl : TrackDriveControlBase
+{
+    public TrackFreewheelControl(ILogger<TrackFreewheelControl> logger) : base(logger)
+    {
+        TestDisabled = true;
+    }
+    protected override TrackDriveAxis Axis => TrackDriveAxis.Freewheel;
+}
+
 /// <summary>Momentary button. Broadcasts an emergency stop to every node.
 /// Never part of the channel test.</summary>
 [ControlType("TrackEmergencyStop")]

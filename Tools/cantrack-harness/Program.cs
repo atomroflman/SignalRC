@@ -645,6 +645,24 @@ Check("limit request repeats at 1 Hz", limCurL == P.LimitNone, $"{limCurL}");
 snap = manager.GetSnapshot();
 Check("limit request acknowledged", snap.Left.LimitRequestAcknowledged && snap.Right.LimitRequestAcknowledged);
 
+// 2d. Run-time current limit: share of peakCurrentAmps, floored at 2 A,
+// capped by a fixed currentLimitAmps, released = none.
+var currentLimit = manager.GetModule<ITrackDriveInput>((int)TrackDriveAxis.CurrentLimit);
+currentLimit.SetValue(0.5f);
+Thread.Sleep(100);
+Check("current limit 0.5 -> 5 A at once", limCurL == 500 && limCurR == 500, $"{limCurL}/{limCurR}");
+currentLimit.SetValue(0.05f);
+Thread.Sleep(100);
+Check("current limit floored at 2 A", limCurL == 200, $"{limCurL}");
+manager.CurrentLimitAmps = 4f;
+currentLimit.SetValue(0.8f);
+Thread.Sleep(100);
+Check("fixed currentLimitAmps caps the channel", limCurL == 400, $"{limCurL}");
+manager.CurrentLimitAmps = 0f;
+currentLimit.Release();
+Thread.Sleep(100);
+Check("current limit released -> no request", limCurL == P.LimitNone, $"{limCurL}");
+
 // 3. Steering while driving.
 steering.SetValue(0.5f);
 Thread.Sleep(100);
@@ -752,6 +770,34 @@ Thread.Sleep(100);
 Check("nonzero command leaves coast", lastMode == (byte)P.DriveMode.Velocity && lastLeft == 2000,
       $"mode {lastMode}, {lastLeft}/{lastRight}");
 manager.BrakeAtStandstill = true;
+
+// Freewheel: Coast instead of Brake at standstill, switchable on a parked
+// vehicle, and released means brake again.
+var freewheel = manager.GetModule<ITrackDriveInput>((int)TrackDriveAxis.Freewheel);
+throttle.SetValue(0f);
+Thread.Sleep(400);
+Check("parked -> brake", lastMode == (byte)P.DriveMode.Brake, $"mode {lastMode}");
+freewheel.SetValue(1f);
+Thread.Sleep(100);
+Check("freewheel on a parked vehicle -> coast", lastMode == (byte)P.DriveMode.Coast, $"mode {lastMode}");
+Check("freewheel in telemetry", manager.GetSnapshot().Freewheel);
+freewheel.SetValue(0f);
+Thread.Sleep(100);
+Check("freewheel off -> brake again", lastMode == (byte)P.DriveMode.Brake, $"mode {lastMode}");
+freewheel.SetValue(1f);
+freewheel.Release();
+Thread.Sleep(100);
+Check("freewheel released -> brake", lastMode == (byte)P.DriveMode.Brake, $"mode {lastMode}");
+manager.CoastAtStandstill = false;
+freewheel.SetValue(1f);
+Thread.Sleep(100);
+Check("freewheel works without coastAtStandstill", lastMode == (byte)P.DriveMode.Coast, $"mode {lastMode}");
+freewheel.SetValue(0f);
+manager.CoastAtStandstill = true;
+throttle.SetValue(1.0f);
+Thread.Sleep(100);
+Check("drive after freewheel", lastMode == (byte)P.DriveMode.Velocity && lastLeft == 2000,
+      $"mode {lastMode}, {lastLeft}/{lastRight}");
 simLeftSpeed = 7.9;
 simRightSpeed = 8.1;
 

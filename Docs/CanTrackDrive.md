@@ -215,6 +215,20 @@ is holding back, and switching to Brake there releases the loop - the wheel
 free-wheels until it is below 2 rad/s. Not changed yet, because nothing has
 been measured in the vehicle.
 
+### Releasing the brake
+
+`TrackFreewheel` is a toggle. While it is on (value 0.5 or more), the
+standstill logic sends `Coast` instead of `Brake`: the gate driver goes into
+standby and the wheels turn freely, so the vehicle can be pushed or towed.
+It switches a parked vehicle over at once, and switching it off brakes
+again with the next frame. Driving is unaffected, and a vehicle that is
+still rolling is first braked to a stop by `Stop` as usual. Released counts
+as off, so a lost connection brakes.
+
+It works even with `coastAtStandstill` off - there the firmware's Stop would
+otherwise keep the short-circuit brake on by itself (local setting `Z2`).
+On a slope the vehicle rolls away while it is on. Telemetry: `freewheel`.
+
 ### The network link
 
 The control path runs over a network, and it can fail in two ways of which only
@@ -288,9 +302,10 @@ request only in RAM, drops it on master timeout and has none after a reset.
 
 - Speed: `maxSpeedRadPerSecond` × the run-time factor from `TrackSpeedLimit`.
   The node clamps to 0..30 rad/s.
-- Current: `currentLimitAmps`, or `0x7FFF` (no request) when 0. The node
-  clamps to 2 A..`I_PEAK` (currently 10 A); below 2 A it could no longer
-  brake.
+- Current: the lower of `currentLimitAmps` and `peakCurrentAmps` × the
+  run-time factor from `TrackCurrentLimit`, at least 2 A; `0x7FFF` (no
+  request) when neither is set. The node clamps to 2 A..`I_PEAK` (currently
+  10 A); below 2 A it could no longer brake.
 - A request only ever lowers a limit. Thermal and undervoltage derating stay
   in charge underneath.
 
@@ -318,6 +333,12 @@ park the vehicle. A slider from 0.1 to 1 works, and so does a toggle with
 value 0.3 as a crawl gear. The full stick then reaches the reduced speed, so
 the stick keeps its whole travel.
 
+`TrackCurrentLimit` works the same way for the current: a value in (0, 1]
+is the share of `peakCurrentAmps` (10 A, the firmware's `I_PEAK`), floored
+at 2 A, and 0 or released means no reduction. A fixed `currentLimitAmps`
+still caps it. Less current is less torque in both directions - it softens
+the start, and it also lengthens the stop.
+
 The voltage limit is not adjustable by design; it follows from the sine
 modulation. See the firmware's `SCHNITTSTELLE.md`, `0x185`.
 
@@ -336,6 +357,7 @@ All on the `pinManagers` entry.
 | `nodeTimeoutMs` | `250` | Status arrives at 20 Hz, so this is five missed frames. |
 | `expectedNodes` | `2` | Set to 1 for bench work with one board. |
 | `currentLimitAmps` | `0` | Phase current limit requested in `0x101`. 0 means no request (firmware maximum). Node clamps to 2..10 A. See [Limits](#limits). |
+| `peakCurrentAmps` | `10` | Full scale of `TrackCurrentLimit`, the firmware's `I_PEAK`. Only for scaling. |
 | `limitIntervalMs` | `1000` | Repeat period of `0x101`. Changes go out at once regardless. |
 | `coastAtStandstill` | `true` | Replace Stop once nothing is commanded and the tracks stand. See [Coasting at standstill](#coasting-at-standstill). |
 | `brakeAtStandstill` | `true` | What replaces it: `Brake` (short-circuit brake, firmware 2026-11-04 and later) or, if `false`, `Coast`. See [Brake mode](#brake-mode). |
@@ -358,6 +380,8 @@ All on the `pinManagers` entry.
 | `TrackLeft` / `TrackRight` | direct, bypasses the mix |
 | `TrackFaultReset` | momentary, asks the nodes to unlatch (one frame per press) |
 | `TrackSpeedLimit` | run-time share of the speed limit, (0, 1]; 0 or released = none. See [Limits](#limits) |
+| `TrackCurrentLimit` | run-time share of `peakCurrentAmps`, (0, 1], at least 2 A; 0 or released = none. See [Limits](#limits) |
+| `TrackFreewheel` | toggle, releases the brake at standstill (Coast instead of Brake). See [Releasing the brake](#releasing-the-brake) |
 | `TrackEmergencyStop` | momentary, broadcasts a stop; never part of the channel test |
 
 `TrackThrottle` and `TrackSteering` have a deliberately gentle channel test -
@@ -393,6 +417,7 @@ Before that it carried the sign of the torque.
 Bus-wide: `busUp`, `nodesPresent`, `driveEnabled`, `inhibit`, `controlAge`,
 `mode`, `commandLeft`, `commandRight`, `speedLimit` (requested in `0x101`),
 `speedLimitFactor` (%), `currentLimitRequest` (empty when none),
+`currentLimitFactor` (%), `freewheel`,
 `framesSent`, `framesReceived`, `sendFailures`.
 
 **Each value needs a channel of its own**, named `<group>.<key>`, for example

@@ -32,6 +32,19 @@ public enum TrackDriveAxis
     /// with value 0.3 as a crawl gear.
     /// </summary>
     SpeedLimit = 8,
+    /// <summary>
+    /// Lowers the phase current limit at run time. A value in (0, 1] is the
+    /// share of peakCurrentAmps; 0, negative or released means no reduction.
+    /// The nodes floor it at 2 A, below which they could no longer brake.
+    /// </summary>
+    CurrentLimit = 9,
+    /// <summary>
+    /// Held at 0.5 or more: release the brake. At standstill the nodes get
+    /// Coast instead of Brake, so the vehicle can be pushed or towed. Moving
+    /// is unaffected, and a vehicle that is still rolling is braked to a stop
+    /// first. Released means brake again.
+    /// </summary>
+    Freewheel = 10,
 }
 
 /// <summary>One input into the drive manager. Values run -1..1 like every other
@@ -172,6 +185,12 @@ public sealed record TrackDriveSnapshot
     /// <summary>Current limit the master sends in 0x101; null when nothing
     /// is requested.</summary>
     public double? RequestedCurrentLimit { get; init; }
+
+    /// <summary>Run-time share of peakCurrentAmps, 1 when not reduced.</summary>
+    public double CurrentLimitFactor { get; init; } = 1.0;
+
+    /// <summary>The brake is released by the Freewheel channel.</summary>
+    public bool Freewheel { get; init; }
 
     public long FramesSent { get; init; }
     public long FramesReceived { get; init; }
