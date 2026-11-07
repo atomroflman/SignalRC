@@ -9,6 +9,9 @@ import { MeteredProtocol, TrafficMeter, meteredWebSocket, type RealSize } from "
 import type { TimerClock } from "./types";
 import { systemClock } from "./types";
 
+/** A view opening on a running provider reloads the channel catalog when it is older than this. */
+const METADATA_MAX_AGE_MS = 5000;
+
 /** The part of @microsoft/signalr's HubConnection used here; replaceable in tests. */
 export interface HubLike {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -107,6 +110,9 @@ export class SourceHub {
       this.cars.set(carId, car);
       car.provider.setConnected(this._state === "connected");
       if (this._state === "connected") void this.refreshCarStates();
+    } else {
+      // Kept alive by another view (e.g. the telemetry bar): pick up channels created since.
+      car.provider.refreshMetadata(METADATA_MAX_AGE_MS);
     }
     car.refs++;
     if (this._state === "disconnected") void this.start();

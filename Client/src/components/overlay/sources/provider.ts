@@ -88,6 +88,9 @@ export class CarSourceProvider implements OverlaySourceProvider {
   private byName = new Map<string, ChannelMetadata>();
   private byId = new Map<number, ChannelMetadata>();
   private metadataState: MetadataState = "idle";
+  private metadataInFlight = false;
+  /** clock.now() of the last completed metadata load. */
+  private metadataLoadedAt = -Infinity;
   private metadataReloads = new Set<number>();
   private outputIds = new Map<string, number>();
 
@@ -331,9 +334,23 @@ export class CarSourceProvider implements OverlaySourceProvider {
   // --- Metadata ---
 
   /** Viewer catalog (D69, D70): telemetry channels and output names, no login needed. */
+  /**
+   * Reloads the channel catalog when it is older than `maxAgeMs`, e.g. when a
+   * view opens on a provider kept alive by another view: channels created in
+   * the meantime would otherwise only appear after a page reload, because
+   * values of an unknown channel are never asked for.
+   */
+  refreshMetadata(maxAgeMs = 0) {
+    if (this.disposed || this.metadataInFlight) return;
+    if (this.clock.now() - this.metadataLoadedAt < maxAgeMs) return;
+    void this.loadMetadata();
+  }
+
   private async loadMetadata() {
-    if (this.metadataState === "loading") return;
-    this.metadataState = "loading";
+    if (this.metadataInFlight) return;
+    this.metadataInFlight = true;
+    // A reload keeps the known catalog usable ("loaded") until the new one arrives.
+    if (this.metadataState !== "loaded") this.metadataState = "loading";
     try {
       const raw = (await this.fetchJson(`/api/cars/${this.carId}/overlay/sources`)) as { telemetry?: unknown; outputs?: unknown } | null;
       const list = (Array.isArray(raw?.telemetry) ? raw.telemetry : []).map(parseChannelMetadata).filter((m): m is ChannelMetadata => !!m);
@@ -345,8 +362,11 @@ export class CarSourceProvider implements OverlaySourceProvider {
           .map((f) => [f.channelName as string, f.id as number]),
       );
       this.metadataState = "loaded";
+      this.metadataLoadedAt = this.clock.now();
     } catch {
-      this.metadataState = "failed";
+      if (this.metadataState !== "loaded") this.metadataState = "failed";
+    } finally {
+      this.metadataInFlight = false;
     }
     if (this.disposed) return;
     this.consumersChanged();

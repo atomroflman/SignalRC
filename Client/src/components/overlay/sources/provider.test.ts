@@ -83,6 +83,28 @@ describe("consumers and interest (telemetry §6)", () => {
   });
 });
 
+describe("channel catalog of a provider kept alive", () => {
+  it("a view opening later picks up channels created since, once the catalog is older than 5 s", async () => {
+    const { env, provider } = await start();
+    expect(provider.channels().map((c) => c.name)).not.toContain("pi.networkTx");
+    env.setChannels([{ id: 11, channelName: "speed" }, { id: 14, channelName: "pi.networkTx" }]);
+
+    // Within 5 s a second view reuses the catalog.
+    env.clock.advance(1000);
+    const early = env.sources.acquire(1);
+    await flush();
+    expect(provider.channels().map((c) => c.name)).not.toContain("pi.networkTx");
+    early.release();
+
+    env.clock.advance(5000);
+    const late = env.sources.acquire(1);
+    await flush();
+    expect(late.provider).toBe(provider);
+    expect(provider.channels().map((c) => c.name)).toContain("pi.networkTx");
+    expect(provider.metadataLoaded).toBe(true);
+  });
+});
+
 describe("aging and deadlines", () => {
   it("values age without further messages and listeners hear it", async () => {
     const { env, provider } = await start();
