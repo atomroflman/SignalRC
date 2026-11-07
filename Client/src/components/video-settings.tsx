@@ -149,6 +149,23 @@ export default function VideoSettingsControl(props: { carId?: number; canManageE
     setSettingsMap(next);
   }
 
+  /** Gain and shutter: 0 lets the camera choose; shown as an empty field with an "Auto" placeholder. */
+  function autoValue(value: number | null | undefined): number | '' {
+    return value == null || value === 0 ? '' : value;
+  }
+
+  /** Neutral image processing and automatic exposure, the camera's own defaults. */
+  function handleResetToAuto(serverId: number) {
+    const current = settingsMapRef.current;
+    const next = {
+      ...current,
+      [serverId]: { ...(current[serverId] || {}), gain: 0, shutter: 0, brightness: 0, contrast: 1, ev: 0, exposure: 'normal' },
+    };
+    settingsMapRef.current = next;
+    setSettingsMap(next);
+    void handleSave(serverId);
+  }
+
   async function handleSave(serverId: number) {
     setError(null);
     const cfg = settingsMapRef.current[serverId];
@@ -277,7 +294,11 @@ export default function VideoSettingsControl(props: { carId?: number; canManageE
 
                 <div>
                   <label className="block text-xs text-zinc-300">{messages.common.brightness}</label>
-                  <input type="range" min="0" max="100" className="w-full" value={Math.round(((cfg.brightness ?? s.brightness ?? 0.5) as number) * 100)} onChange={e => updateFieldFor(s.serverId, 'brightness', Number(e.target.value) / 100)} onBlur={() => void handleSave(s.serverId)} />
+                  {/* mediamtx rpiCameraBrightness: -1..1, 0 = neutral. Double-click resets to neutral. */}
+                  <div className="flex items-center gap-2">
+                    <input type="range" min="-100" max="100" className="w-full" value={Math.round(((cfg.brightness ?? s.brightness ?? 0) as number) * 100)} onChange={e => updateFieldFor(s.serverId, 'brightness', Number(e.target.value) / 100)} onBlur={() => void handleSave(s.serverId)} onDoubleClick={() => { updateFieldFor(s.serverId, 'brightness', 0); void handleSave(s.serverId); }} />
+                    <span className="w-10 text-right tabular-nums text-zinc-400">{(cfg.brightness ?? s.brightness ?? 0).toFixed(2)}</span>
+                  </div>
                 </div>
 
                 <div>
@@ -292,27 +313,28 @@ export default function VideoSettingsControl(props: { carId?: number; canManageE
 
                 <div>
                   <label className="block text-xs text-zinc-300">{messages.common.gain ?? 'Gain'}</label>
-                  <input type="number" step="0.1" min="0" className="w-full text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.gain ?? s.gain ?? ''} onChange={e => updateFieldFor(s.serverId, 'gain', e.target.value ? Number(e.target.value) : null as any)} onBlur={() => void handleSave(s.serverId)} />
+                  <input type="number" step="0.1" min="0" className="w-full text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" placeholder={messages.videoSettings.auto} value={autoValue(cfg.gain ?? s.gain)} onChange={e => updateFieldFor(s.serverId, 'gain', e.target.value ? Number(e.target.value) : 0)} onBlur={() => void handleSave(s.serverId)} />
                 </div>
 
                 <div>
                   <label className="block text-xs text-zinc-300">{messages.common.shutter ?? 'Shutter (µs)'}</label>
-                  <input type="number" min="0" className="w-full text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.shutter ?? s.shutter ?? ''} onChange={e => updateFieldFor(s.serverId, 'shutter', e.target.value ? Number(e.target.value) : null as any)} onBlur={() => void handleSave(s.serverId)} />
+                  <input type="number" min="0" className="w-full text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" placeholder={messages.videoSettings.auto} value={autoValue(cfg.shutter ?? s.shutter)} onChange={e => updateFieldFor(s.serverId, 'shutter', e.target.value ? Number(e.target.value) : 0)} onBlur={() => void handleSave(s.serverId)} />
                 </div>
 
                 <div>
                   <label className="block text-xs text-zinc-300">{messages.common.contrast ?? 'Contrast'}</label>
-                  <input type="number" step="0.1" min="0" max="16" className="w-full text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.contrast ?? s.contrast ?? ''} onChange={e => updateFieldFor(s.serverId, 'contrast', e.target.value ? Number(e.target.value) : null as any)} onBlur={() => void handleSave(s.serverId)} />
+                  <input type="number" step="0.1" min="0" max="16" className="w-full text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" placeholder="1" value={cfg.contrast ?? s.contrast ?? ''} onChange={e => updateFieldFor(s.serverId, 'contrast', e.target.value ? Number(e.target.value) : 1)} onBlur={() => void handleSave(s.serverId)} />
                 </div>
 
                 <div>
                   <label className="block text-xs text-zinc-300">{messages.common.ev ?? 'EV'}</label>
-                  <input type="number" step="0.1" min="-10" max="10" className="w-full text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.ev ?? s.ev ?? ''} onChange={e => updateFieldFor(s.serverId, 'ev', e.target.value ? Number(e.target.value) : null as any)} onBlur={() => void handleSave(s.serverId)} />
+                  <input type="number" step="0.1" min="-10" max="10" className="w-full text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" placeholder="0" value={cfg.ev ?? s.ev ?? ''} onChange={e => updateFieldFor(s.serverId, 'ev', e.target.value ? Number(e.target.value) : 0)} onBlur={() => void handleSave(s.serverId)} />
                 </div>
               </div>
 
               <div className="flex gap-2 flex-wrap">
                 <button className="px-2 py-1 text-xs rounded bg-zinc-700 hover:bg-zinc-600 text-zinc-100" onClick={() => handleSave(s.serverId)} disabled={busyMap[s.serverId]}>{busyMap[s.serverId] ? '...' : messages.videoSettings.save}</button>
+                <button className="px-2 py-1 text-xs rounded bg-zinc-700 hover:bg-zinc-600 text-zinc-100" title={messages.videoSettings.resetToAutoHint} onClick={() => handleResetToAuto(s.serverId)} disabled={busyMap[s.serverId]}>{messages.videoSettings.resetToAuto}</button>
                 {props.canManageEnabled && (
                   <button
                     className={`px-2 py-1 text-xs rounded text-zinc-100 ${s.enabled ? 'bg-amber-700 hover:bg-amber-600' : 'bg-green-700 hover:bg-green-600'}`}

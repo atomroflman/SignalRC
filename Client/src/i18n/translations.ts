@@ -168,6 +168,9 @@ const deMessages = {
     save: 'Speichern',
     enable: 'Aktivieren',
     disable: 'Deaktivieren',
+    auto: 'Auto',
+    resetToAuto: 'Automatik',
+    resetToAutoHint: 'Gain und Shutter automatisch, Helligkeit 0, Kontrast 1, EV 0, Belichtung normal',
   },
   sessionTransfer: {
     title: 'Sitzung ubertragen',
@@ -809,6 +812,9 @@ const enMessages: Messages = {
     save: 'Save',
     enable: 'Enable',
     disable: 'Disable',
+    auto: 'Auto',
+    resetToAuto: 'Automatic',
+    resetToAutoHint: 'Automatic gain and shutter, brightness 0, contrast 1, EV 0, exposure normal',
   },
   sessionTransfer: {
     title: 'Session Transfer',
