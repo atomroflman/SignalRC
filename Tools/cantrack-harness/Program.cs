@@ -478,6 +478,7 @@ var steering = manager.GetModule<ITrackDriveInput>((int)TrackDriveAxis.Steering)
 var seenCommands = 0;
 short lastLeft = 0, lastRight = 0;
 byte lastMode = 0;
+var stopFrames = 0;
 var clearFaultFrames = 0;
 var seenLimitRequests = 0;
 short limCurL = 0, limSpdL = 0, limCurR = 0, limSpdR = 0;
@@ -505,6 +506,7 @@ var pump = new Thread(() =>
             lastLeft = P.ReadInt16(f.Data, 0);
             lastRight = P.ReadInt16(f.Data, 2);
             lastMode = f.Data[4];
+            if (lastMode == (byte)P.DriveMode.Stop) stopFrames++;
             if ((f.Data[5] & P.CommandFlagClearFault) != 0) clearFaultFrames++;
         }
         catch { /* receive timeout on a quiet bus */ }
@@ -788,6 +790,21 @@ freewheel.SetValue(1f);
 freewheel.Release();
 Thread.Sleep(100);
 Check("freewheel released -> brake", lastMode == (byte)P.DriveMode.Brake, $"mode {lastMode}");
+
+// A brake that let go on overcurrent is re-armed with one Stop frame once
+// the wheel is slow enough, and not again within the re-arm interval.
+simLeftSpeed = 5.0;
+simLeftFlags = P.StatusFlags.BrakeTripped;
+var stopsBefore = stopFrames;
+Thread.Sleep(200);
+Check("tripped brake not re-armed while fast", stopFrames == stopsBefore, $"{stopFrames - stopsBefore} Stop frames");
+simLeftSpeed = 0.5;
+Thread.Sleep(300);              // flag stays up: only one re-arm per interval
+Check("tripped brake re-armed once", stopFrames - stopsBefore == 1, $"{stopFrames - stopsBefore} Stop frames");
+Check("back to brake after re-arm", lastMode == (byte)P.DriveMode.Brake, $"mode {lastMode}");
+Check("re-arm counted", manager.GetSnapshot().BrakeRearms == 1, manager.GetSnapshot().BrakeRearms.ToString());
+simLeftFlags = P.StatusFlags.None;
+simLeftSpeed = 0.0;
 manager.CoastAtStandstill = false;
 freewheel.SetValue(1f);
 Thread.Sleep(100);

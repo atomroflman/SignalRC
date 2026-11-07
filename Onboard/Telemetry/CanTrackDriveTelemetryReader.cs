@@ -95,6 +95,7 @@ namespace SignalRC.Onboard.Telemetry;
 [TelemetryValue("currentLimitRequest", TelemetryDataType.Number, "A", Decimals = 1)]
 [TelemetryValue("currentLimitFactor", TelemetryDataType.Number, "%", Decimals = 0)]
 [TelemetryValue("freewheel", TelemetryDataType.Boolean)]
+[TelemetryValue("brakeRearms", TelemetryDataType.Integer, Decimals = 0)]
 [TelemetryValue("odoLeftTravel", TelemetryDataType.Number, "rad", Decimals = 1)]
 [TelemetryValue("odoRightTravel", TelemetryDataType.Number, "rad", Decimals = 1)]
 [TelemetryValue("odoTravelDiff", TelemetryDataType.Number, "rad", Decimals = 1)]
@@ -187,6 +188,7 @@ public class CanTrackDriveTelemetryReader : TelemetryReaderBase
             ? Num(snapshot.RequestedCurrentLimit.Value) : string.Empty;
         values["currentLimitFactor"] = Num(snapshot.CurrentLimitFactor * 100.0);
         values["freewheel"] = snapshot.Freewheel ? "1" : "0";
+        values["brakeRearms"] = snapshot.BrakeRearms.ToString(CultureInfo.InvariantCulture);
         var odo = snapshot.Odometry;
         // Available from the first metre, no calibration needed. The difference
         // is the one number that says whether a track fell behind.

@@ -160,6 +160,28 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
     /// </summary>
     public bool BrakeAtStandstill { get; set; } = true;
 
+    /// <summary>
+    /// Re-arm the short-circuit brake after it let go on overcurrent.
+    ///
+    /// Above 10 A the firmware drops the brake (status bit 7) and keeps it off
+    /// until a command with a different mode arrives. At standstill this
+    /// manager sends Brake without a break, so on its own the brake would stay
+    /// off for good and a vehicle on a slope would keep rolling. With this on,
+    /// a tripped node that is back below <see cref="BrakeRearmSpeedRadPerSecond"/>
+    /// gets one Stop frame and then Brake again, which arms it anew.
+    /// </summary>
+    public bool RearmTrippedBrake { get; set; } = true;
+
+    /// <summary>Re-arm only below this speed: the firmware engages the short
+    /// brake below 2 rad/s, so re-arming faster would only pulse the velocity
+    /// loop for one frame without braking.</summary>
+    public float BrakeRearmSpeedRadPerSecond { get; set; } = 2.0f;
+
+    /// <summary>Least time between two re-arms. The status reports at 20 Hz,
+    /// so the trip flag can still be up for a frame or two after re-arming;
+    /// this keeps that from being read as a new trip.</summary>
+    public int BrakeRearmIntervalMs { get; set; } = 1000;
+
     /// <summary>Must be called under _stateLock.</summary>
     private CanTrackProtocol.DriveMode StandstillMode => BrakeAtStandstill && !_freewheel
         ? CanTrackProtocol.DriveMode.Brake
@@ -292,6 +314,8 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
     private float _speedLimitFactor = 1f;
     private float _currentLimitFactor = 1f;
     private bool _freewheel;
+    private long _brakeRearmMs = -1;
+    private long _brakeRearms;
     private bool _limitsDirty = true;
     private long _limitsSentMs = -1;
     private long _lastControlMs = -1; //!< -1 means nothing has ever arrived
@@ -1128,7 +1152,7 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
         // Freewheel needs the standstill logic even where it is switched off,
         // otherwise Stop would keep the short-circuit brake on (Z2).
         if (!CoastAtStandstill && !_freewheel) return mode;
-        if (_coasting) return StandstillMode;
+        if (_coasting) return BrakeOrRearm(nowMs);
 
         if (_idleSinceMs < 0) _idleSinceMs = nowMs;
 
@@ -1141,7 +1165,31 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
 
         _coasting = (_standingSinceMs >= 0 && nowMs - _standingSinceMs >= StandstillCoastMs)
                     || nowMs - _idleSinceMs >= MaxStopMs;
-        return _coasting ? StandstillMode : mode;
+        return _coasting ? BrakeOrRearm(nowMs) : mode;
+    }
+
+    /// <summary>
+    /// The standstill mode, or a single Stop when a tripped brake is due to be
+    /// re-armed, see <see cref="RearmTrippedBrake"/>. Must be called under
+    /// _stateLock.
+    /// </summary>
+    private CanTrackProtocol.DriveMode BrakeOrRearm(long nowMs)
+    {
+        var standstill = StandstillMode;
+        if (standstill != CanTrackProtocol.DriveMode.Brake || !RearmTrippedBrake) return standstill;
+        if (_brakeRearmMs >= 0 && nowMs - _brakeRearmMs < BrakeRearmIntervalMs) return standstill;
+
+        var tripped = _nodes.FirstOrDefault(n => n.Seen && nowMs - n.LastSeenMs <= NodeTimeoutMs
+                                                 && n.Flags.HasFlag(CanTrackProtocol.StatusFlags.BrakeTripped)
+                                                 && Math.Abs(n.Speed) < BrakeRearmSpeedRadPerSecond);
+        if (tripped == null) return standstill;
+
+        _brakeRearmMs = nowMs;
+        _brakeRearms++;
+        _logger.LogWarning(
+            "Short brake on node {Node} had let go on overcurrent; re-arming at {Speed:0.0} rad/s.",
+            tripped.Node, tripped.Speed);
+        return CanTrackProtocol.DriveMode.Stop;
     }
 
     /// <summary>
@@ -1523,6 +1571,7 @@ public class CanTrackDriveManager : IModuleManager, IDisposable
                 RequestedCurrentLimit = RequestedCurrentLimit(),
                 CurrentLimitFactor = _currentLimitFactor,
                 Freewheel = _freewheel,
+                BrakeRearms = _brakeRearms,
                 BusUp = _socket != null,
                 AllNodesPresent = present >= ExpectedNodes,
                 DriveEnabled = _inhibitReason == null,

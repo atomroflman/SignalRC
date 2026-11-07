@@ -192,6 +192,9 @@ public sealed record TrackDriveSnapshot
     /// <summary>The brake is released by the Freewheel channel.</summary>
     public bool Freewheel { get; init; }
 
+    /// <summary>How often a tripped short brake was re-armed since start.</summary>
+    public long BrakeRearms { get; init; }
+
     public long FramesSent { get; init; }
     public long FramesReceived { get; init; }
     public long SendFailures { get; init; }

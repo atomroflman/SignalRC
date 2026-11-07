@@ -198,6 +198,16 @@ Mode 3, `Brake`, asks a node to park at once, without the velocity loop:
 Status flag bit 6 says the short-circuit brake is engaged right now, bit 7
 that it was released on overcurrent and the wheel is free-wheeling.
 
+**Re-arming after a trip.** The firmware keeps a tripped brake off until a
+command with a *different* mode arrives. At standstill the manager sends
+`Brake` without a break, so the brake would stay off for good and a vehicle
+on a slope would keep rolling. With `rearmTrippedBrake` (default `true`), a
+node that reports bit 7 and is back below `brakeRearmSpeedRadPerSecond`
+(2 rad/s, where the brake engages) gets one `Stop` frame, then `Brake`
+again, at most once per `brakeRearmIntervalMs` (1 s). Each re-arm is logged
+as a warning and counted in `brakeRearms`. If it trips again, the vehicle
+is too heavy for the slope at this speed - the brake only holds 10 A.
+
 **What the manager sends.** The standstill logic above is unchanged - zero
 command, both tracks below `standstillSpeedRadPerSecond` for
 `standstillCoastMs`, or `maxStopMs` as the backstop, latching until a nonzero
@@ -361,6 +371,9 @@ All on the `pinManagers` entry.
 | `limitIntervalMs` | `1000` | Repeat period of `0x101`. Changes go out at once regardless. |
 | `coastAtStandstill` | `true` | Replace Stop once nothing is commanded and the tracks stand. See [Coasting at standstill](#coasting-at-standstill). |
 | `brakeAtStandstill` | `true` | What replaces it: `Brake` (short-circuit brake, firmware 2026-11-04 and later) or, if `false`, `Coast`. See [Brake mode](#brake-mode). |
+| `rearmTrippedBrake` | `true` | Re-arm a brake that let go on overcurrent with one Stop frame. See [Brake mode](#brake-mode). |
+| `brakeRearmSpeedRadPerSecond` | `2.0` | Re-arm only below this speed. |
+| `brakeRearmIntervalMs` | `1000` | Least time between two re-arms. |
 | `standstillSpeedRadPerSecond` | `1.0` | Below this a track counts as standing. |
 | `standstillCoastMs` | `200` | How long both have to stand before the driver goes off. |
 | `maxStopMs` | `2000` | Coast after this long at zero command even if a track still reports motion. |
@@ -417,7 +430,7 @@ Before that it carried the sign of the torque.
 Bus-wide: `busUp`, `nodesPresent`, `driveEnabled`, `inhibit`, `controlAge`,
 `mode`, `commandLeft`, `commandRight`, `speedLimit` (requested in `0x101`),
 `speedLimitFactor` (%), `currentLimitRequest` (empty when none),
-`currentLimitFactor` (%), `freewheel`,
+`currentLimitFactor` (%), `freewheel`, `brakeRearms`,
 `framesSent`, `framesReceived`, `sendFailures`.
 
 **Each value needs a channel of its own**, named `<group>.<key>`, for example
