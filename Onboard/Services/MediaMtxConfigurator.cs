@@ -140,7 +140,9 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator
             var cameraDevice = string.IsNullOrWhiteSpace(stream.Value.CameraDevice) ? "/dev/video0" : stream.Value.CameraDevice;
 
             generatedPaths.AppendLine($"  {stream.Key}:");
-            var forwardToServer = $"ffmpeg{FfmpegLogArgs(stream.Value)} -t 2147483647 -i rtsp://localhost:8554/{stream.Key} -c copy -f rtp rtp://{sourceHost}:{stream.Value.Port}?pkt_size=1300";
+            // The rpiCamera source carries SPS/PPS only in the RTSP SDP, not in-band, and Janus' mountpoint
+            // has no sprop-parameter-sets: dump_extra repeats them before every keyframe so a viewer can decode.
+            var forwardToServer = $"ffmpeg{FfmpegLogArgs(stream.Value)} -t 2147483647 -i rtsp://localhost:8554/{stream.Key} -c copy -bsf:v dump_extra -f rtp rtp://{sourceHost}:{stream.Value.Port}?pkt_size=1300";
 
             if (IsV4l2Camera(stream.Value))
             {
