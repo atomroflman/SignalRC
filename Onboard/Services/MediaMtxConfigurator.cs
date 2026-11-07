@@ -158,6 +158,8 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator
             // TODO: Make it configurable in gui (advanced options)
             generatedPaths.AppendLine($"    rpiCameraDenoise: \"cdn_hq\"");
             generatedPaths.AppendLine($"    runOnInit: {forwardToServer}");
+            if (SensorMode(stream.Value) is { } sensorMode)
+                generatedPaths.AppendLine($"    rpiCameraMode: \"{sensorMode}\"");
 
             foreach (var prop in stream.Value.GetType().GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
                 .Select(e => new {
@@ -216,8 +218,27 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator
         Kind = ChannelTypeSchema.Video,
         TypeName = "camera",
         Description = "Raspberry Pi camera; mediamtx captures, ffmpeg forwards the stream to the server.",
-        Options = [FfmpegLogLevelOption],
+        Options =
+        [
+            FfmpegLogLevelOption,
+            new OptionSchema
+            {
+                Name = "sensorMode", Type = "string",
+                Description = "Sensor mode width:height[:bit-depth[:packing]], e.g. \"2304:1296:10:P\" (mediamtx rpiCameraMode). "
+                    + "libcamera otherwise picks the mode closest to the output size, which may crop: on the Camera Module 3 (imx708) "
+                    + "1536x864 only sees the centre 2/3 of the sensor, 2304:1296 scaled down keeps the full field of view.",
+            },
+        ],
     });
+
+    private static readonly Regex SensorModePattern = new(@"^\d{2,5}:\d{2,5}(:\d{1,2}(:[PU])?)?$", RegexOptions.Compiled);
+
+    /// <summary>The "sensorMode" option if it is a valid rpiCameraMode value; anything else is dropped with the line it would break.</summary>
+    public static string? SensorMode(VideoStreamMapItem stream)
+    {
+        var mode = stream.Options.TryGetValue("sensorMode", out var raw) ? raw?.ToString()?.Trim() : null;
+        return !string.IsNullOrEmpty(mode) && SensorModePattern.IsMatch(mode) ? mode : null;
+    }
 
     /// <summary>
     /// " -hide_banner -loglevel X" plus " -nostats" below "info". An unknown value falls back to
