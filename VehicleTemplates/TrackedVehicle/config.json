@@ -414,10 +414,13 @@
         "enabled": true,
         "priority": 1,
         "rpiCamId": 0,
-        "width": 1024,
-        "height": 768,
-        "framerate": 22,
-        "bitrate": 1000000
+        "width": 1536,
+        "height": 864,
+        "framerate": 30,
+        "bitrate": 1500000,
+        "options": {
+          "sensorMode": "2304:1296:10:P"
+        }
       }
     }
   }
