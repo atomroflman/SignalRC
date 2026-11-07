@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <rect id="sensor" x="2" y="9" width="4" height="6" rx="1"/>
+  <path id="wave-near" d="M8.5 9.5a3.5 3.5 0 0 1 0 5"/>
+  <path id="wave-far" d="M11.5 6.5a7.5 7.5 0 0 1 0 11"/>
+  <line id="obstacle" x1="19" y1="5" x2="19" y2="19"/>
+  <path id="obstacle-hatch" d="M19 8l2.5-2.5M19 12.5l2.5-2.5M19 17l2.5-2.5" stroke-width="1.5"/>
+</svg>
