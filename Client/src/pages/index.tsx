@@ -135,13 +135,13 @@ export default function Home() {
 
   return (
     <div
-      className={`${geistSans.className} ${geistMono.className} h-screen overflow-hidden bg-[linear-gradient(180deg,#101217_0%,#17191f_46%,#111319_100%)] text-slate-100`}
+      className={`${geistSans.className} ${geistMono.className} min-h-dvh lg:h-screen lg:overflow-hidden bg-[linear-gradient(180deg,#101217_0%,#17191f_46%,#111319_100%)] text-slate-100`}
     >
-      <div className="relative isolate h-full overflow-hidden">
+      <div className="relative isolate overflow-hidden lg:h-full">
         <div className="pointer-events-none absolute left-[-8rem] top-[-7rem] h-64 w-64 rounded-full bg-slate-700/16 blur-3xl" />
         <div className="pointer-events-none absolute bottom-[-9rem] right-[-5rem] h-72 w-72 rounded-full bg-slate-700/18 blur-3xl" />
 
-        <div className="relative flex h-full flex-col overflow-hidden bg-[linear-gradient(180deg,rgba(23,25,31,0.98),rgba(15,17,22,0.96))] shadow-[0_28px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl">
+        <div className="relative flex min-h-dvh flex-col lg:h-full lg:min-h-0 lg:overflow-hidden bg-[linear-gradient(180deg,rgba(23,25,31,0.98),rgba(15,17,22,0.96))] shadow-[0_28px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl">
           <div className="flex items-center justify-between px-5 py-4 md:px-6">
             <div className="flex items-center gap-3">
               <BrandLogo className="h-12 w-auto" />
@@ -164,7 +164,7 @@ export default function Home() {
           </div>
 
           <div className="flex flex-1 min-h-0 flex-col lg:flex-row">
-            <div className="flex min-h-0 flex-1 flex-col p-4 md:p-5">
+            <div className="flex min-h-[60dvh] flex-1 flex-col p-4 md:p-5 lg:min-h-0">
               {selectedCarId && <VersionBanner carId={selectedCarId} />}
               <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-[28px] border border-white/8 bg-[linear-gradient(180deg,rgba(9,11,16,0.94),rgba(18,20,28,0.92))] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
                 <CarVideoPanel carId={selectedCarId} />
