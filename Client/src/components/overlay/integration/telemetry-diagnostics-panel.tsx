@@ -176,8 +176,9 @@ export function DiagnosticsView({ provider, m }: { provider: CarSourceProvider; 
         <div className="text-zinc-500">{m.filter.noMatch}</div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-left font-mono">
-            <thead className="text-zinc-500">
+          <table className="w-full table-fixed border-collapse text-left font-mono">
+            <ColWidths widths={serverState ? [...CHANNEL_COLS, ...SERVER_COLS] : CHANNEL_COLS} />
+            <thead className="align-bottom text-zinc-500">
               <tr>
                 <SortHeader col="id" label={m.col.id} view={view} onChange={setView} m={m} />
                 <SortHeader col="name" label={m.col.name} view={view} onChange={setView} m={m} />
@@ -246,7 +247,7 @@ function SortHeader({ col, label, view, onChange, m }: { col: DiagSortKey; label
     <th className="pr-2" aria-sort={active ? (view.desc ? "descending" : "ascending") : "none"}>
       <button
         type="button"
-        className={`whitespace-nowrap text-left hover:text-zinc-200 ${active ? "text-zinc-200" : ""}`}
+        className={`text-left hover:text-zinc-200 ${active ? "text-zinc-200" : ""}`}
         title={m.filter.sortBy(label)}
         onClick={() => onChange({ ...view, sort: col, desc: active ? !view.desc : false })}
       >
@@ -256,14 +257,30 @@ function SortHeader({ col, label, view, onChange, m }: { col: DiagSortKey; label
   );
 }
 
+// Fixed column widths (in ch of the monospace table font, padding included): the auto table layout
+// re-measured every column on each arriving value and the columns kept jumping.
+const CHANNEL_COLS = [6, 18, 10, 30, 22, 9, 25, 12, 20, 20];
+const SERVER_COLS = [36, 18, 12];
+const TRAFFIC_COLS = [28, 10, 15, 26, 12, 13, 34];
+
+function ColWidths({ widths }: { widths: number[] }) {
+  return <colgroup>{widths.map((w, i) => <col key={i} style={{ width: `${w}ch` }} />)}</colgroup>;
+}
+
+/** One-line cell: overflow ends in an ellipsis, the full text is in the tooltip. */
+function Cell({ text, title, className = "" }: { text: string; title?: string; className?: string }) {
+  return <td className={`truncate pr-2 ${className}`} title={title ?? text}>{text}</td>;
+}
+
 function TrafficTable({ rows, serverUnmeasured, m }: { rows: TrafficRow[]; serverUnmeasured: boolean; m: Messages }) {
   const t = m.traffic;
   return (
     <div className="flex flex-col gap-1 rounded border border-zinc-800 p-1" data-ovl-diag-traffic="">
       <div className="font-semibold text-zinc-400">{t.title}</div>
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-left font-mono">
-          <thead className="text-zinc-500">
+        <table className="w-full table-fixed border-collapse text-left font-mono">
+          <ColWidths widths={TRAFFIC_COLS} />
+          <thead className="align-bottom text-zinc-500">
             <tr>
               <th className="pr-2" />
               <th className="pr-2">{t.col.messages}</th>
@@ -277,13 +294,13 @@ function TrafficTable({ rows, serverUnmeasured, m }: { rows: TrafficRow[]; serve
           <tbody>
             {rows.map((r) => (
               <tr key={`${r.key}${r.index ?? ""}`} className="border-t border-zinc-800" data-ovl-diag-traffic-row={r.key}>
-                <td className="whitespace-pre pr-2 font-sans">{r.key === "client" ? t.rows.client(r.index ?? 0) : t.rows[r.key]}</td>
-                <td className="pr-2">{formatPerSecond(r.perSecond)}</td>
-                <td className="pr-2">{r.bytesPerSecond === null ? t.notMeasured : formatBytes(r.bytesPerSecond, true)}</td>
+                <td className="whitespace-pre-wrap pr-2 font-sans">{r.key === "client" ? t.rows.client(r.index ?? 0) : t.rows[r.key]}</td>
+                <Cell text={formatPerSecond(r.perSecond)} />
+                <Cell text={r.bytesPerSecond === null ? t.notMeasured : formatBytes(r.bytesPerSecond, true)} />
                 <td className="pr-2 font-sans">{t.compression[r.compression]}</td>
-                <td className="pr-2">{r.realBytesPerSecond === null ? "–" : formatBytes(r.realBytesPerSecond, true)}</td>
-                <td className="pr-2">{savingFactor(r.realBytesPerSecond, r.bytesPerSecond)}</td>
-                <td className="pr-2">{r.total ? `${r.total.messages} / ${formatBytes(r.total.bytes)} / ${formatBytes(r.total.realBytes)}` : "–"}</td>
+                <Cell text={r.realBytesPerSecond === null ? "–" : formatBytes(r.realBytesPerSecond, true)} />
+                <Cell text={savingFactor(r.realBytesPerSecond, r.bytesPerSecond)} />
+                <Cell text={r.total ? `${r.total.messages} / ${formatBytes(r.total.bytes)} / ${formatBytes(r.total.realBytes)}` : "–"} />
               </tr>
             ))}
           </tbody>
@@ -306,19 +323,19 @@ function Row({ row, now, withServer, m }: { row: DiagnosticsRow; now: number; wi
   return (
     <>
       <tr className="border-t border-zinc-800 align-top" data-ovl-diag-channel={row.id}>
-        <td className="pr-2">{row.id}</td>
-        <td className="pr-2">{row.name ?? "?"}</td>
-        <td className="pr-2">{row.dataType ?? "?"}</td>
-        <td className="pr-2 break-all" title={c?.raw}>{truncate(c?.raw)}</td>
-        <td className={`pr-2 ${toneClass[state.tone]}`}>{state.text}</td>
-        <td className="pr-2">{formatMs(c?.value?.ageMs)}</td>
-        <td className="pr-2">{c?.lastArrival === undefined ? "–" : `${wallTime(c.lastArrival, now)} (${formatMs(now - c.lastArrival)})`}</td>
-        <td className="pr-2">{c ? `${c.changes}/${c.confirmations}` : "–"}</td>
-        <td className="pr-2">{[c?.wanted && m.wanted, c?.sent && m.sent].filter(Boolean).join(", ") || "–"}</td>
-        <td className="pr-2">{c && c.consumers.length > 0 ? c.consumers.join(", ") : "–"}</td>
-        {withServer && <td className="pr-2 break-all" title={s?.value ?? undefined}>{s ? `${truncate(s.value ?? undefined, 24) || "–"} / ${s.state ?? "–"} / ${formatMs(s.ageMs)}` : "–"}</td>}
-        {withServer && <td className="pr-2">{s ? `${s.inDemand ? m.inDemand : "–"} / ${s.interested}` : "–"}</td>}
-        {withServer && <td className="pr-2">{s ? `${s.changes}/${s.touches}` : "–"}</td>}
+        <Cell text={String(row.id)} />
+        <Cell text={row.name ?? "?"} />
+        <Cell text={row.dataType ?? "?"} />
+        <Cell text={truncate(c?.raw)} title={c?.raw} />
+        <Cell text={state.text} className={toneClass[state.tone]} />
+        <Cell text={formatMs(c?.value?.ageMs)} />
+        <Cell text={c?.lastArrival === undefined ? "–" : `${wallTime(c.lastArrival, now)} (${formatMs(now - c.lastArrival)})`} />
+        <Cell text={c ? `${c.changes}/${c.confirmations}` : "–"} />
+        <Cell text={[c?.wanted && m.wanted, c?.sent && m.sent].filter(Boolean).join(", ") || "–"} />
+        <Cell text={c && c.consumers.length > 0 ? c.consumers.join(", ") : "–"} />
+        {withServer && <Cell text={s ? `${truncate(s.value ?? undefined, 24) || "–"} / ${s.state ?? "–"} / ${formatMs(s.ageMs)}` : "–"} title={s?.value ?? undefined} />}
+        {withServer && <Cell text={s ? `${s.inDemand ? m.inDemand : "–"} / ${s.interested}` : "–"} />}
+        {withServer && <Cell text={s ? `${s.changes}/${s.touches}` : "–"} />}
       </tr>
       {(lidar || s?.lidar) && (
         <tr data-ovl-diag-lidar={row.id}>
