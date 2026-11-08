@@ -179,7 +179,7 @@ export default function Home() {
           </div>
 
           {selectedCarId && (
-            <div className="border-t border-white/8 bg-slate-950/40 px-3 py-3 backdrop-blur-sm">
+            <div className="shrink-0 border-t border-white/8 bg-slate-950/40 px-3 py-3 backdrop-blur-sm lg:max-h-[45vh] lg:overflow-y-auto">
               <div className="min-h-24 border border-white/8 bg-slate-900/70 shadow-sm">
                 <Telemetry carId={selectedCarId} />
               </div>
