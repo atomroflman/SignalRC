@@ -273,3 +273,63 @@ export function stateText(value: QualifiedValue | undefined, reasons: Record<str
   if (value.state !== "invalid") return { text: value.state, tone: value.state };
   return { text: `invalid: ${value.reason ? (reasons[value.reason] ?? value.reason) : "?"}`, tone: "invalid" };
 }
+
+export type DiagSortKey = "id" | "name" | "type" | "state" | "age" | "arrival" | "counts";
+export type DiagStateFilter = "all" | StateTone;
+
+/** What the channel table shows: text and state filter, and the sort column. */
+export interface DiagTableView {
+  query: string;
+  state: DiagStateFilter;
+  /** Only channels this client wants or has sent as interest. */
+  onlyRequested: boolean;
+  sort: DiagSortKey;
+  desc: boolean;
+}
+
+export const DEFAULT_DIAG_VIEW: DiagTableView = { query: "", state: "all", onlyRequested: false, sort: "id", desc: false };
+
+const STATE_ORDER: Record<StateTone, number> = { invalid: 0, unchecked: 1, valid: 2 };
+
+function sortValue(row: DiagnosticsRow, key: DiagSortKey, tone: StateTone): number | string | undefined {
+  const c = row.client;
+  switch (key) {
+    case "id": return row.id;
+    case "name": return row.name?.toLowerCase();
+    case "type": return row.dataType?.toLowerCase();
+    case "state": return STATE_ORDER[tone];
+    case "age": return c?.value?.ageMs ?? undefined;
+    case "arrival": return c?.lastArrival;
+    case "counts": return c ? c.changes + c.confirmations : undefined;
+  }
+}
+
+/**
+ * Filters and sorts the channel rows. The query matches id, name and type (case-insensitive, every
+ * whitespace-separated term must match). Rows without a value for the sort column go last in both
+ * directions; ties fall back to the id.
+ */
+export function filterAndSortRows(rows: DiagnosticsRow[], view: DiagTableView, reasons: Record<string, string>): DiagnosticsRow[] {
+  const terms = view.query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const entries = rows
+    .map((row) => ({ row, tone: stateText(row.client?.value, reasons).tone }))
+    .filter(({ row, tone }) => {
+      if (view.state !== "all" && tone !== view.state) return false;
+      if (view.onlyRequested && !(row.client?.wanted || row.client?.sent)) return false;
+      if (terms.length === 0) return true;
+      const haystack = `${row.id} ${row.name ?? ""} ${row.dataType ?? ""}`.toLowerCase();
+      return terms.every((t) => haystack.includes(t));
+    })
+    .map((e) => ({ ...e, key: sortValue(e.row, view.sort, e.tone) }));
+  const dir = view.desc ? -1 : 1;
+  entries.sort((a, b) => {
+    if (a.key === undefined || b.key === undefined) {
+      if (a.key !== b.key) return a.key === undefined ? 1 : -1;
+    } else if (a.key !== b.key) {
+      const cmp = typeof a.key === "number" && typeof b.key === "number" ? a.key - b.key : String(a.key).localeCompare(String(b.key));
+      if (cmp !== 0) return cmp * dir;
+    }
+    return a.row.id - b.row.id;
+  });
+  return entries.map((e) => e.row);
+}

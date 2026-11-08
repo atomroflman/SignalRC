@@ -8,8 +8,8 @@ import { useI18n } from "@/i18n/provider";
 import { LIDAR_FIELDS, sharedSourceHub, type CarSourceProvider, type HubState, type LidarGridSummary } from "../sources";
 import type { IntegrationMessages } from "./messages";
 import {
-  TelemetryDiagnosticsSession, diagnosticsRows, serverUnmeasured, fetchServerDebug, formatBytes, formatMs, formatPerSecond, savingFactor, stateText, truncate, wallTime,
-  type DiagnosticsRow, type ServerDebugResult, type StateTone, type TrafficRow,
+  DEFAULT_DIAG_VIEW, TelemetryDiagnosticsSession, diagnosticsRows, filterAndSortRows, serverUnmeasured, fetchServerDebug, formatBytes, formatMs, formatPerSecond, savingFactor, stateText, truncate, wallTime,
+  type DiagSortKey, type DiagStateFilter, type DiagTableView, type DiagnosticsRow, type ServerDebugResult, type StateTone, type TrafficRow,
 } from "./telemetry-diagnostics";
 
 type Messages = IntegrationMessages["telemetryDiagnostics"];
@@ -66,6 +66,7 @@ export function DiagnosticsView({ provider, m }: { provider: CarSourceProvider; 
   const [server, setServer] = useState<ServerDebugResult | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const [live, setLive] = useState(false);
+  const [view, setView] = useState<DiagTableView>(DEFAULT_DIAG_VIEW);
 
   // Polling keeps the server measuring bytes (it measures only while asked).
   useEffect(() => {
@@ -105,7 +106,8 @@ export function DiagnosticsView({ provider, m }: { provider: CarSourceProvider; 
   const d = session.snapshot();
   const hubState: HubState = sharedSourceHub().state;
   const serverState = server?.ok ? server.state : undefined;
-  const rows = diagnosticsRows(d, serverState);
+  const allRows = diagnosticsRows(d, serverState);
+  const rows = filterAndSortRows(allRows, view, m.reasons);
   const names = new Map(d.channels.map((c) => [c.id, c.name ?? `#${c.id}`]));
   const idList = (ids: number[] | undefined) => (ids && ids.length > 0 ? ids.map((id) => names.get(id) ?? `#${id}`).join(", ") : m.none);
   const lastAgo = d.stream.lastMessageAt === undefined ? undefined : d.now - d.stream.lastMessageAt;
@@ -166,21 +168,25 @@ export function DiagnosticsView({ provider, m }: { provider: CarSourceProvider; 
 
       <TrafficTable rows={session.traffic(serverState?.traffic)} serverUnmeasured={serverUnmeasured(serverState?.traffic)} m={m} />
 
-      {rows.length === 0 ? (
+      {allRows.length > 0 && <TableFilter view={view} onChange={setView} shown={rows.length} total={allRows.length} m={m} />}
+
+      {allRows.length === 0 ? (
         <div className="text-zinc-500">{m.noChannels}</div>
+      ) : rows.length === 0 ? (
+        <div className="text-zinc-500">{m.filter.noMatch}</div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-left font-mono">
             <thead className="text-zinc-500">
               <tr>
-                <th className="pr-2">{m.col.id}</th>
-                <th className="pr-2">{m.col.name}</th>
-                <th className="pr-2">{m.col.type}</th>
+                <SortHeader col="id" label={m.col.id} view={view} onChange={setView} m={m} />
+                <SortHeader col="name" label={m.col.name} view={view} onChange={setView} m={m} />
+                <SortHeader col="type" label={m.col.type} view={view} onChange={setView} m={m} />
                 <th className="pr-2">{m.col.value}</th>
-                <th className="pr-2">{m.col.state}</th>
-                <th className="pr-2">{m.col.age}</th>
-                <th className="pr-2">{m.col.arrival}</th>
-                <th className="pr-2">{m.col.counts}</th>
+                <SortHeader col="state" label={m.col.state} view={view} onChange={setView} m={m} />
+                <SortHeader col="age" label={m.col.age} view={view} onChange={setView} m={m} />
+                <SortHeader col="arrival" label={m.col.arrival} view={view} onChange={setView} m={m} />
+                <SortHeader col="counts" label={m.col.counts} view={view} onChange={setView} m={m} />
                 <th className="pr-2">{m.col.requested}</th>
                 <th className="pr-2">{m.col.consumers}</th>
                 {serverState && <th className="pr-2">{m.col.server}</th>}
@@ -195,6 +201,58 @@ export function DiagnosticsView({ provider, m }: { provider: CarSourceProvider; 
         </div>
       )}
     </div>
+  );
+}
+
+const STATE_FILTERS: DiagStateFilter[] = ["all", "valid", "unchecked", "invalid"];
+
+function TableFilter({ view, onChange, shown, total, m }: { view: DiagTableView; onChange: (v: DiagTableView) => void; shown: number; total: number; m: Messages }) {
+  const f = m.filter;
+  const filtered = view.query !== "" || view.state !== "all" || view.onlyRequested;
+  const input = "rounded border border-zinc-600 bg-zinc-900 px-2 py-0.5 text-zinc-200";
+  return (
+    <div className="flex flex-wrap items-center gap-2 font-sans" data-ovl-diag-filter="">
+      <input
+        type="search"
+        className={`${input} min-w-0 flex-1 basis-40`}
+        placeholder={f.search}
+        aria-label={f.search}
+        value={view.query}
+        onChange={(e) => onChange({ ...view, query: e.target.value })}
+      />
+      <label className="flex items-center gap-1 text-zinc-500">
+        {f.state}
+        <select className={input} value={view.state} onChange={(e) => onChange({ ...view, state: e.target.value as DiagStateFilter })}>
+          {STATE_FILTERS.map((s) => <option key={s} value={s}>{f.states[s]}</option>)}
+        </select>
+      </label>
+      <label className="flex items-center gap-1 text-zinc-400">
+        <input type="checkbox" checked={view.onlyRequested} onChange={(e) => onChange({ ...view, onlyRequested: e.target.checked })} />
+        {f.onlyRequested}
+      </label>
+      <span className="text-zinc-500" data-ovl-diag-shown={shown}>{f.shown(shown, total)}</span>
+      {filtered && (
+        <button type="button" className="rounded border border-zinc-600 bg-zinc-800 px-2 py-0.5 hover:bg-zinc-700" onClick={() => onChange({ ...view, query: "", state: "all", onlyRequested: false })}>
+          {f.reset}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function SortHeader({ col, label, view, onChange, m }: { col: DiagSortKey; label: string; view: DiagTableView; onChange: (v: DiagTableView) => void; m: Messages }) {
+  const active = view.sort === col;
+  return (
+    <th className="pr-2" aria-sort={active ? (view.desc ? "descending" : "ascending") : "none"}>
+      <button
+        type="button"
+        className={`whitespace-nowrap text-left hover:text-zinc-200 ${active ? "text-zinc-200" : ""}`}
+        title={m.filter.sortBy(label)}
+        onClick={() => onChange({ ...view, sort: col, desc: active ? !view.desc : false })}
+      >
+        {label}{active ? (view.desc ? " ▼" : " ▲") : ""}
+      </button>
+    </th>
   );
 }
 

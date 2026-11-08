@@ -151,6 +151,16 @@ const de = {
     interested: (n: number) => `${n} Verbindungen mit Interesse`,
     legacy: (n: number) => `${n} Alt-Clients`,
     noChannels: "Keine Kanäle bekannt.",
+    filter: {
+      search: "Filter: ID, Name, Typ",
+      state: "Zustand",
+      states: { all: "alle", valid: "valid", unchecked: "unchecked", invalid: "invalid" },
+      onlyRequested: "nur angeforderte",
+      shown: (n: number, total: number) => `${n} von ${total} Kanälen`,
+      noMatch: "Kein Kanal passt zum Filter.",
+      reset: "Filter zurücksetzen",
+      sortBy: (col: string) => `Nach ${col} sortieren`,
+    },
     col: {
       id: "ID", name: "Name", type: "Typ", value: "Wert", state: "Zustand", age: "Alter", arrival: "Letzte Ankunft",
       counts: "Upd./Best.", requested: "Angefordert", consumers: "Verbraucher",
@@ -359,6 +369,16 @@ const en: typeof de = {
     interested: (n: number) => `${n} interested connections`,
     legacy: (n: number) => `${n} legacy clients`,
     noChannels: "No channels known.",
+    filter: {
+      search: "Filter: ID, name, type",
+      state: "State",
+      states: { all: "all", valid: "valid", unchecked: "unchecked", invalid: "invalid" },
+      onlyRequested: "requested only",
+      shown: (n: number, total: number) => `${n} of ${total} channels`,
+      noMatch: "No channel matches the filter.",
+      reset: "Reset filter",
+      sortBy: (col: string) => `Sort by ${col}`,
+    },
     col: {
       id: "ID", name: "Name", type: "Type", value: "Value", state: "State", age: "Age", arrival: "Last arrival",
       counts: "Upd./conf.", requested: "Requested", consumers: "Consumers",
