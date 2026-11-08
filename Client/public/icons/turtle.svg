@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path id="shell" d="M4 15a8 7 0 0 1 16 0z"/>
+  <path id="pattern" d="M8.5 15l1.2-4h4.6l1.2 4M9.7 11 8.5 9M14.3 11l1.2-2" stroke-width="1.5"/>
+  <circle id="head" cx="20.8" cy="12.6" r="1.7"/>
+  <path id="legs" d="M7 15v3M17 15v3"/>
+  <path id="tail" d="M4 15l-1.5 1"/>
+</svg>
